@@ -9,7 +9,7 @@ OpenChamber provides the target interaction model but is designed around OpenCod
 
 ## Decision
 
-Build a new desktop-first application with React 19, TypeScript, Vite, Tailwind CSS, Zustand, Tauri 2, and Rust.
+Build a new macOS desktop application with React 19, TypeScript, Vite, Tailwind CSS, Zustand, Tauri 2, and Rust. macOS is the sole supported development and release platform.
 
 Use `pi --mode rpc` as the only agent execution boundary. Run one Pi process per live session, preserve Pi JSONL sessions as the transcript source of truth, and isolate process generations. Keep raw Pi protocol knowledge behind a tested adapter and expose normalized domain events to the UI.
 

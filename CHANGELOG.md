@@ -7,7 +7,8 @@
 - Added streaming chat, thinking, tool activity, model controls, extension UI requests, and abort.
 - Added projects, session tabs, Pi session history and resume support.
 - Added a workspace-scoped file tree, file viewer, attachments, and right-side inspector.
-- Added a cross-platform interactive PTY terminal with resize, restart, and maximize controls.
+- Added a macOS interactive PTY terminal with resize, restart, and maximize controls.
 - Added command palette, settings, persisted themes, responsive layouts, and app icons.
 - Added TypeScript, component-state, Rust security, RPC smoke, build, and browser acceptance checks.
+- Defined Apple silicon macOS as the supported v0.1 development and release platform.
 

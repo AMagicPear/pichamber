@@ -2,7 +2,7 @@
 
 ## 1. Product boundary
 
-Pichamber v0.1 is a desktop coding-agent workspace for a single local user. Its primary job is to open a project, start or resume Pi sessions, and keep chat, tools, files, diffs, and a terminal visible in one coherent workspace.
+Pichamber v0.1 is a macOS coding-agent workspace for a single local user. Its primary job is to open a project, start or resume Pi sessions, and keep chat, tools, files, diffs, and a terminal visible in one coherent workspace. macOS is the only supported development and release platform.
 
 ### MVP
 
@@ -144,7 +144,7 @@ Stores expose focused selectors. Event reduction is idempotent by message/call I
 - Do not grant recursive `$HOME` access through broad Tauri capabilities.
 - The frontend receives opaque handles where a native resource can be represented without a raw path.
 - Spawn Pi and PTYs with an explicit cwd and controlled inherited environment. Never interpolate shell commands in Rust.
-- Kill the child process tree on tab close and application exit: process groups on Unix and job objects on Windows.
+- Kill the child process tree on tab close and application exit with a dedicated macOS process group.
 - Redact secrets, auth files, environment values, and prompt content from production logs by default.
 - Treat rendered Markdown and tool HTML as untrusted; disable raw HTML and external navigation without confirmation.
 
@@ -189,7 +189,7 @@ Acceptance: terminal programs behave interactively; path traversal and symlink e
 
 - Accessibility, performance, responsive/narrow window pass, crash recovery, packaging, screenshots, and release smoke tests.
 
-Acceptance: typecheck, lint, unit, integration, Rust, and E2E suites pass; signed or clearly documented unsigned artifacts build for macOS, Windows, and Linux; no known P0/P1 defects.
+Acceptance: typecheck, lint, unit, integration, Rust, and browser acceptance suites pass; a clearly documented unsigned `.app` and `.dmg` build for Apple silicon macOS; no known P0/P1 defects.
 
 ## 8. Test strategy
 
@@ -199,7 +199,7 @@ Acceptance: typecheck, lint, unit, integration, Rust, and E2E suites pass; signe
 - Integration tests: fake JSONL Pi child process for timeout, malformed line, crash, reconnect, stale generation, and concurrent sessions.
 - Playwright desktop tests: first run, open project, send/stop prompt, answer UI request, inspect file/diff, terminal, resume after relaunch.
 - Visual checks at 1440x900, 1024x768, 768x800, and a narrow desktop window; verify no overlap, clipped labels, blank panels, or unstable layout.
-- Platform smoke: latest macOS plus one supported Windows and Linux environment for install, Pi discovery, PTY, notifications, and process cleanup.
+- Platform smoke: current Apple silicon macOS for install, Pi discovery, PTY, notifications, and process cleanup.
 
 ## 9. Main risks
 
@@ -207,7 +207,7 @@ Acceptance: typecheck, lint, unit, integration, Rust, and E2E suites pass; signe
 - Concurrent runtime races: generation and sequence filtering plus process-tree tests are release gates.
 - Scope growth from OpenChamber parity: parity means matching the selected workflows, not its full platform surface.
 - Tauri permission breadth: security tests and capability review are required before release.
-- Full PTY portability: validate all three platforms during M4 rather than substituting a command-output widget.
+- PTY reliability: validate interactive behavior, resize, restart, and process cleanup on macOS rather than substituting a command-output widget.
 - Large React/store modules: enforce feature boundaries and keep transport, normalization, state, and rendering separate.
 
 ## 10. Definition of done for v0.1

@@ -2,11 +2,11 @@
 
 Pichamber is a desktop interface for the [Pi Coding Agent](https://github.com/badlogic/pi-mono). It combines Pi's extension-first RPC runtime with a project, session, chat, tool, file, and terminal workflow inspired by OpenChamber.
 
-Version 0.1 provides the first complete local desktop workflow for macOS, Windows, and Linux.
+Version 0.1 provides the first complete local desktop workflow for macOS.
 
 ## Product direction
 
-- Desktop-first: macOS, Windows, and Linux through Tauri 2.
+- macOS-native: an Apple silicon desktop application built with Tauri 2.
 - Pi-native: `pi --mode rpc` and Pi JSONL sessions remain the runtime and source of truth.
 - Familiar workflow: interaction density and workspace layout should stay close to OpenChamber without copying its source.
 - Thin host: product-specific agent behavior belongs in Pi packages and extensions, not the desktop shell.
@@ -35,7 +35,7 @@ See [PLAN.md](PLAN.md) for scope, architecture, milestones, and acceptance crite
 
 ## Development
 
-Prerequisites: Node.js 22+, Bun 1.3+, Rust, the Tauri 2 platform prerequisites, and an installed Pi CLI.
+Prerequisites: macOS, Node.js 22+, Bun 1.3+, Rust, the Tauri 2 platform prerequisites, and an installed Pi CLI.
 
 ```bash
 bun install
