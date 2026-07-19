@@ -9,6 +9,7 @@ interface AppState {
   activeProjectId: string | null;
   activeSessionId: string | null;
   messages: Record<string, ChatMessage[]>;
+  attachments: Record<string, string[]>;
   activeAssistant: Record<string, string | undefined>;
   models: ModelInfo[];
   selectedModel?: ModelInfo;
@@ -40,8 +41,11 @@ interface AppState {
   setOpenFile(file?: OpenFile): void;
   setUiRequest(request?: UiRequest): void;
   setRuntimeError(error?: string): void;
-  addUserMessage(sessionId: string, text: string): void;
+  addUserMessage(sessionId: string, text: string, attachments?: string[]): void;
   hydrateMessages(sessionId: string, messages: ChatMessage[]): void;
+  addAttachment(sessionId: string, path: string): void;
+  removeAttachment(sessionId: string, path: string): void;
+  removeAllAttachments(sessionId: string): void;
   reduceRuntimeEvent(sessionId: string, event: Record<string, unknown>): void;
 }
 
@@ -52,7 +56,7 @@ const titleForProject = (projectId: string, sessions: SessionTab[]) => {
 
 export const useAppStore = create<AppState>()(persist((set, get) => ({
   projects: [], sessions: [], activeProjectId: null, activeSessionId: null,
-  messages: {}, activeAssistant: {}, models: [], thinkingLevel: "medium", piPath: "", theme: "system",
+  messages: {}, attachments: {}, activeAssistant: {}, models: [], thinkingLevel: "medium", piPath: "", theme: "system",
   sidebarOpen: true, inspectorOpen: false, terminalOpen: false,
   addProject: (project) => set((state) => {
     const existing = state.projects.find((value) => value.path === project.path);
@@ -97,7 +101,10 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   setOpenFile: (openFile) => set({ openFile, inspectorOpen: Boolean(openFile) }),
   setUiRequest: (uiRequest) => set({ uiRequest }),
   setRuntimeError: (runtimeError) => set({ runtimeError }),
-  addUserMessage: (sessionId, text) => set((state) => ({ messages: { ...state.messages, [sessionId]: [...(state.messages[sessionId] ?? []), { id: crypto.randomUUID(), role: "user", text, tools: [], createdAt: Date.now() }] } })),
+  addUserMessage: (sessionId, text, attachments) => set((state) => ({ messages: { ...state.messages, [sessionId]: [...(state.messages[sessionId] ?? []), { id: crypto.randomUUID(), role: "user", text, tools: [], createdAt: Date.now() }] }, attachments: attachments ? { ...state.attachments, [sessionId]: attachments } : state.attachments })),
+  addAttachment: (sessionId, path) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: [...(state.attachments[sessionId] ?? []).filter((value) => value !== path), path] } })),
+  removeAttachment: (sessionId, path) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: (state.attachments[sessionId] ?? []).filter((value) => value !== path) } })),
+  removeAllAttachments: (sessionId) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: [] } })),
   hydrateMessages: (sessionId, hydrated) => set((state) => ({ messages: { ...state.messages, [sessionId]: hydrated } })),
   reduceRuntimeEvent: (sessionId, event) => set((state) => {
     const slice = reduceRuntimeEvent(sessionId, state.messages[sessionId] ?? [], state.activeAssistant, event);

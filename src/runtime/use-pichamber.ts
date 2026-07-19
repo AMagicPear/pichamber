@@ -83,12 +83,15 @@ export function usePichamber(activeSession?: SessionTab, activeProject?: Project
 
   const sendPrompt = useCallback(async (text: string) => {
     if (!activeSession || !activeProject) return;
-    state.addUserMessage(activeSession.id, text);
+    const attachments = state.attachments[activeSession.id] ?? [];
+    const message = attachments.length > 0 ? `${text}\n\n${attachments.map((path) => `@${path}`).join("\n")}` : text;
+    state.addUserMessage(activeSession.id, message, attachments);
+    state.removeAllAttachments(activeSession.id);
     state.setRuntimeError(undefined);
     try {
       const client = await ensureRuntime(activeSession, activeProject);
       state.setSessionRunning(activeSession.id, true);
-      await client.request({ type: "prompt", message: text, streamingBehavior: "followUp" });
+      await client.request({ type: "prompt", message, streamingBehavior: "followUp" });
     } catch (error) {
       state.setSessionRunning(activeSession.id, false);
       state.setRuntimeError(error instanceof Error ? error.message : String(error));
@@ -122,15 +125,17 @@ export function usePichamber(activeSession?: SessionTab, activeProject?: Project
   }, [activeProject, state]);
 
   const attachFile = useCallback(async (): Promise<string | undefined> => {
-    if (!activeProject) return undefined;
-    if (!isTauri()) return "src/App.tsx";
+    if (!activeSession || !activeProject) return undefined;
+    if (!isTauri()) { state.addAttachment(activeSession.id, "src/App.tsx"); return "src/App.tsx"; }
     const { open } = await import("@tauri-apps/plugin-dialog");
     const selected = await open({ directory: false, multiple: false, title: "Attach a project file", defaultPath: activeProject.path });
     if (!selected) return undefined;
     const path = String(selected);
     if (!pathInsideProject(activeProject.path, path)) { toast.error("Attachments must be inside the open project"); return undefined; }
-    return relativeFromProject(activeProject.path, path);
-  }, [activeProject]);
+    const relative = relativeFromProject(activeProject.path, path);
+    state.addAttachment(activeSession.id, relative);
+    return relative;
+  }, [activeSession, activeProject, state]);
 
   const answerUiRequest = useCallback((value: string | boolean | undefined) => {
     const request = state.uiRequest;

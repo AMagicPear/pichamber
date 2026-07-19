@@ -35,7 +35,8 @@ export const native = {
   stopRpc: (instanceId: string) => invoke<void>("rpc_stop", { instanceId }),
   listSessions: () => invoke<SessionInfo[]>("list_sessions"),
   deleteSession: (sessionPath: string) => invoke<void>("delete_session", { sessionPath }),
-  tree: (root: string) => invoke<TreeEntry[]>("workspace_tree", { root, relative: "", depth: 4 }),
+  tree: (root: string, relative: string = "", depth: number = 4) =>
+    invoke<TreeEntry[]>("workspace_tree", { root, relative, depth }),
   readFile: (root: string, relative: string) => invoke<OpenFile>("workspace_read_file", { root, relative, maxBytes: 2_097_152 }),
   startPty: (cwd: string, cols: number, rows: number) => invoke<{ ptyId: string }>("pty_start", { options: { cwd, cols, rows } }),
   writePty: (ptyId: string, data: string) => invoke<void>("pty_write", { ptyId, data }),
