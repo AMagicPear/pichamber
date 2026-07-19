@@ -1,4 +1,4 @@
-import { Files, Plus, Settings, TerminalSquare } from "lucide-react";
+import { Files, PanelLeft, Plus, Settings, TerminalSquare } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import type { Project, SessionTab } from "../../runtime/types";
 
@@ -25,6 +25,11 @@ export function WorkspaceHeader(props: Props) {
     <header className="workspace-header">
       <div aria-hidden data-tauri-drag-region="deep" className="drag-layer" />
       <div className="header-left no-drag">
+        {!props.sidebarOpen && (
+          <IconButton label="Show sidebar" className="tiny" onClick={props.onToggleSidebar}>
+            <PanelLeft size={17} />
+          </IconButton>
+        )}
         <span className="header-session" title={sessionLabel}>
           <span className={`session-status ${props.runtimeRunning ? "running" : ""}`} />
           <span className="header-session-title">{sessionLabel}</span>
