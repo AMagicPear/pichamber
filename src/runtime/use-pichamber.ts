@@ -26,10 +26,16 @@ const pathInsideProject = (projectPath: string, candidate: string): boolean => {
 const relativeFromProject = (projectPath: string, absolute: string): string =>
   absolute.slice(projectPath.replace(/[\\/]+$/, "").length).replace(/^[\\/]/, "").replaceAll("\\", "/");
 
-// Each Pi session we have open has a Pichamber-local tab id (derived from the
-// session path so it's stable across restarts, used for store lookups).
+// Each Pi session we have open has a Pichamber-local tab id. We use a hash of
+// the session path so it's stable across restarts and short enough to fit the
+// Rust instance-id validation (≤256 chars, no slashes).
 function sessionKey(path: string): string {
-  return `pi:${path}`;
+  let hash = 0;
+  for (let i = 0; i < path.length; i++) {
+    const c = path.charCodeAt(i);
+    hash = ((hash << 5) - hash + c) | 0;
+  }
+  return `pi:${Math.abs(hash).toString(36)}`;
 }
 
 export function usePichamber() {

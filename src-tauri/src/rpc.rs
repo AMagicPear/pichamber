@@ -48,10 +48,10 @@ struct RpcEventPayload {
 
 fn valid_instance_id(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 128
+        && value.len() <= 256
         && value
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':' | '.'))
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ':' | '.' | '@' | '#' | '+'))
 }
 
 fn expand_home(path: &str) -> PathBuf {
@@ -294,6 +294,6 @@ mod tests {
         assert!(valid_instance_id("workspace:session-1"));
         assert!(!valid_instance_id(""));
         assert!(!valid_instance_id("bad/id"));
-        assert!(!valid_instance_id(&"a".repeat(129)));
+        assert!(!valid_instance_id(&"a".repeat(257)));
     }
 }
