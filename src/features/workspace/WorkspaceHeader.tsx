@@ -1,18 +1,16 @@
-import { Files, PanelLeft, Plus, Settings, TerminalSquare, X } from "lucide-react";
+import { Files, Plus, Settings, TerminalSquare } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import type { SessionTab } from "../../runtime/types";
 
 interface Props {
-  tabs: SessionTab[];
-  activeSessionId: string | null;
+  activeSession?: SessionTab;
+  canCreateSession: boolean;
   sidebarOpen: boolean;
   inspectorOpen: boolean;
   terminalOpen: boolean;
   runtimeRunning: boolean;
   contextUsedPct?: number;
   onToggleSidebar(): void;
-  onSelectSession(id: string): void;
-  onCloseSession(id: string): void;
   onNewSession(): void;
   onToggleInspector(): void;
   onToggleTerminal(): void;
@@ -24,36 +22,20 @@ export function WorkspaceHeader(props: Props) {
     <header className="workspace-header">
       <div aria-hidden data-tauri-drag-region="deep" className="drag-layer" />
       <div className="header-left no-drag">
-        {!props.sidebarOpen && (
-          <IconButton label="Show sidebar" className="tiny" onClick={props.onToggleSidebar}>
-            <PanelLeft size={16} />
-          </IconButton>
-        )}
-        <div className="session-tabs">
-          {props.tabs.map((tab) => (
-            <button
-              key={tab.id}
-              className={`session-tab ${tab.id === props.activeSessionId ? "active" : ""}`}
-              onClick={() => props.onSelectSession(tab.id)}
-            >
-              <span>{tab.title}</span>
-              <span
-                className="session-close"
-                role="button"
-                aria-label={`Close ${tab.title}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  props.onCloseSession(tab.id);
-                }}
-              >
-                <X size={12} />
-              </span>
-            </button>
-          ))}
-          <IconButton label="New session" className="tiny" onClick={props.onNewSession}>
-            <Plus size={15} />
-          </IconButton>
-        </div>
+        <span className="header-session" title={props.activeSession?.title}>
+          <span className={`session-status ${props.runtimeRunning ? "running" : ""}`} />
+          <span className="header-session-title">
+            {props.activeSession?.title ?? "No session selected"}
+          </span>
+        </span>
+        <IconButton
+          label="New session"
+          className="tiny"
+          onClick={props.onNewSession}
+          disabled={!props.canCreateSession}
+        >
+          <Plus size={15} />
+        </IconButton>
       </div>
       <div className="header-actions no-drag">
         <span className={`runtime-indicator ${props.runtimeRunning ? "running" : ""}`}>

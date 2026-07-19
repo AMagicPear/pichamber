@@ -73,15 +73,13 @@ export default function App() {
       )}
       <main className="workspace">
         <WorkspaceHeader
-          tabs={actions.tabs}
-          activeSessionId={activeSession?.id ?? null}
+          activeSession={activeSession}
+          canCreateSession={Boolean(activeProject)}
           sidebarOpen={state.sidebarOpen}
           inspectorOpen={state.inspectorOpen}
           terminalOpen={state.terminalOpen}
           runtimeRunning={runtimeRunning}
           onToggleSidebar={state.toggleSidebar}
-          onSelectSession={state.setActiveSession}
-          onCloseSession={actions.closeActiveTab}
           onNewSession={() => activeProject && state.addSession(activeProject.id)}
           onToggleInspector={state.toggleInspector}
           onToggleTerminal={state.toggleTerminal}

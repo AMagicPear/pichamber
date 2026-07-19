@@ -195,12 +195,6 @@ export function usePichamber(activeSession?: SessionTab, activeProject?: Project
     [state.sessions, activeProject],
   );
 
-  const closeActiveTab = useCallback((id: string) => {
-    subscriptions.current.get(id)?.(); subscriptions.current.delete(id);
-    void closeRuntime(id);
-    state.closeSession(id);
-  }, [state]);
-
   return {
     tabs,
     openProjectAndActivate,
@@ -215,6 +209,5 @@ export function usePichamber(activeSession?: SessionTab, activeProject?: Project
     forkSession,
     deleteSession,
     removeProject,
-    closeActiveTab,
   };
 }
