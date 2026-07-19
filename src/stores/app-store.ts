@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { ChatMessage, ModelInfo, OpenFile, Project, SessionTab, ThinkingLevel, ToolActivity, UiRequest } from "../runtime/types";
+import { reduceRuntimeEvent } from "../runtime/normalize-events";
+import type { ChatMessage, ModelInfo, OpenFile, Project, SessionTab, ThinkingLevel, UiRequest } from "../runtime/types";
 
 interface AppState {
   projects: Project[];
@@ -47,16 +48,6 @@ interface AppState {
 const titleForProject = (projectId: string, sessions: SessionTab[]) => {
   const count = sessions.filter((session) => session.projectId === projectId).length + 1;
   return count === 1 ? "New session" : `Session ${count}`;
-};
-
-const textFromContent = (content: unknown): string => {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content.map((part) => {
-    if (!part || typeof part !== "object") return "";
-    const value = part as Record<string, unknown>;
-    return value.type === "text" ? String(value.text ?? "") : "";
-  }).join("");
 };
 
 export const useAppStore = create<AppState>()(persist((set, get) => ({
@@ -109,53 +100,15 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   addUserMessage: (sessionId, text) => set((state) => ({ messages: { ...state.messages, [sessionId]: [...(state.messages[sessionId] ?? []), { id: crypto.randomUUID(), role: "user", text, tools: [], createdAt: Date.now() }] } })),
   hydrateMessages: (sessionId, hydrated) => set((state) => ({ messages: { ...state.messages, [sessionId]: hydrated } })),
   reduceRuntimeEvent: (sessionId, event) => set((state) => {
-    const messages = [...(state.messages[sessionId] ?? [])];
-    const activeMap = { ...state.activeAssistant };
-    const type = String(event.type ?? "");
-    let runtimeError = state.runtimeError;
-    let uiRequest = state.uiRequest;
-    if (type === "message_start") {
-      const raw = (event.message ?? {}) as Record<string, unknown>;
-      if (raw.role === "assistant") {
-        const id = String(raw.id ?? crypto.randomUUID());
-        activeMap[sessionId] = id;
-        messages.push({ id, role: "assistant", text: textFromContent(raw.content), tools: [], createdAt: Date.now(), streaming: true });
-      }
-    } else if (type === "message_update") {
-      const id = activeMap[sessionId];
-      const target = messages.find((message) => message.id === id);
-      const update = (event.assistantMessageEvent ?? {}) as Record<string, unknown>;
-      if (target && update.type === "text_delta") target.text += String(update.delta ?? "");
-      if (target && ["thinking_delta", "reasoning_delta"].includes(String(update.type))) target.thinking = (target.thinking ?? "") + String(update.delta ?? "");
-      if (target && update.type === "error") target.error = String(update.error ?? update.delta ?? "Response failed");
-    } else if (type === "tool_execution_start") {
-      let id = activeMap[sessionId];
-      if (!id) {
-        id = crypto.randomUUID(); activeMap[sessionId] = id;
-        messages.push({ id, role: "assistant", text: "", tools: [], createdAt: Date.now(), streaming: true });
-      }
-      const target = messages.find((message) => message.id === id);
-      const callId = String(event.toolCallId ?? crypto.randomUUID());
-      const tool: ToolActivity = { id: callId, name: String(event.toolName ?? event.name ?? "Tool"), input: (event.args ?? event.input) as Record<string, unknown> | undefined, status: "running", startedAt: Date.now() };
-      target?.tools.push(tool);
-    } else if (["tool_execution_update", "tool_execution_end"].includes(type)) {
-      const target = messages.find((message) => message.id === activeMap[sessionId]);
-      const tool = target?.tools.find((value) => value.id === String(event.toolCallId));
-      if (tool) { tool.output = event.result ?? event.partialResult; tool.status = event.isError ? "error" : type === "tool_execution_end" ? "complete" : "running"; }
-    } else if (["message_end", "turn_end", "agent_end"].includes(type)) {
-      const target = messages.find((message) => message.id === activeMap[sessionId]);
-      if (target) target.streaming = false;
-      if (type !== "agent_end") delete activeMap[sessionId];
-    } else if (type === "extension_ui_request") {
-      const method = String(event.method);
-      if (["select", "confirm", "input", "editor"].includes(method)) uiRequest = event as unknown as UiRequest;
-    } else if (["error", "extension_error", "rpc_disconnected"].includes(type)) {
-      runtimeError = String(event.error ?? event.errorMessage ?? "Pi runtime disconnected");
-    }
-    return { messages: { ...state.messages, [sessionId]: messages }, activeAssistant: activeMap, runtimeError, uiRequest };
+    const slice = reduceRuntimeEvent(sessionId, state.messages[sessionId] ?? [], state.activeAssistant, event);
+    return {
+      messages: { ...state.messages, [sessionId]: slice.messages },
+      activeAssistant: slice.activeAssistant,
+      runtimeError: slice.runtimeError ?? state.runtimeError,
+      uiRequest: slice.uiRequest ?? state.uiRequest,
+    };
   }),
 }), {
   name: "pichamber-shell-v1",
   partialize: (state) => ({ projects: state.projects, sessions: state.sessions.map((session) => ({ ...session, running: false })), activeProjectId: state.activeProjectId, activeSessionId: state.activeSessionId, theme: state.theme, thinkingLevel: state.thinkingLevel, piPath: state.piPath, sidebarOpen: state.sidebarOpen }),
 }));
-

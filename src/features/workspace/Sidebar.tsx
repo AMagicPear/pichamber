@@ -1,5 +1,5 @@
-import { Folder, GitFork, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { Folder, GitFork, History, MoreHorizontal, PanelLeftClose, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import type { Project, SessionTab } from "../../runtime/types";
 
@@ -31,23 +31,30 @@ export function Sidebar(props: Props) {
     <div className="sidebar-actions">
       <button className="primary-action" onClick={props.onOpenProject}><Folder size={15} /> Open project</button>
       <IconButton label="Session history" onClick={props.onHistory}><History size={16} /></IconButton>
-      <IconButton label="Search sessions" onClick={props.onHistory}><Search size={16} /></IconButton>
     </div>
     <div className="project-list">
       {props.projects.length === 0 && <div className="sidebar-empty">Open a project to start a Pi session.</div>}
       {props.projects.map((project) => <section className="project-group" key={project.id}>
         <div className="project-row">
-          <button className="project-name" title={project.path}><Folder size={14} /> <span>{project.name}</span></button>
+          <div className="project-name" title={project.path}><Folder size={14} /> <span>{project.name}</span></div>
           <IconButton label={`New session in ${project.name}`} onClick={() => props.onNewSession(project.id)}><Plus size={15} /></IconButton>
           <IconButton label={`Remove ${project.name}`} onClick={() => props.onRemoveProject(project)}><Trash2 size={14} /></IconButton>
         </div>
         <div className="session-list">
           {props.sessions.filter((session) => session.projectId === project.id).map((session) =>
-            <div key={session.id} className="session-row-wrap"><button className={`session-row ${props.activeSessionId === session.id ? "active" : ""}`} onClick={() => props.onSession(session.id)}>
-              <span className={`session-status ${session.running ? "running" : ""}`} />
-              <span className="session-title">{session.title}</span>
-              {session.unread && <span className="unread-dot" />}
-            </button><IconButton label={`Actions for ${session.title}`} onClick={() => setMenu(menu === session.id ? undefined : session.id)}><MoreHorizontal size={14} /></IconButton>{menu === session.id && <div className="session-menu"><button onClick={() => { setMenu(undefined); props.onRename(session); }}><Pencil size={13} /> Rename</button><button onClick={() => { setMenu(undefined); props.onFork(session); }}><GitFork size={13} /> Fork</button><button className="danger" onClick={() => { setMenu(undefined); props.onDelete(session); }}><Trash2 size={13} /> Delete</button></div>}</div>)}
+            <div key={session.id} className="session-row-wrap">
+              <button className={`session-row ${props.activeSessionId === session.id ? "active" : ""}`} onClick={() => props.onSession(session.id)}>
+                <span className={`session-status ${session.running ? "running" : ""}`} />
+                <span className="session-title">{session.title}</span>
+                {session.unread && <span className="unread-dot" />}
+              </button>
+              <IconButton label={`Actions for ${session.title}`} onClick={() => setMenu(menu === session.id ? undefined : session.id)}><MoreHorizontal size={14} /></IconButton>
+              {menu === session.id && <div className="session-menu">
+                <button onClick={() => { setMenu(undefined); props.onRename(session); }}><Pencil size={13} /> Rename</button>
+                <button onClick={() => { setMenu(undefined); props.onFork(session); }}><GitFork size={13} /> Fork</button>
+                <button className="danger" onClick={() => { setMenu(undefined); props.onDelete(session); }}><Trash2 size={13} /> Delete</button>
+              </div>}
+            </div>)}
         </div>
       </section>)}
     </div>
@@ -57,4 +64,3 @@ export function Sidebar(props: Props) {
     </div>
   </aside>;
 }
-

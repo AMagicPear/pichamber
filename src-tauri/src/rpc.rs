@@ -27,8 +27,6 @@ struct RpcProcess {
 pub struct RpcStartOptions {
     pub cwd: String,
     pub pi_path: Option<String>,
-    pub provider: Option<String>,
-    pub model: Option<String>,
     pub env: Option<HashMap<String, String>>,
 }
 
@@ -134,12 +132,6 @@ pub async fn rpc_start(
 
     let mut command = Command::new(&executable);
     command.arg("--mode").arg("rpc").current_dir(cwd);
-    if let Some(provider) = options.provider.filter(|v| !v.is_empty()) {
-        command.arg("--provider").arg(provider);
-    }
-    if let Some(model) = options.model.filter(|v| !v.is_empty()) {
-        command.arg("--model").arg(model);
-    }
     if let Some(env) = options.env {
         command.envs(env);
     }
@@ -291,15 +283,6 @@ pub async fn rpc_stop(
 ) -> Result<(), String> {
     let id = instance_id.unwrap_or_else(|| DEFAULT_INSTANCE.to_string());
     rpc_stop_inner(&state, &id).await
-}
-
-#[tauri::command]
-pub async fn rpc_is_running(
-    state: State<'_, RpcState>,
-    instance_id: Option<String>,
-) -> Result<bool, String> {
-    let id = instance_id.unwrap_or_else(|| DEFAULT_INSTANCE.to_string());
-    Ok(state.processes.lock().await.contains_key(&id))
 }
 
 #[cfg(test)]

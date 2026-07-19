@@ -29,7 +29,7 @@ export async function openProject(): Promise<Project | null> {
 
 export const native = {
   findPi: (piPath?: string) => invoke<string>("find_pi", { piPath }),
-  startRpc: (options: { cwd: string; piPath?: string; provider?: string; model?: string }, instanceId: string) =>
+  startRpc: (options: { cwd: string; piPath?: string; env?: Record<string, string> }, instanceId: string) =>
     invoke<{ instanceId: string; generation: number; executable: string }>("rpc_start", { options, instanceId }),
   sendRpc: (command: unknown, instanceId: string) => invoke<void>("rpc_send", { command: JSON.stringify(command), instanceId }),
   stopRpc: (instanceId: string) => invoke<void>("rpc_stop", { instanceId }),

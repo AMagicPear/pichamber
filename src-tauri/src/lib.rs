@@ -17,7 +17,6 @@ pub fn run() {
             rpc::rpc_start,
             rpc::rpc_send,
             rpc::rpc_stop,
-            rpc::rpc_is_running,
             rpc::find_pi,
             sessions::list_sessions,
             sessions::delete_session,
