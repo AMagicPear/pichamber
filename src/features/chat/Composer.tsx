@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import { Paperclip, Send, Square, X } from "lucide-react";
+import { Brain, ChevronDown, Paperclip, Send, Square, X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import type { ModelInfo, ThinkingLevel } from "../../runtime/types";
 
@@ -31,6 +31,9 @@ const displayModel = (model: ModelInfo): string => {
   const slash = model.id.indexOf("/");
   return slash >= 0 ? model.id.slice(slash + 1) : model.id;
 };
+
+const labelForThinking = (level: ThinkingLevel): string =>
+  THINKING_LEVELS.find((entry) => entry.value === level)?.label ?? "Medium";
 
 export function Composer(props: Props) {
   const [text, setText] = useState("");
@@ -90,36 +93,44 @@ export function Composer(props: Props) {
         />
         <div className="composer-toolbar">
           <div className="composer-controls">
-            <select
-              className="composer-select"
-              aria-label="Model"
-              value={props.selectedModel?.id ?? ""}
-              onChange={(event) => {
-                const next = props.models.find((model) => model.id === event.target.value);
-                if (next) props.onModel(next);
-              }}
-            >
-              {props.models.length === 0 && <option value="">Loading models…</option>}
-              {props.models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {displayModel(model)}
-                </option>
-              ))}
-            </select>
-            <select
-              className="composer-pill"
-              aria-label="Thinking level"
-              style={{ appearance: "none", backgroundImage: "none", paddingRight: 12 }}
-              value={props.thinkingLevel}
-              onChange={(event) => props.onThinking(event.target.value as ThinkingLevel)}
-            >
-              {THINKING_LEVELS.map((level) => (
-                <option key={level.value} value={level.value}>
-                  Thinking: {level.label}
-                </option>
-              ))}
-            </select>
-            <IconButton label="Attach file" onClick={handleAttach} disabled={props.disabled}>
+            <label className="composer-pill model-pill">
+              <span className="pill-text">
+                {props.selectedModel ? displayModel(props.selectedModel) : props.models.length === 0 ? "Loading models…" : "Pick a model"}
+              </span>
+              <ChevronDown size={12} className="pill-chevron" />
+              <select
+                aria-label="Model"
+                value={props.selectedModel?.id ?? ""}
+                onChange={(event) => {
+                  const next = props.models.find((model) => model.id === event.target.value);
+                  if (next) props.onModel(next);
+                }}
+              >
+                {props.models.length === 0 && <option value="">Loading models…</option>}
+                {props.models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {displayModel(model)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={`composer-pill thinking-pill ${props.thinkingLevel !== "off" ? "is-active" : ""}`}>
+              <Brain size={13} />
+              <span className="pill-text">{labelForThinking(props.thinkingLevel)}</span>
+              <ChevronDown size={11} className="pill-chevron" />
+              <select
+                aria-label="Thinking level"
+                value={props.thinkingLevel}
+                onChange={(event) => props.onThinking(event.target.value as ThinkingLevel)}
+              >
+                {THINKING_LEVELS.map((level) => (
+                  <option key={level.value} value={level.value}>
+                    Thinking: {level.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <IconButton label="Attach file" className="tiny" onClick={handleAttach} disabled={props.disabled}>
               <Paperclip size={15} />
             </IconButton>
           </div>

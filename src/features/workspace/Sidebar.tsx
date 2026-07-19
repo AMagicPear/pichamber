@@ -45,7 +45,7 @@ export function Sidebar(props: Props) {
 
       <div className="sidebar-header-row no-drag">
         <IconButton label="Open project" className="tiny" onClick={props.onOpenProject}>
-          <FolderOpen size={16} />
+          <FolderOpen size={15} />
         </IconButton>
         <IconButton
           label="New session"
@@ -56,11 +56,11 @@ export function Sidebar(props: Props) {
           }}
           disabled={props.projects.length === 0}
         >
-          <Plus size={16} />
+          <Plus size={15} />
         </IconButton>
         <span className="sidebar-header-spacer" />
-        <IconButton label="Search sessions" className="tiny is-active">
-          <Search size={16} />
+        <IconButton label="Search sessions" className="tiny">
+          <Search size={15} />
         </IconButton>
       </div>
 

@@ -1,3 +1,4 @@
+import { ArrowUpRight } from "lucide-react";
 import { BrandLogo } from "../../components/BrandLogo";
 
 interface Props {
@@ -14,21 +15,31 @@ const SUGGESTIONS = [
 export function ChatEmptyState({ projectName, onSuggestion }: Props) {
   return (
     <div className="empty-chat">
-      <div className="empty-logo">
-        <BrandLogo size={64} animated />
-      </div>
-      <h1>{projectName ? `Working in ${projectName}` : "Start a Pi session"}</h1>
-      <p>
-        Pichamber drives the Pi Coding Agent through a local RPC process.
-        Open or create a session in the sidebar to get going.
-      </p>
-      <div className="prompt-suggestions">
-        {SUGGESTIONS.map((suggestion) => (
-          <button key={suggestion.title} onClick={() => onSuggestion(suggestion.body)}>
-            <strong>{suggestion.title}</strong>
-            {suggestion.body}
-          </button>
-        ))}
+      <div className="empty-stack">
+        <div className="empty-logo">
+          <BrandLogo size={56} animated />
+        </div>
+        <div className="empty-headline">
+          <h1>{projectName ? `Working in ${projectName}` : "Ready when you are"}</h1>
+          <p>
+            Ask Pi to plan a change, write code, or explore the repo. It runs locally
+            and streams back into this window — no cloud round-trips.
+          </p>
+        </div>
+        <div className="prompt-suggestions">
+          {SUGGESTIONS.map((suggestion) => (
+            <button key={suggestion.title} onClick={() => onSuggestion(suggestion.body)}>
+              <div className="suggestion-body">
+                <strong>{suggestion.title}</strong>
+                <span>{suggestion.body}</span>
+              </div>
+              <ArrowUpRight size={14} className="suggestion-arrow" />
+            </button>
+          ))}
+        </div>
+        <div className="empty-hints">
+          <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a newline · <kbd>⌘</kbd>+<kbd>K</kbd> for the command palette
+        </div>
       </div>
     </div>
   );

@@ -74,6 +74,7 @@ export default function App() {
       <main className="workspace">
         <WorkspaceHeader
           activeSession={activeSession}
+          activeProject={activeProject}
           canCreateSession={Boolean(activeProject)}
           sidebarOpen={state.sidebarOpen}
           inspectorOpen={state.inspectorOpen}

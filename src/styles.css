@@ -100,12 +100,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .sidebar { position: relative; width: 280px; min-width: 280px; height: 100%; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); }
 .sidebar-titlebar { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 var(--titlebar-inset); }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; color: var(--foreground); }
-.brand-mark { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #fff; background: oklch(0.32 0.02 50); font-family: Georgia, serif; font-size: 17px; font-weight: 600; }
+.brand-mark { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: #fff; background: oklch(0.32 0.02 50); font-family: Georgia, serif; font-size: 16px; font-weight: 600; }
 .dark .brand-mark { color: oklch(0.16 0.01 30); background: oklch(0.77 0.17 85); }
 
 /* OpenChamber-style header row with icon buttons */
-.sidebar-header-row { display: flex; align-items: center; gap: 4px; padding: 8px 10px 6px; border-bottom: 1px solid var(--border); }
-.sidebar-header-row .icon-button { width: 30px; height: 30px; flex-basis: 30px; }
+.sidebar-header-row { display: flex; align-items: center; gap: 2px; padding: 8px 10px 6px; border-bottom: 1px solid var(--border); }
+.sidebar-header-row .icon-button { width: 28px; height: 28px; flex-basis: 28px; }
 .sidebar-header-spacer { flex: 1; }
 
 /* OpenChamber-style footer row */
@@ -124,11 +124,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .project-group { padding: 4px 0 8px; }
 .project-row { min-height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 4px; border-radius: 6px; }
 .project-row:hover { background: var(--surface-hover); }
-.project-row .project-name { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 6px; background: transparent; text-align: left; cursor: pointer; color: var(--muted-foreground); font-size: 12px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.project-row .project-name { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 6px; background: transparent; text-align: left; cursor: pointer; color: var(--muted-foreground); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .project-row .project-name:hover { color: var(--foreground); }
 .project-row .project-name span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-row .icon-button { width: 24px; height: 24px; flex-basis: 24px; opacity: 0; transition: opacity var(--motion-fast) var(--motion-ease); }
+.project-row .icon-button { width: 22px; height: 22px; flex-basis: 22px; opacity: .55; transition: opacity var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
 .project-row:hover .icon-button, .project-row:focus-within .icon-button { opacity: 1; }
+.project-row .icon-button:hover { background: var(--surface-hover); color: var(--foreground); }
 .session-list { display: grid; gap: 1px; padding: 2px 0 2px 8px; }
 .session-row-wrap { position: relative; display: flex; align-items: center; }
 .session-row-wrap > .session-row { min-width: 0; flex: 1; }
@@ -152,13 +153,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* === Workspace header =================================================== */
 .workspace { min-width: 0; flex: 1; height: 100%; display: flex; flex-direction: column; }
-.workspace-header { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 8px 0 10px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 92%, transparent); overflow: visible; }
+.workspace-header { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 92%, transparent); overflow: visible; }
 .app-shell:not(.with-sidebar) .workspace-header { padding-left: var(--titlebar-inset); }
 .workspace-header > .header-left,
 .workspace-header > .header-actions { position: relative; z-index: 1; -webkit-app-region: no-drag; }
-.header-left, .header-actions { min-width: 0; display: flex; align-items: center; gap: 4px; }
-.header-session { min-width: 0; max-width: 360px; display: inline-flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 6px; color: var(--foreground); font-size: 13px; font-weight: 550; }
+.header-left, .header-actions { min-width: 0; display: flex; align-items: center; gap: 6px; }
+.header-session { min-width: 0; max-width: 380px; display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 8px; border-radius: 7px; color: var(--foreground); font-size: 13px; font-weight: 550; transition: background-color var(--motion-fast) var(--motion-ease); }
+.header-session:hover { background: var(--surface-hover); }
+.header-session .session-status { flex: 0 0 7px; }
 .header-session-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-session-sub { color: var(--muted-foreground); font-size: 11px; font-weight: 500; padding-left: 4px; border-left: 1px solid var(--border); margin-left: 2px; }
+.header-spacer { flex: 1; }
 
 /* Runtime status pill (OpenChamber-style) */
 .runtime-indicator { display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; color: var(--text-faint); font-size: 11px; font-weight: 500; transition: color var(--motion-fast) var(--motion-ease); }
@@ -178,18 +183,26 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .chat-scroll { min-height: 0; flex: 1; overflow-y: auto; overflow-x: hidden; }
 
 /* === Empty chat state (OpenChamber centered logo) ====================== */
-.empty-chat { width: min(560px, calc(100% - 40px)); min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 48px 0 140px; text-align: center; animation: empty-fade-in var(--motion-slow) var(--motion-ease) both; }
-.empty-logo { width: 88px; height: 88px; display: grid; place-items: center; margin-bottom: 22px; border-radius: 16px; background: var(--surface-raised); box-shadow: 0 1px 0 var(--border), 0 6px 16px color-mix(in oklch, var(--foreground) 6%, transparent); animation: chip-rise 420ms var(--motion-ease) both; }
-.empty-chat h1 { margin: 0; font-size: 22px; line-height: 1.25; font-weight: 620; letter-spacing: -.01em; }
-.empty-chat p { max-width: 420px; margin: 10px 0 24px; color: var(--muted-foreground); line-height: 1.55; font-size: 13px; }
-.prompt-suggestions { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.prompt-suggestions button { min-height: 52px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-raised); color: var(--muted-foreground); cursor: pointer; font-size: 12px; line-height: 1.4; text-align: left; transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); animation: chip-rise 320ms var(--motion-ease) both; }
+.empty-chat { width: 100%; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 60px 24px 220px; animation: empty-fade-in var(--motion-slow) var(--motion-ease) both; }
+.empty-stack { width: min(640px, 100%); display: flex; flex-direction: column; align-items: center; gap: 26px; text-align: center; }
+.empty-logo { width: 72px; height: 72px; display: grid; place-items: center; border-radius: 14px; background: var(--surface-raised); box-shadow: 0 1px 0 var(--border), 0 8px 22px color-mix(in oklch, var(--foreground) 6%, transparent); animation: chip-rise 420ms var(--motion-ease) both; }
+.empty-headline { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.empty-chat h1 { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 620; letter-spacing: -.015em; }
+.empty-chat p { max-width: 460px; margin: 0; color: var(--muted-foreground); line-height: 1.55; font-size: 13.5px; }
+.prompt-suggestions { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.prompt-suggestions button { min-height: 86px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-raised); color: var(--muted-foreground); cursor: pointer; font-size: 12px; line-height: 1.4; text-align: left; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); animation: chip-rise 320ms var(--motion-ease) both; }
 .prompt-suggestions button:nth-child(1) { animation-delay: 40ms; }
 .prompt-suggestions button:nth-child(2) { animation-delay: 90ms; }
 .prompt-suggestions button:nth-child(3) { animation-delay: 140ms; }
-.prompt-suggestions button:hover { border-color: var(--border-strong); color: var(--foreground); }
+.prompt-suggestions button:hover { border-color: var(--border-strong); color: var(--foreground); background: color-mix(in oklch, var(--primary) 5%, var(--surface-raised)); }
 .prompt-suggestions button:active { transform: scale(.985); }
-.prompt-suggestions button strong { display: block; color: var(--foreground); font-weight: 600; margin-bottom: 2px; }
+.suggestion-body { display: flex; flex-direction: column; gap: 4px; }
+.prompt-suggestions button strong { display: block; color: var(--foreground); font-weight: 600; font-size: 13px; }
+.prompt-suggestions button span { color: var(--muted-foreground); font-size: 12px; line-height: 1.4; }
+.suggestion-arrow { align-self: flex-end; color: var(--text-faint); transition: color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); }
+.prompt-suggestions button:hover .suggestion-arrow { color: var(--primary); transform: translate(1px, -1px); }
+.empty-hints { display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 6px; color: var(--text-faint); font-size: 11px; }
+.empty-hints kbd { font: 10px/1 var(--font-mono); padding: 2px 5px; border-radius: 3px; background: var(--surface-muted); border: 1px solid var(--border); color: var(--muted-foreground); }
 
 /* === Messages (OpenChamber: bubble on right, avatar + rail on left) === */
 .message-list { width: min(48rem, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 200px; }
@@ -251,10 +264,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .attachment-row > .chip button:hover { background: var(--surface-hover); color: var(--foreground); }
 .composer-toolbar { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 7px 7px; }
 .composer-controls { min-width: 0; display: flex; align-items: center; gap: 3px; }
-.composer-pill { min-height: 28px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid transparent; border-radius: 999px; color: var(--muted-foreground); cursor: pointer; font-size: 12px; transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
+.composer-pill { min-height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; border: 1px solid transparent; border-radius: 999px; color: var(--muted-foreground); cursor: pointer; font-size: 12px; font-weight: 500; transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); position: relative; }
 .composer-pill:hover { background: var(--surface-hover); color: var(--foreground); }
 .composer-pill.is-active { background: color-mix(in oklch, var(--primary) 14%, transparent); color: var(--primary); border-color: color-mix(in oklch, var(--primary) 30%, transparent); }
-.composer-pill .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .7; }
+.composer-pill > select { position: absolute; inset: 0; opacity: 0; cursor: pointer; padding: 0; border: 0; background: transparent; color: transparent; }
+.composer-pill > select option { color: var(--foreground); background: var(--surface-raised); }
+.composer-pill .pill-chevron { opacity: .55; transition: opacity var(--motion-fast) var(--motion-ease); }
+.composer-pill:hover .pill-chevron { opacity: 1; }
+.composer-pill.model-pill { max-width: 220px; }
+.composer-pill.model-pill > select { width: 100%; }
+.composer-pill.thinking-pill { padding-right: 6px; }
+.composer-pill .pill-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
 .composer-select { max-width: 200px; min-height: 28px; padding: 0 24px 0 10px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--muted-foreground); cursor: pointer; font-size: 12px; transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 8px center; }
 .composer-select:hover { background-color: var(--surface-hover); color: var(--foreground); }
 .send-button { width: 30px; height: 30px; flex-basis: 30px; color: #fff; background: oklch(0.3 0.02 50); border-radius: 8px; transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); }
