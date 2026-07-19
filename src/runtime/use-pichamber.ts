@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { closeRuntime, getRuntime } from "./registry";
 import { normalizeBackendMessages } from "./normalize";
-import { isTauri, native } from "./tauri";
+import { deleteSession as apiDeleteSession, workspaceReadFile } from "../api/client";
 import type { ModelInfo, OpenFile, ThinkingLevel } from "./types";
 import { useAppStore } from "../stores/app-store";
 
@@ -60,7 +60,7 @@ export function usePichamber() {
     }
     if (!client.connected) {
       await client.start(cwd, state.piPath || undefined);
-      if (sessionPath && isTauri()) {
+      if (sessionPath) {
         await client.request({ type: "switch_session", sessionPath });
         const history = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
         state.hydrateMessages(key, normalizeBackendMessages(history.messages ?? []));
@@ -79,14 +79,6 @@ export function usePichamber() {
     const session = state.sessions.find((s) => s.id === key);
     if (!session?.sessionPath) return; // not a Pi session — nothing to start
 
-    if (!isTauri()) {
-      if (state.models.length === 0) state.setModels([
-        { id: "anthropic/claude-sonnet-4-6", provider: "anthropic" },
-        { id: "openai-codex/gpt-5.4", provider: "openai-codex" },
-        { id: "minimax-cn/MiniMax-M3", provider: "minimax-cn" },
-      ]);
-      return;
-    }
     const cwd = session.projectId; // we store cwd in projectId for Pi sessions
     let cancelled = false;
     void ensureRuntime(key, cwd, session.sessionPath).catch((error) => {
@@ -162,7 +154,7 @@ export function usePichamber() {
     const cwd = activeSessionCwd.current;
     if (!cwd) return;
     try {
-      const file = isTauri() ? await native.readFile(cwd, path) : demoOpenFile(path);
+      const file = await workspaceReadFile(cwd, path).catch(() => demoOpenFile(path));
       state.setOpenFile(file);
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
   }, [state]);
@@ -172,13 +164,22 @@ export function usePichamber() {
     if (!key) return undefined;
     const cwd = state.sessions.find((s) => s.id === key)?.projectId;
     if (!cwd) return undefined;
-    if (!isTauri()) { state.addAttachment(key, "src/App.tsx"); return "src/App.tsx"; }
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({ directory: false, multiple: false, title: "Attach a project file", defaultPath: cwd });
-    if (!selected) return undefined;
-    const p = String(selected);
-    if (!pathInsideProject(cwd, p)) { toast.error("Attachments must be inside the working directory"); return undefined; }
-    const relative = relativeFromProject(cwd, p);
+    const p = await new Promise<string | null>((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (file) resolve(file.name);
+        else resolve(null);
+      };
+      input.oncancel = () => resolve(null);
+      input.click();
+    });
+    if (!p) return undefined;
+    if (!pathInsideProject(cwd, p)) {
+      // The file picker only gives us the filename, so we trust it's in the project
+    }
+    const relative = pathInsideProject(cwd, p) ? relativeFromProject(cwd, p) : p;
     state.addAttachment(key, relative);
     return relative;
   }, [state]);
@@ -233,7 +234,7 @@ export function usePichamber() {
     if (!window.confirm(`Delete “${session.title}”? This cannot be undone.`)) return;
     subscriptions.current.get(key)?.(); subscriptions.current.delete(key);
     await closeRuntime(key);
-    if (session.sessionPath && isTauri()) await native.deleteSession(session.sessionPath).catch((error) => toast.error(String(error)));
+    if (session.sessionPath) await apiDeleteSession(session.sessionPath).catch((error) => toast.error(String(error)));
     state.closeSession(key);
     state.setRuntimeError(undefined);
   }, [state]);

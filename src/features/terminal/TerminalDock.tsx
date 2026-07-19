@@ -3,9 +3,8 @@ import { Maximize2, Plus, RotateCw, X } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { listen } from "@tauri-apps/api/event";
 import { IconButton } from "../../components/IconButton";
-import { isTauri, native } from "../../runtime/tauri";
+import { ptyWs, startPty } from "../../api/client";
 
 type Status = "connecting" | "ready" | "closed" | "error";
 
@@ -15,8 +14,6 @@ const theme = {
   cursor: "#d9a441",
   selectionBackground: "#4a4d47",
 };
-
-const PROMPT_DEMO = (cwd: string) => `${cwd} $ `;
 
 export function TerminalDock({ cwd, onClose }: { cwd?: string; onClose(): void }) {
   const host = useRef<HTMLDivElement>(null);
@@ -36,15 +33,17 @@ export function TerminalDock({ cwd, onClose }: { cwd?: string; onClose(): void }
     terminalRef.current = terminal;
 
     let ptyId: string | undefined;
+    let ws: WebSocket | null = null;
     let disposed = false;
-    let unlisten: Array<() => void> = [];
     let resizeFrame = 0;
 
     const observer = new ResizeObserver(() => {
       cancelAnimationFrame(resizeFrame);
       resizeFrame = requestAnimationFrame(() => {
         fit.fit();
-        if (ptyId) void native.resizePty(ptyId, terminal.cols, terminal.rows);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
+        }
       });
     });
     observer.observe(host.current);
@@ -53,37 +52,46 @@ export function TerminalDock({ cwd, onClose }: { cwd?: string; onClose(): void }
       disposed = true;
       observer.disconnect();
       cancelAnimationFrame(resizeFrame);
-      unlisten.forEach((fn) => fn());
-      if (ptyId) void native.stopPty(ptyId);
+      if (ws) { ws.onclose = null; ws.onmessage = null; ws.close(); }
       terminal.dispose();
       terminalRef.current = null;
     };
 
-    if (!isTauri()) {
-      terminal.writeln("\x1b[38;5;214mPichamber demo terminal\x1b[0m");
-      terminal.write(`\r\n${PROMPT_DEMO(cwd)} `);
-      setStatus("ready");
-      const input = terminal.onData((data) => {
-        if (data === "\r") terminal.write(`\r\n${PROMPT_DEMO(cwd)} `);
-        else terminal.write(data);
-      });
-      return () => { input.dispose(); cleanup(); };
-    }
-
     void (async () => {
       try {
-        unlisten = [
-          await listen<{ ptyId: string; data: string }>("pty-data", (event) => { if (event.payload.ptyId === ptyId) terminal.write(event.payload.data); }),
-          await listen<{ ptyId: string }>("pty-exit", (event) => { if (event.payload.ptyId === ptyId) setStatus("closed"); }),
-        ];
-        const result = await native.startPty(cwd, terminal.cols, terminal.rows);
-        if (disposed) { await native.stopPty(result.ptyId); return; }
+        const result = await startPty({ cwd, cols: terminal.cols, rows: terminal.rows });
+        if (disposed) return;
         ptyId = result.ptyId;
+
+        ws = ptyWs(ptyId);
+        ws.onmessage = (event) => {
+          if (typeof event.data === "string") terminal.write(event.data);
+        };
+        ws.onclose = () => {
+          if (!disposed) setStatus("closed");
+        };
+        ws.onerror = () => {
+          // onclose fires next
+        };
+
+        // Wait for WS to open before setting ready
+        await new Promise<void>((resolve) => {
+          if (!ws) return resolve();
+          if (ws.readyState === WebSocket.OPEN) return resolve();
+          ws.onopen = () => resolve();
+        });
+
+        if (disposed) return;
         setStatus("ready");
-        terminal.onData((data) => { if (ptyId) void native.writePty(ptyId, data); });
+
+        terminal.onData((data) => {
+          if (ws && ws.readyState === WebSocket.OPEN) ws.send(data);
+        });
       } catch (error) {
-        terminal.writeln(`\r\nTerminal failed: ${String(error)}`);
-        setStatus("error");
+        if (!disposed) {
+          terminal.writeln(`\r\nTerminal failed: ${String(error)}`);
+          setStatus("error");
+        }
       }
     })();
 

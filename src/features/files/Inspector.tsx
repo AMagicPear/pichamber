@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { ChevronRight, File, Folder, FolderTree, X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
-import { native } from "../../runtime/tauri";
+import { workspaceTree } from "../../api/client";
 import type { OpenFile, Project, TreeEntry } from "../../runtime/types";
 
 type Tab = "files" | "context";
@@ -23,8 +23,8 @@ export function Inspector({ project, file, onFile, onClose }: Props) {
     if (!project) { setTree([]); return; }
     const root = project.path;
     let cancelled = false;
-    void native.tree(root, "", 4)
-      .then((entries) => { if (!cancelled) setTree(entries); })
+    void workspaceTree(root, "", 4)
+      .then((entries) => { if (!cancelled) setTree(entries as TreeEntry[]); })
       .catch(() => undefined);
     return () => { cancelled = true; };
     // project is captured by root above so we re-fetch only on path changes.

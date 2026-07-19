@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FolderOpen, PanelLeftClose, Plus, RefreshCw, Search, Settings as SettingsIcon } from "lucide-react";
 import { BrandMark } from "../../components/BrandLogo";
 import { IconButton } from "../../components/IconButton";
-import { isTauri, native, openProject } from "../../runtime/tauri";
+import { listAllSessionsGrouped, openProject } from "../../api/client";
 import type { PiSessionGroup } from "../../runtime/types";
 
 interface Props {
@@ -19,10 +19,8 @@ export function Sidebar(props: Props) {
   const normalized = query.trim().toLowerCase();
 
   const load = () => {
-    if (!isTauri()) return;
     setLoading(true);
-    native
-      .listAllSessionsGrouped()
+    listAllSessionsGrouped()
       .then(setGroups)
       .catch((error) => console.warn("Failed to load Pi sessions:", error))
       .finally(() => setLoading(false));
@@ -48,7 +46,6 @@ export function Sidebar(props: Props) {
   return (
     <aside className="sidebar" aria-label="Pi sessions">
       <div className="sidebar-titlebar">
-        <div aria-hidden data-tauri-drag-region="deep" className="drag-layer" />
         <div className="brand no-drag">
           <BrandMark size={22} />
           <span>Pichamber</span>

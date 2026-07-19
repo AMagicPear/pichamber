@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Clock3, Search, X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
-import { isTauri, native } from "../../runtime/tauri";
+import { listSessions } from "../../api/client";
 import type { Project, SessionInfo } from "../../runtime/types";
 
 const timeAgo = (seconds: number) => {
@@ -17,11 +17,7 @@ export function SessionBrowser({ project, onResume, onClose }: { project?: Proje
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    if (!isTauri()) {
-      setSessions([{ id: "demo-history", name: "Review workspace layout", path: "/demo/session.jsonl", cwd: project?.path, createdAt: Date.now() / 1000 - 4000, modifiedAt: Date.now() / 1000 - 300, messageCount: 8, tokens: 12400, cost: 0.08 }]);
-      setLoading(false); return;
-    }
-    native.listSessions().then(setSessions).finally(() => setLoading(false));
+    listSessions().then(setSessions).finally(() => setLoading(false));
   }, [project]);
   const filtered = useMemo(() => sessions.filter((session) => (!project || session.cwd === project.path) && `${session.name ?? ""} ${session.id}`.toLowerCase().includes(query.toLowerCase())), [sessions, project, query]);
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="session-browser" role="dialog" aria-modal="true" aria-label="Session history">

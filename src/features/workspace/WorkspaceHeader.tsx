@@ -23,7 +23,7 @@ export function WorkspaceHeader(props: Props) {
   const sessionLabel = props.activeSession?.title ?? (projectLabel ? "New session" : "No session selected");
   return (
     <header className="workspace-header">
-      <div aria-hidden data-tauri-drag-region="deep" className="drag-layer" />
+      <div aria-hidden className="drag-layer" />
       <div className="header-left no-drag">
         {!props.sidebarOpen && (
           <IconButton label="Show sidebar" className="tiny" onClick={props.onToggleSidebar}>

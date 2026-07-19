@@ -84,9 +84,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 /* === App shell ======================================================== */
 .app-shell { display: flex; width: 100%; height: 100dvh; background: var(--background); }
 
-/* Tauri 2 macOS drag: the .drag-layer carries [data-tauri-drag-region]
-   and child interactive regions opt out via .no-drag. */
-.drag-layer { position: absolute; inset: 0; z-index: 0; pointer-events: auto; }
+/* Titlebar drag-layer: decorative in browser mode. */
+.drag-layer { display: none; }
 .no-drag { -webkit-app-region: no-drag; }
 
 /* === Icon button (OpenChamber-style 32x32 square w/ hover bg) ========= */
