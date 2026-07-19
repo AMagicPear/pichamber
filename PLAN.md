@@ -2,214 +2,199 @@
 
 ## 1. Product boundary
 
-Pichamber v0.1 is a macOS coding-agent workspace for a single local user. Its primary job is to open a project, start or resume Pi sessions, and keep chat, tools, files, diffs, and a terminal visible in one coherent workspace. macOS is the only supported development and release platform.
+Pichamber is a coding-agent workspace that runs entirely in the browser. It talks to a local Rust backend that manages Pi processes, the filesystem, and PTY terminals. No Electron, no Tauri — just a browser tab and a single background process.
 
-### MVP
+Version 0.2 makes Pichamber a browser-first application, following OpenChamber's architecture: a local HTTP+WebSocket server that the browser connects to.
 
-- Open, pin, reorder, and remove local projects.
-- Create, resume, rename, fork, search, and delete Pi sessions.
-- Stream user, assistant, thinking, and tool activity into a stable timeline.
-- Compose prompts with attachments, file references, model choice, thinking level, stop, steer, and queued follow-up.
-- Render purpose-built tool states for shell, file reads/writes, diffs, searches, tasks, and generic extension tools.
-- Handle extension UI requests such as confirm, select, input, editor, notification, and status.
-- Open referenced files and diffs in a resizable right pane.
-- Run a real PTY in a resizable bottom dock rooted at the project directory.
-- Configure Pi discovery/path, theme, notifications, and basic runtime preferences.
-- Show actionable onboarding, compatibility, process, and provider errors.
+### v0.1 (done) — macOS desktop via Tauri
+### v0.2 (now) — browser-first via local HTTP server
 
-### Deferred until after v0.1
+- Runs in any browser on the same machine (`localhost:1420`)
+- Single Rust binary: `pichamber serve` starts the backend and opens the browser
+- No Tauri, no Electron, no desktop framework dependency
+- Works on macOS, Linux, and potentially Windows
 
-Web/PWA and remote access, GitHub/PR workflows, multi-agent orchestration, voice, mobile, package marketplace UI, auto-update, mini-chat, SSH hosts, and collaborative relay are excluded. Pi's existing slash commands, skills, prompts, packages, and extensions remain available through runtime discovery.
+### Deferred
 
-## 2. Interaction and visual direction
+Web/PWA remote access, GitHub/PR workflows, multi-agent, voice, mobile, package marketplace, SSH hosts, collaborative relay.
 
-The UI should reproduce OpenChamber's information architecture and interaction expectations, not its source code.
+## 2. Architecture — v0.2
 
-```text
-+----------------+-----------------------------+------------------+
-| projects       | session header / tabs       | file / diff      |
-| sessions       +-----------------------------+ inspector        |
-|                |                             |                  |
-| status         | chat timeline               |                  |
-|                |                             |                  |
-|                +-----------------------------+------------------+
-| settings       | composer                    |                  |
-+----------------+-----------------------------+------------------+
-|                docked terminal                                  |
-+-----------------------------------------------------------------+
+OpenChamber reference architecture:
+```
+Browser ──fetch/WS──> Express ──proxy──> OpenCode HTTP API
+                                ├── PTY (bun-pty)
+                                └── Event fan-out (SSE + WS)
 ```
 
-- Quiet, dense desktop tool rather than a marketing interface.
-- Left project/session rail, central chat, optional right inspector, and bottom terminal.
-- Chat measure defaults near `48rem`; tool output can use the available workspace width.
-- Compact rows, restrained radii of at most 8px, visible keyboard focus, and stable control dimensions.
-- Light and dark themes use semantic tokens for surfaces, borders, text, status, syntax, tools, and diffs. Do not copy OpenChamber's theme values verbatim.
-- Lucide icons, icon buttons for familiar actions, tooltips for ambiguous controls, and text labels only for commands that need them.
-- Desktop starts with the full shell. Narrow windows turn side panes into drawers without changing the underlying navigation model.
-- Motion is limited to pane transitions, streaming activity, and disclosure state; `prefers-reduced-motion` is respected.
-
-The memorable element is the activity rail inside each assistant turn: thinking, tool calls, permission waits, and final output share one chronological spine. It preserves Pi's runtime detail while keeping the conversation scannable.
-
-## 3. Architecture
-
-```text
-React UI
-  -> application services and normalized domain events
-    -> typed Tauri bridge
-      -> Rust native host
-        -> one `pi --mode rpc` process per live session
-        -> workspace-scoped filesystem and PTY services
+Pichamber v0.2 architecture:
+```
+Browser ──fetch/WS──> Rust HTTP server (axum) ──stdin/stdout──> Pi RPC processes
+                          │
+                          ├── PTY management (portable-pty)
+                          ├── File system (workspace-scoped)
+                          └── Session listing (Pi JSONL store)
 ```
 
-Dependency direction is one-way. Components cannot call Tauri APIs, read files, or write Pi RPC lines directly. They use application services. Pi-specific event shapes terminate in `runtime/pi`; the rest of the UI consumes normalized events.
+Key difference from OpenChamber: Pi has no HTTP API (`--mode rpc` is stdin/stdout only), so we can't proxy. Instead, the Rust backend directly manages Pi RPC processes and fans out their events to the browser via WebSocket.
 
-Pi JSONL session files under `~/.pi/agent/sessions` are authoritative. Pichamber persists only shell state such as projects, tabs, pane sizes, drafts, unread markers, and preferences. It must not maintain a competing transcript database in v0.1.
+### Transport layer
 
-### Proposed structure
+Replace Tauri IPC with standard web protocols:
 
-```text
-src/
-  app/                 bootstrap, routing, providers, command registry
-  components/          shared controls and overlays
-  features/
-    workspace/         projects, session tree, tabs, layout
-    chat/              timeline, messages, activity rail, composer
-    files/             tree, viewer, diff inspector
-    terminal/          PTY dock
-    settings/          runtime, appearance, notifications
-  runtime/
-    contracts/         normalized commands, events, capability types
-    pi/                Pi protocol adapter, fixtures, compatibility probe
-    tauri/             typed invoke/listen transport
-  stores/              keyed runtime stores and persisted shell stores
-  styles/              reset, semantic tokens, typography, utilities
-src-tauri/
-  src/
-    commands/          narrow Tauri command modules
-    rpc/               process registry, JSONL transport, generations
-    sessions/          Pi JSONL index and metadata parsing
-    fs/                canonicalization and workspace sandbox
-    pty/               platform PTY lifecycle
-    config/            app settings and Pi executable discovery
-  capabilities/        least-privilege Tauri policies
-tests/
-  fixtures/pi-rpc/     captured, redacted protocol fixtures
-  e2e/                 critical desktop workflows
-docs/decisions/        architecture decision records
+| Function | v0.1 (Tauri) | v0.2 (HTTP/WS) |
+|---|---|---|
+| Start Pi | `invoke("rpc_start")` | `POST /api/rpc/start` |
+| Send command | `invoke("rpc_send")` | `POST /api/rpc/:id/send` |
+| Pi events | `listen("rpc-event")` | WS `/api/rpc/:id/events` |
+| PTY start | `invoke("pty_start")` | `POST /api/pty/start` |
+| PTY I/O | `invoke("pty_write")` | WS `/api/pty/:id` |
+| List sessions | `invoke("list_all_sessions_grouped")` | `GET /api/sessions` |
+| File tree | `invoke("workspace_tree")` | `GET /api/workspace/tree` |
+| Read file | `invoke("workspace_read_file")` | `GET /api/workspace/file` |
+| Delete session | `invoke("delete_session")` | `DELETE /api/sessions` |
+| Find Pi | `invoke("find_pi")` | `GET /api/pi/path` |
+| Stop Pi | `invoke("rpc_stop")` | `POST /api/rpc/:id/stop` |
+
+Frontend transport abstraction (`src/api/`):
+- `api-client.ts` — typed `fetch()` wrappers for all endpoints
+- `event-stream.ts` — WebSocket subscription with auto-reconnect
+- `tauri.ts` → deleted, replaced by `api-client.ts`
+- Runtime detection: checks `window.__PICHAMBER_API_BASE__` for server mode
+
+### Rust server (axum)
+
+```
+src-server/
+  main.rs            # CLI entry: `pichamber serve`
+  server.rs          # Axum router, static file serving, CORS
+  routes/
+    rpc.rs           # POST /api/rpc/start, /send, /stop
+    rpc_ws.rs        # WS /api/rpc/:id/events (Pi stdout fan-out)
+    sessions.rs      # GET /api/sessions, DELETE /api/sessions
+    workspace.rs     # GET /api/workspace/tree, /file
+    pty.rs           # POST /api/pty/start, WS /api/pty/:id
+    health.rs        # GET /api/health
+  state.rs           # Shared AppState (RpcRegistry, PtyState)
+  rpc/
+    registry.rs      # Moved from current src-tauri/src/rpc.rs
+    process.rs       # Pi process spawn/kill lifecycle
+  pty/
+    manager.rs       # Moved from src-tauri/src/pty.rs
+  sessions/
+    index.rs         # Moved from src-tauri/src/sessions.rs
+  workspace/
+    fs.rs            # Moved from src-tauri/src/workspace.rs
+  security/
+    sandbox.rs       # Path validation, canonicalization
 ```
 
-## 4. Runtime contracts
+### Build pipeline
 
-The Rust-to-TypeScript envelope is owned by Pichamber and remains stable even when Pi changes:
-
-```ts
-type RuntimeEnvelope = {
-  instanceId: string;
-  generation: number;
-  sequence: number;
-  receivedAt: string;
-  payload: PiRpcLine;
-};
-
-type DomainEvent =
-  | { type: "message.delta"; messageId: string; text: string }
-  | { type: "message.completed"; messageId: string; usage?: Usage }
-  | { type: "thinking.delta"; turnId: string; text: string }
-  | { type: "tool.started"; call: ToolCall }
-  | { type: "tool.updated"; callId: string; update: unknown }
-  | { type: "tool.completed"; callId: string; result: ToolResult }
-  | { type: "ui.requested"; request: ExtensionUiRequest }
-  | { type: "runtime.failed"; error: RuntimeError };
+```
+cargo build → pichamber binary
+                   ├── embedded frontend dist/ (include_bytes!)
+                   ├── HTTP server on localhost:1420
+                   └── CLI: pichamber serve [--port 1420] [--open]
 ```
 
-The names above are Pichamber domain events, not assumptions about raw Pi event names. Before chat implementation, capture redacted fixtures from the supported Pi version for prompt, thinking, tool, abort, compact, fork, model switch, extension UI, malformed output, and process exit. The adapter is exhaustively tested against those fixtures and retains unknown raw events for diagnostics.
+The Rust binary embeds the Vite-built frontend via `rust-embed` or `include_dir`. Single file distribution — no separate `dist/` folder, no `node_modules` at runtime.
 
-Each runtime request has an ID and timeout. Every emitted line carries `instanceId`, `generation`, and a monotonic `sequence`. A restarted process increments generation; listeners silently reject old generations and duplicate sequence numbers. Closing a tab stops its process tree and removes listeners. Switching tabs does not stop background work.
+### Project structure
 
-## 5. State ownership
+```
+pichamber/
+├── package.json              # Frontend deps + scripts
+├── vite.config.ts            # Vite config (outputs to dist/)
+├── tsconfig.json             # TypeScript project references
+├── index.html                # Vite entry HTML
+├── Cargo.toml                # Rust workspace root
+├── src/                      # Frontend (React + TypeScript)
+│   ├── main.tsx
+│   ├── App.tsx
+│   ├── api/                  # HTTP/WS client (replaces runtime/tauri.ts)
+│   │   ├── client.ts
+│   │   └── events.ts
+│   ├── features/
+│   │   ├── chat/
+│   │   ├── files/
+│   │   ├── terminal/
+│   │   ├── settings/
+│   │   └── workspace/
+│   ├── runtime/              # Domain logic (kept, transport-agnostic)
+│   │   ├── types.ts
+│   │   ├── registry.ts
+│   │   ├── rpc-client.ts     # Updated: uses api-client instead of Tauri invoke
+│   │   ├── normalize.ts
+│   │   ├── normalize-events.ts
+│   │   └── use-pichamber.ts
+│   ├── stores/
+│   ├── components/
+│   └── styles.css
+├── src-server/               # Rust backend (replaces src-tauri/)
+│   ├── main.rs
+│   ├── server.rs
+│   ├── state.rs
+│   ├── routes/
+│   ├── rpc/
+│   ├── pty/
+│   ├── sessions/
+│   └── workspace/
+└── tests/
+```
 
-- `shellStore`, persisted: projects, open tabs, active tab, pane visibility/sizes, unread markers.
-- `settingsStore`, persisted: appearance, Pi binary override, notification and terminal preferences.
-- `runtimeStoreRegistry`, ephemeral and keyed by tab: connection state, generation, pending requests, capability report.
-- `chatStoreRegistry`, ephemeral and keyed by session: normalized messages, activities, streaming and errors. Rehydrated from Pi session content.
-- `composerStoreRegistry`, session-scoped: draft, attachments, queue, model, thinking level.
-- `overlayStore`, ephemeral: permission/extension requests, dialogs, palette, toasts.
-- `terminalStoreRegistry`, ephemeral and keyed by project: PTY identity, dimensions, status.
+### What gets deleted
 
-Stores expose focused selectors. Event reduction is idempotent by message/call ID; deltas never append after completion. Unknown or out-of-order updates trigger a state refresh when Pi supports it, otherwise an inline recoverable error.
+- `src-tauri/` — entire directory (Tauri-specific)
+- `src/runtime/tauri.ts` — replaced by `src/api/client.ts`
+- `src/runtime/rpc-client.ts` — rewritten to use fetch/WS transport
+- `src/features/workspace/SessionBrowser.tsx` — kept, just uses new API client
+- `tauri.conf.json`, `capabilities/`, `build.rs` — all Tauri scaffolding
+- `@tauri-apps/api`, `@tauri-apps/plugin-dialog` — npm deps
+- All `isTauri()` checks — replaced with `isServer()` or direct API call
 
-## 6. Security rules
+### What stays
 
-- Canonicalize both workspace root and target path in Rust before every filesystem operation; reject traversal and symlink escapes.
-- Do not grant recursive `$HOME` access through broad Tauri capabilities.
-- The frontend receives opaque handles where a native resource can be represented without a raw path.
-- Spawn Pi and PTYs with an explicit cwd and controlled inherited environment. Never interpolate shell commands in Rust.
-- Kill the child process tree on tab close and application exit with a dedicated macOS process group.
-- Redact secrets, auth files, environment values, and prompt content from production logs by default.
-- Treat rendered Markdown and tool HTML as untrusted; disable raw HTML and external navigation without confirmation.
+- All React components (Sidebar, ChatView, Composer, Message, Inspector, ToolBlock, etc.)
+- All stores (app-store.ts)
+- All runtime domain logic (normalize.ts, normalize-events.ts, types.ts, registry.ts)
+- All CSS (styles.css with OKLCH design tokens)
+- The Pi session management model (read from `~/.pi/agent/sessions/`)
 
-## 7. Delivery milestones
+### v0.2 milestones
 
-### M0: protocol and design baseline
+#### M6: HTTP transport scaffold
+- Set up axum server with health endpoint
+- Serve Vite-built frontend from embedded files
+- Replace `tauri.ts` with `api/client.ts` (fetch-based)
+- Move all Rust business logic from `src-tauri/` to `src-server/`
+- Delete Tauri scaffolding
+- `cargo build` produces a single `pichamber` binary
 
-- Initialize repository, toolchain, CI, formatting, linting, and test commands.
-- Capture Pi RPC fixtures and document supported Pi version/capabilities.
-- Produce desktop and narrow-window wireframes plus semantic color/type tokens.
-- Record architecture, security, and session-source-of-truth decisions.
+#### M7: WebSocket event streaming
+- Add `/api/rpc/:id/events` WebSocket endpoint
+- Fan out Pi stdout lines to WS clients, matching the current Tauri event envelope
+- Auto-reconnect on WS disconnect with generation filtering
+- Replace `rpc-client.ts` event listener with WS subscription
 
-Acceptance: protocol fixture tests pass; visual plan covers empty, streaming, tool, permission, error, and narrow-window states; no production UI work depends on guessed raw events.
+#### M8: Terminal via WebSocket
+- Add `/api/pty/:id` WebSocket endpoint (binary PTY frames + JSON control)
+- Port PTY manager from Tauri command model to WS model
+- Keep existing `TerminalDock` component, swap xterm.js WebSocket URL
 
-### M1: native transport vertical slice
+#### M9: Polish and release
+- `pichamber serve --open` flow (start server + open browser)
+- Handle CORS for development (Vite dev server on different port)
+- Restore all existing functionality: file tree, session delete, Pi discovery
+- Single-binary distribution for macOS (and optionally Linux)
 
-- Build Tauri process registry, CLI discovery, typed bridge, request correlation, generation filtering, and clean process-tree shutdown.
-- Display raw diagnostic events for one newly created and one resumed session.
+### Definition of done for v0.2
 
-Acceptance: prompt/abort/resume survives rapid tab switching; stale events cannot enter the active session; missing/incompatible Pi produces an actionable screen.
+`pichamber serve` starts a local server. Opening `localhost:1420` in any browser shows the full Pichamber workspace: sidebar with Pi sessions grouped by project, chat with streaming messages, composer with model selection, file inspector, and interactive terminal. All functionality from v0.1 works identically, but through HTTP/WS instead of Tauri IPC. No desktop framework required. Single binary distribution.
 
-### M2: chat core
+### Risks
 
-- Implement timeline, Markdown/code, activity rail, tool states, composer, model/thinking controls, auto-scroll, error and reconnect states.
-- Implement extension UI confirm/select/input/editor and background notifications.
-
-Acceptance: captured fixture scenarios and a live Pi prompt render consistently; keyboard-only send, stop, inspect, answer, and retry flows work.
-
-### M3: workspace shell
-
-- Implement project/session rail, tabs, session browser, fork/rename/delete, right file/diff inspector, persisted layout and unread state.
-
-Acceptance: three simultaneous sessions across two projects remain isolated through restart and rapid switching; tool file links open the correct workspace file.
-
-### M4: terminal, security, and settings
-
-- Add real PTY resize/input/output, project cwd, settings, theme, command palette, permission boundaries, and failure recovery.
-
-Acceptance: terminal programs behave interactively; path traversal and symlink escape tests fail closed; settings survive relaunch.
-
-### M5: release candidate
-
-- Accessibility, performance, responsive/narrow window pass, crash recovery, packaging, screenshots, and release smoke tests.
-
-Acceptance: typecheck, lint, unit, integration, Rust, and browser acceptance suites pass; a clearly documented unsigned `.app` and `.dmg` build for Apple silicon macOS; no known P0/P1 defects.
-
-## 8. Test strategy
-
-- Rust unit tests: session parsing, path sandbox, symlink escapes, executable discovery, process registry, shutdown.
-- TypeScript unit tests: Pi adapter fixtures, event ordering/deduplication, store reducers, command capability gating.
-- Component tests: composer, activity disclosures, extension UI, errors, keyboard focus, pane resizing.
-- Integration tests: fake JSONL Pi child process for timeout, malformed line, crash, reconnect, stale generation, and concurrent sessions.
-- Playwright desktop tests: first run, open project, send/stop prompt, answer UI request, inspect file/diff, terminal, resume after relaunch.
-- Visual checks at 1440x900, 1024x768, 768x800, and a narrow desktop window; verify no overlap, clipped labels, blank panels, or unstable layout.
-- Platform smoke: current Apple silicon macOS for install, Pi discovery, PTY, notifications, and process cleanup.
-
-## 9. Main risks
-
-- Pi RPC drift: contain it in one adapter, probe capabilities, pin a tested range, and retain fixtures.
-- Concurrent runtime races: generation and sequence filtering plus process-tree tests are release gates.
-- Scope growth from OpenChamber parity: parity means matching the selected workflows, not its full platform surface.
-- Tauri permission breadth: security tests and capability review are required before release.
-- PTY reliability: validate interactive behavior, resize, restart, and process cleanup on macOS rather than substituting a command-output widget.
-- Large React/store modules: enforce feature boundaries and keep transport, normalization, state, and rendering separate.
-
-## 10. Definition of done for v0.1
-
-A user can install Pichamber, locate or configure Pi, open a project, run and resume multiple isolated sessions, understand streaming and tool activity, answer extension requests, inspect affected files and diffs, use an interactive terminal, recover from process failure, and relaunch without losing shell context. These workflows must pass automated critical-path tests and platform smoke checks.
+- **WebSocket reliability**: the current Tauri event system is in-process and reliable; WS over localhost adds a network hop but should be near-zero latency on the same machine.
+- **File dialogs**: `@tauri-apps/plugin-dialog` provided native open/save dialogs. In browser mode, fall back to `<input type="file" webkitdirectory>` for folder selection and standard file inputs.
+- **PTY in browser**: xterm.js already works in browsers — just swap the WebSocket URL from Tauri's IPC channel to our WS endpoint. No xterm.js changes needed.
+- **Single binary size**: embedding the Vite dist in the Rust binary adds ~2 MB (gzipped). Acceptable for a local dev tool.
