@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Pichamber main window capability",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:allow-open"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-toggle-maximize",
+    "dialog:allow-open"
+  ]
 }
