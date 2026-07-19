@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { reduceRuntimeEvent } from "../runtime/normalize-events";
-import type { ChatMessage, ModelInfo, OpenFile, Project, SessionTab, ThinkingLevel, UiRequest } from "../runtime/types";
+import type { ChatMessage, ModelInfo, OpenFile, Project, SessionInfo, SessionTab, ThinkingLevel, UiRequest } from "../runtime/types";
 
 interface AppState {
   projects: Project[];
@@ -26,6 +26,7 @@ interface AppState {
   removeProject(id: string): void;
   addSession(projectId: string): SessionTab;
   resumeSession(projectId: string, path: string, title: string): SessionTab;
+  discoverPiSessions(projectId: string, candidates: SessionInfo[]): SessionTab[];
   setActiveSession(id: string): void;
   closeSession(id: string): void;
   renameSession(id: string, title: string): void;
@@ -82,6 +83,29 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     const session: SessionTab = { id: crypto.randomUUID(), projectId, title, sessionPath: path, running: false, unread: false };
     set((state) => ({ sessions: [...state.sessions, session], activeSessionId: session.id, activeProjectId: projectId, messages: { ...state.messages, [session.id]: [] } }));
     return session;
+  },
+  discoverPiSessions: (projectId, candidates) => {
+    const state = get();
+    const knownPaths = new Set(state.sessions.filter((session) => session.sessionPath).map((session) => session.sessionPath as string));
+    const newSessions: SessionTab[] = [];
+    let messageSlots = { ...state.messages };
+    for (const candidate of candidates) {
+      if (!candidate.path || knownPaths.has(candidate.path)) continue;
+      const session: SessionTab = {
+        id: crypto.randomUUID(),
+        projectId,
+        title: candidate.name || candidate.path.split(/[/\\]/).pop() || "Pi session",
+        sessionPath: candidate.path,
+        running: false,
+        unread: false,
+      };
+      newSessions.push(session);
+      knownPaths.add(candidate.path);
+      messageSlots = { ...messageSlots, [session.id]: [] };
+    }
+    if (newSessions.length === 0) return [];
+    set({ sessions: [...state.sessions, ...newSessions], messages: messageSlots });
+    return newSessions;
   },
   setActiveSession: (id) => set((state) => ({ activeSessionId: id, activeProjectId: state.sessions.find((session) => session.id === id)?.projectId ?? state.activeProjectId, sessions: state.sessions.map((session) => session.id === id ? { ...session, unread: false } : session) })),
   closeSession: (id) => set((state) => {

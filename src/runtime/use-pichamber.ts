@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { closeRuntime, getRuntime } from "./registry";
 import { normalizeBackendMessages } from "./normalize";
 import { isTauri, native, openProject } from "./tauri";
-import type { ModelInfo, OpenFile, Project, SessionTab, ThinkingLevel } from "./types";
+import type { ModelInfo, OpenFile, Project, SessionInfo, SessionTab, ThinkingLevel } from "./types";
 import { useAppStore } from "../stores/app-store";
 
 const DEMO_FILES: Record<string, string> = {
@@ -61,17 +61,64 @@ export function usePichamber(activeSession?: SessionTab, activeProject?: Project
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id, activeSession?.sessionPath, activeProject?.id]);
 
-  // Initial history hydration when a resumed session is selected.
+  // Start the runtime as soon as a session is selected so the model list, runtime indicator,
+  // and resumed history are all available without the user having to send the first prompt.
   useEffect(() => {
-    if (!activeSession?.sessionPath || !activeProject || (state.messages[activeSession.id]?.length ?? 0) > 0) return;
+    if (!activeSession || !activeProject) return;
+    if (!isTauri()) {
+      // Browser-demo fallback still wants a populated model list for the picker UI.
+      if (state.models.length === 0) state.setModels([
+        { id: "anthropic/claude-sonnet-4-6", provider: "anthropic" },
+        { id: "openai-codex/gpt-5.4", provider: "openai-codex" },
+        { id: "minimax-cn/MiniMax-M3", provider: "minimax-cn" },
+      ]);
+      return;
+    }
     let cancelled = false;
     void ensureRuntime(activeSession, activeProject).catch((error) => {
       if (!cancelled) state.setRuntimeError(error instanceof Error ? error.message : String(error));
     });
     return () => { cancelled = true; };
-    // Session IDs and paths are the lifecycle boundary; runtime state changes must not restart hydration.
+    // The active session + project id are the only lifecycle triggers; runtime state changes must not restart the runtime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession?.id, activeSession?.sessionPath, activeProject?.id]);
+  }, [activeSession?.id, activeProject?.id]);
+
+  // Discover Pi sessions that exist on disk for the active project (and for any persisted
+  // projects at startup) and merge them into the sidebar so the user can pick them up
+  // without first opening the Session History modal.
+  useEffect(() => {
+    if (!isTauri() || !activeProject) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const all = await native.listSessions();
+        if (cancelled) return;
+        const root = activeProject.path.replace(/[/\\]+$/, "");
+        const known = new Map<string, SessionInfo>(
+          useAppStore.getState().sessions
+            .filter((session) => session.sessionPath)
+            .map((session) => [session.sessionPath as string, { id: session.sessionPath as string, path: session.sessionPath as string, name: session.title, modifiedAt: 0, createdAt: 0, messageCount: 0, tokens: 0, cost: 0, cwd: activeProject.path }]),
+        );
+        const candidates: SessionInfo[] = [];
+        for (const candidate of all) {
+          if (!candidate.path || known.has(candidate.path)) continue;
+          if (!candidate.cwd) continue;
+          const candidateRoot = candidate.cwd.replace(/[/\\]+$/, "");
+          if (candidateRoot !== root && !candidateRoot.startsWith(`${root}/`) && !candidateRoot.startsWith(`${root}\\`)) continue;
+          candidates.push(candidate);
+        }
+        if (candidates.length === 0) return;
+        candidates.sort((a, b) => b.modifiedAt - a.modifiedAt);
+        const inserted = useAppStore.getState().discoverPiSessions(activeProject.id, candidates);
+        if (inserted.length > 0) toast.success(`Loaded ${inserted.length} Pi session${inserted.length === 1 ? "" : "s"} from disk`);
+      } catch (error) {
+        if (!cancelled) console.warn("Failed to load Pi sessions from disk:", error);
+      }
+    })();
+    return () => { cancelled = true; };
+    // Discovery only depends on the active project identity, not on transient path/state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProject?.id]);
 
   const openProjectAndActivate = useCallback(async () => {
     const project = await openProject();
