@@ -70,22 +70,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 }
 
 .app-shell { display: flex; width: 100%; height: 100dvh; background: var(--bg); }
-.drag-region { -webkit-app-region: drag; }
-/* WKWebView refuses to drag through elements with overflow; use a dedicated drag layer behind the controls instead of relying on a flex parent's own drag region. */
-.drag-layer { position: absolute; inset: 0; z-index: 0; -webkit-app-region: drag; pointer-events: auto; }
-.no-drag,
-.drag-region button,
-.drag-region .icon-button,
-.drag-region .brand,
-.drag-region input,
-.drag-region select,
-.drag-region textarea,
-.drag-region .session-tab,
-.drag-region .session-menu,
-.drag-region .session-row-wrap,
-.drag-region .sidebar-actions,
-.drag-region .project-list,
-.drag-region .sidebar-footer { -webkit-app-region: no-drag; }
+/* Tauri 2 macOS uses a [data-tauri-drag-region] attribute wired to plugin:window|start_dragging (see tauri/src/window/scripts/drag.js). The script is auto-injected and intercepts mousedown; CSS -webkit-app-region alone is not wired up by Tauri. The .drag-layer div carries the attribute and acts as the OS drag handle. */
+.drag-layer { position: absolute; inset: 0; z-index: 0; pointer-events: auto; }
+.no-drag { -webkit-app-region: no-drag; }
 .icon-button { width: 30px; height: 30px; flex: 0 0 30px; display: inline-grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); }
 .icon-button:hover:not(:disabled) { color: var(--text); background: var(--surface-hover); }
 .icon-button:active:not(:disabled) { transform: scale(.92); }
