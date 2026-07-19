@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { closeRuntime, getRuntime } from "./registry";
 import { normalizeBackendMessages } from "./normalize";
-import { isTauri, native, openProject } from "./tauri";
-import type { ModelInfo, OpenFile, Project, SessionInfo, SessionTab, ThinkingLevel } from "./types";
+import { isTauri, native } from "./tauri";
+import type { ModelInfo, OpenFile, ThinkingLevel } from "./types";
 import { useAppStore } from "../stores/app-store";
 
 const DEMO_FILES: Record<string, string> = {
@@ -26,47 +26,54 @@ const pathInsideProject = (projectPath: string, candidate: string): boolean => {
 const relativeFromProject = (projectPath: string, absolute: string): string =>
   absolute.slice(projectPath.replace(/[\\/]+$/, "").length).replace(/^[\\/]/, "").replaceAll("\\", "/");
 
-export function usePichamber(activeSession?: SessionTab, activeProject?: Project) {
+// Each Pi session we have open has a Pichamber-local tab id (derived from the
+// session path so it's stable across restarts, used for store lookups).
+function sessionKey(path: string): string {
+  return `pi:${path}`;
+}
+
+export function usePichamber() {
   const state = useAppStore();
   const subscriptions = useRef(new Map<string, () => void>());
+  const activeSessionCwd = useRef<string | undefined>(undefined);
 
   // Detach all event listeners on unmount.
   useEffect(() => () => { subscriptions.current.forEach((unsubscribe) => unsubscribe()); }, []);
 
-  // Ensure the runtime for a session is started exactly once and subscribed to events.
-  const ensureRuntime = useCallback(async (session: SessionTab, project: Project) => {
-    const client = getRuntime(session.id);
-    if (!subscriptions.current.has(session.id)) {
+  const ensureRuntime = useCallback(async (key: string, cwd: string, sessionPath?: string) => {
+    const client = getRuntime(key);
+    if (!subscriptions.current.has(key)) {
       const unsubscribe = client.onEvent((event) => {
         const next = useAppStore.getState();
-        next.reduceRuntimeEvent(session.id, event);
-        if (event.type === "agent_start") next.setSessionRunning(session.id, true);
-        if (["agent_end", "rpc_disconnected"].includes(String(event.type))) next.setSessionRunning(session.id, false);
+        next.reduceRuntimeEvent(key, event);
+        if (event.type === "agent_start") next.setSessionRunning(key, true);
+        if (["agent_end", "rpc_disconnected"].includes(String(event.type))) next.setSessionRunning(key, false);
         if (event.type === "extension_ui_request" && event.method === "notify") toast(String(event.message ?? event.title ?? "Pi notification"));
       });
-      subscriptions.current.set(session.id, unsubscribe);
+      subscriptions.current.set(key, unsubscribe);
     }
     if (!client.connected) {
-      await client.start(project.path, state.piPath || undefined);
-      if (session.sessionPath && isTauri()) {
-        await client.request({ type: "switch_session", sessionPath: session.sessionPath });
+      await client.start(cwd, state.piPath || undefined);
+      if (sessionPath && isTauri()) {
+        await client.request({ type: "switch_session", sessionPath });
         const history = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
-        state.hydrateMessages(session.id, normalizeBackendMessages(history.messages ?? []));
+        state.hydrateMessages(key, normalizeBackendMessages(history.messages ?? []));
       }
       const modelData = await client.request<{ models: ModelInfo[] }>({ type: "get_available_models" }).catch(() => ({ models: [] }));
       state.setModels(modelData.models ?? []);
     }
     return client;
-    // The closure intentionally only re-binds when the active session changes; runtime state changes must not restart hydration.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession?.id, activeSession?.sessionPath, activeProject?.id]);
+  }, [state.activeSessionId]);
 
-  // Start the runtime as soon as a session is selected so the model list, runtime indicator,
-  // and resumed history are all available without the user having to send the first prompt.
+  // Auto-start the runtime when the active session changes.
   useEffect(() => {
-    if (!activeSession || !activeProject) return;
+    const key = state.activeSessionId;
+    if (!key) return;
+    const session = state.sessions.find((s) => s.id === key);
+    if (!session?.sessionPath) return; // not a Pi session — nothing to start
+
     if (!isTauri()) {
-      // Browser-demo fallback still wants a populated model list for the picker UI.
       if (state.models.length === 0) state.setModels([
         { id: "anthropic/claude-sonnet-4-6", provider: "anthropic" },
         { id: "openai-codex/gpt-5.4", provider: "openai-codex" },
@@ -74,177 +81,160 @@ export function usePichamber(activeSession?: SessionTab, activeProject?: Project
       ]);
       return;
     }
+    const cwd = session.projectId; // we store cwd in projectId for Pi sessions
     let cancelled = false;
-    void ensureRuntime(activeSession, activeProject).catch((error) => {
+    void ensureRuntime(key, cwd, session.sessionPath).catch((error) => {
       if (!cancelled) state.setRuntimeError(error instanceof Error ? error.message : String(error));
     });
     return () => { cancelled = true; };
-    // The active session + project id are the only lifecycle triggers; runtime state changes must not restart the runtime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession?.id, activeProject?.id]);
+  }, [state.activeSessionId]);
 
-  // Discover Pi sessions that exist on disk for the active project (and for any persisted
-  // projects at startup) and merge them into the sidebar so the user can pick them up
-  // without first opening the Session History modal.
-  useEffect(() => {
-    if (!isTauri() || !activeProject) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const all = await native.listSessions();
-        if (cancelled) return;
-        const root = activeProject.path.replace(/[/\\]+$/, "");
-        const known = new Map<string, SessionInfo>(
-          useAppStore.getState().sessions
-            .filter((session) => session.sessionPath)
-            .map((session) => [session.sessionPath as string, { id: session.sessionPath as string, path: session.sessionPath as string, name: session.title, modifiedAt: 0, createdAt: 0, messageCount: 0, tokens: 0, cost: 0, cwd: activeProject.path }]),
-        );
-        const candidates: SessionInfo[] = [];
-        for (const candidate of all) {
-          if (!candidate.path || known.has(candidate.path)) continue;
-          if (!candidate.cwd) continue;
-          const candidateRoot = candidate.cwd.replace(/[/\\]+$/, "");
-          if (candidateRoot !== root && !candidateRoot.startsWith(`${root}/`) && !candidateRoot.startsWith(`${root}\\`)) continue;
-          candidates.push(candidate);
-        }
-        if (candidates.length === 0) return;
-        candidates.sort((a, b) => b.modifiedAt - a.modifiedAt);
-        const inserted = useAppStore.getState().discoverPiSessions(activeProject.id, candidates);
-        if (inserted.length > 0) toast.success(`Loaded ${inserted.length} Pi session${inserted.length === 1 ? "" : "s"} from disk`);
-      } catch (error) {
-        if (!cancelled) console.warn("Failed to load Pi sessions from disk:", error);
-      }
-    })();
-    return () => { cancelled = true; };
-    // Discovery only depends on the active project identity, not on transient path/state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProject?.id]);
+  /**
+   * Open an existing Pi session from disk. Called by the Sidebar when the user
+   * clicks a session row.
+   */
+  const openSession = useCallback((sessionPath: string, cwd: string, title: string) => {
+    const key = sessionKey(sessionPath);
+    state.openPiSession(key, cwd, title, sessionPath);
+    activeSessionCwd.current = cwd;
+  }, [state]);
 
-  const openProjectAndActivate = useCallback(async () => {
-    const project = await openProject();
-    if (!project) return;
-    state.addProject(project);
-    const existing = state.sessions.find((session) => session.projectId === project.id);
-    if (existing) state.setActiveSession(existing.id); else state.addSession(project.id);
+  /**
+   * Start a brand-new Pi session in the given working directory. Pi will
+   * auto-create a new .jsonl in its session store.
+   */
+  const newSession = useCallback((cwd: string) => {
+    const key = `new:${crypto.randomUUID()}`;
+    state.openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`);
+    activeSessionCwd.current = cwd;
   }, [state]);
 
   const sendPrompt = useCallback(async (text: string) => {
-    if (!activeSession || !activeProject) return;
-    const attachments = state.attachments[activeSession.id] ?? [];
-    const message = attachments.length > 0 ? `${text}\n\n${attachments.map((path) => `@${path}`).join("\n")}` : text;
-    state.addUserMessage(activeSession.id, message, attachments);
-    state.removeAllAttachments(activeSession.id);
+    const key = state.activeSessionId;
+    if (!key) return;
+    const session = state.sessions.find((s) => s.id === key);
+    if (!session) return;
+    const cwd = session.projectId; // cwd stored in projectId
+    const attachments = state.attachments[key] ?? [];
+    const message = attachments.length > 0 ? `${text}\n\n${attachments.map((p) => `@${p}`).join("\n")}` : text;
+    state.addUserMessage(key, message, attachments);
+    state.removeAllAttachments(key);
     state.setRuntimeError(undefined);
     try {
-      const client = await ensureRuntime(activeSession, activeProject);
-      state.setSessionRunning(activeSession.id, true);
+      const client = await ensureRuntime(key, cwd, session.sessionPath);
+      state.setSessionRunning(key, true);
       await client.request({ type: "prompt", message, streamingBehavior: "followUp" });
     } catch (error) {
-      state.setSessionRunning(activeSession.id, false);
+      state.setSessionRunning(key, false);
       state.setRuntimeError(error instanceof Error ? error.message : String(error));
     }
-  }, [activeSession, activeProject, state, ensureRuntime]);
+  }, [state, ensureRuntime]);
 
   const stopPrompt = useCallback(() => {
-    if (!activeSession) return;
-    void getRuntime(activeSession.id).request({ type: "abort" }).then(() => state.setSessionRunning(activeSession.id, false)).catch((error) => {
+    const key = state.activeSessionId;
+    if (!key) return;
+    void getRuntime(key).request({ type: "abort" }).then(() => state.setSessionRunning(key, false)).catch((error) => {
       state.setRuntimeError(error instanceof Error ? error.message : String(error));
       toast.error("Pi did not confirm the stop request");
     });
-  }, [activeSession, state]);
+  }, [state]);
 
   const pickModel = useCallback((model: ModelInfo) => {
     state.setSelectedModel(model);
-    if (activeSession && getRuntime(activeSession.id).connected) void getRuntime(activeSession.id).request({ type: "set_model", provider: model.provider, modelId: model.id });
-  }, [activeSession, state]);
+    const key = state.activeSessionId;
+    if (key && getRuntime(key).connected) void getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id });
+  }, [state]);
 
   const setThinking = useCallback((level: ThinkingLevel) => {
     state.setThinkingLevel(level);
-    if (activeSession && getRuntime(activeSession.id).connected) void getRuntime(activeSession.id).request({ type: "set_thinking_level", level });
-  }, [activeSession, state]);
+    const key = state.activeSessionId;
+    if (key && getRuntime(key).connected) void getRuntime(key).request({ type: "set_thinking_level", level });
+  }, [state]);
 
   const openFile = useCallback(async (path: string) => {
-    if (!activeProject) return;
+    const cwd = activeSessionCwd.current;
+    if (!cwd) return;
     try {
-      const file = isTauri() ? await native.readFile(activeProject.path, path) : demoOpenFile(path);
+      const file = isTauri() ? await native.readFile(cwd, path) : demoOpenFile(path);
       state.setOpenFile(file);
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-  }, [activeProject, state]);
+  }, [state]);
 
   const attachFile = useCallback(async (): Promise<string | undefined> => {
-    if (!activeSession || !activeProject) return undefined;
-    if (!isTauri()) { state.addAttachment(activeSession.id, "src/App.tsx"); return "src/App.tsx"; }
+    const key = state.activeSessionId;
+    if (!key) return undefined;
+    const cwd = state.sessions.find((s) => s.id === key)?.projectId;
+    if (!cwd) return undefined;
+    if (!isTauri()) { state.addAttachment(key, "src/App.tsx"); return "src/App.tsx"; }
     const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({ directory: false, multiple: false, title: "Attach a project file", defaultPath: activeProject.path });
+    const selected = await open({ directory: false, multiple: false, title: "Attach a project file", defaultPath: cwd });
     if (!selected) return undefined;
-    const path = String(selected);
-    if (!pathInsideProject(activeProject.path, path)) { toast.error("Attachments must be inside the open project"); return undefined; }
-    const relative = relativeFromProject(activeProject.path, path);
-    state.addAttachment(activeSession.id, relative);
+    const p = String(selected);
+    if (!pathInsideProject(cwd, p)) { toast.error("Attachments must be inside the working directory"); return undefined; }
+    const relative = relativeFromProject(cwd, p);
+    state.addAttachment(key, relative);
     return relative;
-  }, [activeSession, activeProject, state]);
+  }, [state]);
 
   const answerUiRequest = useCallback((value: string | boolean | undefined) => {
     const request = state.uiRequest;
-    if (!request || !activeSession) return;
+    const key = state.activeSessionId;
+    if (!request || !key) return;
     const payload = value === undefined ? { type: "extension_ui_response", id: request.id, cancelled: true }
       : request.method === "confirm" ? { type: "extension_ui_response", id: request.id, confirmed: value }
       : { type: "extension_ui_response", id: request.id, value };
-    void getRuntime(activeSession.id).send(payload);
+    void getRuntime(key).send(payload);
     state.setUiRequest(undefined);
-  }, [activeSession, state]);
-
-  const renameSession = useCallback((session: SessionTab) => {
-    const title = window.prompt("Session name", session.title)?.trim();
-    if (!title) return;
-    state.renameSession(session.id, title);
-    const client = getRuntime(session.id);
-    if (client.connected) void client.request({ type: "set_session_name", name: title });
   }, [state]);
 
-  const forkSession = useCallback(async (session: SessionTab) => {
-    const project = state.projects.find((item) => item.id === session.projectId);
-    if (!project) return;
+  const renameSession = useCallback(async () => {
+    const key = state.activeSessionId;
+    if (!key) return;
+    const session = state.sessions.find((s) => s.id === key);
+    if (!session) return;
+    const title = window.prompt("Session name", session.title)?.trim();
+    if (!title) return;
+    state.renameSession(key, title);
+    if (getRuntime(key).connected) void getRuntime(key).request({ type: "set_session_name", name: title });
+  }, [state]);
+
+  const forkSession = useCallback(async () => {
+    const key = state.activeSessionId;
+    if (!key) return;
+    const session = state.sessions.find((s) => s.id === key);
+    if (!session) return;
+    const cwd = session.projectId;
     try {
-      const client = await ensureRuntime(session, project);
+      const client = await ensureRuntime(key, cwd, session.sessionPath);
       const data = await client.request<{ messages?: Array<{ id?: string; entryId?: string }> }>({ type: "get_fork_messages" });
       const entry = data.messages?.at(-1);
       const entryId = entry?.entryId ?? entry?.id;
       if (!entryId) throw new Error("This session does not have a forkable turn yet");
       await client.request({ type: "fork", entryId });
       const history = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
-      state.hydrateMessages(session.id, normalizeBackendMessages(history.messages ?? []));
-      state.renameSession(session.id, `${session.title} (fork)`);
+      state.hydrateMessages(key, normalizeBackendMessages(history.messages ?? []));
+      state.renameSession(key, `${session.title} (fork)`);
       toast.success("Forked from the latest turn");
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
   }, [state, ensureRuntime]);
 
-  const deleteSession = useCallback(async (session: SessionTab) => {
+  const deleteSession = useCallback(async () => {
+    const key = state.activeSessionId;
+    if (!key) return;
+    const session = state.sessions.find((s) => s.id === key);
+    if (!session) return;
     if (!window.confirm(`Delete “${session.title}”? This cannot be undone.`)) return;
-    subscriptions.current.get(session.id)?.(); subscriptions.current.delete(session.id);
-    await closeRuntime(session.id);
+    subscriptions.current.get(key)?.(); subscriptions.current.delete(key);
+    await closeRuntime(key);
     if (session.sessionPath && isTauri()) await native.deleteSession(session.sessionPath).catch((error) => toast.error(String(error)));
-    state.closeSession(session.id);
+    state.closeSession(key);
     state.setRuntimeError(undefined);
   }, [state]);
 
-  const removeProject = useCallback(async (project: Project) => {
-    if (!window.confirm(`Remove “${project.name}” from Pichamber? Project files will not be deleted.`)) return;
-    for (const session of state.sessions.filter((session) => session.projectId === project.id)) {
-      subscriptions.current.get(session.id)?.(); subscriptions.current.delete(session.id);
-      await closeRuntime(session.id);
-    }
-    state.removeProject(project.id);
-  }, [state]);
-
-  const tabs = useMemo(
-    () => state.sessions.filter((session) => !activeProject || session.projectId === activeProject.id),
-    [state.sessions, activeProject],
-  );
-
   return {
-    tabs,
-    openProjectAndActivate,
+    openSession,
+    newSession,
     sendPrompt,
     stopPrompt,
     pickModel,
@@ -255,6 +245,5 @@ export function usePichamber(activeSession?: SessionTab, activeProject?: Project
     renameSession,
     forkSession,
     deleteSession,
-    removeProject,
   };
 }

@@ -67,6 +67,12 @@ export interface OpenFile {
   truncated: boolean;
 }
 
+export interface PiSessionGroup {
+  cwd: string;
+  name: string;
+  sessions: SessionInfo[];
+}
+
 export interface SessionInfo {
   id: string;
   name?: string;

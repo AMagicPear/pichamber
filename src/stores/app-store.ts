@@ -27,6 +27,7 @@ interface AppState {
   addSession(projectId: string): SessionTab;
   resumeSession(projectId: string, path: string, title: string): SessionTab;
   discoverPiSessions(projectId: string, candidates: SessionInfo[]): SessionTab[];
+  openPiSession(key: string, cwd: string, title: string, sessionPath?: string): void;
   setActiveSession(id: string): void;
   closeSession(id: string): void;
   renameSession(id: string, title: string): void;
@@ -106,6 +107,27 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
     if (newSessions.length === 0) return [];
     set({ sessions: [...state.sessions, ...newSessions], messages: messageSlots });
     return newSessions;
+  },
+  openPiSession: (key, cwd, title, sessionPath) => {
+    const existing = get().sessions.find((session) => session.id === key);
+    if (existing) {
+      set({ activeSessionId: key, activeProjectId: cwd });
+      return;
+    }
+    const session: SessionTab = {
+      id: key,
+      projectId: cwd,        // we store cwd in projectId for Pi sessions
+      title,
+      sessionPath,
+      running: false,
+      unread: false,
+    };
+    set((state) => ({
+      sessions: [...state.sessions, session],
+      activeSessionId: key,
+      activeProjectId: cwd,
+      messages: { ...state.messages, [key]: [] },
+    }));
   },
   setActiveSession: (id) => set((state) => ({ activeSessionId: id, activeProjectId: state.sessions.find((session) => session.id === id)?.projectId ?? state.activeProjectId, sessions: state.sessions.map((session) => session.id === id ? { ...session, unread: false } : session) })),
   closeSession: (id) => set((state) => {

@@ -18,6 +18,7 @@ pub fn run() {
             rpc::rpc_send,
             rpc::rpc_stop,
             rpc::find_pi,
+            sessions::list_all_sessions_grouped,
             sessions::list_sessions,
             sessions::delete_session,
             workspace::workspace_tree,

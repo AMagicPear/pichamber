@@ -9,6 +9,14 @@ use walkdir::WalkDir;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProjectSessions {
+    cwd: String,
+    name: String,
+    sessions: Vec<SessionInfo>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionInfo {
     id: String,
     name: Option<String>,
@@ -110,6 +118,62 @@ fn parse_session(path: &Path) -> Result<SessionInfo, String> {
         tokens,
         cost,
     })
+}
+
+/// List every Pi session on disk, grouped by working directory.
+/// This is the canonical session index — the frontend should use it as the
+/// primary source of truth instead of maintaining its own project/session store.
+#[tauri::command]
+pub fn list_all_sessions_grouped() -> Result<Vec<ProjectSessions>, String> {
+    let root = sessions_root()?;
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    let mut sessions = WalkDir::new(root)
+        .follow_links(false)
+        .max_depth(4)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry.file_type().is_file()
+                && entry.path().extension().and_then(|v| v.to_str()) == Some("jsonl")
+        })
+        .take(10_000)
+        .filter_map(|entry| parse_session(entry.path()).ok())
+        .collect::<Vec<_>>();
+    sessions.sort_by_key(|session| std::cmp::Reverse(session.modified_at));
+    // Group by cwd, keeping the most-recently-modified session at the top of each group.
+    let mut groups: std::collections::BTreeMap<String, Vec<SessionInfo>> =
+        std::collections::BTreeMap::new();
+    for session in sessions {
+        let cwd = session.cwd.clone().unwrap_or_else(|| String::from("unknown"));
+        groups.entry(cwd).or_default().push(session);
+    }
+    let mut projects: Vec<ProjectSessions> = groups
+        .into_iter()
+        .map(|(cwd, mut sessions)| {
+            sessions.sort_by_key(|s| std::cmp::Reverse(s.modified_at));
+            let name = std::path::Path::new(&cwd)
+                .file_name()
+                .and_then(|v| v.to_str())
+                .unwrap_or(&cwd)
+                .to_string();
+            ProjectSessions {
+                cwd,
+                name,
+                sessions,
+            }
+        })
+        .collect();
+    projects.sort_by_key(|p| {
+        std::cmp::Reverse(
+            p.sessions
+                .first()
+                .map(|s| s.modified_at)
+                .unwrap_or(0),
+        )
+    });
+    Ok(projects)
 }
 
 #[tauri::command]

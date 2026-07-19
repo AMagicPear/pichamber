@@ -7,7 +7,6 @@ import { UiRequestDialog } from "./features/chat/UiRequestDialog";
 import { Inspector } from "./features/files/Inspector";
 import { SettingsModal } from "./features/settings/SettingsModal";
 import { Sidebar } from "./features/workspace/Sidebar";
-import { SessionBrowser } from "./features/workspace/SessionBrowser";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader";
 import { usePichamber } from "./runtime/use-pichamber";
 import { useAppStore } from "./stores/app-store";
@@ -17,18 +16,15 @@ const TerminalDock = lazy(() => import("./features/terminal/TerminalDock").then(
 export default function App() {
   const state = useAppStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  const activeSession = state.sessions.find((session) => session.id === state.activeSessionId);
-  const activeProject =
-    state.projects.find((project) => project.id === activeSession?.projectId) ??
-    state.projects.find((project) => project.id === state.activeProjectId);
+  const activeSession = state.sessions.find((s) => s.id === state.activeSessionId);
+  const cwd = activeSession?.projectId;
   const messages = activeSession ? state.messages[activeSession.id] ?? [] : [];
   const attachments = activeSession ? state.attachments[activeSession.id] ?? [] : [];
   const runtimeRunning = activeSession?.running ?? false;
 
-  const actions = usePichamber(activeSession, activeProject);
+  const actions = usePichamber();
 
   useEffect(() => {
     const dark = state.theme === "dark" || (state.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -44,11 +40,9 @@ export default function App() {
   }, []);
 
   const paletteActions: PaletteAction[] = [
-    { id: "open", label: "Open project", icon: "open", run: () => void actions.openProjectAndActivate() },
-    ...(activeProject ? [{ id: "new", label: "New session", icon: "new" as const, hint: "⌘N", run: () => state.addSession(activeProject.id) }] : []),
+    ...(cwd ? [{ id: "new", label: "New session", icon: "new" as const, hint: "⌘N", run: () => actions.newSession(cwd) }] : []),
     { id: "files", label: "Toggle files", icon: "files", run: state.toggleInspector },
     { id: "terminal", label: "Toggle terminal", icon: "terminal", run: state.toggleTerminal },
-    { id: "history", label: "Session history", icon: "history", run: () => setHistoryOpen(true) },
     { id: "settings", label: "Open settings", icon: "settings", run: () => setSettingsOpen(true) },
   ];
 
@@ -56,32 +50,23 @@ export default function App() {
     <div className={`app-shell ${state.sidebarOpen ? "with-sidebar" : ""} ${state.inspectorOpen ? "with-inspector" : ""}`}>
       {state.sidebarOpen && (
         <Sidebar
-          projects={state.projects}
-          sessions={state.sessions}
-          activeProjectId={state.activeProjectId}
-          activeSessionId={state.activeSessionId}
-          onOpenProject={() => void actions.openProjectAndActivate()}
-          onNewSession={state.addSession}
-          onSession={state.setActiveSession}
+          onOpenSession={actions.openSession}
+          onNewSession={actions.newSession}
           onClose={state.toggleSidebar}
           onSettings={() => setSettingsOpen(true)}
-          onRename={actions.renameSession}
-          onFork={(session) => void actions.forkSession(session)}
-          onDelete={(session) => void actions.deleteSession(session)}
-          onRemoveProject={(project) => void actions.removeProject(project)}
         />
       )}
       <main className="workspace">
         <WorkspaceHeader
           activeSession={activeSession}
-          activeProject={activeProject}
-          canCreateSession={Boolean(activeProject)}
+          activeProject={cwd ? { id: cwd, name: cwd.split("/").pop() ?? cwd, path: cwd } : undefined}
+          canCreateSession={Boolean(cwd)}
           sidebarOpen={state.sidebarOpen}
           inspectorOpen={state.inspectorOpen}
           terminalOpen={state.terminalOpen}
           runtimeRunning={runtimeRunning}
           onToggleSidebar={state.toggleSidebar}
-          onNewSession={() => activeProject && state.addSession(activeProject.id)}
+          onNewSession={() => cwd && actions.newSession(cwd)}
           onToggleInspector={state.toggleInspector}
           onToggleTerminal={state.toggleTerminal}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -96,12 +81,12 @@ export default function App() {
           <div className="chat-pane">
             <ChatView
               messages={messages}
-              projectName={activeProject?.name}
+              projectName={cwd ? cwd.split("/").pop() : undefined}
               onOpenFile={(path) => void actions.openFile(path)}
               onSuggestion={(text) => void actions.sendPrompt(text)}
             />
             <Composer
-              disabled={!activeProject || !activeSession}
+              disabled={!activeSession}
               running={runtimeRunning}
               models={state.models}
               selectedModel={state.selectedModel}
@@ -117,7 +102,7 @@ export default function App() {
           </div>
           {state.inspectorOpen && (
             <Inspector
-              project={activeProject}
+              project={cwd ? { id: cwd, name: cwd.split("/").pop() ?? cwd, path: cwd } : undefined}
               file={state.openFile}
               onFile={(path) => path ? void actions.openFile(path) : state.setOpenFile(undefined)}
               onClose={state.toggleInspector}
@@ -126,7 +111,7 @@ export default function App() {
         </div>
         {state.terminalOpen && (
           <Suspense fallback={<div className="terminal-loading">Starting terminal…</div>}>
-            <TerminalDock cwd={activeProject?.path} onClose={state.toggleTerminal} />
+            <TerminalDock cwd={cwd} onClose={state.toggleTerminal} />
           </Suspense>
         )}
       </main>
@@ -139,16 +124,6 @@ export default function App() {
           onThinking={state.setThinkingLevel}
           onPiPath={state.setPiPath}
           onClose={() => setSettingsOpen(false)}
-        />
-      )}
-      {historyOpen && (
-        <SessionBrowser
-          project={activeProject}
-          onResume={(session) => {
-            if (activeProject) state.resumeSession(activeProject.id, session.path, session.name ?? "Resumed session");
-            setHistoryOpen(false);
-          }}
-          onClose={() => setHistoryOpen(false)}
         />
       )}
       {state.uiRequest && <UiRequestDialog request={state.uiRequest} onAnswer={actions.answerUiRequest} />}

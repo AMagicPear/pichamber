@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { OpenFile, Project, SessionInfo, TreeEntry } from "./types";
+import type { OpenFile, PiSessionGroup, Project, SessionInfo, TreeEntry } from "./types";
 
 export const isTauri = () => "__TAURI_INTERNALS__" in window;
 
@@ -33,6 +33,7 @@ export const native = {
     invoke<{ instanceId: string; generation: number; executable: string }>("rpc_start", { options, instanceId }),
   sendRpc: (command: unknown, instanceId: string) => invoke<void>("rpc_send", { command: JSON.stringify(command), instanceId }),
   stopRpc: (instanceId: string) => invoke<void>("rpc_stop", { instanceId }),
+  listAllSessionsGrouped: () => invoke<PiSessionGroup[]>("list_all_sessions_grouped"),
   listSessions: () => invoke<SessionInfo[]>("list_sessions"),
   deleteSession: (sessionPath: string) => invoke<void>("delete_session", { sessionPath }),
   tree: (root: string, relative: string = "", depth: number = 4) =>
