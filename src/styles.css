@@ -61,7 +61,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text-muted) 64%, transparent); }
 
 :root {
-  --titlebar-height: 44px;
+  --titlebar-height: 48px;
   --titlebar-inset: 78px; /* reserved width on the left for macOS traffic lights */
   --motion-fast: 140ms;
   --motion-base: 180ms;
@@ -71,7 +71,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .app-shell { display: flex; width: 100%; height: 100dvh; background: var(--bg); }
 .drag-region { -webkit-app-region: drag; }
-.no-drag, .drag-region button { -webkit-app-region: no-drag; }
+/* Clickable controls nested inside a drag region must opt out so OS drag does not eat their clicks. */
+.no-drag,
+.drag-region button,
+.drag-region .icon-button,
+.drag-region .brand,
+.drag-region input,
+.drag-region select,
+.drag-region textarea,
+.drag-region .session-tab,
+.drag-region .session-menu,
+.drag-region .session-row-wrap,
+.drag-region .sidebar-actions,
+.drag-region .project-list,
+.drag-region .sidebar-footer { -webkit-app-region: no-drag; }
 .icon-button { width: 30px; height: 30px; flex: 0 0 30px; display: inline-grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease); }
 .icon-button:hover:not(:disabled) { color: var(--text); background: var(--surface-hover); }
 .icon-button:active:not(:disabled) { transform: scale(.92); }
@@ -79,7 +92,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .sidebar { width: 280px; min-width: 280px; height: 100%; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); }
 .sidebar-titlebar { height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 var(--titlebar-inset); -webkit-app-region: drag; }
-.sidebar-titlebar > * { -webkit-app-region: no-drag; }
+/* Children are explicitly opted out via .no-drag on clickable controls; the rest of the strip stays draggable. */
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; }
 .brand-mark { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #fff; background: #363a35; font-family: Georgia, serif; font-size: 17px; }
 .dark .brand-mark { color: #1b1c19; background: #e2b04f; }
@@ -111,8 +124,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .version { margin-left: auto; color: var(--text-faint); font-size: 11px; }
 
 .workspace { min-width: 0; flex: 1; height: 100%; display: flex; flex-direction: column; }
-.workspace-header { height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px 0 var(--titlebar-inset); border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); -webkit-app-region: drag; }
-.workspace-header > * { -webkit-app-region: no-drag; }
+.workspace-header { height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px 0 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); -webkit-app-region: drag; }
+.app-shell:not(.with-sidebar) .workspace-header { padding-left: var(--titlebar-inset); }
+/* Clickable controls opt out via the global .drag-region selector; everything else stays a drag handle. */
 .header-left, .header-actions, .session-tabs { min-width: 0; display: flex; align-items: center; gap: 4px; }
 .session-tabs { overflow-x: auto; scrollbar-width: none; }
 .session-tab { position: relative; max-width: 190px; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 11px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
