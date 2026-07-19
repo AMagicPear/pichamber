@@ -28,7 +28,7 @@
   --radius: 0.625rem;
 
   --titlebar-height: 48px;
-  --titlebar-inset: 78px; /* macOS traffic lights */
+  --titlebar-inset: 14px;
   --motion-fast: 140ms;
   --motion-base: 180ms;
   --motion-slow: 240ms;
@@ -97,7 +97,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* === Sidebar =========================================================== */
 .sidebar { position: relative; width: 280px; min-width: 280px; height: 100%; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); }
-.sidebar-titlebar { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 var(--titlebar-inset); }
+.sidebar-titlebar { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
 .sidebar-titlebar > :not(.drag-layer) { position: relative; z-index: 1; }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; color: var(--foreground); }
 .brand-mark { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: #fff; background: oklch(0.32 0.02 50); font-family: Georgia, serif; font-size: 16px; font-weight: 600; }
@@ -153,8 +153,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* === Workspace header =================================================== */
 .workspace { min-width: 0; flex: 1; height: 100%; display: flex; flex-direction: column; }
-.workspace-header { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 92%, transparent); overflow: visible; }
-.app-shell:not(.with-sidebar) .workspace-header { padding-left: var(--titlebar-inset); }
+.workspace-header { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px 0 10px; border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 92%, transparent); overflow: visible; }
 .workspace-header > .header-left,
 .workspace-header > .header-actions { position: relative; z-index: 1; -webkit-app-region: no-drag; }
 .header-left, .header-actions { min-width: 0; display: flex; align-items: center; gap: 6px; }
@@ -411,7 +410,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .workspace-body { position: relative; }
 }
 @media (max-width: 820px) {
-  :root { --titlebar-inset: 16px; }
   .sidebar { position: absolute; z-index: 20; inset: 0 auto 0 0; width: min(320px, calc(100% - 48px)); box-shadow: 12px 0 40px color-mix(in oklch, #000 18%, transparent); }
   .inspector { position: fixed; z-index: 30; inset: 0; width: 100%; min-width: 0; box-shadow: none; }
   .runtime-indicator { display: none; }

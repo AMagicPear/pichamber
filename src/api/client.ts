@@ -13,7 +13,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error(text);
   }
   if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  // Handle empty 200 responses (e.g. rpc_send, rpc_stop)
+  const text = await response.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 // ── Session types (mirrors Rust) ────────────────────────────────────
