@@ -23,7 +23,8 @@ interface Props {
 export function Sidebar(props: Props) {
   const [menu, setMenu] = useState<string>();
   return <aside className="sidebar" aria-label="Projects and sessions">
-    <div className="sidebar-titlebar drag-region">
+    <div className="sidebar-titlebar">
+      <div aria-hidden className="drag-layer" />
       <div className="brand no-drag"><span className="brand-mark">π</span><span>Pichamber</span></div>
       <IconButton label="Hide sidebar" className="no-drag" onClick={props.onClose}><PanelLeftClose size={17} /></IconButton>
     </div>

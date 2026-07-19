@@ -71,7 +71,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .app-shell { display: flex; width: 100%; height: 100dvh; background: var(--bg); }
 .drag-region { -webkit-app-region: drag; }
-/* Clickable controls nested inside a drag region must opt out so OS drag does not eat their clicks. */
+/* WKWebView refuses to drag through elements with overflow; use a dedicated drag layer behind the controls instead of relying on a flex parent's own drag region. */
+.drag-layer { position: absolute; inset: 0; z-index: 0; -webkit-app-region: drag; pointer-events: auto; }
 .no-drag,
 .drag-region button,
 .drag-region .icon-button,
@@ -90,9 +91,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .icon-button:active:not(:disabled) { transform: scale(.92); }
 .send-button:active:not(:disabled) { transform: scale(.94); }
 
-.sidebar { width: 280px; min-width: 280px; height: 100%; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); }
-.sidebar-titlebar { height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 var(--titlebar-inset); -webkit-app-region: drag; }
-/* Children are explicitly opted out via .no-drag on clickable controls; the rest of the strip stays draggable. */
+.sidebar { position: relative; width: 280px; min-width: 280px; height: 100%; display: flex; flex-direction: column; background: var(--surface); border-right: 1px solid var(--border); }
+.sidebar-titlebar { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 var(--titlebar-inset); }
+/* The drag layer sits behind everything; all interactive children opt out via .no-drag so clicks land on them. */
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; }
 .brand-mark { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #fff; background: #363a35; font-family: Georgia, serif; font-size: 17px; }
 .dark .brand-mark { color: #1b1c19; background: #e2b04f; }
@@ -124,9 +125,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .version { margin-left: auto; color: var(--text-faint); font-size: 11px; }
 
 .workspace { min-width: 0; flex: 1; height: 100%; display: flex; flex-direction: column; }
-.workspace-header { height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px 0 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); -webkit-app-region: drag; }
+.workspace-header { position: relative; height: var(--titlebar-height); min-height: var(--titlebar-height); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 10px 0 12px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 94%, transparent); overflow: visible; }
 .app-shell:not(.with-sidebar) .workspace-header { padding-left: var(--titlebar-inset); }
-/* Clickable controls opt out via the global .drag-region selector; everything else stays a drag handle. */
+/* Drag layer + children opt-out: the absolute layer guarantees drag everywhere, while children remain clickable. */
+.workspace-header > .header-left,
+.workspace-header > .header-actions { position: relative; z-index: 1; -webkit-app-region: no-drag; }
 .header-left, .header-actions, .session-tabs { min-width: 0; display: flex; align-items: center; gap: 4px; }
 .session-tabs { overflow-x: auto; scrollbar-width: none; }
 .session-tab { position: relative; max-width: 190px; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 11px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
