@@ -3,6 +3,11 @@ import type { ModelInfo, RuntimeEvent } from "./types";
 
 type EventListener = (event: RuntimeEvent) => void;
 
+interface ClientContext {
+  cwd: string;
+  piPath?: string;
+}
+
 export class RpcClient {
   readonly instanceId: string;
   private generation = 0;
@@ -11,7 +16,10 @@ export class RpcClient {
   private listeners = new Set<EventListener>();
   private unlisten: Array<() => void> = [];
   private demoTimers: number[] = [];
+  private context?: ClientContext;
+  private startInFlight: Promise<void> | null = null;
   connected = false;
+  private stderrTail = "";
 
   constructor(instanceId: string) {
     this.instanceId = instanceId;
@@ -27,13 +35,20 @@ export class RpcClient {
   }
 
   async start(cwd: string, piPath?: string) {
-    await this.stop();
+    this.context = { cwd, piPath: piPath?.trim() ? piPath : undefined };
     if (!isTauri()) {
+      await this.stop();
       this.generation += 1;
       this.connected = true;
       this.emit({ type: "rpc_connected", discovery: "browser-demo" });
       return;
     }
+    if (!this.startInFlight) this.startInFlight = this.startInternal(this.context).finally(() => { this.startInFlight = null; });
+    return this.startInFlight;
+  }
+
+  private async startInternal(context: ClientContext) {
+    await this.teardownListeners();
     const unlisten = await native.listenRpc(
       (payload) => {
         if (payload.instanceId !== this.instanceId || payload.generation !== this.generation) return;
@@ -45,20 +60,35 @@ export class RpcClient {
       },
       (payload) => {
         if (payload.instanceId !== this.instanceId || payload.generation !== this.generation) return;
+        const wasConnected = this.connected;
         this.connected = false;
-        this.emit({ type: "rpc_disconnected", code: payload.code });
+        if (wasConnected) this.emit({ type: "rpc_disconnected", code: payload.code });
       },
       (payload) => {
         if (payload.instanceId === this.instanceId && payload.generation === this.generation) {
+          this.stderrTail = `${this.stderrTail}${payload.line}\n`.slice(-2048);
           this.emit({ type: "runtime_stderr", line: payload.line });
         }
       },
     );
     this.unlisten = unlisten;
-    const result = await native.startRpc({ cwd, piPath }, this.instanceId);
-    this.generation = result.generation;
-    this.connected = true;
-    this.emit({ type: "rpc_connected", discovery: result.executable });
+    try {
+      const result = await native.startRpc({ cwd: context.cwd, piPath: context.piPath }, this.instanceId);
+      this.generation = result.generation;
+      this.connected = true;
+      this.emit({ type: "rpc_connected", discovery: result.executable });
+    } catch (error) {
+      this.teardownListeners();
+      const detail = error instanceof Error ? error.message : String(error);
+      this.emit({ type: "rpc_disconnected", code: undefined, error: detail });
+      throw error;
+    }
+  }
+
+  private async teardownListeners() {
+    const previous = this.unlisten;
+    this.unlisten = [];
+    previous.forEach((fn) => fn());
   }
 
   private handle(event: RuntimeEvent) {
@@ -76,8 +106,14 @@ export class RpcClient {
   }
 
   async request<T>(command: Record<string, unknown>, timeout = 35_000): Promise<T> {
-    if (!this.connected) throw new Error("Pi runtime is not connected");
-    if (!isTauri()) return this.demoRequest<T>(command);
+    if (!isTauri()) {
+      if (!this.connected) throw new Error("Pi runtime is not connected");
+      return this.demoRequest<T>(command);
+    }
+    if (!this.connected && this.context) {
+      try { await this.start(this.context.cwd, this.context.piPath); } catch { /* surfaced below */ }
+    }
+    if (!this.connected) throw new Error(this.recentStderr() || "Pi runtime is not connected");
     const id = `req_${++this.requestSequence}`;
     const payload = { ...command, id };
     const promise = new Promise<T>((resolve, reject) => {
@@ -87,7 +123,15 @@ export class RpcClient {
       }, timeout);
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
     });
-    await native.sendRpc(payload, this.instanceId);
+    try {
+      await native.sendRpc(payload, this.instanceId);
+    } catch (error) {
+      this.pending.delete(id);
+      this.connected = false;
+      const detail = error instanceof Error ? error.message : String(error);
+      this.emit({ type: "rpc_disconnected", code: undefined, error: detail });
+      throw new Error(this.recentStderr() || detail);
+    }
     return promise;
   }
 
@@ -131,10 +175,12 @@ export class RpcClient {
       value.reject(new Error("Runtime stopped"));
     });
     this.pending.clear();
-    this.unlisten.forEach((fn) => fn());
-    this.unlisten = [];
+    if (this.startInFlight) { try { await this.startInFlight; } catch { /* swallow */ } }
+    await this.teardownListeners();
     if (this.connected && isTauri()) await native.stopRpc(this.instanceId).catch(() => undefined);
     this.connected = false;
+    this.stderrTail = "";
   }
-}
 
+  recentStderr(): string { return this.stderrTail; }
+}
