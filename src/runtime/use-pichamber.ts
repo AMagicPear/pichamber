@@ -18,14 +18,6 @@ const demoOpenFile = (path: string): OpenFile => {
   return { path, content, size: content.length, truncated: false };
 };
 
-const pathInsideProject = (projectPath: string, candidate: string): boolean => {
-  const root = projectPath.replace(/[\\/]+$/, "");
-  return candidate === root || candidate.startsWith(`${root}/`) || candidate.startsWith(`${root}\\`);
-};
-
-const relativeFromProject = (projectPath: string, absolute: string): string =>
-  absolute.slice(projectPath.replace(/[\\/]+$/, "").length).replace(/^[\\/]/, "").replaceAll("\\", "/");
-
 // Each Pi session we have open has a Pichamber-local tab id. We use a hash of
 // the session path so it's stable across restarts and short enough to fit the
 // Rust instance-id validation (≤256 chars, no slashes).
@@ -41,7 +33,6 @@ function sessionKey(path: string): string {
 export function usePichamber() {
   const state = useAppStore();
   const subscriptions = useRef(new Map<string, () => void>());
-  const activeSessionCwd = useRef<string | undefined>(undefined);
 
   // Detach all event listeners on unmount.
   useEffect(() => () => { subscriptions.current.forEach((unsubscribe) => unsubscribe()); }, []);
@@ -132,27 +123,16 @@ export function usePichamber() {
    */
   const openSession = useCallback((sessionPath: string, cwd: string, title: string) => {
     const key = sessionKey(sessionPath);
-    state.openPiSession(key, cwd, title, sessionPath);
-    // Only show loading if this session hasn't been loaded before.
-    const existing = state.messages[key];
-    if (!existing || existing.length === 0) {
-      state.setSessionLoading(key, true);
-    }
-    activeSessionCwd.current = cwd;
-  }, [state]);
+    const s = useAppStore.getState();
+    s.openPiSession(key, cwd, title, sessionPath);
+    if (!s.messages[key]?.length) s.setSessionLoading(key, true);
+  }, []);
 
-  /**
-   * Start a brand-new Pi session in the given working directory. Calls the
-   * server to allocate a session file path, then opens a tab for it. Pi will
-   * create the `.jsonl` file on disk when it first switches to the session.
-   */
   const newSession = useCallback(async (cwd: string) => {
-    // Ensure the session directory exists — Pi creates the actual file.
     await createSession(cwd).catch(() => {});
     const key = `new:${sessionKey(cwd)}:${Date.now()}`;
-    state.openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`);
-    activeSessionCwd.current = cwd;
-  }, [state]);
+    useAppStore.getState().openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`);
+  }, []);
 
   const sendPrompt = useCallback(async (text: string) => {
     const key = state.activeSessionId;
@@ -176,40 +156,41 @@ export function usePichamber() {
   }, [state, ensureRuntime]);
 
   const stopPrompt = useCallback(() => {
-    const key = state.activeSessionId;
+    const s = useAppStore.getState();
+    const key = s.activeSessionId;
     if (!key) return;
-    state.setSessionRunning(key, false);
+    s.setSessionRunning(key, false);
     getRuntime(key).send({ type: "abort" }).catch(() => {});
-  }, [state]);
+  }, []);
 
   const pickModel = useCallback((model: ModelInfo) => {
-    state.setSelectedModel(model);
-    const key = state.activeSessionId;
+    const s = useAppStore.getState();
+    s.setSelectedModel(model);
+    const key = s.activeSessionId;
     if (key && getRuntime(key).connected) {
-      void getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id }).then(() =>
-        getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" })
-      ).then((sessionState) => {
-        if (sessionState?.thinkingLevel) {
-          state.setThinkingLevel(sessionState.thinkingLevel);
-        }
-      }).catch(() => {});
+      getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id })
+        .then(() => getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" }))
+        .then((st) => { if (st?.thinkingLevel) s.setThinkingLevel(st.thinkingLevel); })
+        .catch(() => {});
     }
-  }, [state]);
+  }, []);
 
   const setThinking = useCallback((level: ThinkingLevel) => {
-    state.setThinkingLevel(level);
-    const key = state.activeSessionId;
+    const s = useAppStore.getState();
+    s.setThinkingLevel(level);
+    const key = s.activeSessionId;
     if (key && getRuntime(key).connected) {
-      void getRuntime(key).request({ type: "set_thinking_level", level }).then(() =>
-        getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" })
-      ).then((sessionState) => {
-        if (sessionState?.thinkingLevel && sessionState.thinkingLevel !== level) {
-          state.setThinkingLevel(sessionState.thinkingLevel);
-          toast(`Thinking set to ${sessionState.thinkingLevel} (${level} not available for this model)`);
-        }
-      }).catch(() => {});
+      getRuntime(key).request({ type: "set_thinking_level", level })
+        .then(() => getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" }))
+        .then((st) => {
+          if (st?.thinkingLevel && st.thinkingLevel !== level) {
+            s.setThinkingLevel(st.thinkingLevel);
+            toast(`Thinking set to ${st.thinkingLevel} (${level} not available for this model)`);
+          }
+        })
+        .catch(() => {});
     }
-  }, [state]);
+  }, []);
 
   // OpenChamber-style regenerate: resend the last user prompt
   const regeneratePrompt = useCallback(async () => {
@@ -225,76 +206,71 @@ export function usePichamber() {
   }, [state, sendPrompt]);
 
   const openFile = useCallback(async (path: string) => {
-    const cwd = activeSessionCwd.current;
+    const s = useAppStore.getState();
+    const key = s.activeSessionId;
+    const cwd = key ? s.sessions.find((t) => t.id === key)?.projectId : undefined;
     if (!cwd) return;
     try {
       const file = await workspaceReadFile(cwd, path).catch(() => demoOpenFile(path));
-      state.setOpenFile(file);
+      s.setOpenFile(file);
     } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-  }, [state]);
+  }, []);
 
   const attachFile = useCallback(async (): Promise<string | undefined> => {
-    const key = state.activeSessionId;
-    if (!key) return undefined;
-    const cwd = state.sessions.find((s) => s.id === key)?.projectId;
-    if (!cwd) return undefined;
-    const p = await new Promise<string | null>((resolve) => {
+    const s = useAppStore.getState();
+    const key = s.activeSessionId;
+    if (!key) return;
+    const cwd = s.sessions.find((t) => t.id === key)?.projectId;
+    if (!cwd) return;
+    const filename = await new Promise<string | null>((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
-      input.onchange = () => {
-        const file = input.files?.[0];
-        if (file) resolve(file.name);
-        else resolve(null);
-      };
+      input.onchange = () => resolve(input.files?.[0]?.name ?? null);
       input.oncancel = () => resolve(null);
       input.click();
     });
-    if (!p) return undefined;
-    if (!pathInsideProject(cwd, p)) {
-      // The file picker only gives us the filename, so we trust it's in the project
-    }
-    const relative = pathInsideProject(cwd, p) ? relativeFromProject(cwd, p) : p;
-    state.addAttachment(key, relative);
-    return relative;
-  }, [state]);
+    if (!filename) return;
+    s.addAttachment(key, filename);
+    return filename;
+  }, []);
 
   const answerUiRequest = useCallback((value: string | boolean | undefined) => {
-    const request = state.uiRequest;
-    const key = state.activeSessionId;
+    const s = useAppStore.getState();
+    const request = s.uiRequest;
+    const key = s.activeSessionId;
     if (!request || !key) return;
-    const payload = value === undefined ? { type: "extension_ui_response", id: request.id, cancelled: true }
-      : request.method === "confirm" ? { type: "extension_ui_response", id: request.id, confirmed: value }
-      : { type: "extension_ui_response", id: request.id, value };
-    void getRuntime(key).send(payload);
-    state.setUiRequest(undefined);
-  }, [state]);
+    const payload = value === undefined ? { type: "extension_ui_response" as const, id: request.id, cancelled: true }
+      : request.method === "confirm" ? { type: "extension_ui_response" as const, id: request.id, confirmed: value }
+      : { type: "extension_ui_response" as const, id: request.id, value };
+    getRuntime(key).send(payload);
+    s.setUiRequest(undefined);
+  }, []);
 
   const renameSession = useCallback(async () => {
-    const key = state.activeSessionId;
+    const s = useAppStore.getState();
+    const key = s.activeSessionId;
     if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
+    const session = s.sessions.find((t) => t.id === key);
     if (!session) return;
     const title = window.prompt("Session name", session.title)?.trim();
     if (!title) return;
-    state.renameSession(key, title);
-    if (getRuntime(key).connected) void getRuntime(key).request({ type: "set_session_name", name: title });
-  }, [state]);
+    s.renameSession(key, title);
+    if (getRuntime(key).connected) getRuntime(key).request({ type: "set_session_name", name: title });
+  }, []);
 
-  // Sidebar-driven rename: called when the user commits the inline rename
-  // input next to a Pi session row. Looks up the matching open tab (if any)
-  // and pushes the new name both to the local store and the Pi runtime.
   const renameSessionByPath = useCallback(async (sessionPath: string, newTitle: string) => {
     const trimmed = newTitle.trim();
     if (!trimmed) return;
-    const tab = state.sessions.find((s) => s.sessionPath === sessionPath);
-    if (tab) state.renameSession(tab.id, trimmed);
+    const s = useAppStore.getState();
+    const tab = s.sessions.find((t) => t.sessionPath === sessionPath);
+    if (tab) s.renameSession(tab.id, trimmed);
     const key = tab?.id ?? sessionKey(sessionPath);
     if (getRuntime(key).connected) {
-      void getRuntime(key).request({ type: "set_session_name", name: trimmed }).catch((error) => {
+      getRuntime(key).request({ type: "set_session_name", name: trimmed }).catch((error) => {
         console.warn("Failed to push session rename to Pi:", error);
       });
     }
-  }, [state]);
+  }, []);
 
   const forkSession = useCallback(async () => {
     const key = state.activeSessionId;
@@ -317,17 +293,18 @@ export function usePichamber() {
   }, [state, ensureRuntime]);
 
   const deleteSession = useCallback(async () => {
-    const key = state.activeSessionId;
+    const s = useAppStore.getState();
+    const key = s.activeSessionId;
     if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
+    const session = s.sessions.find((t) => t.id === key);
     if (!session) return;
     if (!window.confirm(`Delete “${session.title}”? This cannot be undone.`)) return;
     subscriptions.current.get(key)?.(); subscriptions.current.delete(key);
     await closeRuntime(key);
     if (session.sessionPath) await apiDeleteSession(session.sessionPath).catch((error) => toast.error(String(error)));
-    state.closeSession(key);
-    state.setRuntimeError(undefined);
-  }, [state]);
+    s.closeSession(key);
+    s.setRuntimeError(undefined);
+  }, []);
 
   return {
     openSession,

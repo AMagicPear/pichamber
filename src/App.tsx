@@ -93,15 +93,11 @@ export default function App() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen(true); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") { event.preventDefault(); state.toggleSidebar(); }
-      // Escape key stops a running prompt (like Ctrl+C in a terminal)
-      if (event.key === "Escape" && runtimeRunning) {
-        event.preventDefault();
-        stopRef.current();
-      }
+      if (event.key === "Escape" && runtimeRunning) { event.preventDefault(); stopRef.current(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [state, runtimeRunning]);
+  }, [runtimeRunning]);
 
   const paletteActions: PaletteAction[] = [
     ...(cwd ? [{ id: "new", label: "New session", icon: "new" as const, hint: "⌘N", run: () => actions.newSession(cwd) }] : []),
