@@ -173,19 +173,25 @@ export function Sidebar(props: Props) {
         </div>
       </div>
 
-      {/* ── Open project dialog ── */}
+      {/* ── Open project dialog (OpenChamber-style inline) ── */}
       {openProjectOpen && (
         <div className="sidebar-open-project">
+          <label>Open project</label>
           <input
             autoFocus
             value={openProjectPath}
             onChange={(e) => setOpenProjectPath(e.target.value)}
-            placeholder="Paste a project path, e.g. /Users/you/my-project"
+            placeholder="/Users/you/my-project"
             aria-label="Project path"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 const trimmed = openProjectPath.trim();
-                if (trimmed) { props.onNewSession(trimmed); setOpenProjectOpen(false); setOpenProjectPath(""); }
+                if (trimmed) {
+                  props.onNewSession(trimmed);
+                  setOpenProjectOpen(false);
+                  setOpenProjectPath("");
+                  setTimeout(() => load(), 400);
+                }
               }
               if (e.key === "Escape") { setOpenProjectOpen(false); setOpenProjectPath(""); }
             }}
@@ -193,7 +199,13 @@ export function Sidebar(props: Props) {
           <div className="sidebar-open-project-actions">
             <button onClick={() => {
               const trimmed = openProjectPath.trim();
-              if (trimmed) { props.onNewSession(trimmed); setOpenProjectOpen(false); setOpenProjectPath(""); }
+              if (trimmed) {
+                props.onNewSession(trimmed);
+                setOpenProjectOpen(false);
+                setOpenProjectPath("");
+                // Reload sidebar to pick up the new project group.
+                setTimeout(() => load(), 400);
+              }
             }}>
               Open
             </button>
@@ -238,8 +250,12 @@ export function Sidebar(props: Props) {
         {loading && <div className="sidebar-empty">Loading…</div>}
         {!loading && filtered.length === 0 && totalSessions === 0 && (
           <div className="sidebar-empty">
-            <p>No sessions yet.</p>
-            <p>Click <strong>Open project</strong> above to start a session, or run <code>pi</code> in a terminal to auto-discover existing sessions.</p>
+            <p>No projects open.</p>
+            <p>
+              Click <button type="button" className="sidebar-empty-action" onClick={() => setOpenProjectOpen(true)}>
+                <FolderOpen size={12} /> Open project
+              </button> to get started.
+            </p>
           </div>
         )}
         {!loading && filtered.length === 0 && normalized && (
