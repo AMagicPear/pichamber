@@ -194,22 +194,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .runtime-indicator.running { color: var(--success); }
 .runtime-indicator.running .dot { opacity: 1; animation: pulse 1.4s infinite; }
 
-/* Header model & thinking pills (OpenChamber-style) */
-.header-model-pill,
-.header-thinking-pill { min-height: 26px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px 0 9px; border: 1px solid transparent; border-radius: 999px; color: var(--muted-foreground); cursor: pointer; font-size: 11px; font-weight: 500; position: relative; background: transparent; transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease); }
-.header-model-pill:hover, .header-thinking-pill:hover { background: var(--surface-hover); color: var(--foreground); }
-.header-thinking-pill.is-active { background: color-mix(in oklch, var(--primary) 14%, transparent); color: var(--primary); border-color: color-mix(in oklch, var(--primary) 30%, transparent); }
-.header-model-pill .pill-text,
-.header-thinking-pill .pill-text { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.header-model-pill .pill-chevron,
-.header-thinking-pill .pill-chevron { opacity: .55; transition: opacity var(--motion-fast) var(--motion-ease); }
-.header-model-pill:hover .pill-chevron,
-.header-thinking-pill:hover .pill-chevron { opacity: 1; }
-.header-model-pill > select,
-.header-thinking-pill > select { position: absolute; inset: 0; opacity: 0; cursor: pointer; padding: 0; border: 0; background: transparent; color: transparent; }
-.header-model-pill > select option,
-.header-thinking-pill > select option { color: var(--foreground); background: var(--surface-raised); }
-
 /* Separator */
 .separator-v { width: 1px; height: 18px; margin: 0 4px; background: var(--border); }
 
@@ -524,11 +508,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .composer-wrap { padding-right: 12px; padding-left: 12px; }
   .settings-modal { width: 100%; height: min(720px, 92vh); }
   .settings-layout nav { width: 150px; }
-  .header-model-pill, .header-thinking-pill { padding: 0 6px; }
-  .header-model-pill .pill-text, .header-thinking-pill .pill-text { max-width: 80px; }
 }
 @media (max-width: 600px) {
-  .header-model-pill, .header-thinking-pill { display: none; }
   .composer-pill { padding: 0 8px; }
   .settings-layout nav { display: none; }
   .settings-content { padding: 20px 16px; }

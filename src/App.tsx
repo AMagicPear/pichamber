@@ -113,11 +113,6 @@ export default function App() {
           sidebarOpen={state.sidebarOpen}
           terminalOpen={state.terminalOpen}
           runtimeRunning={runtimeRunning}
-          models={state.models}
-          selectedModel={state.selectedModel}
-          thinkingLevel={state.thinkingLevel}
-          onModel={actions.pickModel}
-          onThinking={actions.setThinking}
           onToggleSidebar={state.toggleSidebar}
           onNewSession={() => cwd && actions.newSession(cwd)}
           onToggleInspector={state.toggleInspector}
