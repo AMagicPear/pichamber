@@ -19,19 +19,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      "/api": {
-        target: `http://localhost:${BACKEND_PORT}`,
-        changeOrigin: true,
-        ws: true,
-      },
-    },
   },
   define: {
-    // In dev mode the Vite proxy handles /api. At build time the
-    // frontend is served by the Rust server on the same origin, so
-    // no base override is needed.
-    "window.__PICHAMBER_API_BASE__": JSON.stringify(""),
+    // In dev mode API calls go directly to the backend — no proxy.
+    // At build time the frontend is served by the Bun server on the
+    // same origin, so no base override is needed.
+    "window.__PICHAMBER_API_BASE__": JSON.stringify(`http://localhost:${BACKEND_PORT}`),
   },
   build: {
     target: "es2022",

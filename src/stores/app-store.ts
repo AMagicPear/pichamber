@@ -11,13 +11,16 @@ interface AppState {
   messages: Record<string, ChatMessage[]>;
   attachments: Record<string, string[]>;
   activeAssistant: Record<string, string | undefined>;
+  sessionLoading: Record<string, boolean>;
   models: ModelInfo[];
   selectedModel?: ModelInfo;
   thinkingLevel: ThinkingLevel;
   piPath: string;
   theme: "light" | "dark" | "system";
   sidebarOpen: boolean;
+  sidebarWidth: number;
   inspectorOpen: boolean;
+  inspectorWidth: number;
   terminalOpen: boolean;
   openFile?: OpenFile;
   uiRequest?: UiRequest;
@@ -38,13 +41,16 @@ interface AppState {
   setPiPath(path: string): void;
   setTheme(theme: "light" | "dark" | "system"): void;
   toggleSidebar(): void;
+  setSidebarWidth(width: number): void;
   toggleInspector(): void;
+  setInspectorWidth(width: number): void;
   toggleTerminal(): void;
   setOpenFile(file?: OpenFile): void;
   setUiRequest(request?: UiRequest): void;
   setRuntimeError(error?: string): void;
   addUserMessage(sessionId: string, text: string, attachments?: string[]): void;
   hydrateMessages(sessionId: string, messages: ChatMessage[]): void;
+  setSessionLoading(sessionId: string, loading: boolean): void;
   addAttachment(sessionId: string, path: string): void;
   removeAttachment(sessionId: string, path: string): void;
   removeAllAttachments(sessionId: string): void;
@@ -58,8 +64,8 @@ const titleForProject = (projectId: string, sessions: SessionTab[]) => {
 
 export const useAppStore = create<AppState>()(persist((set, get) => ({
   projects: [], sessions: [], activeProjectId: null, activeSessionId: null,
-  messages: {}, attachments: {}, activeAssistant: {}, models: [], thinkingLevel: "medium", piPath: "", theme: "system",
-  sidebarOpen: true, inspectorOpen: false, terminalOpen: false,
+  messages: {}, attachments: {}, activeAssistant: {}, sessionLoading: {}, models: [], thinkingLevel: "medium", piPath: "", theme: "system",
+  sidebarOpen: true, sidebarWidth: 280, inspectorOpen: false, inspectorWidth: 420, terminalOpen: false,
   addProject: (project) => set((state) => {
     const existing = state.projects.find((value) => value.path === project.path);
     const target = existing ?? project;
@@ -142,7 +148,9 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   setPiPath: (piPath) => set({ piPath }),
   setTheme: (theme) => set({ theme }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+  setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
   toggleInspector: () => set((state) => ({ inspectorOpen: !state.inspectorOpen })),
+  setInspectorWidth: (inspectorWidth) => set({ inspectorWidth }),
   toggleTerminal: () => set((state) => ({ terminalOpen: !state.terminalOpen })),
   setOpenFile: (openFile) => set({ openFile, inspectorOpen: Boolean(openFile) }),
   setUiRequest: (uiRequest) => set({ uiRequest }),
@@ -151,7 +159,8 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   addAttachment: (sessionId, path) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: [...(state.attachments[sessionId] ?? []).filter((value) => value !== path), path] } })),
   removeAttachment: (sessionId, path) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: (state.attachments[sessionId] ?? []).filter((value) => value !== path) } })),
   removeAllAttachments: (sessionId) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: [] } })),
-  hydrateMessages: (sessionId, hydrated) => set((state) => ({ messages: { ...state.messages, [sessionId]: hydrated } })),
+  hydrateMessages: (sessionId, hydrated) => set((state) => ({ messages: { ...state.messages, [sessionId]: hydrated }, sessionLoading: { ...state.sessionLoading, [sessionId]: false } })),
+  setSessionLoading: (sessionId, loading) => set((state) => ({ sessionLoading: { ...state.sessionLoading, [sessionId]: loading } })),
   reduceRuntimeEvent: (sessionId, event) => set((state) => {
     const slice = reduceRuntimeEvent(sessionId, state.messages[sessionId] ?? [], state.activeAssistant, event);
     return {
@@ -163,5 +172,5 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   }),
 }), {
   name: "pichamber-shell-v1",
-  partialize: (state) => ({ projects: state.projects, sessions: state.sessions.map((session) => ({ ...session, running: false })), activeProjectId: state.activeProjectId, activeSessionId: state.activeSessionId, theme: state.theme, thinkingLevel: state.thinkingLevel, piPath: state.piPath, sidebarOpen: state.sidebarOpen }),
+  partialize: (state) => ({ projects: state.projects, sessions: state.sessions.map((session) => ({ ...session, running: false })), activeProjectId: state.activeProjectId, activeSessionId: state.activeSessionId, theme: state.theme, thinkingLevel: state.thinkingLevel, piPath: state.piPath, sidebarOpen: state.sidebarOpen, sidebarWidth: state.sidebarWidth, inspectorWidth: state.inspectorWidth }),
 }));

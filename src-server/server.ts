@@ -1,6 +1,6 @@
 import { PtyState } from "./pty.ts"
 import { RpcState, type RpcEvent } from "./rpc.ts"
-import { listAllSessionsGrouped, listSessions, deleteSession } from "./sessions.ts"
+import { listAllSessionsGrouped, listSessions, deleteSession, generateNewSessionPath } from "./sessions.ts"
 import { workspaceTree, workspaceReadFile } from "./workspace.ts"
 import { existsSync } from "node:fs"
 import { join, dirname } from "node:path"
@@ -12,10 +12,23 @@ interface AppState {
   pty: PtyState
 }
 
+function corsHeaders(): Record<string, string> {
+  return {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "access-control-allow-headers": "Content-Type, Authorization",
+  }
+}
+
+/** Return an empty response with CORS headers. */
+function ok(status = 200): Response {
+  return new Response(null, { status, headers: corsHeaders() })
+}
+
 function json(data: any, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...corsHeaders() },
   })
 }
 
@@ -71,6 +84,11 @@ async function fetchHandler(
   const url = new URL(req.url)
   const path = decodeURIComponent(url.pathname)
 
+  // CORS preflight
+  if (req.method === "OPTIONS") {
+    return ok(204)
+  }
+
   try {
     if (path === "/api/health") {
       return json({ status: "ok", version: "0.2.0" })
@@ -83,7 +101,13 @@ async function fetchHandler(
       const q = getQuery(url)
       if (!q.path) return errorResponse("Missing path")
       deleteSession(q.path)
-      return new Response(null, { status: 204 })
+      return ok(204)
+    }
+    if (path === "/api/sessions/new" && req.method === "GET") {
+      const q = getQuery(url)
+      if (!q.cwd) return errorResponse("Missing cwd")
+      const sessionPath = generateNewSessionPath(q.cwd)
+      return json({ path: sessionPath })
     }
     if (path === "/api/sessions/flat" && req.method === "GET") {
       return json(listSessions())
@@ -106,12 +130,12 @@ async function fetchHandler(
     if (rpcSend && req.method === "POST") {
       const body = await readJson(req)
       await state.rpc.send(JSON.stringify(body), rpcSend[1])
-      return new Response(null, { status: 200 })
+      return ok(200)
     }
     const rpcStop = path.match(/^\/api\/rpc\/([^/]+)\/stop$/)
     if (rpcStop && req.method === "POST") {
       await state.rpc.stop(rpcStop[1])
-      return new Response(null, { status: 200 })
+      return ok(200)
     }
     const rpcEvents = path.match(/^\/api\/rpc\/([^/]+)\/events$/)
     if (rpcEvents && req.method === "GET") {
@@ -167,11 +191,11 @@ function serveStatic(path: string): Response {
   if (!existsSync(filePath)) {
     const fallback = join(distDir, "index.html")
     if (existsSync(fallback)) {
-      return new Response(Bun.file(fallback))
+      return new Response(Bun.file(fallback), { headers: corsHeaders() })
     }
     return new Response("Not found", { status: 404 })
   }
-  return new Response(Bun.file(filePath))
+  return new Response(Bun.file(filePath), { headers: corsHeaders() })
 }
 
 function findDistDir(): string {
@@ -249,10 +273,12 @@ export function startServer(): void {
   const url = `http://localhost:${port}`
   console.log(`Pichamber v0.2.0 listening on ${url}`)
 
-  if (process.platform === "darwin") {
-    Bun.spawn(["open", url])
-  } else if (process.platform === "linux") {
-    Bun.spawn(["xdg-open", url])
+  if (!process.env.PICHAMBER_DEV) {
+    if (process.platform === "darwin") {
+      Bun.spawn(["open", url])
+    } else if (process.platform === "linux") {
+      Bun.spawn(["xdg-open", url])
+    }
   }
 
   const shutdown = async () => {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CommandPalette, type PaletteAction } from "./components/CommandPalette";
 import { Toaster } from "./components/Toaster";
@@ -11,6 +11,7 @@ import { Sidebar } from "./features/workspace/Sidebar";
 import { WorkspaceHeader } from "./features/workspace/WorkspaceHeader";
 import { usePichamber } from "./runtime/use-pichamber";
 import { useAppStore } from "./stores/app-store";
+import { useResizable } from "./hooks/use-resizable";
 import { listAllSessionsGrouped } from "./api/client";
 
 const TerminalDock = lazy(() => import("./features/terminal/TerminalDock").then((module) => ({ default: module.TerminalDock })));
@@ -23,10 +24,31 @@ export default function App() {
   const activeSession = state.sessions.find((s) => s.id === state.activeSessionId);
   const cwd = activeSession?.projectId;
   const messages = activeSession ? state.messages[activeSession.id] ?? [] : [];
+  const sessionLoading = activeSession ? Boolean(state.sessionLoading[activeSession.id]) : false;
   const attachments = activeSession ? state.attachments[activeSession.id] ?? [] : [];
   const runtimeRunning = activeSession?.running ?? false;
 
   const actions = usePichamber();
+  const stopRef = useRef(actions.stopPrompt);
+  useEffect(() => { stopRef.current = actions.stopPrompt; }, [actions.stopPrompt]);
+
+  // Resizable sidebar (right-edge handle)
+  const sidebarResize = useResizable({
+    min: 200,
+    max: 480,
+    initial: state.sidebarWidth,
+    edge: "right",
+    onResize: state.setSidebarWidth,
+  });
+
+  // Resizable inspector (left-edge handle)
+  const inspectorResize = useResizable({
+    min: 300,
+    max: 800,
+    initial: state.inspectorWidth,
+    edge: "left",
+    onResize: state.setInspectorWidth,
+  });
 
   // OpenChamber pattern: auto-draft / resume on startup
   const [autoDraftAttempted, setAutoDraftAttempted] = useState(false);
@@ -69,10 +91,15 @@ export default function App() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen(true); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") { event.preventDefault(); state.toggleSidebar(); }
+      // Escape key stops a running prompt (like Ctrl+C in a terminal)
+      if (event.key === "Escape" && runtimeRunning) {
+        event.preventDefault();
+        stopRef.current();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [state]);
+  }, [state, runtimeRunning]);
 
   const paletteActions: PaletteAction[] = [
     ...(cwd ? [{ id: "new", label: "New session", icon: "new" as const, hint: "⌘N", run: () => actions.newSession(cwd) }] : []),
@@ -97,6 +124,10 @@ export default function App() {
     <div className={`app-shell${state.sidebarOpen ? " with-sidebar" : ""}${state.inspectorOpen ? " with-inspector" : ""}`}>
       <Sidebar
         isOpen={state.sidebarOpen}
+        width={state.sidebarWidth}
+        resizeHandleRef={sidebarResize.handleRef}
+        resizeDragging={sidebarResize.dragging}
+        onResizeMouseDown={sidebarResize.onMouseDown}
         activeSessionPath={activeSession?.sessionPath ?? null}
         onOpenSession={actions.openSession}
         onNewSession={actions.newSession}
@@ -130,6 +161,7 @@ export default function App() {
               messages={messages}
               projectName={cwd ? cwd.split("/").pop() : undefined}
               cwd={cwd}
+              loading={sessionLoading}
               onOpenFile={(path) => void actions.openFile(path)}
               onSuggestion={handleSuggestion}
               onRegenerate={() => void actions.regeneratePrompt()}
@@ -154,6 +186,10 @@ export default function App() {
             <Inspector
               project={cwd ? { id: cwd, name: cwd.split("/").pop() ?? cwd, path: cwd } : undefined}
               file={state.openFile}
+              width={state.inspectorWidth}
+              resizeHandleRef={inspectorResize.handleRef}
+              resizeDragging={inspectorResize.dragging}
+              onResizeMouseDown={inspectorResize.onMouseDown}
               onFile={(path) => path ? void actions.openFile(path) : state.setOpenFile(undefined)}
               onClose={state.toggleInspector}
             />

@@ -1,4 +1,4 @@
-import { readdirSync, statSync, readFileSync, existsSync, realpathSync, unlinkSync } from "node:fs"
+import { readdirSync, statSync, readFileSync, existsSync, realpathSync, mkdirSync, unlinkSync } from "node:fs"
 import { join, dirname, basename, resolve } from "node:path"
 import { homedir } from "node:os"
 
@@ -226,4 +226,25 @@ function resolveSafe(p: string): string | undefined {
       return undefined
     }
   }
+}
+
+/** Encode an absolute cwd path into Pi's session directory name.
+ *  Must match Pi CLI's encoding: `--` prefix/suffix, strip leading `/`,
+ *  replace `/` and `:` with `-`. */
+function encodeCwdToDirName(cwd: string): string {
+  const safePath = cwd.replace(/^[/\\]+/, "").replace(/[/\\:]/g, "-")
+  return `--${safePath}--`
+}
+
+/** Generate a new session file path for the given project cwd.
+ *  Creates the project directory under Pi's session root if needed. */
+export function generateNewSessionPath(cwd: string): string {
+  const root = sessionsRoot()
+  const dirName = encodeCwdToDirName(cwd)
+  const dir = join(root, dirName)
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  const id = crypto.randomUUID()
+  return join(dir, `${id}.jsonl`)
 }

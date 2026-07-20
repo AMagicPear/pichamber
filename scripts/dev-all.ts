@@ -5,8 +5,8 @@ const BACKEND_PORT = process.env.PICHAMBER_PORT ?? "1420"
 const procs = [
   {
     name: "server",
-    cmd: ["bun", "run", "src-server/server.ts"],
-    env: { ...process.env, PICHAMBER_PORT: BACKEND_PORT },
+    cmd: ["bun", "--watch", "run", "src-server/server.ts"],
+    env: { ...process.env, PICHAMBER_PORT: BACKEND_PORT, PICHAMBER_DEV: "1" },
   },
   {
     name: "web",
@@ -57,6 +57,17 @@ const children = procs.map((p) => {
 
 process.on("SIGINT", shutdown)
 process.on("SIGTERM", shutdown)
+
+// Wait a moment for both servers to be ready, then open Vite
+setTimeout(() => {
+  const url = "http://localhost:5173"
+  if (process.platform === "darwin") {
+    Bun.spawn(["open", url])
+  } else if (process.platform === "linux") {
+    Bun.spawn(["xdg-open", url])
+  }
+  console.log(`  ${url}`)
+}, 1500)
 
 console.log(
   `\x1b[32m▶ dev running\x1b[0m — open \x1b[1mhttp://localhost:5173\x1b[0m (frontend) · backend on :${BACKEND_PORT}`,

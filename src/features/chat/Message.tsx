@@ -1,12 +1,12 @@
 import { Check, Copy, GitFork, Paperclip, RefreshCw, RotateCcw, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Markdown } from "../../components/Markdown";
 import { IconButton } from "../../components/IconButton";
 import type { ChatMessage } from "../../runtime/types";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolBlock } from "./ToolBlock";
 
-export function Message({
+export const Message = memo(function Message({
   message,
   onOpenFile,
   onOpenPath,
@@ -107,7 +107,7 @@ export function Message({
       )}
     </article>
   );
-}
+});
 
 function MessageActions({
   text,

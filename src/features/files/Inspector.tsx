@@ -10,6 +10,10 @@ type Tab = "files" | "context";
 interface Props {
   project?: Project;
   file?: OpenFile;
+  width: number;
+  resizeHandleRef: React.RefObject<HTMLDivElement | null>;
+  resizeDragging: boolean;
+  onResizeMouseDown(e: React.MouseEvent): void;
   onFile(path: string): void;
   onClose(): void;
 }
@@ -28,7 +32,7 @@ function renderFiles(
   return <FileTreeView tree={tree} expanded={expanded} setExpanded={setExpanded} onOpen={onFile} activePath={activePath} />;
 }
 
-export function Inspector({ project, file, onFile, onClose }: Props) {
+export function Inspector({ project, file, width, resizeHandleRef, resizeDragging, onResizeMouseDown, onFile, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("files");
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -46,7 +50,16 @@ export function Inspector({ project, file, onFile, onClose }: Props) {
   }, [project?.path]);
 
   return (
-    <aside className="inspector" aria-label="Inspector">
+    <aside
+      className="inspector"
+      aria-label="Inspector"
+      style={{ "--inspector-w": `${width}px` } as React.CSSProperties}
+    >
+      <div
+        ref={resizeHandleRef}
+        className={`inspector-resize-handle${resizeDragging ? " is-dragging" : ""}`}
+        onMouseDown={onResizeMouseDown}
+      />
       <div className="inspector-tabs">
         <button className={tab === "files" ? "active" : ""} onClick={() => setTab("files")}>
           <FolderTree size={13} /> Files

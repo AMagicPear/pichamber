@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Maximize2, Plus, RotateCw, X } from "lucide-react";
+import { Maximize2, Minimize2, Plus, RotateCw, X } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
@@ -103,11 +103,11 @@ export function TerminalDock({ cwd, onClose }: { cwd?: string; onClose(): void }
 
   return <section className={`terminal-dock ${maximized ? "maximized" : ""}`}>
     <header>
-      <div className="terminal-tabs"><button className="active">Terminal</button><IconButton label="New terminal" onClick={restartTerminal}><Plus size={14} /></IconButton></div>
+      <div className="terminal-tabs"><button className="active">Terminal</button></div>
       <div className="terminal-actions">
         <span className={`terminal-status ${status}`}>{status}</span>
         {showRestart && <IconButton label="Restart terminal" onClick={restartTerminal}><RotateCw size={14} /></IconButton>}
-        <IconButton label={maximized ? "Restore terminal" : "Maximize terminal"} onClick={() => setMaximized(!maximized)}><Maximize2 size={14} /></IconButton>
+        <IconButton label={maximized ? "Restore" : "Maximize"} onClick={() => setMaximized(!maximized)}>{maximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</IconButton>
         <IconButton label="Close terminal" onClick={onClose}><X size={15} /></IconButton>
       </div>
     </header>

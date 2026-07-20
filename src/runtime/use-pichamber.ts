@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { closeRuntime, getRuntime } from "./registry";
 import { normalizeBackendMessages } from "./normalize";
-import { deleteSession as apiDeleteSession, workspaceReadFile } from "../api/client";
+import { deleteSession as apiDeleteSession, workspaceReadFile, createSession } from "../api/client";
 import type { ModelInfo, OpenFile, ThinkingLevel } from "./types";
 import { useAppStore } from "../stores/app-store";
 
@@ -97,6 +97,11 @@ export function usePichamber() {
     if (!session?.sessionPath) return; // not a Pi session — nothing to start
 
     const cwd = session.projectId; // we store cwd in projectId for Pi sessions
+    // Set loading if no messages yet (avoid flashing on tab switch to loaded tabs)
+    const existing = state.messages[key];
+    if (!existing || existing.length === 0) {
+      state.setSessionLoading(key, true);
+    }
     let cancelled = false;
     void ensureRuntime(key, cwd, session.sessionPath).catch((error) => {
       if (!cancelled) state.setRuntimeError(error instanceof Error ? error.message : String(error));
@@ -112,16 +117,19 @@ export function usePichamber() {
   const openSession = useCallback((sessionPath: string, cwd: string, title: string) => {
     const key = sessionKey(sessionPath);
     state.openPiSession(key, cwd, title, sessionPath);
+    state.setSessionLoading(key, true);
     activeSessionCwd.current = cwd;
   }, [state]);
 
   /**
-   * Start a brand-new Pi session in the given working directory. Pi will
-   * auto-create a new .jsonl in its session store.
+   * Start a brand-new Pi session in the given working directory. Calls the
+   * server to allocate a session file path, then opens a tab for it. Pi will
+   * create the `.jsonl` file on disk when it first switches to the session.
    */
-  const newSession = useCallback((cwd: string) => {
-    const key = `new:${crypto.randomUUID()}`;
-    state.openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`);
+  const newSession = useCallback(async (cwd: string) => {
+    const { path } = await createSession(cwd).catch(() => ({ path: `new:${crypto.randomUUID()}` }));
+    const key = path.startsWith("new:") ? path : sessionKey(path);
+    state.openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`, path.startsWith("new:") ? undefined : path);
     activeSessionCwd.current = cwd;
   }, [state]);
 
@@ -149,9 +157,13 @@ export function usePichamber() {
   const stopPrompt = useCallback(() => {
     const key = state.activeSessionId;
     if (!key) return;
-    void getRuntime(key).request({ type: "abort" }).then(() => state.setSessionRunning(key, false)).catch((error) => {
-      state.setRuntimeError(error instanceof Error ? error.message : String(error));
-      toast.error("Pi did not confirm the stop request");
+    // Immediately mark as not running so the UI reflects the stop right away.
+    state.setSessionRunning(key, false);
+    // Fire-and-forget: don't wait for a response — Pi may be busy streaming
+    // and the abort may not get an explicit acknowledgement.
+    getRuntime(key).send({ type: "abort" }).catch(() => {
+      // If send itself fails (e.g. disconnected), the runtime will emit
+      // rpc_disconnected which already clears the running flag.
     });
   }, [state]);
 

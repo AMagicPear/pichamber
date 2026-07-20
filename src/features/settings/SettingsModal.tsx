@@ -176,7 +176,7 @@ export function SettingsModal({
                     <strong>Newline in composer</strong>
                     <small>Insert a line break without sending.</small>
                   </span>
-                  <kbd>Shift</kbd>+<kbd>Enter</kbd>
+                  <kbd>Shift+Enter</kbd>
                 </div>
                 <div className="setting-row">
                   <span>

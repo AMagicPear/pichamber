@@ -1,4 +1,4 @@
-const BASE = (window as unknown as Record<string, string>).__PICHAMBER_API_BASE__ || "http://localhost:1420";
+const BASE = (window as unknown as Record<string, string | undefined>).__PICHAMBER_API_BASE__ ?? "http://localhost:1420";
 
 function apiUrl(path: string): string {
   return `${BASE}${path}`;
@@ -92,6 +92,10 @@ export async function listAllSessionsGrouped(): Promise<ProjectSessions[]> {
 
 export async function deleteSession(sessionPath: string): Promise<void> {
   await request<void>("DELETE", `/api/sessions?path=${encodeURIComponent(sessionPath)}`);
+}
+
+export async function createSession(cwd: string): Promise<{ path: string }> {
+  return request<{ path: string }>("GET", `/api/sessions/new?cwd=${encodeURIComponent(cwd)}`);
 }
 
 // ── Workspace files ─────────────────────────────────────────────────

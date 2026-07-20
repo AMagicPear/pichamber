@@ -71,9 +71,30 @@ export class RpcClient {
       this.connected = true;
       this.emit({ type: "rpc_connected", discovery: result.executable });
 
-      // Connect WebSocket for events
+      // Connect WebSocket for events — wait for it to open so we don't
+      // miss events that Pi emits between process start and subscription.
       const ws = rpcEventWs(this.instanceId);
       this.ws = ws;
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        ws.onopen = () => { if (!settled) { settled = true; resolve(); } };
+        ws.onclose = (event) => {
+          if (!settled) {
+            settled = true;
+            reject(new Error(`WebSocket closed before opening (code ${event.code})`));
+          }
+        };
+        ws.onerror = () => {
+          // onerror is non-fatal — the browser may fire it and then
+          // succeed via onopen or fail via onclose.  Let onclose
+          // deliver the definitive outcome.
+        };
+      });
+      // Restore normal handlers after open is confirmed.
+      ws.onopen = null;
+      ws.onclose = null;
+      ws.onerror = null;
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as {

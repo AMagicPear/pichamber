@@ -6,6 +6,10 @@ import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
 
 interface Props {
   isOpen: boolean;
+  width: number;
+  resizeHandleRef: React.RefObject<HTMLDivElement | null>;
+  resizeDragging: boolean;
+  onResizeMouseDown(e: React.MouseEvent): void;
   activeSessionPath: string | null;
   onOpenSession(sessionPath: string, cwd: string, title: string): void;
   onNewSession(cwd: string): void;
@@ -122,10 +126,18 @@ export function Sidebar(props: Props) {
 
   return (
     <aside
-      className={`sidebar${props.isOpen ? " is-open" : ""}`}
+      className={`sidebar${props.isOpen ? " is-open" : ""}${props.resizeDragging ? " no-transition" : ""}`}
       aria-label="Pi sessions"
       aria-hidden={!props.isOpen}
+      style={{ "--sidebar-w": `${props.width}px` } as React.CSSProperties}
     >
+      {props.isOpen && (
+        <div
+          ref={props.resizeHandleRef}
+          className={`sidebar-resize-handle${props.resizeDragging ? " is-dragging" : ""}`}
+          onMouseDown={props.onResizeMouseDown}
+        />
+      )}
       <div className="sidebar-inner">
       {/* ── Header row (OpenChamber-style) ── */}
       <div className="sidebar-header">
@@ -294,7 +306,7 @@ export function Sidebar(props: Props) {
                             )}
                             <button className="danger" onClick={(e) => {
                               e.stopPropagation();
-                              handleDeleteSession(session as SessionInfo, group.cwd);
+                              handleDeleteSession(session, group.cwd);
                             }}>
                               <Archive size={12} /> Delete
                             </button>
