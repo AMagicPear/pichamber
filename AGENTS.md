@@ -2,13 +2,19 @@
 
 ## 核心准则
 
-**能抄就抄，少写代码。** 搬运优先级：
+### 准则一：能抄就抄
+
+搬运优先级：
 
 1. **Pi 源代码** (`/Users/amagicpear/projects/pichamber-plans/pi`) — 逻辑、算法、类型定义，直接复制
 2. **OpenChamber 源代码** (`/Users/amagicpear/projects/pichamber-plans/openchamber`) — UI 结构、样式、交互模式，直接复制
 3. 以上两个都没有，才自己写
 
 自己写得越少，对齐越好，bug 越少。
+
+### 准则二：代码越少越好
+
+功能体验不缺席的前提下，代码总量越少越好，越简洁越好。能删就删，能合并就合并，能一行解决的问题不写两行。
 
 ## 开发命令
 
