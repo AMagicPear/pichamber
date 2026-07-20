@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
+import { ChevronRight, Archive, ChevronDown, FolderOpen, FolderPlus, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import { listAllSessionsGrouped, deleteSession as apiDeleteSession } from "../../api/client";
 import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
@@ -54,6 +54,8 @@ export function Sidebar(props: Props) {
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
+  const [openProjectOpen, setOpenProjectOpen] = useState(false);
+  const [openProjectPath, setOpenProjectPath] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   // Per-row imperative handle for the menu's "Rename" action to flip the
   // row into edit mode without lifting state for every row up to the parent.
@@ -147,6 +149,9 @@ export function Sidebar(props: Props) {
           <IconButton label="Refresh sessions" className="tiny" onClick={load}>
             <FolderOpen size={15} />
           </IconButton>
+          <IconButton label="Open project" className="tiny" onClick={() => setOpenProjectOpen(true)}>
+            <FolderPlus size={15} />
+          </IconButton>
           <IconButton label="New session" className="tiny" onClick={() => {
             const cwd = groups.length > 0 ? groups[0].cwd : "";
             if (cwd) props.onNewSession(cwd);
@@ -170,6 +175,35 @@ export function Sidebar(props: Props) {
           </IconButton>
         </div>
       </div>
+
+      {/* ── Open project dialog ── */}
+      {openProjectOpen && (
+        <div className="sidebar-open-project">
+          <input
+            autoFocus
+            value={openProjectPath}
+            onChange={(e) => setOpenProjectPath(e.target.value)}
+            placeholder="Paste a project path, e.g. /Users/you/my-project"
+            aria-label="Project path"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const trimmed = openProjectPath.trim();
+                if (trimmed) { props.onNewSession(trimmed); setOpenProjectOpen(false); setOpenProjectPath(""); }
+              }
+              if (e.key === "Escape") { setOpenProjectOpen(false); setOpenProjectPath(""); }
+            }}
+          />
+          <div className="sidebar-open-project-actions">
+            <button onClick={() => {
+              const trimmed = openProjectPath.trim();
+              if (trimmed) { props.onNewSession(trimmed); setOpenProjectOpen(false); setOpenProjectPath(""); }
+            }}>
+              Open
+            </button>
+            <button onClick={() => { setOpenProjectOpen(false); setOpenProjectPath(""); }}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Expandable search (OpenChamber pattern) ── */}
       {searchOpen && (
@@ -207,8 +241,8 @@ export function Sidebar(props: Props) {
         {loading && <div className="sidebar-empty">Loading…</div>}
         {!loading && filtered.length === 0 && totalSessions === 0 && (
           <div className="sidebar-empty">
-            <p>No sessions found.</p>
-            <p>Run <code>pi</code> in a project directory to create sessions, or open a project folder.</p>
+            <p>No sessions yet.</p>
+            <p>Click <strong>Open project</strong> above to start a session, or run <code>pi</code> in a terminal to auto-discover existing sessions.</p>
           </div>
         )}
         {!loading && filtered.length === 0 && normalized && (
