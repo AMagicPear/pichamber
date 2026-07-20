@@ -69,8 +69,12 @@ export function usePichamber() {
         const history = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
         state.hydrateMessages(key, normalizeBackendMessages(history.messages ?? []));
       }
-      const modelData = await client.request<{ models: ModelInfo[] }>({ type: "get_available_models" }).catch(() => ({ models: [] }));
-      state.setModels(modelData.models ?? []);
+      // Load models once globally — they don't change per session.
+      if (!useAppStore.getState().models.length) {
+        const modelData = await client.request<{ models: ModelInfo[] }>({ type: "get_available_models" }).catch(() => ({ models: [] as ModelInfo[] }));
+        if (modelData.models.length) state.setModels(modelData.models);
+      }
+      const loadedModels = state.models;
 
       // Restore the session's model & thinking level from Pi state
       if (sessionPath) {
@@ -82,8 +86,8 @@ export function usePichamber() {
           state.setThinkingLevel(sessionState.thinkingLevel);
         }
         const stateModelId = sessionState.model?.id;
-        if (stateModelId && modelData.models) {
-          const found = modelData.models.find((m) => m.id === stateModelId);
+        if (stateModelId && loadedModels.length) {
+          const found = loadedModels.find((m) => m.id === stateModelId);
           if (found) state.setSelectedModel(found);
         }
       }
