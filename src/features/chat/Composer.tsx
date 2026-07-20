@@ -35,6 +35,10 @@ export function Composer(props: Props) {
   const draftRef = useRef("");
   const sending = text.trim().length > 0;
   const modelId = props.selectedModel?.id ?? "";
+  const supportsReasoning = props.selectedModel?.reasoning !== false;
+  const availableThinkingLevels = supportsReasoning
+    ? (Object.entries(THINKING_LABELS) as [ThinkingLevel, string][])
+    : [["off", "Off"] as const];
 
   // OpenChamber-style textarea auto-grow: reset to scrollHeight on every
   // change so the field grows as the user pastes/types and shrinks on delete,
@@ -178,7 +182,7 @@ export function Composer(props: Props) {
                 value={props.thinkingLevel}
                 onChange={(e) => props.onThinking(e.target.value as ThinkingLevel)}
               >
-                {Object.entries(THINKING_LABELS).map(([k, v]) => (
+                {availableThinkingLevels.map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>
