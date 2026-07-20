@@ -39,6 +39,21 @@ export function getSupportedThinkingLevels(model?: ModelInfo): ThinkingLevel[] {
   });
 }
 
+/** Clamp to the nearest supported level (try higher first, then lower). */
+export function clampThinkingLevel(model: ModelInfo | undefined, level: ThinkingLevel): ThinkingLevel {
+  const available = getSupportedThinkingLevels(model);
+  if (available.includes(level)) return level;
+  const idx = ALL_THINKING_LEVELS.indexOf(level);
+  if (idx === -1) return available[0];
+  for (let i = idx; i < ALL_THINKING_LEVELS.length; i++) {
+    if (available.includes(ALL_THINKING_LEVELS[i])) return ALL_THINKING_LEVELS[i];
+  }
+  for (let i = idx - 1; i >= 0; i--) {
+    if (available.includes(ALL_THINKING_LEVELS[i])) return ALL_THINKING_LEVELS[i];
+  }
+  return available[0];
+}
+
 export interface ToolActivity {
   id: string;
   name: string;
