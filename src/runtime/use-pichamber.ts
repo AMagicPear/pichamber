@@ -180,7 +180,7 @@ export function usePichamber() {
     const key = s.activeSessionId;
     if (!key) return;
     const msgs = s.messages[key] ?? [];
-    const lastUser = msgs.findLast((m) => m.role === "user");
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user");
     if (!lastUser) { toast.error("Nothing to regenerate"); return; }
     await sendPrompt(lastUser.text);
   }, [sendPrompt]);
@@ -188,7 +188,8 @@ export function usePichamber() {
   const forkSession = useCallback(async () => {
     const s = store.getState();
     const key = s.activeSessionId;
-    const session = key ? s.sessions.find((t) => t.id === key) : undefined;
+    if (!key) return;
+    const session = s.sessions.find((t) => t.id === key);
     if (!session?.projectId) return;
     try {
       const client = await ensureRuntime(key, session.projectId, session.sessionPath);
@@ -207,7 +208,8 @@ export function usePichamber() {
   const deleteSession = useCallback(async () => {
     const s = store.getState();
     const key = s.activeSessionId;
-    const session = key ? s.sessions.find((t) => t.id === key) : undefined;
+    if (!key) return;
+    const session = s.sessions.find((t) => t.id === key);
     if (!session) return;
     if (!window.confirm(`Delete "${session.title}"? This cannot be undone.`)) return;
     subscriptions.current.get(key)?.();
@@ -253,7 +255,8 @@ export function usePichamber() {
   const renameSession = useCallback(async () => {
     const s = store.getState();
     const key = s.activeSessionId;
-    const session = key ? s.sessions.find((t) => t.id === key) : undefined;
+    if (!key) return;
+    const session = s.sessions.find((t) => t.id === key);
     if (!session) return;
     const title = window.prompt("Session name", session.title)?.trim();
     if (!title) return;
