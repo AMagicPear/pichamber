@@ -1,4 +1,4 @@
-import { readdirSync, statSync, readFileSync, existsSync, realpathSync, mkdirSync, unlinkSync } from "node:fs"
+import { readdirSync, statSync, readFileSync, existsSync, realpathSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
 import { join, dirname, basename, resolve } from "node:path"
 import { homedir } from "node:os"
 
@@ -237,7 +237,8 @@ function encodeCwdToDirName(cwd: string): string {
 }
 
 /** Generate a new session file path for the given project cwd.
- *  Creates the project directory under Pi's session root if needed. */
+ *  Creates the project directory under Pi's session root if needed,
+ *  and writes a minimal header so the sidebar can discover it immediately. */
 export function generateNewSessionPath(cwd: string): string {
   const root = sessionsRoot()
   const dirName = encodeCwdToDirName(cwd)
@@ -246,5 +247,10 @@ export function generateNewSessionPath(cwd: string): string {
     mkdirSync(dir, { recursive: true })
   }
   const id = crypto.randomUUID()
-  return join(dir, `${id}.jsonl`)
+  const path = join(dir, `${id}.jsonl`)
+  // Write a minimal session file so listAllSessionsGrouped picks it up
+  // immediately — Pi will append the full header when it starts.
+  const header = JSON.stringify({ type: "session", id, cwd }) + "\n"
+  writeFileSync(path, header, "utf8")
+  return path
 }

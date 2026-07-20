@@ -13,7 +13,7 @@ interface Props {
   onResizeMouseDown(e: React.MouseEvent): void;
   activeSessionPath: string | null;
   onOpenSession(sessionPath: string, cwd: string, title: string): void;
-  onNewSession(cwd: string): void;
+  onNewSession(cwd: string): Promise<void> | void;
   onRenameSession?(sessionPath: string, newTitle: string): void;
   onClose(): void;
   onSettings(): void;
@@ -54,8 +54,6 @@ export function Sidebar(props: Props) {
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
-  const [openProjectOpen, setOpenProjectOpen] = useState(false);
-  const [openProjectPath, setOpenProjectPath] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   // Per-row imperative handle for the menu's "Rename" action to flip the
   // row into edit mode without lifting state for every row up to the parent.
@@ -82,13 +80,10 @@ export function Sidebar(props: Props) {
   };
 
   const handleOpenProject = async () => {
-    // Try native folder picker first, fall back to path input.
     const dir = await selectDirectory();
     if (dir) {
-      props.onNewSession(dir);
-      setTimeout(() => load(), 400);
-    } else {
-      setOpenProjectOpen(true);
+      await props.onNewSession(dir);
+      load();
     }
   };
 
@@ -184,47 +179,6 @@ export function Sidebar(props: Props) {
         </div>
       </div>
 
-      {/* ── Open project dialog (OpenChamber-style inline) ── */}
-      {openProjectOpen && (
-        <div className="sidebar-open-project">
-          <label>Open project</label>
-          <input
-            autoFocus
-            value={openProjectPath}
-            onChange={(e) => setOpenProjectPath(e.target.value)}
-            placeholder="/Users/you/my-project"
-            aria-label="Project path"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const trimmed = openProjectPath.trim();
-                if (trimmed) {
-                  props.onNewSession(trimmed);
-                  setOpenProjectOpen(false);
-                  setOpenProjectPath("");
-                  setTimeout(() => load(), 400);
-                }
-              }
-              if (e.key === "Escape") { setOpenProjectOpen(false); setOpenProjectPath(""); }
-            }}
-          />
-          <div className="sidebar-open-project-actions">
-            <button onClick={() => {
-              const trimmed = openProjectPath.trim();
-              if (trimmed) {
-                props.onNewSession(trimmed);
-                setOpenProjectOpen(false);
-                setOpenProjectPath("");
-                // Reload sidebar to pick up the new project group.
-                setTimeout(() => load(), 400);
-              }
-            }}>
-              Open
-            </button>
-            <button onClick={() => { setOpenProjectOpen(false); setOpenProjectPath(""); }}>Cancel</button>
-          </div>
-        </div>
-      )}
-
       {/* ── Expandable search (OpenChamber pattern) ── */}
       {searchOpen && (
         <div className="sidebar-search-group">
@@ -263,7 +217,7 @@ export function Sidebar(props: Props) {
           <div className="sidebar-empty">
             <p>No projects open.</p>
             <p>
-              Click <button type="button" className="sidebar-empty-action" onClick={() => setOpenProjectOpen(true)}>
+              Click <button type="button" className="sidebar-empty-action" onClick={handleOpenProject}>
                 <FolderOpen size={12} /> Open project
               </button> to get started.
             </p>
