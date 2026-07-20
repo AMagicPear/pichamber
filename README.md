@@ -1,5 +1,8 @@
 # Pichamber
 
+[![npm version](https://img.shields.io/npm/v/@amagicpear/pichamber.svg)](https://www.npmjs.com/package/@amagicpear/pichamber)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 ![Pichamber screenshot](assets/screenshot.png)
 
 Pichamber is a browser-based interface for the [Pi Coding Agent](https://github.com/badlogic/pi-mono). It combines Pi's extension-first RPC runtime with a project, session, chat, tool, file, and terminal workflow inspired by OpenChamber — all running in a browser tab, served by a local Bun/TypeScript backend.
