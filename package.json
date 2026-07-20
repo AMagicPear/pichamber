@@ -1,6 +1,6 @@
 {
   "name": "@amagicpear/pichamber",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A browser-based workspace for the Pi Coding Agent",
   "license": "MIT",
   "type": "module",
