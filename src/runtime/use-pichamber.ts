@@ -174,13 +174,7 @@ export function usePichamber() {
     const key = state.activeSessionId;
     if (!key) return;
     state.setSessionRunning(key, false);
-    const client = getRuntime(key);
-    client.send({ type: "abort" }).catch(async () => {
-      // Send failed — the connection is dead. Force a clean restart so the
-      // session doesn't get stuck in a broken state.
-      try { await client.stop(); } catch {}
-      state.setSessionLoading(key, false);
-    });
+    getRuntime(key).send({ type: "abort" }).catch(() => {});
   }, [state]);
 
   const pickModel = useCallback((model: ModelInfo) => {
