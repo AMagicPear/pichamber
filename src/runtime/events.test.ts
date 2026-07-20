@@ -54,9 +54,9 @@ describe("applyEvent", () => {
     v = applyEvent(v, { type: "message_start", message: assistantTextOnly });
     expect(v.messages).toHaveLength(2);
     v = applyEvent(v, { type: "message_update", message: { ...assistantTextOnly, content: [{ type: "text", text: "Hi there updated" } as TextContent] } });
-    expect(v.messages[1].content[0]).toMatchObject({ type: "text", text: "Hi there updated" });
+    expect((v.messages[1] as AssistantMessage).content[0]).toMatchObject({ type: "text", text: "Hi there updated" });
     v = applyEvent(v, { type: "message_end", message: assistantTextOnly });
-    expect(v.messages[1].content[0]).toMatchObject({ type: "text", text: "Hi there" });
+    expect((v.messages[1] as AssistantMessage).content[0]).toMatchObject({ type: "text", text: "Hi there" });
   });
 
   it("tracks running tools", () => {

@@ -167,7 +167,7 @@ export function applyEvent(prev: SessionView, event: RuntimeEvent): SessionView 
       return { ...prev, state: { ...prev.state, thinkingLevel: level } };
     }
     case "model_select": {
-      const model = (event as { model: Model }).model;
+      const model = (event as unknown as { model: Model }).model;
       return { ...prev, state: { ...prev.state, model } };
     }
     case "session_info_changed": {

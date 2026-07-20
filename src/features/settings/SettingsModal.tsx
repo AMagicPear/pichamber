@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import { useDialogDismiss } from "../../hooks/useDialogDismiss";
-import type { ModelThinkingLevel, ThinkingLevel } from "../../runtime/types";
+import type { ModelThinkingLevel } from "../../runtime/types";
 import { EXTENDED_THINKING_LEVELS } from "../../runtime/types";
 
 type Section = "general" | "runtime" | "shortcuts";
@@ -26,7 +26,7 @@ export function SettingsModal({
   onClose,
 }: {
   theme: string;
-  thinkingLevel: ThinkingLevel;
+  thinkingLevel: ModelThinkingLevel;
   piPath: string;
   onTheme(value: "light" | "dark" | "system"): void;
   onThinking(value: ModelThinkingLevel): void;
