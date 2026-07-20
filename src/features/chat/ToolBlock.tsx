@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronRight,
@@ -268,6 +268,8 @@ export function ToolBlock({ tool, onOpenFile, cwd }: ToolBlockProps) {
                 outputLanguage={outputLanguage}
                 jsonView={jsonView}
                 onJsonViewChange={setJsonView}
+                onOpenFile={onOpenFile}
+                cwd={cwd}
                 copied={copied}
                 onCopy={async () => {
                   try {
@@ -294,6 +296,8 @@ const ToolOutputBody = ({
   outputLanguage,
   jsonView,
   onJsonViewChange,
+  onOpenFile,
+  cwd,
   copied,
   onCopy,
 }: {
@@ -303,6 +307,8 @@ const ToolOutputBody = ({
   outputLanguage: string;
   jsonView: JsonView;
   onJsonViewChange: (view: JsonView) => void;
+  onOpenFile: (path: string) => void;
+  cwd?: string;
   copied: boolean;
   onCopy: () => void;
 }) => {
@@ -383,7 +389,7 @@ const ToolOutputBody = ({
           {copied ? <Check size={11} /> : <Copy size={11} />}
         </button>
       </div>
-      <pre className="tool-output-text-pre">{outputText}</pre>
+      <ClickableFileOutput text={outputText} onOpenFile={onOpenFile} cwd={cwd} />
     </div>
   );
 };
@@ -392,3 +398,105 @@ const ToolOutputBody = ({
 // button-styled link inside the metadata row) but kept re-exported so other
 // modules importing it for fallback styles keep working.
 export { IconButton };
+
+// ── Clickable file paths in tool output ────────────────────────────────
+
+/** Known file extensions — used to spot plausible file paths in output. */
+const CODE_EXTS = new Set([
+  "ts", "tsx", "js", "jsx", "mjs", "cjs", "json", "jsonc", "jsonl",
+  "css", "scss", "less", "html", "htm", "xml", "svg", "md", "mdx",
+  "py", "rs", "go", "java", "kt", "swift", "c", "cpp", "h", "hpp",
+  "rb", "php", "sh", "bash", "zsh", "fish", "yaml", "yml", "toml",
+  "ini", "cfg", "conf", "env", "gitignore", "dockerfile", "makefile",
+  "sql", "graphql", "proto", "vue", "svelte", "astro", "elm",
+  "lua", "r", "rmd", "rmarkdown", "tex", "nim", "zig", "odin",
+  "cs", "fs", "fsx", "vb", "ps1", "psm1", "bat", "cmd",
+  "lock", "toml", "prisma", "wasm", "wat", "wgsl",
+]);
+
+/**
+ * Check whether a string looks like a relative or absolute file path with a
+ * recognised extension.
+ */
+function looksLikeFilePath(s: string): boolean {
+  if (!s.includes("/") && !s.includes("\\")) return false;
+  const dot = s.lastIndexOf(".");
+  if (dot === -1) return false;
+  const ext = s.slice(dot + 1).toLowerCase();
+  // Also accept dotted filenames without extension (e.g. .gitignore)
+  if (s.startsWith(".") && dot === 0) return true;
+  return CODE_EXTS.has(ext);
+}
+
+/** Grep-style output: `path:line` or `path:line:col` */
+const GREP_RE = /^(\S+?):(\d+)(?::(\d+))?[:\s](.*)$/;
+
+interface ClickableFileOutputProps {
+  text: string;
+  onOpenFile(path: string): void;
+  cwd?: string;
+}
+
+function ClickableFileOutput({ text, onOpenFile, cwd }: ClickableFileOutputProps) {
+  const lines = text.split("\n");
+
+  // For grep/search/glob tools, try to detect the path pattern.
+  // Heuristic: if the first non-empty line matches a grep pattern or looks
+  // like a file path, treat the whole output as path-rich.
+  const firstLine = lines.find((l) => l.trim()) ?? "";
+  const usesGrepFormat = GREP_RE.test(firstLine);
+  const usesFilePathFormat = looksLikeFilePath(firstLine.trim());
+  const shouldLinkPaths = usesGrepFormat || usesFilePathFormat;
+
+  if (!shouldLinkPaths) {
+    return <pre className="tool-output-text-pre">{text}</pre>;
+  }
+
+  const renderLine = (line: string, i: number): ReactNode => {
+    if (usesGrepFormat) {
+      const m = line.match(GREP_RE);
+      if (m) {
+        const [, path, lineNum, , rest] = m;
+        const displayPath = cwd ? getRelativePath(path!, cwd) : path!;
+        return (
+          <span key={i} className="tool-output-line">
+            <button
+              type="button"
+              className="tool-output-path-link"
+              onClick={(e) => { e.stopPropagation(); onOpenFile(path!); }}
+              title={`Open ${path}`}
+            >
+              {displayPath}:{lineNum}
+            </button>
+            <span className="tool-output-line-rest">{rest}</span>
+          </span>
+        );
+      }
+    }
+
+    const trimmed = line.trim();
+    if (usesFilePathFormat && looksLikeFilePath(trimmed)) {
+      const displayPath = cwd ? getRelativePath(trimmed, cwd) : trimmed;
+      return (
+        <span key={i} className="tool-output-line">
+          <button
+            type="button"
+            className="tool-output-path-link"
+            onClick={(e) => { e.stopPropagation(); onOpenFile(trimmed); }}
+            title={`Open ${trimmed}`}
+          >
+            {displayPath}
+          </button>
+        </span>
+      );
+    }
+
+    return <span key={i} className="tool-output-line">{line}</span>;
+  };
+
+  return (
+    <pre className="tool-output-text-pre tool-output-text-linked">
+      {lines.map((line, i) => renderLine(line, i))}
+    </pre>
+  );
+}

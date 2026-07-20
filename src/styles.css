@@ -440,6 +440,27 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .tool-output-path:hover { background: var(--surface-hover); color: var(--foreground); }
 .tool-output { margin: 2px 8px 8px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-muted); color: var(--foreground); max-height: 50vh; overflow: hidden; position: relative; }
 .tool-output-text-pre { margin: 0; padding: 10px 12px; font: 11.5px/1.55 var(--font-mono); white-space: pre-wrap; word-break: break-word; color: var(--foreground); max-height: 50vh; overflow: auto; }
+/* Clickable file paths inside tool output (grep/glob/list results) */
+.tool-output-text-linked { display: block; }
+.tool-output-line { display: block; min-height: 1.55em; }
+.tool-output-path-link {
+  display: inline;
+  padding: 0 3px;
+  margin: 0 1px;
+  border: 0;
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--primary) 10%, transparent);
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 550;
+  text-decoration: none;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+.tool-output-path-link:hover {
+  background: color-mix(in oklch, var(--primary) 22%, transparent);
+}
+.tool-output-line-rest { color: var(--muted-foreground); }
 .tool-output-error { margin: 0; padding: 10px 12px; font: 11.5px/1.55 var(--font-mono); white-space: pre-wrap; color: var(--danger); background: color-mix(in oklch, var(--danger) 8%, var(--surface-muted)); border-radius: 8px; }
 .tool-output-markdown { padding: 4px 4px 4px; font-size: 12.5px; line-height: 1.6; color: var(--foreground); }
 .tool-output-markdown .markdown-body { font-size: 12.5px; line-height: 1.6; }
