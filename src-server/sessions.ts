@@ -63,6 +63,8 @@ function parseSession(filePath: string): SessionInfo | undefined {
   const id = String(header.id)
   // Pi stores cwd in the session header — this is the canonical source.
   const cwd = typeof header.cwd === "string" ? header.cwd : undefined
+  // Name may be on the header itself (older Pi versions).
+  let name: string | undefined = typeof header.name === "string" ? header.name : undefined
 
   // Scan the file for message count, tokens, cost, and name.
   let name: string | undefined
@@ -82,7 +84,12 @@ function parseSession(filePath: string): SessionInfo | undefined {
       let value: any
       try { value = JSON.parse(rawLine) } catch { continue }
 
-      if (name === undefined && value.type === "session_info") {
+      // Name: Pi writes it via session_info entries, but also on message
+      // entries (as name/sessionName). Check all sources.
+      if (name === undefined) {
+        name = value.name ?? value.sessionName ?? undefined
+      }
+      if (!name && value.type === "session_info") {
         name = value.name?.trim() || undefined
       }
       if (value.type === "message" || value.role !== undefined) {
