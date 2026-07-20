@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
-import { listAllSessionsGrouped, deleteSession as apiDeleteSession } from "../../api/client";
+import { listAllSessionsGrouped, deleteSession as apiDeleteSession, selectDirectory } from "../../api/client";
 import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
 
 interface Props {
@@ -81,6 +81,17 @@ export function Sidebar(props: Props) {
     });
   };
 
+  const handleOpenProject = async () => {
+    // Try native folder picker first, fall back to path input.
+    const dir = await selectDirectory();
+    if (dir) {
+      props.onNewSession(dir);
+      setTimeout(() => load(), 400);
+    } else {
+      setOpenProjectOpen(true);
+    }
+  };
+
   const handleDeleteSession = async (session: SessionInfo, groupCwd: string) => {
     try {
       await apiDeleteSession(session.path);
@@ -146,7 +157,7 @@ export function Sidebar(props: Props) {
       {/* ── Header row (OpenChamber-style) ── */}
       <div className="sidebar-header">
         <div className="sidebar-header-actions">
-          <IconButton label="Open project" className="tiny" onClick={() => setOpenProjectOpen(true)}>
+          <IconButton label="Open project" className="tiny" onClick={handleOpenProject}>
             <FolderOpen size={15} />
           </IconButton>
           <IconButton label="New session" className="tiny" onClick={() => {

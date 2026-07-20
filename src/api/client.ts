@@ -116,6 +116,17 @@ export async function startPty(options: { cwd: string; cols: number; rows: numbe
   return request<{ ptyId: string }>("POST", "/api/pty/start", options);
 }
 
+// ── Native dialogs ───────────────────────────────────────────────────
+
+export async function selectDirectory(): Promise<string | null> {
+  try {
+    const data = await request<{ path: string }>("POST", "/api/dialog/select-directory");
+    return data.path;
+  } catch {
+    return null;
+  }
+}
+
 // ── WebSocket helpers ───────────────────────────────────────────────
 
 function wsUrl(path: string): string {

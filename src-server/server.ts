@@ -146,6 +146,33 @@ async function fetchHandler(
       return handleRpcStderrWs(state, rpcStderr[1], server, req)
     }
 
+    if (path === "/api/dialog/select-directory" && req.method === "POST") {
+      try {
+        let dir: string | null = null;
+        if (process.platform === "darwin") {
+          const proc = Bun.spawn([
+            "osascript", "-e",
+            'POSIX path of (choose folder with prompt "Select project directory")',
+          ]);
+          const out = await new Response(proc.stdout).text();
+          await proc.exited;
+          dir = out.trim() || null;
+        } else if (process.platform === "linux") {
+          const proc = Bun.spawn([
+            "zenity", "--file-selection", "--directory",
+            "--title=Select project directory",
+          ]);
+          const out = await new Response(proc.stdout).text();
+          await proc.exited;
+          dir = out.trim() || null;
+        }
+        if (!dir) return errorResponse("No directory selected");
+        return json({ path: dir });
+      } catch (e: any) {
+        return errorResponse(e.message ?? String(e));
+      }
+    }
+
     if (path === "/api/workspace/tree" && req.method === "GET") {
       const q = getQuery(url)
       return json(workspaceTree(q.root, q.relative, q.depth ? Number(q.depth) : undefined))
