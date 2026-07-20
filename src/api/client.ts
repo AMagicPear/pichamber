@@ -1,3 +1,5 @@
+import type { OpenFile, PiSessionGroup, TreeEntry } from "../runtime/types";
+
 const BASE = (window as unknown as Record<string, string | undefined>).__PICHAMBER_API_BASE__ ?? "http://localhost:1420";
 
 function apiUrl(path: string): string {
@@ -13,46 +15,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error(text);
   }
   if (response.status === 204) return undefined as T;
-  // rpc_send / rpc_stop return an empty 200 body.
   const text = await response.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
-}
-
-// ── Payload types (mirror the Rust backend) ─────────────────────────
-
-interface SessionInfo {
-  id: string;
-  name?: string;
-  path: string;
-  cwd?: string;
-  createdAt: number;
-  modifiedAt: number;
-  messageCount: number;
-  tokens: number;
-  cost: number;
-}
-
-export interface ProjectSessions {
-  cwd: string;
-  name: string;
-  available: boolean;
-  sessions: SessionInfo[];
-}
-
-interface TreeEntry {
-  name: string;
-  path: string;
-  kind: string;
-  size?: number;
-  children?: TreeEntry[];
-}
-
-interface OpenFile {
-  path: string;
-  content: string;
-  size: number;
-  truncated: boolean;
 }
 
 export interface RpcStartResult {
@@ -86,8 +51,8 @@ export async function stopRpc(instanceId: string): Promise<void> {
 
 // ── Sessions ────────────────────────────────────────────────────────
 
-export async function listAllSessionsGrouped(): Promise<ProjectSessions[]> {
-  return request<ProjectSessions[]>("GET", "/api/sessions");
+export async function listAllSessionsGrouped(): Promise<PiSessionGroup[]> {
+  return request<PiSessionGroup[]>("GET", "/api/sessions");
 }
 
 export async function deleteSession(sessionPath: string): Promise<void> {

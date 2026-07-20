@@ -62,15 +62,14 @@ export function Sidebar(props: Props) {
 
   const refresh = () => {
     listAllSessionsGrouped()
-      .then((g) => setGroups(g as PiSessionGroup[]))
+      .then(setGroups)
       .catch(() => {});
   };
 
   const load = () => {
     setLoading(true);
     listAllSessionsGrouped()
-      .then((g) => {
-        const loaded = g as PiSessionGroup[];
+      .then((loaded) => {
         setGroups(loaded);
         // Default-collapse unavailable projects (only on initial load).
         const unavailable = loaded.filter((p) => !p.available).map((p) => p.cwd);

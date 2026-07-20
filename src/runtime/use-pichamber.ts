@@ -140,10 +140,8 @@ export function usePichamber() {
    * create the `.jsonl` file on disk when it first switches to the session.
    */
   const newSession = useCallback(async (cwd: string) => {
-    // Pi creates the actual session file on first prompt — we just ensure
-    // the directory exists and open a tab. The session file will be
-    // auto-discovered by the sidebar when Pi writes it.
-    const dir = await createSession(cwd).then((r) => r.dir).catch(() => undefined);
+    // Ensure the session directory exists — Pi creates the actual file.
+    await createSession(cwd).catch(() => {});
     const key = `new:${sessionKey(cwd)}:${Date.now()}`;
     state.openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`);
     activeSessionCwd.current = cwd;
