@@ -3,8 +3,8 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import { useDialogDismiss } from "../../hooks/useDialogDismiss";
-import type { ThinkingLevel } from "../../runtime/types";
-import { ALL_THINKING_LEVELS } from "../../runtime/types";
+import type { ModelThinkingLevel, ThinkingLevel } from "../../runtime/types";
+import { EXTENDED_THINKING_LEVELS } from "../../runtime/types";
 
 type Section = "general" | "runtime" | "shortcuts";
 
@@ -14,7 +14,7 @@ const SECTIONS: Array<{ id: Section; label: string; description: string }> = [
   { id: "shortcuts", label: "Shortcuts", description: "Keybindings used in this window." },
 ];
 
-const THINKING_LEVELS = ALL_THINKING_LEVELS;
+const THINKING_LEVELS = EXTENDED_THINKING_LEVELS;
 
 export function SettingsModal({
   theme,
@@ -29,14 +29,14 @@ export function SettingsModal({
   thinkingLevel: ThinkingLevel;
   piPath: string;
   onTheme(value: "light" | "dark" | "system"): void;
-  onThinking(value: ThinkingLevel): void;
+  onThinking(value: ModelThinkingLevel): void;
   onPiPath(value: string): void;
   onClose(): void;
 }) {
   const { closing, dismiss } = useDialogDismiss(onClose);
   const [section, setSection] = useState<Section>("general");
   const [draftTheme, setDraftTheme] = useState(theme as "light" | "dark" | "system");
-  const [draftThinking, setDraftThinking] = useState(thinkingLevel);
+  const [draftThinking, setDraftThinking] = useState<ModelThinkingLevel>(thinkingLevel);
   const [draftPiPath, setDraftPiPath] = useState(piPath);
 
   // Re-sync drafts when the modal is re-opened with new values
@@ -124,7 +124,7 @@ export function SettingsModal({
                   </span>
                   <select
                     value={draftThinking}
-                    onChange={(event) => setDraftThinking(event.target.value as ThinkingLevel)}
+                    onChange={(event) => setDraftThinking(event.target.value as ModelThinkingLevel)}
                   >
                     {THINKING_LEVELS.map((value) => (
                       <option key={value} value={value}>

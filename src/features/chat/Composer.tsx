@@ -1,31 +1,32 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import { Brain, ChevronDown, Paperclip, Send, Square, X } from "lucide-react";
+import { Brain, ChevronDown, Send, Square } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
-import type { ModelInfo, ThinkingLevel } from "../../runtime/types";
-import { getSupportedThinkingLevels } from "../../runtime/types";
+import {
+  EXTENDED_THINKING_LEVELS,
+  getSupportedThinkingLevels,
+  type Model,
+  type ModelThinkingLevel,
+} from "../../runtime/types";
 
 interface Props {
   disabled?: boolean;
   running?: boolean;
-  models: ModelInfo[];
-  selectedModel?: ModelInfo;
-  thinkingLevel: ThinkingLevel;
-  attachments: string[];
-  onModel(model: ModelInfo): void;
-  onThinking(level: ThinkingLevel): void;
-  onAttach(): Promise<string | undefined>;
-  onRemoveAttachment(path: string): void;
+  models: Model[];
+  selectedModel?: Model;
+  thinkingLevel: ModelThinkingLevel;
+  onModel(model: Model): void;
+  onThinking(level: ModelThinkingLevel): void;
   onSend(text: string): void;
   onStop(): void;
 }
 
-const THINKING_LABELS: Record<ThinkingLevel, string> = {
+const THINKING_LABELS: Record<ModelThinkingLevel, string> = {
   off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "X-High", max: "Max",
 };
 
-const displayModel = (model: ModelInfo): string => {
+const displayModel = (model: Model): string => {
   const slash = model.id.indexOf("/");
-  return slash >= 0 ? model.id.slice(slash + 1) : model.id;
+  return slash >= 0 ? model.id.slice(slash + 1) : model.name || model.id;
 };
 
 export function Composer(props: Props) {
@@ -36,12 +37,9 @@ export function Composer(props: Props) {
   const draftRef = useRef("");
   const sending = text.trim().length > 0;
   const modelId = props.selectedModel?.id ?? "";
-  const supportedLevels = getSupportedThinkingLevels(props.selectedModel);
-  const availableThinkingLevels = supportedLevels.map((k) => [k, THINKING_LABELS[k]] as const);
+  const supportedLevels = props.selectedModel ? getSupportedThinkingLevels(props.selectedModel) : ["off"];
+  const availableThinkingLevels = EXTENDED_THINKING_LEVELS.filter((l) => supportedLevels.includes(l));
 
-  // OpenChamber-style textarea auto-grow: reset to scrollHeight on every
-  // change so the field grows as the user pastes/types and shrinks on delete,
-  // capped at the CSS max-height (180px).
   useEffect(() => {
     const el = textarea.current;
     if (!el) return;
@@ -74,7 +72,6 @@ export function Composer(props: Props) {
       handleSubmit();
       return;
     }
-    // Input history navigation (OpenChamber-style up/down)
     if (event.key === "ArrowUp" && !event.shiftKey && !event.ctrlKey && !event.metaKey && textarea.current?.selectionStart === 0) {
       event.preventDefault();
       const hist = historyRef.current;
@@ -83,7 +80,6 @@ export function Composer(props: Props) {
       const next = Math.max(0, historyIdxRef.current - 1);
       historyIdxRef.current = next;
       setText(hist[next]);
-      // Move cursor to end after React re-render
       requestAnimationFrame(() => {
         const ta = textarea.current;
         if (ta) { ta.selectionStart = ta.selectionEnd = ta.value.length; }
@@ -109,27 +105,9 @@ export function Composer(props: Props) {
     }
   };
 
-  const handleAttach = async () => {
-    const path = await props.onAttach();
-    if (path) textarea.current?.focus();
-  };
-
   return (
     <form className="composer-wrap" onSubmit={handleSubmit}>
       <div className="composer">
-        {/* OpenChamber-style attachment chips */}
-        {props.attachments.length > 0 && (
-          <div className="attachment-row">
-            {props.attachments.map((path) => (
-              <span key={path} className="chip" title={path}>
-                <Paperclip size={11} /> {path}
-                <button type="button" aria-label={`Remove ${path}`} onClick={() => props.onRemoveAttachment(path)}>
-                  <X size={11} />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
         <textarea
           ref={textarea}
           value={text}
@@ -147,11 +125,6 @@ export function Composer(props: Props) {
         />
         <div className="composer-toolbar">
           <div className="composer-controls">
-            <IconButton label="Attach file" className="tiny" onClick={handleAttach} disabled={props.disabled}>
-              <Paperclip size={15} />
-            </IconButton>
-
-            {/* OpenChamber-style model selector pill */}
             {props.models.length > 0 && (
               <label className="composer-pill model-pill" title="Change model">
                 <span className="pill-text">{props.selectedModel ? displayModel(props.selectedModel) : "Model"}</span>
@@ -165,13 +138,12 @@ export function Composer(props: Props) {
                   }}
                 >
                   {props.models.map((m) => (
-                    <option key={m.id} value={m.id}>{displayModel(m)}</option>
+                    <option key={`${m.provider}/${m.id}`} value={m.id}>{displayModel(m)}</option>
                   ))}
                 </select>
               </label>
             )}
 
-            {/* OpenChamber-style thinking level pill */}
             <label className={`composer-pill ${props.thinkingLevel !== "off" ? "is-active" : ""}`} title="Thinking level">
               <Brain size={12} />
               <span className="pill-text">{THINKING_LABELS[props.thinkingLevel]}</span>
@@ -179,10 +151,10 @@ export function Composer(props: Props) {
               <select
                 aria-label="Thinking level"
                 value={props.thinkingLevel}
-                onChange={(e) => props.onThinking(e.target.value as ThinkingLevel)}
+                onChange={(e) => props.onThinking(e.target.value as ModelThinkingLevel)}
               >
-                {availableThinkingLevels.map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
+                {availableThinkingLevels.map((k) => (
+                  <option key={k} value={k}>{THINKING_LABELS[k]}</option>
                 ))}
               </select>
             </label>

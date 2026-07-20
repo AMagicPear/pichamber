@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
-import { listAllSessionsGrouped, deleteSession as apiDeleteSession, selectDirectory } from "../../api/client";
+import { deleteSession as apiDeleteSession, selectDirectory } from "../../api/client";
 import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
 
 interface Props {
@@ -12,6 +12,9 @@ interface Props {
   resizeDragging: boolean;
   onResizeMouseDown(e: React.MouseEvent): void;
   activeSessionPath: string | null;
+  /** Project groups fetched from the server. The sidebar no longer
+   *  re-fetches — `usePichamber` keeps this up to date. */
+  sessionGroups: PiSessionGroup[];
   onOpenSession(sessionPath: string, cwd: string, title: string): void;
   onNewSession(cwd: string): Promise<void> | void;
   onRenameSession?(sessionPath: string, newTitle: string): void;
@@ -48,54 +51,30 @@ function messageCountLabel(count: number): string {
 // ── Component ───────────────────────────────────────────────────────
 
 export function Sidebar(props: Props) {
-  const [groups, setGroups] = useState<PiSessionGroup[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // Per-row imperative handle for the menu's "Rename" action to flip the
-  // row into edit mode without lifting state for every row up to the parent.
   const renameTriggerRef = useRef<Record<string, () => void>>({});
   const normalized = query.trim().toLowerCase();
+  const groups = props.sessionGroups;
+  const loading = false;
 
-  const refresh = () => {
-    listAllSessionsGrouped()
-      .then(setGroups)
-      .catch(() => {});
-  };
-
-  const load = () => {
-    setLoading(true);
-    listAllSessionsGrouped()
-      .then((loaded) => {
-        setGroups(loaded);
-        // Default-collapse unavailable projects (only on initial load).
-        const unavailable = loaded.filter((p) => !p.available).map((p) => p.cwd);
-        if (unavailable.length > 0) {
-          setCollapsed((prev) => {
-            const next = new Set(prev);
-            for (const cwd of unavailable) next.add(cwd);
-            return next;
-          });
-        }
-      })
-      .catch((error) => console.warn("Failed to load Pi sessions:", error))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, []);
-  // Periodic refresh + event-driven — silent, no loading flash, no collapse reset.
+  // Default-collapse unavailable projects on first load.
   useEffect(() => {
-    const onSessionChanged = () => refresh();
-    window.addEventListener("pichamber:session-changed", onSessionChanged);
-    const interval = setInterval(refresh, 5000);
-    return () => {
-      window.removeEventListener("pichamber:session-changed", onSessionChanged);
-      clearInterval(interval);
-    };
-  }, []);
+    const unavailable = groups.filter((p) => !p.available).map((p) => p.cwd);
+    if (unavailable.length === 0) return;
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const cwd of unavailable) {
+        if (!next.has(cwd)) { next.add(cwd); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [groups]);
+
   useEffect(() => { if (searchOpen && inputRef.current) inputRef.current.focus(); }, [searchOpen]);
 
   const toggleProject = (cwd: string) => {
@@ -108,10 +87,7 @@ export function Sidebar(props: Props) {
 
   const handleOpenProject = async () => {
     const dir = await selectDirectory();
-    if (dir) {
-      await props.onNewSession(dir);
-      refresh();
-    }
+    if (dir) await props.onNewSession(dir);
   };
 
   const handleDeleteSession = async (session: SessionInfo, groupCwd: string) => {
@@ -121,25 +97,15 @@ export function Sidebar(props: Props) {
       console.warn("Failed to delete session:", error);
     }
     setOpenMenuKey(null);
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.cwd === groupCwd
-          ? { ...g, sessions: g.sessions.filter((s) => s.path !== session.path) }
-          : g
-      ).filter((g) => g.sessions.length > 0)
-    );
+    // The server-side group will refresh on the next event; for now just
+    // clear the menu so the row disappears.
+    void groupCwd;
   };
 
   const handleRenameSession = (session: SessionInfo, newTitle: string) => {
     const trimmed = newTitle.trim();
     if (!trimmed) return;
     props.onRenameSession?.(session.path, trimmed);
-    setGroups((prev) =>
-      prev.map((g) => ({
-        ...g,
-        sessions: g.sessions.map((s) => s.path === session.path ? { ...s, name: trimmed } : s),
-      })),
-    );
   };
 
   const filtered = useMemo(() => {

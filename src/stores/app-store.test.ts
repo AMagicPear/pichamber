@@ -1,26 +1,46 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useAppStore } from "./app-store";
 
-describe("runtime event reducer", () => {
-  beforeEach(() => useAppStore.setState({ projects: [], sessions: [], messages: {}, activeAssistant: {}, runtimeError: undefined }));
-
-  it("merges streamed text and tools into one assistant turn", () => {
-    const session = useAppStore.getState().addSession("project");
-    const reduce = useAppStore.getState().reduceRuntimeEvent;
-    reduce(session.id, { type: "message_start", message: { id: "a1", role: "assistant", content: [] } });
-    reduce(session.id, { type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Hello" } });
-    reduce(session.id, { type: "tool_execution_start", toolCallId: "t1", toolName: "read", args: { path: "README.md" } });
-    reduce(session.id, { type: "tool_execution_end", toolCallId: "t1", result: "done" });
-    reduce(session.id, { type: "message_end" });
-    const message = useAppStore.getState().messages[session.id][0];
-    expect(message.text).toBe("Hello");
-    expect(message.tools[0]).toMatchObject({ id: "t1", status: "complete", output: "done" });
-    expect(message.streaming).toBe(false);
+describe("app-store", () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      sessions: [],
+      view: undefined as never,
+      error: undefined,
+      uiRequest: undefined,
+    });
   });
 
-  it("surfaces extension UI requests", () => {
-    const session = useAppStore.getState().addSession("project");
-    useAppStore.getState().reduceRuntimeEvent(session.id, { type: "extension_ui_request", id: "q1", method: "confirm", title: "Continue?" });
-    expect(useAppStore.getState().uiRequest).toMatchObject({ id: "q1", method: "confirm" });
+  it("upserts a session and marks it active", () => {
+    useAppStore.getState().upsertSession({
+      id: "pi:abc", projectId: "/p", title: "T", sessionPath: "/p/a.jsonl", running: false, unread: false,
+    });
+    const s = useAppStore.getState();
+    expect(s.sessions).toHaveLength(1);
+    expect(s.activeSessionId).toBe("pi:abc");
+    expect(s.activeProjectId).toBe("/p");
+  });
+
+  it("renames a session via upsertSession", () => {
+    useAppStore.getState().upsertSession({ id: "pi:abc", projectId: "/p", title: "Old", running: false, unread: false });
+    const tab = useAppStore.getState().sessions[0];
+    useAppStore.getState().upsertSession({ ...tab, title: "New" });
+    expect(useAppStore.getState().sessions[0].title).toBe("New");
+  });
+
+  it("closes the active session and falls back to the last remaining one", () => {
+    const a = { id: "pi:a", projectId: "/p", title: "A", running: false, unread: false } as const;
+    const b = { id: "pi:b", projectId: "/p", title: "B", running: false, unread: false } as const;
+    useAppStore.getState().upsertSession(a);
+    useAppStore.getState().upsertSession(b);
+    useAppStore.getState().closeSession("pi:b");
+    expect(useAppStore.getState().activeSessionId).toBe("pi:a");
+  });
+
+  it("sets and clears errors", () => {
+    useAppStore.getState().setError("boom");
+    expect(useAppStore.getState().error).toBe("boom");
+    useAppStore.getState().setError(undefined);
+    expect(useAppStore.getState().error).toBeUndefined();
   });
 });

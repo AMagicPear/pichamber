@@ -1,20 +1,55 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { reduceRuntimeEvent } from "../runtime/normalize-events";
-import type { ChatMessage, ModelInfo, OpenFile, Project, SessionInfo, SessionTab, ThinkingLevel, UiRequest } from "../runtime/types";
+import type { SessionView } from "../runtime/events";
+import type {
+  Model,
+  OpenFile,
+  PiSessionGroup,
+  Project,
+  RpcExtensionUIRequest,
+  RpcSessionState,
+  SessionTab,
+  ThinkingLevel,
+} from "../runtime/types";
+import { initialView } from "../runtime/events";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// pichamber's only persistent state is UI preferences and the active session
+// pointer. Everything else (messages, models, thinking level, running tools)
+// is owned by Pi and mirrored from events through `use-pichamber`.
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface AppState {
-  projects: Project[];
+  // Sidebar data — fetched from the server on demand, not persisted.
+  sessionGroups: PiSessionGroup[];
+  sessionLoading: boolean;
+
+  // Currently focused session. Pichamber only keeps one session's messages
+  // in memory; switching sessions refetches via `get_messages`.
   sessions: SessionTab[];
-  activeProjectId: string | null;
   activeSessionId: string | null;
-  messages: Record<string, ChatMessage[]>;
-  attachments: Record<string, string[]>;
-  activeAssistant: Record<string, string | undefined>;
-  sessionLoading: Record<string, boolean>;
-  models: ModelInfo[];
-  selectedModel?: ModelInfo;
-  thinkingLevel: ThinkingLevel;
+  activeProjectId: string | null;
+  projects: Project[];
+
+  // Mirror of Pi's `get_state` response.
+  state: RpcSessionState;
+
+  // Live view of the active session — built by folding Pi events.
+  view: SessionView;
+
+  // Available models, fetched once from Pi.
+  models: Model[];
+
+  // Current UI request from Pi, if any.
+  uiRequest?: RpcExtensionUIRequest;
+
+  // File viewer.
+  openFile?: OpenFile;
+
+  // Last error.
+  error?: string;
+
+  // Configuration.
   piPath: string;
   theme: "light" | "dark" | "system";
   sidebarOpen: boolean;
@@ -22,157 +57,110 @@ interface AppState {
   inspectorOpen: boolean;
   inspectorWidth: number;
   terminalOpen: boolean;
-  openFile?: OpenFile;
-  uiRequest?: UiRequest;
-  runtimeError?: string;
-  addProject(project: Project): void;
-  removeProject(id: string): void;
-  addSession(projectId: string): SessionTab;
-  resumeSession(projectId: string, path: string, title: string): SessionTab;
-  discoverPiSessions(projectId: string, candidates: SessionInfo[]): SessionTab[];
-  openPiSession(key: string, cwd: string, title: string, sessionPath?: string): void;
+
+  // Actions — kept small, one per concern.
+  setSessionGroups(groups: PiSessionGroup[]): void;
+  setSessionLoading(loading: boolean): void;
   setActiveSession(id: string): void;
   closeSession(id: string): void;
-  renameSession(id: string, title: string): void;
-  setSessionRunning(id: string, running: boolean): void;
-  updateSessionPath(id: string, sessionPath: string): void;
-  setModels(models: ModelInfo[]): void;
-  setSelectedModel(model: ModelInfo): void;
-  setThinkingLevel(level: ThinkingLevel): void;
+  upsertSession(tab: SessionTab): void;
+  setProjects(projects: Project[]): void;
+  setState(state: RpcSessionState): void;
+  setView(view: SessionView | ((prev: SessionView) => SessionView)): void;
+  setModels(models: Model[]): void;
+  setUiRequest(req?: RpcExtensionUIRequest): void;
+  setOpenFile(file?: OpenFile): void;
+  setError(error?: string): void;
   setPiPath(path: string): void;
   setTheme(theme: "light" | "dark" | "system"): void;
+  setThinkingLevel(level: ThinkingLevel): void;
+  setSelectedModel(model: Model): void;
   toggleSidebar(): void;
   setSidebarWidth(width: number): void;
   toggleInspector(): void;
   setInspectorWidth(width: number): void;
   toggleTerminal(): void;
-  setOpenFile(file?: OpenFile): void;
-  setUiRequest(request?: UiRequest): void;
-  setRuntimeError(error?: string): void;
-  addUserMessage(sessionId: string, text: string, attachments?: string[]): void;
-  hydrateMessages(sessionId: string, messages: ChatMessage[]): void;
-  setSessionLoading(sessionId: string, loading: boolean): void;
-  addAttachment(sessionId: string, path: string): void;
-  removeAttachment(sessionId: string, path: string): void;
-  removeAllAttachments(sessionId: string): void;
-  reduceRuntimeEvent(sessionId: string, event: Record<string, unknown>): void;
 }
 
-const titleForProject = (projectId: string, sessions: SessionTab[]) => {
-  const count = sessions.filter((session) => session.projectId === projectId).length + 1;
-  return count === 1 ? "New session" : `Session ${count}`;
+const initialState: Omit<AppState,
+  | "setSessionGroups" | "setSessionLoading" | "setActiveSession" | "closeSession"
+  | "upsertSession" | "setProjects" | "setState" | "setView" | "setModels" | "setUiRequest"
+  | "setOpenFile" | "setError" | "setPiPath" | "setTheme" | "setThinkingLevel"
+  | "setSelectedModel" | "toggleSidebar" | "setSidebarWidth" | "toggleInspector"
+  | "setInspectorWidth" | "toggleTerminal"
+> = {
+  sessionGroups: [],
+  sessionLoading: false,
+  sessions: [],
+  activeSessionId: null,
+  activeProjectId: null,
+  projects: [],
+  state: {
+    thinkingLevel: "medium",
+    isStreaming: false,
+    isCompacting: false,
+    steeringMode: "all",
+    followUpMode: "all",
+    sessionId: "",
+    autoCompactionEnabled: true,
+    messageCount: 0,
+    pendingMessageCount: 0,
+  },
+  view: initialView(),
+  models: [],
+  piPath: "",
+  theme: "system",
+  sidebarOpen: true,
+  sidebarWidth: 280,
+  inspectorOpen: false,
+  inspectorWidth: 420,
+  terminalOpen: false,
 };
 
-export const useAppStore = create<AppState>()(persist((set, get) => ({
-  projects: [], sessions: [], activeProjectId: null, activeSessionId: null,
-  messages: {}, attachments: {}, activeAssistant: {}, sessionLoading: {}, models: [], thinkingLevel: "medium", piPath: "", theme: "system",
-  sidebarOpen: true, sidebarWidth: 280, inspectorOpen: false, inspectorWidth: 420, terminalOpen: false,
-  addProject: (project) => set((state) => {
-    const existing = state.projects.find((value) => value.path === project.path);
-    const target = existing ?? project;
-    return { projects: existing ? state.projects : [...state.projects, project], activeProjectId: target.id };
-  }),
-  removeProject: (id) => set((state) => {
-    const projects = state.projects.filter((project) => project.id !== id);
-    const removedSessions = new Set(state.sessions.filter((session) => session.projectId === id).map((session) => session.id));
-    const sessions = state.sessions.filter((session) => session.projectId !== id);
-    const messages = Object.fromEntries(Object.entries(state.messages).filter(([sessionId]) => !removedSessions.has(sessionId)));
-    return { projects, sessions, messages, activeProjectId: state.activeProjectId === id ? projects[0]?.id ?? null : state.activeProjectId, activeSessionId: removedSessions.has(state.activeSessionId ?? "") ? sessions[0]?.id ?? null : state.activeSessionId };
-  }),
-  addSession: (projectId) => {
-    const state = get();
-    const session: SessionTab = { id: crypto.randomUUID(), projectId, title: titleForProject(projectId, state.sessions), running: false, unread: false };
-    set({ sessions: [...state.sessions, session], activeSessionId: session.id, activeProjectId: projectId, messages: { ...state.messages, [session.id]: [] } });
-    return session;
-  },
-  resumeSession: (projectId, path, title) => {
-    const existing = get().sessions.find((session) => session.sessionPath === path);
-    if (existing) { get().setActiveSession(existing.id); return existing; }
-    const session: SessionTab = { id: crypto.randomUUID(), projectId, title, sessionPath: path, running: false, unread: false };
-    set((state) => ({ sessions: [...state.sessions, session], activeSessionId: session.id, activeProjectId: projectId, messages: { ...state.messages, [session.id]: [] } }));
-    return session;
-  },
-  discoverPiSessions: (projectId, candidates) => {
-    const state = get();
-    const knownPaths = new Set(state.sessions.filter((session) => session.sessionPath).map((session) => session.sessionPath as string));
-    const newSessions: SessionTab[] = [];
-    let messageSlots = { ...state.messages };
-    for (const candidate of candidates) {
-      if (!candidate.path || knownPaths.has(candidate.path)) continue;
-      const session: SessionTab = {
-        id: crypto.randomUUID(),
-        projectId,
-        title: candidate.name || candidate.path.split(/[/\\]/).pop() || "Pi session",
-        sessionPath: candidate.path,
-        running: false,
-        unread: false,
-      };
-      newSessions.push(session);
-      knownPaths.add(candidate.path);
-      messageSlots = { ...messageSlots, [session.id]: [] };
-    }
-    if (newSessions.length === 0) return [];
-    set({ sessions: [...state.sessions, ...newSessions], messages: messageSlots });
-    return newSessions;
-  },
-  openPiSession: (key, cwd, title, sessionPath) => {
-    const existing = get().sessions.find((session) => session.id === key);
-    if (existing) {
-      set({ activeSessionId: key, activeProjectId: cwd });
-      return;
-    }
-    const session: SessionTab = {
-      id: key,
-      projectId: cwd,        // we store cwd in projectId for Pi sessions
-      title,
-      sessionPath,
-      running: false,
-      unread: false,
-    };
-    set((state) => ({
-      sessions: [...state.sessions, session],
-      activeSessionId: key,
-      activeProjectId: cwd,
-      messages: { ...state.messages, [key]: [] },
-    }));
-  },
-  setActiveSession: (id) => set((state) => ({ activeSessionId: id, activeProjectId: state.sessions.find((session) => session.id === id)?.projectId ?? state.activeProjectId, sessions: state.sessions.map((session) => session.id === id ? { ...session, unread: false } : session) })),
+export const useAppStore = create<AppState>()(persist((set) => ({
+  ...initialState,
+
+  setSessionGroups: (sessionGroups) => set({ sessionGroups }),
+  setSessionLoading: (sessionLoading) => set({ sessionLoading }),
+  setActiveSession: (id) => set((state) => ({
+    activeSessionId: id,
+    activeProjectId: state.sessions.find((s) => s.id === id)?.projectId ?? state.activeProjectId,
+    sessions: state.sessions.map((s) => (s.id === id ? { ...s, unread: false } : s)),
+  })),
   closeSession: (id) => set((state) => {
-    const sessions = state.sessions.filter((session) => session.id !== id);
+    const sessions = state.sessions.filter((s) => s.id !== id);
     return { sessions, activeSessionId: state.activeSessionId === id ? sessions.at(-1)?.id ?? null : state.activeSessionId };
   }),
-  renameSession: (id, title) => set((state) => ({ sessions: state.sessions.map((session) => session.id === id ? { ...session, title } : session) })),
-  setSessionRunning: (id, running) => set((state) => ({ sessions: state.sessions.map((session) => session.id === id ? { ...session, running } : session) })),
-  updateSessionPath: (id, sessionPath) => set((state) => ({ sessions: state.sessions.map((session) => session.id === id ? { ...session, sessionPath } : session) })),
-  setModels: (models) => set({ models, selectedModel: get().selectedModel ?? models[0] }),
-  setSelectedModel: (selectedModel) => set({ selectedModel }),
-  setThinkingLevel: (thinkingLevel) => set({ thinkingLevel }),
+  upsertSession: (tab) => set((state) => {
+    const existing = state.sessions.findIndex((s) => s.id === tab.id);
+    const sessions = existing === -1 ? [...state.sessions, tab] : state.sessions.map((s, i) => (i === existing ? tab : s));
+    return { sessions, activeSessionId: tab.id, activeProjectId: tab.projectId };
+  }),
+  setProjects: (projects) => set({ projects, activeProjectId: projects[0]?.id ?? null }),
+  setState: (state) => set({ state }),
+  setView: (view) => set((state) => ({ view: typeof view === "function" ? view(state.view) : view })),
+  setModels: (models) => set({ models }),
+  setUiRequest: (uiRequest) => set({ uiRequest }),
+  setOpenFile: (openFile) => set({ openFile, inspectorOpen: Boolean(openFile) }),
+  setError: (error) => set({ error }),
   setPiPath: (piPath) => set({ piPath }),
   setTheme: (theme) => set({ theme }),
+  setThinkingLevel: (thinkingLevel) => set((state) => ({ state: { ...state.state, thinkingLevel } })),
+  setSelectedModel: (model) => set((state) => ({ state: { ...state.state, model } })),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
   toggleInspector: () => set((state) => ({ inspectorOpen: !state.inspectorOpen })),
   setInspectorWidth: (inspectorWidth) => set({ inspectorWidth }),
   toggleTerminal: () => set((state) => ({ terminalOpen: !state.terminalOpen })),
-  setOpenFile: (openFile) => set({ openFile, inspectorOpen: Boolean(openFile) }),
-  setUiRequest: (uiRequest) => set({ uiRequest }),
-  setRuntimeError: (runtimeError) => set({ runtimeError }),
-  addUserMessage: (sessionId, text, attachments) => set((state) => ({ messages: { ...state.messages, [sessionId]: [...(state.messages[sessionId] ?? []), { id: crypto.randomUUID(), role: "user", text, tools: [], createdAt: Date.now() }] }, attachments: attachments ? { ...state.attachments, [sessionId]: attachments } : state.attachments })),
-  addAttachment: (sessionId, path) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: [...(state.attachments[sessionId] ?? []).filter((value) => value !== path), path] } })),
-  removeAttachment: (sessionId, path) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: (state.attachments[sessionId] ?? []).filter((value) => value !== path) } })),
-  removeAllAttachments: (sessionId) => set((state) => ({ attachments: { ...state.attachments, [sessionId]: [] } })),
-  hydrateMessages: (sessionId, hydrated) => set((state) => ({ messages: { ...state.messages, [sessionId]: hydrated }, sessionLoading: { ...state.sessionLoading, [sessionId]: false } })),
-  setSessionLoading: (sessionId, loading) => set((state) => ({ sessionLoading: { ...state.sessionLoading, [sessionId]: loading } })),
-  reduceRuntimeEvent: (sessionId, event) => set((state) => {
-    const slice = reduceRuntimeEvent(sessionId, state.messages[sessionId] ?? [], state.activeAssistant, event);
-    return {
-      messages: { ...state.messages, [sessionId]: slice.messages },
-      activeAssistant: slice.activeAssistant,
-      runtimeError: slice.runtimeError ?? state.runtimeError,
-      uiRequest: slice.uiRequest ?? state.uiRequest,
-    };
-  }),
 }), {
-  name: "pichamber-shell-v1",
-  partialize: (state) => ({ projects: state.projects, sessions: state.sessions.map((session) => ({ ...session, running: false })), activeProjectId: state.activeProjectId, activeSessionId: state.activeSessionId, theme: state.theme, thinkingLevel: state.thinkingLevel, piPath: state.piPath, sidebarOpen: state.sidebarOpen, sidebarWidth: state.sidebarWidth, inspectorWidth: state.inspectorWidth }),
+  name: "pichamber-shell-v2",
+  partialize: (state) => ({
+    activeSessionId: state.activeSessionId,
+    activeProjectId: state.activeProjectId,
+    theme: state.theme,
+    piPath: state.piPath,
+    sidebarOpen: state.sidebarOpen,
+    sidebarWidth: state.sidebarWidth,
+    inspectorWidth: state.inspectorWidth,
+  }),
 }));

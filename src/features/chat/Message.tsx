@@ -1,127 +1,132 @@
-import { Check, Copy, GitFork, Paperclip, RefreshCw, RotateCcw, Sparkles } from "lucide-react";
+import { Check, Copy, Sparkles } from "lucide-react";
 import { memo, useState } from "react";
 import { Markdown } from "../../components/Markdown";
 import { IconButton } from "../../components/IconButton";
-import type { ChatMessage } from "../../runtime/types";
+import {
+  assistantText,
+  assistantThinking,
+  assistantToolCalls,
+} from "../../runtime/events";
+import type {
+  AgentMessage,
+  AssistantMessage,
+  RunningTool,
+  TextContent,
+  ThinkingContent,
+  ToolCall,
+  ToolResultMessage,
+  UserMessage,
+} from "../../runtime/types";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolBlock } from "./ToolBlock";
 
-export const Message = memo(function Message({
-  message,
-  onOpenFile,
-  onOpenPath,
-  cwd,
-  canRegenerate,
-  onRegenerate,
-  onFork,
-}: {
-  message: ChatMessage;
+interface Props {
+  message: AgentMessage;
+  runningTools: Map<string, RunningTool>;
+  findResult(messages: AgentMessage[], toolCallId: string): ToolResultMessage | undefined;
   onOpenFile(path: string): void;
-  onOpenPath?(path: string): void;
   cwd?: string;
-  canRegenerate?: boolean;
-  onRegenerate?(): void;
-  onFork?(): void;
+}
+
+export const Message = memo(function Message({ message, runningTools, findResult, onOpenFile, cwd }: Props) {
+  if (message.role === "user") return <UserBubble message={message} onOpenFile={onOpenFile} />;
+  if (message.role === "assistant") return <AssistantBubble message={message} runningTools={runningTools} findResult={findResult} onOpenFile={onOpenFile} cwd={cwd} />;
+  // toolResult messages are surfaced inline on their corresponding ToolBlock,
+  // so the linear renderer skips them.
+  return null;
+});
+
+function UserBubble({ message, onOpenFile }: { message: UserMessage; onOpenFile(path: string): void }) {
+  const text = typeof message.content === "string"
+    ? message.content
+    : message.content
+        .filter((c): c is TextContent => c.type === "text")
+        .map((c) => c.text)
+        .join("");
+  return (
+    <article className="message user-message">
+      <div className="user-bubble">
+        <Markdown onOpenPath={onOpenFile}>{text}</Markdown>
+      </div>
+      <MessageActions text={text} />
+    </article>
+  );
+}
+
+function AssistantBubble({
+  message,
+  runningTools,
+  findResult,
+  onOpenFile,
+  cwd,
+}: {
+  message: AssistantMessage;
+  runningTools: Map<string, RunningTool>;
+  findResult: (messages: AgentMessage[], toolCallId: string) => ToolResultMessage | undefined;
+  onOpenFile(path: string): void;
+  cwd?: string;
 }) {
-  if (message.role === "user") {
-    // Parse @file references for display
-    const lines = message.text.split("\n");
-    const attachments: string[] = [];
-    const displayLines: string[] = [];
-    for (const line of lines) {
-      if (line.trimStart().startsWith("@")) {
-        const ref = line.trimStart().slice(1).trim();
-        if (ref) attachments.push(ref);
-      } else {
-        displayLines.push(line);
-      }
-    }
-    const displayText = displayLines.join("\n").trim() || message.text;
-
-    return (
-      <article className="message user-message">
-        {attachments.length > 0 && (
-          <div className="user-attachments">
-            {attachments.map((path) => (
-              <span key={path} className="user-attachment">
-                <Paperclip size={10} /> {path}
-              </span>
-            ))}
-          </div>
-        )}
-        {displayText && (
-          <div className="user-bubble">
-            <Markdown onOpenPath={onOpenPath}>{displayText}</Markdown>
-          </div>
-        )}
-        {!displayText && attachments.length > 0 && (
-          <div className="user-bubble">
-            <Markdown onOpenPath={onOpenPath}>{message.text}</Markdown>
-          </div>
-        )}
-        {displayText && <MessageActions text={message.text} />}
-      </article>
-    );
-  }
-
-  // Reasoning is auto-expanded while the upstream model is still streaming
-  // (we don't know it's "done" until the assistant message ends). After
-  // message.streaming flips false, ThinkingBlock collapses by default and the
-  // user can click to expand.
-  const thinkingStreaming = !!message.streaming && !!message.thinking;
+  const thinking = assistantThinking(message);
+  const text = assistantText(message);
+  const toolCalls = assistantToolCalls(message);
+  const isStreaming = message.stopReason === undefined || message.stopReason === "error";
 
   return (
     <article className="message assistant-message">
       <div className="assistant-heading">
         <span className="assistant-avatar"><Sparkles size={13} /></span>
         <strong>Pi</strong>
-        {message.streaming && (
+        {isStreaming && (
           <span className="streaming-label">
             <span className="pulse-dot" /> Working
           </span>
         )}
       </div>
-      {(message.thinking || message.tools.length > 0) && (
+      {(thinking || toolCalls.length > 0) && (
         <div className="activity-rail">
-          {message.thinking && (
-            <ThinkingBlock
-              text={message.thinking}
-              streaming={thinkingStreaming}
-              blockId={message.id}
-            />
+          {thinking && (
+            <ThinkingBlock text={thinking} streaming={isStreaming} blockId={String(message.timestamp)} />
           )}
-          {message.tools.map((tool) => (
-            <ToolBlock key={tool.id} tool={tool} onOpenFile={onOpenFile} cwd={cwd} />
+          {toolCalls.map((call) => (
+            <ToolBlock
+              key={call.id}
+              call={call}
+              result={findResult([message], call.id) ?? findRunningToolResult(runningTools, call.id)}
+              running={runningTools.get(call.id)}
+              onOpenFile={onOpenFile}
+              cwd={cwd}
+            />
           ))}
         </div>
       )}
-      {message.text && (
+      {text && (
         <div>
-          <Markdown onOpenPath={onOpenPath}>{message.text}</Markdown>
-          {message.streaming && <span className="streaming-cursor" />}
+          <Markdown>{text}</Markdown>
+          {isStreaming && <span className="streaming-cursor" />}
         </div>
       )}
-      {message.error && <div className="inline-error">{message.error}</div>}
-      {!message.streaming && message.text && (
-        <MessageActions text={message.text} align="left" canRegenerate={canRegenerate} onRegenerate={onRegenerate} onFork={onFork} />
-      )}
+      {message.errorMessage && <div className="inline-error">{message.errorMessage}</div>}
+      {!isStreaming && text && <MessageActions text={text} align="left" />}
     </article>
   );
-});
+}
 
-function MessageActions({
-  text,
-  align,
-  canRegenerate,
-  onRegenerate,
-  onFork,
-}: {
-  text: string;
-  align?: "left";
-  canRegenerate?: boolean;
-  onRegenerate?(): void;
-  onFork?(): void;
-}) {
+function findRunningToolResult(running: Map<string, RunningTool>, toolCallId: string): ToolResultMessage | undefined {
+  const r = running.get(toolCallId);
+  if (!r) return undefined;
+  // Synthesize a ToolResultMessage from the live running state — useful
+  // when the user switches sessions before the official `turn_end` arrives.
+  return {
+    role: "toolResult",
+    toolCallId,
+    toolName: r.toolName,
+    content: typeof r.result === "string" ? [{ type: "text", text: r.result }] : [],
+    isError: r.isError ?? false,
+    timestamp: r.endedAt ?? r.startedAt,
+  };
+}
+
+function MessageActions({ text, align }: { text: string; align?: "left" }) {
   const [copied, setCopied] = useState(false);
   const isAssistant = align === "left";
   return (
@@ -138,21 +143,9 @@ function MessageActions({
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </IconButton>
-      {!isAssistant && (
-        <IconButton label="Edit message" className="tiny" onClick={() => navigator.clipboard.writeText(text)}>
-          <RotateCcw size={13} />
-        </IconButton>
-      )}
-      {isAssistant && canRegenerate && onRegenerate && (
-        <IconButton label="Regenerate response" className="tiny" onClick={onRegenerate}>
-          <RefreshCw size={13} />
-        </IconButton>
-      )}
-      {isAssistant && onFork && (
-        <IconButton label="Fork from here" className="tiny" onClick={onFork}>
-          <GitFork size={13} />
-        </IconButton>
-      )}
     </div>
   );
 }
+
+// Re-exports kept for backwards compatibility with the rest of the app.
+export type { AgentMessage, AssistantMessage, ThinkingContent, ToolCall, TextContent };

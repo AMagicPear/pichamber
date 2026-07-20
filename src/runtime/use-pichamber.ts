@@ -1,329 +1,225 @@
-import { useCallback, useEffect, useRef } from "react";
+// ─────────────────────────────────────────────────────────────────────────────
+// Bridges UI actions to Pi RPC commands. Subscribes to the active session's
+// RpcClient and folds events into the SessionView stored in zustand. Pi owns
+// the source of truth for messages, state, and tool calls; pichamber just
+// mirrors.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { closeRuntime, getRuntime } from "./registry";
-import { normalizeBackendMessages } from "./normalize";
-import { deleteSession as apiDeleteSession, workspaceReadFile, createSession } from "../api/client";
-import { type ModelInfo, type OpenFile, type ThinkingLevel } from "./types";
+import { applyEvent, initialView } from "./events";
+import {
+  createSession,
+  deleteSession as apiDeleteSession,
+  listAllSessionsGrouped,
+  workspaceReadFile,
+} from "../api/client";
+import type { AgentMessage, Model, ThinkingLevel } from "./types";
 import { useAppStore } from "../stores/app-store";
 
-const DEMO_FILES: Record<string, string> = {
-  "src/App.tsx": "export function App() {\n  return <main>Pichamber</main>;\n}\n",
-  "src/styles.css": ":root {\n  color-scheme: light dark;\n}\n",
-  "README.md": "# Pichamber\n\nA desktop workspace for the Pi Coding Agent.\n",
-  "package.json": "{\n  \"name\": \"pichamber\",\n  \"version\": \"0.1.0\"\n}\n",
-};
+const SESSION_PREFIX = "pi:";
 
-const demoOpenFile = (path: string): OpenFile => {
-  const content = DEMO_FILES[path] ?? `// ${path}\n`;
-  return { path, content, size: content.length, truncated: false };
-};
-
-// Each Pi session we have open has a Pichamber-local tab id. We use a hash of
-// the session path so it's stable across restarts and short enough to fit the
-// Rust instance-id validation (≤256 chars, no slashes).
-function sessionKey(path: string): string {
-  let hash = 0;
-  for (let i = 0; i < path.length; i++) {
-    const c = path.charCodeAt(i);
-    hash = ((hash << 5) - hash + c) | 0;
-  }
-  return `pi:${Math.abs(hash).toString(36)}`;
+/** Stable id derived from a session file path. Pi encodes the session id in
+ *  the filename (`<timestamp>_<id>.jsonl`); we just extract it. */
+function keyFromSessionPath(path: string): string {
+  const file = path.split("/").pop() ?? path;
+  const stem = file.endsWith(".jsonl") ? file.slice(0, -6) : file;
+  const underscore = stem.lastIndexOf("_");
+  return SESSION_PREFIX + (underscore > 0 ? stem.slice(underscore + 1) : path);
 }
 
 export function usePichamber() {
-  const state = useAppStore();
-  const subscriptions = useRef(new Map<string, () => void>());
+  const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const sessions = useAppStore((s) => s.sessions);
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
 
-  // Detach all event listeners on unmount.
-  useEffect(() => () => { subscriptions.current.forEach((unsubscribe) => unsubscribe()); }, []);
-
-  const ensureRuntime = useCallback(async (key: string, cwd: string, sessionPath?: string) => {
-    const client = getRuntime(key);
-    if (!subscriptions.current.has(key)) {
-      const unsubscribe = client.onEvent((event) => {
-        const next = useAppStore.getState();
-        next.reduceRuntimeEvent(key, event);
-        // Let Pi be the source of truth for model & thinking level changes.
-        if (event.type === "thinking_level_changed") {
-          next.setThinkingLevel(event.level as ThinkingLevel);
-        }
-        if (event.type === "model_select") {
-          const m = event.model as ModelInfo | undefined;
-          if (m) next.setSelectedModel(m);
-        }
-        if (event.type === "agent_start") next.setSessionRunning(key, true);
-        if (["agent_end", "rpc_disconnected"].includes(String(event.type))) {
-          next.setSessionRunning(key, false);
-          // Pi may have created a new session file — link it to the active
-          // tab so the sidebar shows it as selected, then refresh.
-          client.request<{ sessionFile?: string }>({ type: "get_state" }).then((s) => {
-            if (s.sessionFile) {
-              const tab = useAppStore.getState().sessions.find((t) => t.id === key);
-              if (tab && !tab.sessionPath) {
-                useAppStore.getState().updateSessionPath(key, s.sessionFile);
-              }
-            }
-          }).catch(() => {});
-          window.dispatchEvent(new CustomEvent("pichamber:session-changed"));
-        }
-        if (event.type === "extension_ui_request" && event.method === "notify") toast(String(event.message ?? event.title ?? "Pi notification"));
-      });
-      subscriptions.current.set(key, unsubscribe);
-    }
-    if (!client.connected) {
-      await client.start(cwd, state.piPath || undefined);
-      if (sessionPath) {
-        await client.request({ type: "switch_session", sessionPath });
-        const history = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
-        state.hydrateMessages(key, normalizeBackendMessages(history.messages ?? []));
-      }
-      // Load models once globally — they don't change per session.
-      if (!useAppStore.getState().models.length) {
-        const modelData = await client.request<{ models: ModelInfo[] }>({ type: "get_available_models" }).catch(() => ({ models: [] as ModelInfo[] }));
-        if (modelData.models.length) state.setModels(modelData.models);
-      }
-      const loadedModels = state.models;
-
-      // Restore the session's model & thinking level from Pi state
-      if (sessionPath) {
-        const sessionState = await client.request<{
-          model?: { provider: string; id: string };
-          thinkingLevel?: ThinkingLevel;
-        }>({ type: "get_state" }).catch((): { model?: { provider: string; id: string }; thinkingLevel?: ThinkingLevel } => ({}));
-        if (sessionState.thinkingLevel) {
-          state.setThinkingLevel(sessionState.thinkingLevel);
-        }
-        const stateModelId = sessionState.model?.id;
-        if (stateModelId && loadedModels.length) {
-          const found = loadedModels.find((m) => m.id === stateModelId);
-          if (found) state.setSelectedModel(found);
-        }
-      }
-    }
-    // Ensure loading is cleared even if we skipped the start block.
-    state.setSessionLoading(key, false);
-    return client;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeSessionId]);
-
-  // Auto-start the runtime when the active session changes.
+  // ─── Subscribe to Pi events for the active session ────────────────────
   useEffect(() => {
-    const key = state.activeSessionId;
-    if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
-    if (!session?.sessionPath) return;
+    if (!activeSessionId) return;
+    const client = getRuntime(activeSessionId);
+    const unsub = client.onEvent((event) => {
+      const store = useAppStore.getState();
+      const prev = store.view;
+      const next = applyEvent(prev, event);
+      store.setView(next);
 
-    const cwd = session.projectId;
-    const existing = state.messages[key];
-    if (!existing || existing.length === 0) {
-      state.setSessionLoading(key, true);
-    }
-    let cancelled = false;
-    void ensureRuntime(key, cwd, session.sessionPath).catch((error) => {
-      if (!cancelled) {
-        state.setRuntimeError(error instanceof Error ? error.message : String(error));
-        state.setSessionLoading(key, false);
+      // Surface the events Pi emits that aren't represented in SessionView.
+      if (event.type === "extension_ui_request") {
+        const req = event as { method?: string; message?: string; title?: string; notifyType?: string };
+        if (req.method === "notify") {
+          toast[req.notifyType === "error" ? "error" : req.notifyType === "warning" ? "warning" : "info"](
+            String(req.message ?? req.title ?? "Pi notification"),
+          );
+        }
+      }
+      if (event.type === "error" || event.type === "extension_error") {
+        toast.error(String((event as { error?: string }).error ?? "Pi runtime error"));
+      }
+      // Sidebar refresh on disk-side changes.
+      if (event.type === "entry_appended" || event.type === "session_info_changed" || event.type === "agent_end") {
+        listAllSessionsGrouped().then((groups) => useAppStore.getState().setSessionGroups(groups)).catch(() => undefined);
+      }
+      // New session: Pi gave us a file path via get_state.
+      if (event.type === "agent_end") {
+        client.request<{ sessionFile?: string }>({ type: "get_state" }).then((s) => {
+          if (s.sessionFile) {
+            const tab = useAppStore.getState().sessions.find((t) => t.id === activeSessionId);
+            if (tab && !tab.sessionPath) {
+              useAppStore.getState().upsertSession({ ...tab, sessionPath: s.sessionFile });
+            }
+          }
+        }).catch(() => undefined);
       }
     });
+    return () => { unsub(); };
+  }, [activeSessionId]);
+
+  // ─── Connect + load history when the active session changes ───────────
+  useEffect(() => {
+    if (!activeSessionId || !activeSession?.sessionPath || !activeSession.projectId) return;
+    const client = getRuntime(activeSessionId);
+    const cwd = activeSession.projectId;
+    const sessionPath = activeSession.sessionPath;
+    let cancelled = false;
+
+    useAppStore.getState().setSessionLoading(true);
+    useAppStore.getState().setError(undefined);
+    useAppStore.getState().setView(initialView());
+
+    (async () => {
+      try {
+        await client.start(cwd, useAppStore.getState().piPath || undefined);
+        if (cancelled) return;
+        await client.request({ type: "switch_session", sessionPath });
+        if (cancelled) return;
+        const history = await client.request<{ messages: AgentMessage[] }>({ type: "get_messages" });
+        if (cancelled) return;
+        useAppStore.getState().setView((prev) => ({ ...prev, messages: history.messages ?? [] }));
+        const sessionState = await client.request<{ state?: import("./types").RpcSessionState }>({ type: "get_state" }).catch(() => null);
+        if (cancelled) return;
+        if (sessionState?.state) useAppStore.getState().setState(sessionState.state);
+        if (!useAppStore.getState().models.length) {
+          const data = await client.request<{ models: Model[] }>({ type: "get_available_models" }).catch(() => ({ models: [] }));
+          if (!cancelled && data.models.length) useAppStore.getState().setModels(data.models);
+        }
+      } catch (error) {
+        if (!cancelled) useAppStore.getState().setError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (!cancelled) useAppStore.getState().setSessionLoading(false);
+      }
+    })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeSessionId]);
+  }, [activeSessionId, activeSession?.sessionPath, activeSession?.projectId]);
 
-  /**
-   * Open an existing Pi session from disk. Called by the Sidebar when the user
-   * clicks a session row.
-   */
-  const openSession = useCallback((sessionPath: string, cwd: string, title: string) => {
-    const key = sessionKey(sessionPath);
-    const s = useAppStore.getState();
-    s.openPiSession(key, cwd, title, sessionPath);
-    if (!s.messages[key]?.length) s.setSessionLoading(key, true);
-  }, []);
+  // ─── Actions (UI intent → Pi RPC) ─────────────────────────────────────
+  const sendPrompt = (text: string, images?: unknown[], behavior: "steer" | "followUp" = "followUp") => {
+    if (!activeSessionId) return Promise.resolve();
+    return getRuntime(activeSessionId).request({ type: "prompt", message: text, images, streamingBehavior: behavior });
+  };
 
-  const newSession = useCallback(async (cwd: string) => {
-    await createSession(cwd).catch(() => {});
-    const key = `new:${sessionKey(cwd)}:${Date.now()}`;
-    useAppStore.getState().openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`);
-  }, []);
+  const stopPrompt = () => { if (activeSessionId) getRuntime(activeSessionId).send({ type: "abort" }); };
 
-  const sendPrompt = useCallback(async (text: string) => {
-    const key = state.activeSessionId;
-    if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
-    if (!session) return;
-    const cwd = session.projectId; // cwd stored in projectId
-    const attachments = state.attachments[key] ?? [];
-    const message = attachments.length > 0 ? `${text}\n\n${attachments.map((p) => `@${p}`).join("\n")}` : text;
-    state.addUserMessage(key, message, attachments);
-    state.removeAllAttachments(key);
-    state.setRuntimeError(undefined);
-    try {
-      const client = await ensureRuntime(key, cwd, session.sessionPath);
-      state.setSessionRunning(key, true);
-      await client.request({ type: "prompt", message, streamingBehavior: "followUp" });
-    } catch (error) {
-      state.setSessionRunning(key, false);
-      state.setRuntimeError(error instanceof Error ? error.message : String(error));
-    }
-  }, [state, ensureRuntime]);
+  const pickModel = (model: Model) => {
+    useAppStore.getState().setSelectedModel(model);
+    if (activeSessionId) getRuntime(activeSessionId).request({ type: "set_model", provider: model.provider, modelId: model.id }).catch(() => undefined);
+  };
 
-  const stopPrompt = useCallback(() => {
-    const s = useAppStore.getState();
-    const key = s.activeSessionId;
-    if (!key) return;
-    s.setSessionRunning(key, false);
-    getRuntime(key).send({ type: "abort" }).catch(() => {});
-  }, []);
+  const setThinking = (level: ThinkingLevel) => {
+    useAppStore.getState().setThinkingLevel(level);
+    if (activeSessionId) getRuntime(activeSessionId).request({ type: "set_thinking_level", level }).catch(() => undefined);
+  };
 
-  const pickModel = useCallback((model: ModelInfo) => {
-    const s = useAppStore.getState();
-    s.setSelectedModel(model);
-    s.setSessionLoading(s.activeSessionId ?? "", true);
-    const key = s.activeSessionId;
-    if (key && getRuntime(key).connected) {
-      getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id })
-        .finally(() => s.setSessionLoading(key, false));
-    }
-  }, []);
-
-  const setThinking = useCallback((level: ThinkingLevel) => {
-    const s = useAppStore.getState();
-    // Optimistic local update — Pi will confirm/correct via thinking_level_changed event.
-    s.setThinkingLevel(level);
-    const key = s.activeSessionId;
-    if (key && getRuntime(key).connected) {
-      getRuntime(key).request({ type: "set_thinking_level", level }).catch(() => {});
-    }
-  }, []);
-
-  // OpenChamber-style regenerate: resend the last user prompt
-  const regeneratePrompt = useCallback(async () => {
-    const key = state.activeSessionId;
-    if (!key) return;
-    const messages = state.messages[key] ?? [];
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    if (!lastUser) {
-      toast.error("Nothing to regenerate");
-      return;
-    }
-    await sendPrompt(lastUser.text);
-  }, [state, sendPrompt]);
-
-  const openFile = useCallback(async (path: string) => {
-    const s = useAppStore.getState();
-    const key = s.activeSessionId;
-    const cwd = key ? s.sessions.find((t) => t.id === key)?.projectId : undefined;
-    if (!cwd) return;
-    try {
-      const file = await workspaceReadFile(cwd, path).catch(() => demoOpenFile(path));
-      s.setOpenFile(file);
-    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-  }, []);
-
-  const attachFile = useCallback(async (): Promise<string | undefined> => {
-    const s = useAppStore.getState();
-    const key = s.activeSessionId;
-    if (!key) return;
-    const cwd = s.sessions.find((t) => t.id === key)?.projectId;
-    if (!cwd) return;
-    const filename = await new Promise<string | null>((resolve) => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.onchange = () => resolve(input.files?.[0]?.name ?? null);
-      input.oncancel = () => resolve(null);
-      input.click();
-    });
-    if (!filename) return;
-    s.addAttachment(key, filename);
-    return filename;
-  }, []);
-
-  const answerUiRequest = useCallback((value: string | boolean | undefined) => {
-    const s = useAppStore.getState();
-    const request = s.uiRequest;
-    const key = s.activeSessionId;
-    if (!request || !key) return;
-    const payload = value === undefined ? { type: "extension_ui_response" as const, id: request.id, cancelled: true }
-      : request.method === "confirm" ? { type: "extension_ui_response" as const, id: request.id, confirmed: value }
-      : { type: "extension_ui_response" as const, id: request.id, value };
-    getRuntime(key).send(payload);
-    s.setUiRequest(undefined);
-  }, []);
-
-  const renameSession = useCallback(async () => {
-    const s = useAppStore.getState();
-    const key = s.activeSessionId;
-    if (!key) return;
-    const session = s.sessions.find((t) => t.id === key);
+  const renameActive = () => {
+    if (!activeSessionId) return;
+    const session = useAppStore.getState().sessions.find((t) => t.id === activeSessionId);
     if (!session) return;
     const title = window.prompt("Session name", session.title)?.trim();
     if (!title) return;
-    s.renameSession(key, title);
-    if (getRuntime(key).connected) getRuntime(key).request({ type: "set_session_name", name: title });
-  }, []);
+    useAppStore.getState().upsertSession({ ...session, title });
+    if (getRuntime(activeSessionId).connected) getRuntime(activeSessionId).request({ type: "set_session_name", name: title });
+  };
 
-  const renameSessionByPath = useCallback(async (sessionPath: string, newTitle: string) => {
+  const renameByPath = (sessionPath: string, newTitle: string) => {
     const trimmed = newTitle.trim();
     if (!trimmed) return;
-    const s = useAppStore.getState();
-    const tab = s.sessions.find((t) => t.sessionPath === sessionPath);
-    if (tab) s.renameSession(tab.id, trimmed);
-    const key = tab?.id ?? sessionKey(sessionPath);
-    if (getRuntime(key).connected) {
-      getRuntime(key).request({ type: "set_session_name", name: trimmed }).catch((error) => {
-        console.warn("Failed to push session rename to Pi:", error);
-      });
-    }
-  }, []);
+    const tab = useAppStore.getState().sessions.find((t) => t.sessionPath === sessionPath);
+    if (tab) useAppStore.getState().upsertSession({ ...tab, title: trimmed });
+    const key = tab?.id ?? keyFromSessionPath(sessionPath);
+    if (getRuntime(key).connected) getRuntime(key).request({ type: "set_session_name", name: trimmed }).catch(() => undefined);
+  };
 
-  const forkSession = useCallback(async () => {
-    const key = state.activeSessionId;
-    if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
+  const deleteActive = async () => {
+    if (!activeSessionId) return;
+    const session = useAppStore.getState().sessions.find((t) => t.id === activeSessionId);
     if (!session) return;
-    const cwd = session.projectId;
+    if (!window.confirm(`Delete "${session.title}"? This cannot be undone.`)) return;
+    await closeRuntime(activeSessionId);
+    if (session.sessionPath) await apiDeleteSession(session.sessionPath).catch((e) => toast.error(String(e)));
+    useAppStore.getState().closeSession(activeSessionId);
+  };
+
+  const newSession = async (cwd: string) => {
+    await createSession(cwd).catch(() => undefined);
+    // We don't have a session file yet — open a tab keyed by cwd. Pi will
+    // create the file on first prompt and we'll get the path from
+    // `get_state.sessionFile` (see agent_end handler above).
+    const key = `${SESSION_PREFIX}new:${cwd}:${Date.now()}`;
+    useAppStore.getState().upsertSession({
+      id: key,
+      projectId: cwd,
+      title: `New session`,
+      running: false,
+      unread: false,
+    });
+  };
+
+  const openSession = (sessionPath: string, cwd: string, title: string) => {
+    const id = keyFromSessionPath(sessionPath);
+    useAppStore.getState().upsertSession({
+      id,
+      projectId: cwd,
+      title: title || sessionPath.split("/").pop()?.replace(/\.jsonl$/, "") || "Session",
+      sessionPath,
+      running: false,
+      unread: false,
+    });
+  };
+
+  const openFile = async (path: string) => {
+    const cwd = useAppStore.getState().activeProjectId;
+    if (!cwd) return;
     try {
-      const client = await ensureRuntime(key, cwd, session.sessionPath);
-      const data = await client.request<{ messages?: Array<{ id?: string; entryId?: string }> }>({ type: "get_fork_messages" });
-      const entry = data.messages?.at(-1);
-      const entryId = entry?.entryId ?? entry?.id;
-      if (!entryId) throw new Error("This session does not have a forkable turn yet");
-      await client.request({ type: "fork", entryId });
-      const history = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
-      state.hydrateMessages(key, normalizeBackendMessages(history.messages ?? []));
-      state.renameSession(key, `${session.title} (fork)`);
-      toast.success("Forked from the latest turn");
-    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-  }, [state, ensureRuntime]);
+      const file = await workspaceReadFile(cwd, path);
+      useAppStore.getState().setOpenFile(file);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  };
 
-  const deleteSession = useCallback(async () => {
+  const answerUiRequest = (value: string | boolean | undefined) => {
     const s = useAppStore.getState();
-    const key = s.activeSessionId;
-    if (!key) return;
-    const session = s.sessions.find((t) => t.id === key);
-    if (!session) return;
-    if (!window.confirm(`Delete “${session.title}”? This cannot be undone.`)) return;
-    subscriptions.current.get(key)?.(); subscriptions.current.delete(key);
-    await closeRuntime(key);
-    if (session.sessionPath) await apiDeleteSession(session.sessionPath).catch((error) => toast.error(String(error)));
-    s.closeSession(key);
-    s.setRuntimeError(undefined);
-  }, []);
+    const request = s.uiRequest;
+    if (!request || !activeSessionId) return;
+    let payload: Record<string, unknown>;
+    if (value === undefined) payload = { type: "extension_ui_response", id: request.id, cancelled: true };
+    else if (request.method === "confirm") payload = { type: "extension_ui_response", id: request.id, confirmed: value };
+    else payload = { type: "extension_ui_response", id: request.id, value };
+    getRuntime(activeSessionId).send(payload);
+    s.setUiRequest(undefined);
+  };
 
   return {
-    openSession,
-    newSession,
     sendPrompt,
-    regeneratePrompt,
     stopPrompt,
     pickModel,
     setThinking,
+    renameSession: renameActive,
+    renameSessionByPath: renameByPath,
+    deleteSession: deleteActive,
+    newSession,
+    openSession,
     openFile,
-    attachFile,
     answerUiRequest,
-    renameSession,
-    renameSessionByPath,
-    forkSession,
-    deleteSession,
   };
 }

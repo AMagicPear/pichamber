@@ -1,5 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { CommandPalette, type PaletteAction } from "./components/CommandPalette";
 import { Toaster } from "./components/Toaster";
 import { Composer } from "./features/chat/Composer";
@@ -23,16 +22,15 @@ export default function App() {
 
   const activeSession = state.sessions.find((s) => s.id === state.activeSessionId);
   const cwd = activeSession?.projectId;
-  const messages = activeSession ? state.messages[activeSession.id] ?? [] : [];
-  const sessionLoading = activeSession ? Boolean(state.sessionLoading[activeSession.id]) : false;
-  const attachments = activeSession ? state.attachments[activeSession.id] ?? [] : [];
-  const runtimeRunning = activeSession?.running ?? false;
+  const messages = state.view.messages;
+  const runningTools = state.view.runningTools;
+  const sessionLoading = state.sessionLoading;
+  const isStreaming = state.view.state.isStreaming;
+  const thinkingLevel = state.view.state.thinkingLevel;
+  const selectedModel = state.view.state.model ?? state.models[0];
 
   const actions = usePichamber();
-  const stopRef = useRef(actions.stopPrompt);
-  useEffect(() => { stopRef.current = actions.stopPrompt; }, [actions.stopPrompt]);
 
-  // Resizable sidebar (right-edge handle)
   const sidebarResize = useResizable({
     min: 200,
     max: 480,
@@ -41,8 +39,6 @@ export default function App() {
     cssVar: "--sidebar-w",
     onResize: state.setSidebarWidth,
   });
-
-  // Resizable inspector (left-edge handle)
   const inspectorResize = useResizable({
     min: 300,
     max: 800,
@@ -52,71 +48,38 @@ export default function App() {
     onResize: state.setInspectorWidth,
   });
 
-  // OpenChamber pattern: auto-draft / resume on startup
-  const [autoDraftAttempted, setAutoDraftAttempted] = useState(false);
   useEffect(() => {
-    if (autoDraftAttempted) return;
-    if (state.sessions.length > 0) {
-      if (!state.activeSessionId) {
-        const latest = [...state.sessions].sort((a, b) => {
-          const aMsg = state.messages[a.id];
-          const bMsg = state.messages[b.id];
-          const aTime = aMsg?.[aMsg.length - 1]?.createdAt ?? 0;
-          const bTime = bMsg?.[bMsg.length - 1]?.createdAt ?? 0;
-          return bTime - aTime;
-        });
-        if (latest.length > 0) state.setActiveSession(latest[0].id);
-      }
-      setAutoDraftAttempted(true);
-      return;
-    }
-    setAutoDraftAttempted(true);
-    listAllSessionsGrouped().then((groups) => {
-      if (groups.length > 0) {
-        const group = groups[0];
-        const session = group.sessions[0];
-        if (session) {
-          actions.openSession(session.path, group.cwd, session.name ?? session.id.slice(0, 8));
-          toast.success(`Resumed ${group.name}`);
-        }
-      }
-    }).catch(() => { /* no sessions on disk — user needs to open a project */ });
+    let cancelled = false;
+    listAllSessionsGrouped()
+      .then((groups) => { if (!cancelled) state.setSessionGroups(groups); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [state.setSessionGroups]);
 
   useEffect(() => {
     const dark = state.theme === "dark" || (state.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.classList.toggle("dark", dark);
-  }, [state.theme]);
+  }, [state.theme, state.theme === "system"]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen(true); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") { event.preventDefault(); state.toggleSidebar(); }
-      if (event.key === "Escape" && runtimeRunning) { event.preventDefault(); stopRef.current(); }
+      if (event.key === "Escape" && isStreaming) { event.preventDefault(); actions.stopPrompt(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [runtimeRunning]);
+  }, [isStreaming, actions]);
 
   const paletteActions: PaletteAction[] = [
-    ...(cwd ? [{ id: "new", label: "New session", icon: "new" as const, hint: "⌘N", run: () => actions.newSession(cwd) }] : []),
+    ...(cwd ? [{ id: "new", label: "New session", icon: "new" as const, hint: "⌘N", run: () => void actions.newSession(cwd) }] : []),
     { id: "files", label: "Toggle files", icon: "files", run: state.toggleInspector },
-    ...(activeSession ? [{ id: "rename", label: "Rename session", icon: "settings" as const, run: () => actions.renameSession() }] : []),
-    ...(activeSession ? [{ id: "fork", label: "Fork session", icon: "settings" as const, run: () => actions.forkSession() }] : []),
-    ...(activeSession ? [{ id: "delete", label: "Delete session", icon: "settings" as const, run: () => actions.deleteSession() }] : []),
+    ...(activeSession ? [{ id: "rename", label: "Rename session", icon: "settings" as const, run: () => void actions.renameSession() }] : []),
+    ...(activeSession ? [{ id: "delete", label: "Delete session", icon: "settings" as const, run: () => void actions.deleteSession() }] : []),
     { id: "terminal", label: "Toggle terminal", icon: "terminal", run: state.toggleTerminal },
     { id: "settings", label: "Open settings", icon: "settings", run: () => setSettingsOpen(true) },
   ];
-
-  const handleSuggestion = (text: string) => {
-    if (!activeSession && cwd) {
-      actions.newSession(cwd);
-      setTimeout(() => actions.sendPrompt(text), 80);
-    } else {
-      void actions.sendPrompt(text);
-    }
-  };
 
   return (
     <div className={`app-shell${state.sidebarOpen ? " with-sidebar" : ""}${state.inspectorOpen ? " with-inspector" : ""}`}>
@@ -128,6 +91,7 @@ export default function App() {
         resizeDragging={sidebarResize.dragging}
         onResizeMouseDown={sidebarResize.onMouseDown}
         activeSessionPath={activeSession?.sessionPath ?? null}
+        sessionGroups={state.sessionGroups}
         onOpenSession={actions.openSession}
         onNewSession={actions.newSession}
         onRenameSession={actions.renameSessionByPath}
@@ -141,43 +105,39 @@ export default function App() {
           canCreateSession={Boolean(cwd)}
           sidebarOpen={state.sidebarOpen}
           terminalOpen={state.terminalOpen}
-          runtimeRunning={runtimeRunning}
+          runtimeRunning={isStreaming}
           onToggleSidebar={state.toggleSidebar}
-          onNewSession={() => cwd && actions.newSession(cwd)}
+          onNewSession={() => cwd && void actions.newSession(cwd)}
           onToggleInspector={state.toggleInspector}
           onToggleTerminal={state.toggleTerminal}
           onOpenSettings={() => setSettingsOpen(true)}
         />
-        {state.runtimeError && (
+        {state.error && (
           <div className="runtime-error">
-            <span>{state.runtimeError}</span>
-            <button onClick={() => state.setRuntimeError(undefined)}>Dismiss</button>
+            <span>{state.error}</span>
+            <button onClick={() => state.setError(undefined)}>Dismiss</button>
           </div>
         )}
         <div className="workspace-body">
           <div className="chat-pane">
             <ChatView
               messages={messages}
+              runningTools={runningTools}
               projectName={cwd ? cwd.split("/").pop() : undefined}
               cwd={cwd}
               loading={sessionLoading}
               onOpenFile={(path) => void actions.openFile(path)}
-              onSuggestion={handleSuggestion}
-              onRegenerate={() => void actions.regeneratePrompt()}
-              onFork={() => void actions.forkSession()}
+              onSuggestion={(text) => { void actions.sendPrompt(text); }}
             />
             <Composer
               disabled={!activeSession}
-              running={runtimeRunning}
+              running={isStreaming}
               models={state.models}
-              selectedModel={state.selectedModel}
-              thinkingLevel={state.thinkingLevel}
-              attachments={attachments}
+              selectedModel={selectedModel}
+              thinkingLevel={thinkingLevel}
               onModel={actions.pickModel}
               onThinking={actions.setThinking}
-              onAttach={actions.attachFile}
-              onRemoveAttachment={(path) => activeSession && state.removeAttachment(activeSession.id, path)}
-              onSend={actions.sendPrompt}
+              onSend={(text) => void actions.sendPrompt(text)}
               onStop={actions.stopPrompt}
             />
           </div>
@@ -204,7 +164,7 @@ export default function App() {
       {settingsOpen && (
         <SettingsModal
           theme={state.theme}
-          thinkingLevel={state.thinkingLevel}
+          thinkingLevel={thinkingLevel}
           piPath={state.piPath}
           onTheme={state.setTheme}
           onThinking={state.setThinkingLevel}

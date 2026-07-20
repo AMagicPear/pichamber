@@ -1,37 +1,28 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import type { ChatMessage } from "../../runtime/types";
+import type { AgentMessage, RunningTool } from "../../runtime/types";
+import { findToolResult } from "../../runtime/events";
 import { ChatEmptyState } from "./ChatEmptyState";
 import { Message } from "./Message";
 
 interface Props {
-  messages: ChatMessage[];
+  messages: AgentMessage[];
+  runningTools: Map<string, RunningTool>;
   projectName?: string;
-  /** Active working directory. Strips the prefix off absolute paths so tool
-   *  summaries show short relative paths (OpenChamber-style). */
   cwd?: string;
   loading?: boolean;
   onOpenFile(path: string): void;
   onSuggestion(text: string): void;
-  onRegenerate(): void;
-  onFork(): void;
 }
 
-export const ChatView = memo(function ChatView({ messages, projectName, cwd, loading, onOpenFile, onSuggestion, onRegenerate, onFork }: Props) {
+export const ChatView = memo(function ChatView({ messages, runningTools, projectName, cwd, loading, onOpenFile, onSuggestion }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoScrollRef = useRef(true);
-  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
-  const onFileRef = useRef(onOpenFile);
-  useEffect(() => { onFileRef.current = onOpenFile; }, [onOpenFile]);
 
-  // Track whether the user is near the bottom via scroll events, not by
-  // sampling after React commits (which would always report false because
-  // scrollHeight already increased while scrollTop hasn't moved yet).
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const threshold = 80;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    autoScrollRef.current = distanceFromBottom < threshold;
+    autoScrollRef.current = distanceFromBottom < 80;
   }, []);
 
   useEffect(() => {
@@ -41,17 +32,13 @@ export const ChatView = memo(function ChatView({ messages, projectName, cwd, loa
     return () => el.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // When the message list identity changes (new session), reset to
-  // auto-scroll and jump to bottom immediately.
+  const isEmpty = messages.length === 0;
   useEffect(() => {
     autoScrollRef.current = true;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+  }, [isEmpty]);
 
-  // Auto-scroll to bottom when new content arrives, but only if the user
-  // hasn't manually scrolled up. Using useLayoutEffect so the scroll
-  // happens synchronously before paint — no visible jump.
   useLayoutEffect(() => {
     if (autoScrollRef.current) {
       const el = scrollRef.current;
@@ -69,14 +56,12 @@ export const ChatView = memo(function ChatView({ messages, projectName, cwd, loa
             <div className="message-list">
               {messages.map((message) => (
                 <Message
-                  key={message.id}
+                  key={`${message.role}:${(message as { timestamp: number }).timestamp}`}
                   message={message}
+                  runningTools={runningTools}
+                  findResult={findToolResult}
                   onOpenFile={onOpenFile}
-                  onOpenPath={(path) => onFileRef.current(path)}
                   cwd={cwd}
-                  canRegenerate={message.role === "assistant" && message.id === lastAssistantId}
-                  onRegenerate={onRegenerate}
-                  onFork={onFork}
                 />
               ))}
             </div>

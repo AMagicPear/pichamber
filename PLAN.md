@@ -76,12 +76,11 @@ pichamber/
 │   ├── hooks/
 │   │   └── use-resizable.ts   # Panel resize hook
 │   ├── runtime/               # Domain logic
-│   │   ├── types.ts
+│   │   ├── types.ts           # Pichamber UI types + Pi type re-exports
 │   │   ├── registry.ts
 │   │   ├── rpc-client.ts
-│   │   ├── normalize.ts
-│   │   ├── normalize-events.ts
-│   │   └── use-pichamber.ts
+│   │   ├── events.ts          # Single event reducer over Pi's AgentSessionEvent
+│   │   └── use-pichamber.ts   # UI intent → Pi RPC (thin layer)
 │   ├── stores/
 │   │   └── app-store.ts
 │   ├── components/            # Shared UI (Markdown, BrandLogo, etc.)
@@ -103,3 +102,4 @@ pichamber/
 - **Generation filtering**: every process restart increments a generation number; WebSocket messages carry the generation, letting clients ignore stale events from killed processes.
 - **Frontend is transport-agnostic**: `RpcClient` wraps fetch + WebSocket into a simple `request()`/`onEvent()` interface. Swapping transports means changing one class.
 - **CORS in dev**: frontend (Vite :5173) and backend (Bun :1420) run on different ports. All responses carry CORS headers.
+- **Pi is a devDependency, not a copy target**: pichamber `import type` directly from `@earendil-works/pi-ai` / `@earendil-works/pi-agent-core` / `@earendil-works/pi-coding-agent` (^0.80.10). No type or function is copied locally — protocol upgrades propagate via `bun update`. See `AGENTS.md`.
