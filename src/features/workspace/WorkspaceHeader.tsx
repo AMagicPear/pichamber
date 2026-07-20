@@ -30,7 +30,7 @@ export function WorkspaceHeader(props: Props) {
           </IconButton>
         )}
         <span className="header-session" title={sessionLabel}>
-          <span className={`session-status ${props.runtimeRunning ? "running" : ""}`} />
+          {props.runtimeRunning && <span className="session-status running" />}
           <span className="header-session-title">{sessionLabel}</span>
           {projectLabel && projectLabel !== sessionLabel && (
             <span className="header-session-sub" title={props.activeProject?.path}>{projectLabel}</span>

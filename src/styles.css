@@ -279,7 +279,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .header-left, .header-actions { min-width: 0; display: flex; align-items: center; gap: 6px; }
 .header-session { min-width: 0; max-width: 380px; display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px 4px 8px; border-radius: 7px; color: var(--foreground); font-size: 13px; font-weight: 550; transition: background-color var(--motion-fast) var(--motion-ease); }
 .header-session:hover { background: var(--surface-hover); }
-.header-session .session-status { flex: 0 0 7px; }
+.header-session .session-status { flex: 0 0 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: pulse 1.4s infinite; }
 .header-session-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header-session-sub { color: var(--muted-foreground); font-size: 11px; font-weight: 500; padding-left: 4px; border-left: 1px solid var(--border); margin-left: 2px; }
 .header-spacer { flex: 1; }
