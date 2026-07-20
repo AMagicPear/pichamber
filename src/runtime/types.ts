@@ -25,14 +25,17 @@ export interface ModelInfo {
   thinkingLevelMap?: Partial<Record<ThinkingLevel, string | null>>;
 }
 
-/** Return the thinking levels a model supports, matching Pi's logic. */
+/** Return the thinking levels a model supports, matching Pi's logic exactly. */
 export function getSupportedThinkingLevels(model?: ModelInfo): ThinkingLevel[] {
   if (!model?.reasoning) return ["off"];
   const map = model.thinkingLevelMap;
   if (!map) return ALL_THINKING_LEVELS;
   return ALL_THINKING_LEVELS.filter((level) => {
-    if (!(level in map)) return true;
-    return map[level] !== null;
+    const mapped = map[level];
+    if (mapped === null) return false;
+    // "xhigh" and "max" are opt-in: must have an explicit mapping.
+    if (level === "xhigh" || level === "max") return mapped !== undefined;
+    return true;
   });
 }
 
