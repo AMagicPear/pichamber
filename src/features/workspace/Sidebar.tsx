@@ -60,13 +60,19 @@ export function Sidebar(props: Props) {
   const renameTriggerRef = useRef<Record<string, () => void>>({});
   const normalized = query.trim().toLowerCase();
 
+  const refresh = () => {
+    listAllSessionsGrouped()
+      .then((g) => setGroups(g as PiSessionGroup[]))
+      .catch(() => {});
+  };
+
   const load = () => {
     setLoading(true);
     listAllSessionsGrouped()
       .then((g) => {
         const loaded = g as PiSessionGroup[];
         setGroups(loaded);
-        // Default-collapse unavailable projects.
+        // Default-collapse unavailable projects (only on initial load).
         const unavailable = loaded.filter((p) => !p.available).map((p) => p.cwd);
         if (unavailable.length > 0) {
           setCollapsed((prev) => {
@@ -81,11 +87,11 @@ export function Sidebar(props: Props) {
   };
 
   useEffect(() => { load(); }, []);
-  // Periodic refresh + event-driven refresh (Pi may create sessions from any tab).
+  // Periodic refresh + event-driven — silent, no loading flash, no collapse reset.
   useEffect(() => {
-    const onSessionChanged = () => load();
+    const onSessionChanged = () => refresh();
     window.addEventListener("pichamber:session-changed", onSessionChanged);
-    const interval = setInterval(load, 5000);
+    const interval = setInterval(refresh, 5000);
     return () => {
       window.removeEventListener("pichamber:session-changed", onSessionChanged);
       clearInterval(interval);
@@ -105,7 +111,7 @@ export function Sidebar(props: Props) {
     const dir = await selectDirectory();
     if (dir) {
       await props.onNewSession(dir);
-      load();
+      refresh();
     }
   };
 
