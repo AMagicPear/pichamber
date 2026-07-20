@@ -55,7 +55,16 @@ export function usePichamber() {
         if (event.type === "agent_start") next.setSessionRunning(key, true);
         if (["agent_end", "rpc_disconnected"].includes(String(event.type))) {
           next.setSessionRunning(key, false);
-          // Pi may have created a new session file — tell the sidebar to refresh.
+          // Pi may have created a new session file — link it to the active
+          // tab so the sidebar shows it as selected, then refresh.
+          client.request<{ sessionFile?: string }>({ type: "get_state" }).then((s) => {
+            if (s.sessionFile) {
+              const tab = useAppStore.getState().sessions.find((t) => t.id === key);
+              if (tab && !tab.sessionPath) {
+                useAppStore.getState().updateSessionPath(key, s.sessionFile);
+              }
+            }
+          }).catch(() => {});
           window.dispatchEvent(new CustomEvent("pichamber:session-changed"));
         }
         if (event.type === "extension_ui_request" && event.method === "notify") toast(String(event.message ?? event.title ?? "Pi notification"));

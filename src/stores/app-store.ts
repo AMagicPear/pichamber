@@ -35,6 +35,7 @@ interface AppState {
   closeSession(id: string): void;
   renameSession(id: string, title: string): void;
   setSessionRunning(id: string, running: boolean): void;
+  updateSessionPath(id: string, sessionPath: string): void;
   setModels(models: ModelInfo[]): void;
   setSelectedModel(model: ModelInfo): void;
   setThinkingLevel(level: ThinkingLevel): void;
@@ -142,6 +143,7 @@ export const useAppStore = create<AppState>()(persist((set, get) => ({
   }),
   renameSession: (id, title) => set((state) => ({ sessions: state.sessions.map((session) => session.id === id ? { ...session, title } : session) })),
   setSessionRunning: (id, running) => set((state) => ({ sessions: state.sessions.map((session) => session.id === id ? { ...session, running } : session) })),
+  updateSessionPath: (id, sessionPath) => set((state) => ({ sessions: state.sessions.map((session) => session.id === id ? { ...session, sessionPath } : session) })),
   setModels: (models) => set({ models, selectedModel: get().selectedModel ?? models[0] }),
   setSelectedModel: (selectedModel) => set({ selectedModel }),
   setThinkingLevel: (thinkingLevel) => set({ thinkingLevel }),
