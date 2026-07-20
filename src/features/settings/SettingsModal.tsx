@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import { useDialogDismiss } from "../../hooks/useDialogDismiss";
 import type { ThinkingLevel } from "../../runtime/types";
+import { ALL_THINKING_LEVELS } from "../../runtime/types";
 
 type Section = "general" | "runtime" | "shortcuts";
 
@@ -13,7 +14,7 @@ const SECTIONS: Array<{ id: Section; label: string; description: string }> = [
   { id: "shortcuts", label: "Shortcuts", description: "Keybindings used in this window." },
 ];
 
-const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
+const THINKING_LEVELS = ALL_THINKING_LEVELS;
 
 export function SettingsModal({
   theme,

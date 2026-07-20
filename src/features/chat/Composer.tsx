@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEv
 import { Brain, ChevronDown, Paperclip, Send, Square, X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import type { ModelInfo, ThinkingLevel } from "../../runtime/types";
+import { getSupportedThinkingLevels } from "../../runtime/types";
 
 interface Props {
   disabled?: boolean;
@@ -19,7 +20,7 @@ interface Props {
 }
 
 const THINKING_LABELS: Record<ThinkingLevel, string> = {
-  off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "X-High",
+  off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "X-High", max: "Max",
 };
 
 const displayModel = (model: ModelInfo): string => {
@@ -35,10 +36,8 @@ export function Composer(props: Props) {
   const draftRef = useRef("");
   const sending = text.trim().length > 0;
   const modelId = props.selectedModel?.id ?? "";
-  const supportsReasoning = props.selectedModel?.reasoning !== false;
-  const availableThinkingLevels = supportsReasoning
-    ? (Object.entries(THINKING_LABELS) as [ThinkingLevel, string][])
-    : [["off", "Off"] as const];
+  const supportedLevels = getSupportedThinkingLevels(props.selectedModel);
+  const availableThinkingLevels = supportedLevels.map((k) => [k, THINKING_LABELS[k]] as const);
 
   // OpenChamber-style textarea auto-grow: reset to scrollHeight on every
   // change so the field grows as the user pastes/types and shrinks on delete,

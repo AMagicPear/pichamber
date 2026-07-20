@@ -1,4 +1,6 @@
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export const ALL_THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 export interface Project {
   id: string;
@@ -20,6 +22,18 @@ export interface ModelInfo {
   id: string;
   contextWindow?: number;
   reasoning?: boolean;
+  thinkingLevelMap?: Partial<Record<ThinkingLevel, string | null>>;
+}
+
+/** Return the thinking levels a model supports, matching Pi's logic. */
+export function getSupportedThinkingLevels(model?: ModelInfo): ThinkingLevel[] {
+  if (!model?.reasoning) return ["off"];
+  const map = model.thinkingLevelMap;
+  if (!map) return ALL_THINKING_LEVELS;
+  return ALL_THINKING_LEVELS.filter((level) => {
+    if (!(level in map)) return true;
+    return map[level] !== null;
+  });
 }
 
 export interface ToolActivity {
