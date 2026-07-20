@@ -47,41 +47,56 @@ export function reduceRuntimeEvent(
     }
     case "message_update": {
       const id = activeMap[sessionId];
-      const target = next.find((message) => message.id === id);
+      const idx = next.findIndex((message) => message.id === id);
+      if (idx === -1) break;
+      const target = next[idx];
       const update = (event.assistantMessageEvent ?? {}) as Record<string, unknown>;
-      if (target && update.type === "text_delta") target.text += textValue(update.delta);
-      if (target && ["thinking_delta", "reasoning_delta"].includes(String(update.type))) target.thinking = (target.thinking ?? "") + textValue(update.delta);
-      if (target && update.type === "error") target.error = String(update.error ?? update.delta ?? "Response failed");
+      if (update.type === "text_delta") {
+        next[idx] = { ...target, text: target.text + textValue(update.delta) };
+      }
+      if (["thinking_delta", "reasoning_delta"].includes(String(update.type))) {
+        next[idx] = { ...target, thinking: (target.thinking ?? "") + textValue(update.delta) };
+      }
+      if (update.type === "error") {
+        next[idx] = { ...target, error: String(update.error ?? update.delta ?? "Response failed") };
+      }
       break;
     }
     case "tool_execution_start": {
       let id = activeMap[sessionId];
-      if (!id) {
+      let targetIdx = next.findIndex((message) => message.id === id);
+      if (targetIdx === -1) {
         id = crypto.randomUUID();
         activeMap[sessionId] = id;
         next.push({ id, role: "assistant", text: "", tools: [], createdAt: Date.now(), streaming: true });
+        targetIdx = next.length - 1;
       }
-      const target = next.find((message) => message.id === id);
+      const target = next[targetIdx];
       const callId = String(event.toolCallId ?? crypto.randomUUID());
       const tool: ToolActivity = { id: callId, name: String(event.toolName ?? event.name ?? "Tool"), input: (event.args ?? event.input) as Record<string, unknown> | undefined, status: "running", startedAt: Date.now() };
-      target?.tools.push(tool);
+      next[targetIdx] = { ...target, tools: [...target.tools, tool] };
       break;
     }
     case "tool_execution_update":
     case "tool_execution_end": {
-      const target = next.find((message) => message.id === activeMap[sessionId]);
-      const tool = target?.tools.find((value) => value.id === String(event.toolCallId));
-      if (tool) {
-        tool.output = event.result ?? event.partialResult;
-        tool.status = event.isError ? "error" : type === "tool_execution_end" ? "complete" : "running";
-      }
+      const targetIdx = next.findIndex((message) => message.id === activeMap[sessionId]);
+      if (targetIdx === -1) break;
+      const target = next[targetIdx];
+      const toolIdx = target.tools.findIndex((value) => value.id === String(event.toolCallId));
+      if (toolIdx === -1) break;
+      const updatedTools = target.tools.map((t, i) =>
+        i === toolIdx
+          ? { ...t, output: event.result ?? event.partialResult, status: event.isError ? "error" as const : type === "tool_execution_end" ? "complete" as const : "running" as const }
+          : t
+      );
+      next[targetIdx] = { ...target, tools: updatedTools };
       break;
     }
     case "message_end":
     case "turn_end":
     case "agent_end": {
-      const target = next.find((message) => message.id === activeMap[sessionId]);
-      if (target) target.streaming = false;
+      const targetIdx = next.findIndex((message) => message.id === activeMap[sessionId]);
+      if (targetIdx !== -1) next[targetIdx] = { ...next[targetIdx], streaming: false };
       if (type !== "agent_end") delete activeMap[sessionId];
       break;
     }

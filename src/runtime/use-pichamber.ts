@@ -67,6 +67,23 @@ export function usePichamber() {
       }
       const modelData = await client.request<{ models: ModelInfo[] }>({ type: "get_available_models" }).catch(() => ({ models: [] }));
       state.setModels(modelData.models ?? []);
+
+      // Restore the session's model & thinking level from Pi state
+      // Pi returns model as nested object: { model: { provider, id, ... } }
+      if (sessionPath) {
+        const sessionState = await client.request<{
+          model?: { provider: string; id: string };
+          thinkingLevel?: ThinkingLevel;
+        }>({ type: "get_state" }).catch((): { model?: { provider: string; id: string }; thinkingLevel?: ThinkingLevel } => ({}));
+        if (sessionState.thinkingLevel) {
+          state.setThinkingLevel(sessionState.thinkingLevel);
+        }
+        const stateModelId = sessionState.model?.id;
+        if (stateModelId && modelData.models) {
+          const found = modelData.models.find((m) => m.id === stateModelId);
+          if (found) state.setSelectedModel(found);
+        }
+      }
     }
     return client;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,14 +158,44 @@ export function usePichamber() {
   const pickModel = useCallback((model: ModelInfo) => {
     state.setSelectedModel(model);
     const key = state.activeSessionId;
-    if (key && getRuntime(key).connected) void getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id });
+    if (key && getRuntime(key).connected) {
+      void getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id }).then(() =>
+        getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" })
+      ).then((sessionState) => {
+        if (sessionState?.thinkingLevel) {
+          state.setThinkingLevel(sessionState.thinkingLevel);
+        }
+      }).catch(() => {});
+    }
   }, [state]);
 
   const setThinking = useCallback((level: ThinkingLevel) => {
     state.setThinkingLevel(level);
     const key = state.activeSessionId;
-    if (key && getRuntime(key).connected) void getRuntime(key).request({ type: "set_thinking_level", level });
+    if (key && getRuntime(key).connected) {
+      void getRuntime(key).request({ type: "set_thinking_level", level }).then(() =>
+        getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" })
+      ).then((sessionState) => {
+        if (sessionState?.thinkingLevel && sessionState.thinkingLevel !== level) {
+          state.setThinkingLevel(sessionState.thinkingLevel);
+          toast(`Thinking set to ${sessionState.thinkingLevel} (${level} not available for this model)`);
+        }
+      }).catch(() => {});
+    }
   }, [state]);
+
+  // OpenChamber-style regenerate: resend the last user prompt
+  const regeneratePrompt = useCallback(async () => {
+    const key = state.activeSessionId;
+    if (!key) return;
+    const messages = state.messages[key] ?? [];
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    if (!lastUser) {
+      toast.error("Nothing to regenerate");
+      return;
+    }
+    await sendPrompt(lastUser.text);
+  }, [state, sendPrompt]);
 
   const openFile = useCallback(async (path: string) => {
     const cwd = activeSessionCwd.current;
@@ -243,6 +290,7 @@ export function usePichamber() {
     openSession,
     newSession,
     sendPrompt,
+    regeneratePrompt,
     stopPrompt,
     pickModel,
     setThinking,

@@ -25,7 +25,7 @@ export function TerminalDock({ cwd, onClose }: { cwd?: string; onClose(): void }
   useEffect(() => {
     if (!host.current || !cwd) { setStatus("closed"); return; }
 
-    const terminal = new Terminal({ cursorBlink: true, fontSize: 13, lineHeight: 1.35, fontFamily: "var(--font-mono)", theme });
+    const terminal = new Terminal({ cursorBlink: true, fontSize: 13, lineHeight: 1.35, fontFamily: '"JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace', theme });
     const fit = new FitAddon();
     terminal.loadAddon(fit);
     terminal.open(host.current);

@@ -226,6 +226,7 @@ export class RpcClient {
         thinkingLevel: "medium",
         isStreaming: false,
         sessionId: "demo",
+        model: { provider: "anthropic", id: "claude-sonnet-4-6" },
       } as T;
     if (command.type === "prompt") {
       const id = crypto.randomUUID();
@@ -271,7 +272,7 @@ export class RpcClient {
             assistantMessageEvent: {
               type: "text_delta",
               delta:
-                "The workspace is ready. Pichamber is connected to the project and can stream Pi activity, inspect files, and run terminal commands without leaving this view.",
+                "The workspace is ready. Pichamber streams Pi activity, inspects files, and runs terminal commands — all without leaving this view.\n\n## Quick start\n\n```typescript\nimport { useAppStore } from './stores/app-store';\n\nconst state = useAppStore();\nstate.addProject({ id: 'demo', name: 'Pichamber', path: '/projects/pichamber' });\n```\n\n### Features\n\n| Feature | Status | Notes |\n|---|---|---|\n| Chat streaming | ✓ | Real-time Pi RPC events |\n| File inspector | ✓ | Workspace-scoped tree |\n| Terminal | ✓ | portable-pty + xterm.js |\n| Markdown | ✓ | marked + GFM tables |\n\n> **Tip:** Press `Cmd+K` to open the command palette. Shift+Enter for newlines in the composer.",
             },
           },
         ],

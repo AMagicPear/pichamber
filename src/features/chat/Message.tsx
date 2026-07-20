@@ -1,19 +1,62 @@
-import { Bot, Check, Copy, RotateCcw, Sparkles } from "lucide-react";
+import { Check, Copy, GitFork, Paperclip, RefreshCw, RotateCcw, Sparkles } from "lucide-react";
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Markdown } from "../../components/Markdown";
 import { IconButton } from "../../components/IconButton";
 import type { ChatMessage } from "../../runtime/types";
 import { ToolBlock } from "./ToolBlock";
 
-export function Message({ message, onOpenFile }: { message: ChatMessage; onOpenFile(path: string): void }) {
+export function Message({
+  message,
+  onOpenFile,
+  onOpenPath,
+  canRegenerate,
+  onRegenerate,
+  onFork,
+}: {
+  message: ChatMessage;
+  onOpenFile(path: string): void;
+  onOpenPath?(path: string): void;
+  canRegenerate?: boolean;
+  onRegenerate?(): void;
+  onFork?(): void;
+}) {
   if (message.role === "user") {
+    // Parse @file references for display
+    const lines = message.text.split("\n");
+    const attachments: string[] = [];
+    const displayLines: string[] = [];
+    for (const line of lines) {
+      if (line.trimStart().startsWith("@")) {
+        const ref = line.trimStart().slice(1).trim();
+        if (ref) attachments.push(ref);
+      } else {
+        displayLines.push(line);
+      }
+    }
+    const displayText = displayLines.join("\n").trim() || message.text;
+
     return (
       <article className="message user-message">
-        <div className="user-bubble">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
-        </div>
-        <MessageActions text={message.text} />
+        {attachments.length > 0 && (
+          <div className="user-attachments">
+            {attachments.map((path) => (
+              <span key={path} className="user-attachment">
+                <Paperclip size={10} /> {path}
+              </span>
+            ))}
+          </div>
+        )}
+        {displayText && (
+          <div className="user-bubble">
+            <Markdown onOpenPath={onOpenPath}>{displayText}</Markdown>
+          </div>
+        )}
+        {!displayText && attachments.length > 0 && (
+          <div className="user-bubble">
+            <Markdown onOpenPath={onOpenPath}>{message.text}</Markdown>
+          </div>
+        )}
+        {displayText && <MessageActions text={message.text} />}
       </article>
     );
   }
@@ -43,22 +86,36 @@ export function Message({ message, onOpenFile }: { message: ChatMessage; onOpenF
         </div>
       )}
       {message.text && (
-        <div className="markdown-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+        <div>
+          <Markdown onOpenPath={onOpenPath}>{message.text}</Markdown>
+          {message.streaming && <span className="streaming-cursor" />}
         </div>
       )}
       {message.error && <div className="inline-error">{message.error}</div>}
       {!message.streaming && message.text && (
-        <MessageActions text={message.text} align="left" />
+        <MessageActions text={message.text} align="left" canRegenerate={canRegenerate} onRegenerate={onRegenerate} onFork={onFork} />
       )}
     </article>
   );
 }
 
-function MessageActions({ text, align }: { text: string; align?: "left" }) {
+function MessageActions({
+  text,
+  align,
+  canRegenerate,
+  onRegenerate,
+  onFork,
+}: {
+  text: string;
+  align?: "left";
+  canRegenerate?: boolean;
+  onRegenerate?(): void;
+  onFork?(): void;
+}) {
   const [copied, setCopied] = useState(false);
+  const isAssistant = align === "left";
   return (
-    <div className={`message-actions ${align === "left" ? "assistant-actions" : ""}`}>
+    <div className={`message-actions ${isAssistant ? "assistant-actions" : ""}`}>
       <IconButton
         label={copied ? "Copied" : "Copy"}
         className="tiny"
@@ -71,12 +128,21 @@ function MessageActions({ text, align }: { text: string; align?: "left" }) {
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </IconButton>
-      <IconButton label="Insert as new prompt" className="tiny" onClick={() => navigator.clipboard.writeText(text)}>
-        <RotateCcw size={13} />
-      </IconButton>
+      {!isAssistant && (
+        <IconButton label="Edit message" className="tiny" onClick={() => navigator.clipboard.writeText(text)}>
+          <RotateCcw size={13} />
+        </IconButton>
+      )}
+      {isAssistant && canRegenerate && onRegenerate && (
+        <IconButton label="Regenerate response" className="tiny" onClick={onRegenerate}>
+          <RefreshCw size={13} />
+        </IconButton>
+      )}
+      {isAssistant && onFork && (
+        <IconButton label="Fork from here" className="tiny" onClick={onFork}>
+          <GitFork size={13} />
+        </IconButton>
+      )}
     </div>
   );
 }
-
-// Re-export Bot in case something else imports it from here.
-export const PiAvatar = Bot;

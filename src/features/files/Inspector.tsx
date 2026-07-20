@@ -14,6 +14,20 @@ interface Props {
   onClose(): void;
 }
 
+function renderFiles(
+  tab: Tab,
+  file: OpenFile | undefined,
+  tree: TreeEntry[],
+  expanded: Record<string, boolean>,
+  setExpanded: Dispatch<SetStateAction<Record<string, boolean>>>,
+  onFile: (path: string) => void,
+) {
+  if (tab !== "files") return null;
+  const activePath: string | undefined = file ? file.path : undefined;
+  if (file) return <FileView file={file} onBack={() => onFile("")} />;
+  return <FileTreeView tree={tree} expanded={expanded} setExpanded={setExpanded} onOpen={onFile} activePath={activePath} />;
+}
+
 export function Inspector({ project, file, onFile, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("files");
   const [tree, setTree] = useState<TreeEntry[]>([]);
@@ -45,11 +59,7 @@ export function Inspector({ project, file, onFile, onClose }: Props) {
           <X size={14} />
         </IconButton>
       </div>
-      {tab === "files" && (
-        file
-          ? <FileView file={file} onBack={() => onFile("")} />
-          : <FileTreeView tree={tree} expanded={expanded} setExpanded={setExpanded} onOpen={onFile} />
-      )}
+      {tab === "files" && renderFiles(tab, file, tree, expanded, setExpanded, onFile)}
       {tab === "context" && <ContextView project={project} />}
     </aside>
   );
@@ -75,58 +85,76 @@ function FileTreeView({
   expanded,
   setExpanded,
   onOpen,
+  activePath,
 }: {
   tree: TreeEntry[];
   expanded: Record<string, boolean>;
   setExpanded: Dispatch<SetStateAction<Record<string, boolean>>>;
   onOpen(path: string): void;
+  activePath?: string;
 }) {
   if (tree.length === 0) {
     return <div className="tree-empty">No files indexed for this project yet.</div>;
   }
+  // Render as a flat list of rows with depth-driven indent + vertical guide lines,
+  // mirroring OpenChamber's SidebarFilesTree tree-rendering pattern.
+  const rows: Array<{ node: TreeEntry; depth: number; isLast: boolean; parentPath: string }> = [];
+  const selectedPath: string | undefined = activePath;
+  const walk = (nodes: TreeEntry[], depth: number, parentIsLast: boolean[], parentPath: string) => {
+    nodes.forEach((node, index) => {
+      const isLast = index === nodes.length - 1;
+      rows.push({ node, depth, isLast, parentPath });
+      const isDir = node.kind === "directory";
+      const isOpen = expanded[node.path] ?? depth < 1;
+      if (isDir && isOpen && node.children) {
+        walk(node.children, depth + 1, [...parentIsLast, isLast], node.path);
+      }
+    });
+  };
+  walk(tree, 0, [], "");
   return (
     <div className="file-tree">
-      {tree.map((node) => (
-        <TreeRow key={node.path} node={node} depth={0} expanded={expanded} setExpanded={setExpanded} onOpen={onOpen} />
-      ))}
-    </div>
-  );
-}
-
-function TreeRow({
-  node,
-  depth,
-  expanded,
-  setExpanded,
-  onOpen,
-}: {
-  node: TreeEntry;
-  depth: number;
-  expanded: Record<string, boolean>;
-  setExpanded: Dispatch<SetStateAction<Record<string, boolean>>>;
-  onOpen(path: string): void;
-}) {
-  const isDir = node.kind === "directory";
-  const isOpen = expanded[node.path] ?? depth < 1;
-  return (
-    <div>
-      <button
-        className="tree-row"
-        onClick={() => (isDir ? setExpanded({ ...expanded, [node.path]: !isOpen }) : onOpen(node.path))}
-        style={{ paddingLeft: 4 + depth * 12 }}
-      >
-        {isDir ? (
-          <span className="tree-icon" style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 140ms cubic-bezier(.22,1,.36,1)" }}>
-            <ChevronRight size={12} />
-          </span>
-        ) : (
-          <span className="tree-icon"><File size={12} /></span>
-        )}
-        <span>{node.name}</span>
-      </button>
-      {isDir && isOpen && node.children?.map((child) => (
-        <TreeRow key={child.path} node={child} depth={depth + 1} expanded={expanded} setExpanded={setExpanded} onOpen={onOpen} />
-      ))}
+      {rows.map(({ node, depth, isLast }) => {
+        const isDir = node.kind === "directory";
+        const isOpen = expanded[node.path] ?? depth < 1;
+        return (
+          <div className="tree-row-wrap" key={node.path} style={{ paddingLeft: depth * 12 }}>
+            {/* Indent guide lines (OpenChamber-style): a horizontal stub for every
+                nested row + a vertical riser that bridges from the parent's
+                vertical line down past the current row when it isn't the last
+                child. The vertical riser is on the row's wrapping container so
+                it spans the full row height without affecting the button's hit
+                area. */}
+            {depth > 0 && (
+              <>
+                <span
+                  className="tree-guide-h"
+                  style={{ left: depth * 12 - 7, width: 7 }}
+                />
+                {!isLast && (
+                  <span
+                    className="tree-guide-v"
+                    style={{ left: depth * 12 - 7 }}
+                  />
+                )}
+              </>
+            )}
+            <button
+              className={`tree-row${selectedPath === node.path ? " active" : ""}`}
+              onClick={() =>
+                isDir
+                  ? setExpanded((prev) => ({ ...prev, [node.path]: !isOpen }))
+                  : onOpen(node.path)
+              }
+            >
+              <span className="tree-icon" style={{ transform: isDir && isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 140ms cubic-bezier(.22,1,.36,1)" }}>
+                {isDir ? <ChevronRight size={12} /> : <File size={12} />}
+              </span>
+              <span>{node.name}</span>
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

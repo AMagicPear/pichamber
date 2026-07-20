@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Plus, Search, Settings as SettingsIcon } from "lucide-react";
+import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
-import { listAllSessionsGrouped } from "../../api/client";
-import type { PiSessionGroup } from "../../runtime/types";
+import { listAllSessionsGrouped, deleteSession as apiDeleteSession } from "../../api/client";
+import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
 
 interface Props {
   activeSessionPath: string | null;
@@ -32,6 +32,12 @@ function relativeTime(ts: number): string {
   return "";
 }
 
+function messageCountLabel(count: number): string {
+  if (count === 0) return "";
+  if (count === 1) return "1 msg";
+  return `${count} msgs`;
+}
+
 // ── Component ───────────────────────────────────────────────────────
 
 export function Sidebar(props: Props) {
@@ -47,7 +53,7 @@ export function Sidebar(props: Props) {
   const load = () => {
     setLoading(true);
     listAllSessionsGrouped()
-      .then(setGroups)
+      .then((g) => setGroups(g as PiSessionGroup[]))
       .catch((error) => console.warn("Failed to load Pi sessions:", error))
       .finally(() => setLoading(false));
   };
@@ -61,6 +67,22 @@ export function Sidebar(props: Props) {
       if (next.has(cwd)) next.delete(cwd); else next.add(cwd);
       return next;
     });
+  };
+
+  const handleDeleteSession = async (session: SessionInfo, groupCwd: string) => {
+    try {
+      await apiDeleteSession(session.path);
+    } catch (error) {
+      console.warn("Failed to delete session:", error);
+    }
+    setOpenMenuKey(null);
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.cwd === groupCwd
+          ? { ...g, sessions: g.sessions.filter((s) => s.path !== session.path) }
+          : g
+      ).filter((g) => g.sessions.length > 0)
+    );
   };
 
   const filtered = useMemo(() => {
@@ -79,13 +101,14 @@ export function Sidebar(props: Props) {
   }, [groups, normalized]);
 
   const hasSearch = normalized.length > 0;
+  const totalSessions = groups.reduce((s, g) => s + g.sessions.length, 0);
 
   return (
     <aside className="sidebar" aria-label="Pi sessions">
       {/* ── Header row (OpenChamber-style) ── */}
       <div className="sidebar-header">
         <div className="sidebar-header-actions">
-          <IconButton label="Add project" className="tiny" onClick={load}>
+          <IconButton label="Refresh sessions" className="tiny" onClick={load}>
             <FolderOpen size={15} />
           </IconButton>
           <IconButton label="New session" className="tiny" onClick={() => {
@@ -146,10 +169,14 @@ export function Sidebar(props: Props) {
       {/* ── Project list ── */}
       <div className="sidebar-projects">
         {loading && <div className="sidebar-empty">Loading…</div>}
-        {!loading && filtered.length === 0 && (
+        {!loading && filtered.length === 0 && totalSessions === 0 && (
           <div className="sidebar-empty">
-            {normalized ? "No matching sessions." : "No sessions yet."}
+            <p>No sessions found.</p>
+            <p>Run <code>pi</code> in a project directory to create sessions, or open a project folder.</p>
           </div>
+        )}
+        {!loading && filtered.length === 0 && normalized && (
+          <div className="sidebar-empty">No matching sessions.</div>
         )}
         {filtered.map((group) => {
           const isCollapsed = collapsed.has(group.cwd);
@@ -201,6 +228,9 @@ export function Sidebar(props: Props) {
                               search={normalized}
                             />
                           </span>
+                          <span className="session-meta">
+                            {messageCountLabel(session.messageCount)}
+                          </span>
                           <span className="session-time">
                             {relativeTime(session.modifiedAt)}
                           </span>
@@ -221,10 +251,16 @@ export function Sidebar(props: Props) {
                         </div>
                         {menuOpen && (
                           <div className="session-menu">
-                            <button className="danger" onClick={(e) => {
+                            <button onClick={(e) => {
                               e.stopPropagation();
                               setOpenMenuKey(null);
-                              load();
+                              props.onOpenSession(session.path, group.cwd, session.name ?? session.id);
+                            }}>
+                              <MessageSquareText size={12} /> Open
+                            </button>
+                            <button className="danger" onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSession(session as SessionInfo, group.cwd);
                             }}>
                               <Archive size={12} /> Delete
                             </button>
@@ -245,6 +281,9 @@ export function Sidebar(props: Props) {
         <IconButton label="Settings" className="tiny" onClick={props.onSettings}>
           <SettingsIcon size={15} />
         </IconButton>
+        {totalSessions > 0 && (
+          <span className="sidebar-count">{totalSessions} session{totalSessions !== 1 ? "s" : ""}</span>
+        )}
       </div>
     </aside>
   );
