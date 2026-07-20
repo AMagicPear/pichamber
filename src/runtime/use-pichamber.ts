@@ -57,7 +57,8 @@ export function usePichamber() {
 
     // First connection: start Pi, load history, fetch models.
     if (!client.connected) {
-      await client.start(cwd);
+      const piPath = store.getState().piPath || undefined;
+      await client.start(cwd, piPath);
       if (sessionPath) {
         await client.request({ type: "switch_session", sessionPath });
         const { messages } = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
