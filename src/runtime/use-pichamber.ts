@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { closeRuntime, getRuntime } from "./registry";
 import { normalizeBackendMessages } from "./normalize";
 import { deleteSession as apiDeleteSession, workspaceReadFile, createSession } from "../api/client";
-import { type ModelInfo, type OpenFile, type ThinkingLevel, clampThinkingLevel } from "./types";
+import { type ModelInfo, type OpenFile, type ThinkingLevel } from "./types";
 import { useAppStore } from "../stores/app-store";
 
 const DEMO_FILES: Record<string, string> = {
@@ -43,6 +43,14 @@ export function usePichamber() {
       const unsubscribe = client.onEvent((event) => {
         const next = useAppStore.getState();
         next.reduceRuntimeEvent(key, event);
+        // Let Pi be the source of truth for model & thinking level changes.
+        if (event.type === "thinking_level_changed") {
+          next.setThinkingLevel(event.level as ThinkingLevel);
+        }
+        if (event.type === "model_select") {
+          const m = event.model as ModelInfo | undefined;
+          if (m) next.setSelectedModel(m);
+        }
         if (event.type === "agent_start") next.setSessionRunning(key, true);
         if (["agent_end", "rpc_disconnected"].includes(String(event.type))) {
           next.setSessionRunning(key, false);
@@ -170,35 +178,21 @@ export function usePichamber() {
   const pickModel = useCallback((model: ModelInfo) => {
     const s = useAppStore.getState();
     s.setSelectedModel(model);
-    // Clamp thinking level immediately so the UI never shows an unsupported option.
-    const clamped = clampThinkingLevel(model, s.thinkingLevel);
-    if (clamped !== s.thinkingLevel) s.setThinkingLevel(clamped);
+    s.setSessionLoading(s.activeSessionId ?? "", true);
     const key = s.activeSessionId;
     if (key && getRuntime(key).connected) {
       getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id })
-        .then(() => getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" }))
-        .then((st) => {
-          // Pi may further clamp (e.g. for gateway-level rules) — respect the final value.
-          if (st?.thinkingLevel) s.setThinkingLevel(st.thinkingLevel);
-        })
-        .catch(() => {});
+        .finally(() => s.setSessionLoading(key, false));
     }
   }, []);
 
   const setThinking = useCallback((level: ThinkingLevel) => {
     const s = useAppStore.getState();
+    // Optimistic local update — Pi will confirm/correct via thinking_level_changed event.
     s.setThinkingLevel(level);
     const key = s.activeSessionId;
     if (key && getRuntime(key).connected) {
-      getRuntime(key).request({ type: "set_thinking_level", level })
-        .then(() => getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" }))
-        .then((st) => {
-          if (st?.thinkingLevel && st.thinkingLevel !== level) {
-            s.setThinkingLevel(st.thinkingLevel);
-            toast(`Thinking set to ${st.thinkingLevel} (${level} not available for this model)`);
-          }
-        })
-        .catch(() => {});
+      getRuntime(key).request({ type: "set_thinking_level", level }).catch(() => {});
     }
   }, []);
 
