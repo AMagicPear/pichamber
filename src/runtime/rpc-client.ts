@@ -55,7 +55,11 @@ export class RpcClient {
         this.startInFlight = null;
       });
     }
-    return this.startInFlight;
+    // Safety: if the previous start attempt is stuck, time it out.
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("RPC start timed out")), 15_000)
+    );
+    return Promise.race([this.startInFlight, timeout]);
   }
 
   private async startInternal(context: ClientContext) {
@@ -77,17 +81,18 @@ export class RpcClient {
       this.ws = ws;
       await new Promise<void>((resolve, reject) => {
         let settled = false;
-        ws.onopen = () => { if (!settled) { settled = true; resolve(); } };
+        const timer = setTimeout(() => {
+          if (!settled) { settled = true; reject(new Error("WebSocket open timed out after 10s")); }
+        }, 10_000);
+        ws.onopen = () => {
+          if (!settled) { settled = true; clearTimeout(timer); resolve(); }
+        };
         ws.onclose = (event) => {
-          if (!settled) {
-            settled = true;
-            reject(new Error(`WebSocket closed before opening (code ${event.code})`));
-          }
+          if (!settled) { settled = true; clearTimeout(timer); reject(new Error(`WebSocket closed before opening (code ${event.code})`)); }
         };
         ws.onerror = () => {
           // onerror is non-fatal — the browser may fire it and then
-          // succeed via onopen or fail via onclose.  Let onclose
-          // deliver the definitive outcome.
+          // succeed via onopen or fail via onclose.
         };
       });
       // Restore normal handlers after open is confirmed.
