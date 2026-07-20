@@ -1,6 +1,7 @@
-import { readdirSync, statSync, readFileSync, existsSync, realpathSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
-import { join, dirname, basename, resolve } from "node:path"
+import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync, createReadStream } from "node:fs"
+import { join, basename, resolve, normalize } from "node:path"
 import { homedir } from "node:os"
+import { createInterface } from "node:readline"
 
 export interface ProjectSessions {
   cwd: string
@@ -21,6 +22,8 @@ export interface SessionInfo {
   cost: number
 }
 
+// ── Path helpers (matches Pi's implementation in session-manager.ts) ──
+
 function sessionsRoot(): string {
   if (process.env.PI_CODING_AGENT_DIR) {
     return join(process.env.PI_CODING_AGENT_DIR, "sessions")
@@ -28,236 +31,164 @@ function sessionsRoot(): string {
   return join(homedir(), ".pi/agent/sessions")
 }
 
-function decodeDirToCwd(dirName: string): string | undefined {
-  const core = dirName.replace(/^-+|-+$/g, "")
-  if (!core) return undefined
-  const tokens = core.split("-")
-  if (tokens.length === 0) return undefined
-
-  function walk(index: number, current: string): string | undefined {
-    if (index === tokens.length) {
-      return statSafe(current)?.isDirectory() ? current : undefined
-    }
-    const separated = `${current}/${tokens[index]}`
-    const joined = `${current}-${tokens[index]}`
-    if (existsSync(separated)) {
-      const found = walk(index + 1, separated)
-      if (found) return found
-    }
-    const found = walk(index + 1, joined)
-    if (found) return found
-    return walk(index + 1, separated)
-  }
-
-  return walk(1, `/${tokens[0]}`)
+/** Encode a cwd into a directory name — exactly how Pi does it. */
+function encodeCwd(cwd: string): string {
+  const resolved = resolve(normalize(cwd))
+  return `--${resolved.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`
 }
 
-function statSafe(path: string) {
+/** Read just the first line of a session file to extract the header. */
+function readSessionHeader(filePath: string): Record<string, unknown> | null {
   try {
-    return statSync(path)
+    const fd = readFileSync(filePath, "utf8")
+    const nl = fd.indexOf("\n")
+    const firstLine = nl >= 0 ? fd.slice(0, nl) : fd
+    if (!firstLine) return null
+    const header = JSON.parse(firstLine)
+    if (header?.type !== "session" || typeof header.id !== "string") return null
+    return header
   } catch {
-    return undefined
+    return null
   }
 }
 
-function timestamp(meta: ReturnType<typeof statSync>, created: boolean): number {
-  const value = created
-    ? meta.ctimeMs || meta.mtimeMs
-    : meta.mtimeMs
-  return Math.floor((value || 0) / 1000)
-}
+/** Fast scan: read header line only, count messages by scanning the file. */
+function parseSession(filePath: string): SessionInfo | undefined {
+  const stat = statSafe(filePath)
+  if (!stat || stat.size > 50 * 1024 * 1024) return undefined
 
-function parseSession(path: string): SessionInfo | undefined {
-  const meta = statSafe(path)
-  if (!meta) return undefined
-  if (meta.size > 50 * 1024 * 1024) return undefined
+  const header = readSessionHeader(filePath)
+  if (!header) return undefined
 
-  let id = basename(path, ".jsonl")
+  const id = String(header.id)
+  // Pi stores cwd in the session header — this is the canonical source.
+  const cwd = typeof header.cwd === "string" ? header.cwd : undefined
+
+  // Scan the file for message count, tokens, cost, and name.
   let name: string | undefined
-  let cwd: string | undefined
   let messageCount = 0
   let tokens = 0
   let cost = 0
-  let hasSessionHeader = false
 
-  const content = readFileSync(path, "utf8")
-  for (const rawLine of content.split("\n")) {
-    if (!rawLine.trim()) continue
-    let value: any
-    try {
-      value = JSON.parse(rawLine)
-    } catch {
-      continue
-    }
-    if (value.type === "session") {
-      hasSessionHeader = true
-      if (value.id) id = value.id
-    }
-    if (name === undefined) {
-      name = value.name ?? value.sessionName ?? undefined
-    }
-    if (cwd === undefined) {
-      cwd = value.cwd ?? undefined
-    }
-    if (value.type === "message" || value.role !== undefined) {
-      messageCount += 1
-    }
-    const usage = value.message?.usage ?? value.usage
-    if (usage) {
-      tokens += usage.totalTokens ?? usage.total_tokens ?? 0
-      cost += usage.cost?.total ?? usage.cost ?? 0
-    }
-  }
+  try {
+    const rl = createInterface({
+      input: createReadStream(filePath, { encoding: "utf8" }),
+      crlfDelay: Infinity,
+    })
+    let firstLine = true
+    for (const rawLine of rl) {
+      if (firstLine) { firstLine = false; continue }
+      if (!rawLine.trim()) continue
+      let value: any
+      try { value = JSON.parse(rawLine) } catch { continue }
 
-  if (cwd === undefined) {
-    const parent = basename(dirname(path))
-    const decoded = decodeDirToCwd(parent)
-    if (decoded) {
-      cwd = decoded
-    } else {
-      // Couldn't reverse-engineer the path — keep the encoded form so the
-      // session still appears in the sidebar rather than being hidden.
-      cwd = parent
+      if (name === undefined && value.type === "session_info") {
+        name = value.name?.trim() || undefined
+      }
+      if (value.type === "message" || value.role !== undefined) {
+        messageCount += 1
+      }
+      const usage = value.message?.usage ?? value.usage
+      if (usage) {
+        tokens += usage.totalTokens ?? usage.total_tokens ?? 0
+        cost += usage.cost?.total ?? usage.cost ?? 0
+      }
     }
-  }
-
-  // Skip files that are not actual Pi sessions (e.g. aborted/partial writes
-  // that never recorded a session header or any message). Pi itself rejects
-  // these, so listing them only leads to a failed open click.
-  if (!hasSessionHeader && messageCount === 0) {
-    return undefined
+  } catch {
+    // If streaming read fails, fall back to what we have.
   }
 
   return {
     id,
     name,
-    path,
+    path: filePath,
     cwd,
-    createdAt: timestamp(meta, true),
-    modifiedAt: timestamp(meta, false),
+    createdAt: Math.floor((stat.ctimeMs || stat.mtimeMs || 0) / 1000),
+    modifiedAt: Math.floor((stat.mtimeMs || 0) / 1000),
     messageCount,
     tokens,
     cost,
   }
 }
 
-function scanSessions(): SessionInfo[] {
-  const root = sessionsRoot()
-  if (!existsSync(root)) return []
-  const results: SessionInfo[] = []
-  const stack = [root]
-  let depth = 0
-  while (stack.length && depth < 4) {
-    const dir = stack.pop()!
-    let entries: string[]
-    try {
-      entries = readdirSync(dir)
-    } catch {
-      continue
-    }
-    for (const entry of entries) {
-      const full = join(dir, entry)
-      const stat = statSafe(full)
-      if (!stat) continue
-      if (stat.isDirectory()) {
-        stack.push(full)
-      } else if (entry.endsWith(".jsonl")) {
-        const parsed = parseSession(full)
-        if (parsed) results.push(parsed)
-      }
-    }
-    depth += 1
-  }
-  return results
+function statSafe(path: string) {
+  try { return statSync(path) } catch { return undefined }
 }
 
+// ── Public API ────────────────────────────────────────────────────────
+
+/** List all sessions grouped by cwd, scanning every directory under the
+ *  Pi sessions root — exactly like Pi's SessionManager.listAll(). */
 export function listAllSessionsGrouped(): ProjectSessions[] {
-  const sessions = scanSessions()
-  sessions.sort((a, b) => b.modifiedAt - a.modifiedAt)
+  const root = sessionsRoot()
+  if (!existsSync(root)) return []
 
   const groups = new Map<string, SessionInfo[]>()
-  for (const session of sessions) {
-    const cwd = session.cwd ?? ""
-    if (!groups.has(cwd)) groups.set(cwd, [])
-    groups.get(cwd)!.push(session)
+
+  try {
+    const entries = readdirSync(root, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const dir = join(root, entry.name)
+      let files: string[]
+      try { files = readdirSync(dir) } catch { continue }
+      for (const file of files) {
+        if (!file.endsWith(".jsonl")) continue
+        const session = parseSession(join(dir, file))
+        if (!session) continue
+        const cwd = session.cwd ?? ""
+        if (!groups.has(cwd)) groups.set(cwd, [])
+        groups.get(cwd)!.push(session)
+      }
+    }
+  } catch {
+    return []
   }
 
   const projects: ProjectSessions[] = []
-  for (const [cwd, groupSessions] of groups) {
-    groupSessions.sort((a, b) => b.modifiedAt - a.modifiedAt)
+  for (const [cwd, sessions] of groups) {
+    sessions.sort((a, b) => b.modifiedAt - a.modifiedAt)
     const available = cwd !== "" && statSafe(cwd)?.isDirectory() === true
-    const name =
-      cwd === ""
-        ? "Unknown"
-        : basename(cwd) || cwd
-    projects.push({ cwd, name, available, sessions: groupSessions })
+    const name = cwd === "" ? "Unknown" : basename(cwd) || cwd
+    projects.push({ cwd, name, available, sessions })
   }
-  projects.sort(
-    (a, b) =>
-      (b.sessions[0]?.modifiedAt ?? 0) - (a.sessions[0]?.modifiedAt ?? 0),
-  )
+  projects.sort((a, b) => (b.sessions[0]?.modifiedAt ?? 0) - (a.sessions[0]?.modifiedAt ?? 0))
   return projects
 }
 
 export function listSessions(): SessionInfo[] {
-  const sessions = scanSessions()
-  sessions.sort((a, b) => b.modifiedAt - a.modifiedAt)
-  return sessions
+  const groups = listAllSessionsGrouped()
+  return groups.flatMap((g) => g.sessions).sort((a, b) => b.modifiedAt - a.modifiedAt)
 }
 
 export function deleteSession(sessionPath: string): void {
   const root = sessionsRoot()
   if (!existsSync(root)) throw new Error("Sessions directory unavailable")
-  const resolvedRoot = resolveSafe(root)
-  const resolvedTarget = resolveSafe(sessionPath)
-  if (!resolvedTarget || !resolvedTarget.startsWith(resolvedRoot)) {
+  const resolvedRoot = resolve(normalize(root))
+  const resolvedTarget = resolve(normalize(sessionPath))
+  if (!resolvedTarget.startsWith(resolvedRoot)) {
     throw new Error("Session path is outside the Pi sessions directory")
   }
   if (!resolvedTarget.endsWith(".jsonl")) {
     throw new Error("Session path must point to a .jsonl file")
   }
-  try {
-    unlinkSync(resolvedTarget)
-  } catch (e: any) {
+  try { unlinkSync(resolvedTarget) } catch (e: any) {
     throw new Error(`Unable to delete session: ${e.message ?? e}`)
   }
 }
 
-function resolveSafe(p: string): string | undefined {
-  try {
-    return realpathSync(p)
-  } catch {
-    try {
-      return resolve(p)
-    } catch {
-      return undefined
-    }
-  }
-}
-
-/** Encode an absolute cwd path into Pi's session directory name.
- *  Must match Pi CLI's encoding: `--` prefix/suffix, strip leading `/`,
- *  replace `/` and `:` with `-`. */
-function encodeCwdToDirName(cwd: string): string {
-  const safePath = cwd.replace(/^[/\\]+/, "").replace(/[/\\:]/g, "-")
-  return `--${safePath}--`
-}
-
-/** Generate a new session file path for the given project cwd.
- *  Creates the project directory under Pi's session root if needed,
- *  and writes a minimal header so the sidebar can discover it immediately. */
+/** Create a new session file — uses Pi's exact encoding. */
 export function generateNewSessionPath(cwd: string): string {
   const root = sessionsRoot()
-  const dirName = encodeCwdToDirName(cwd)
+  const dirName = encodeCwd(cwd)
   const dir = join(root, dirName)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
   const id = crypto.randomUUID()
   const path = join(dir, `${id}.jsonl`)
-  // Write a minimal session file so listAllSessionsGrouped picks it up
-  // immediately — Pi will append the full header when it starts.
-  const header = JSON.stringify({ type: "session", id, cwd }) + "\n"
+  // Write minimal header so the session appears in listings immediately.
+  const header = JSON.stringify({ type: "session", version: 3, id, timestamp: new Date().toISOString(), cwd: resolve(normalize(cwd)) }) + "\n"
   writeFileSync(path, header, "utf8")
   return path
 }
