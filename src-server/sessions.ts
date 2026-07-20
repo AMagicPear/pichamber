@@ -111,7 +111,14 @@ function parseSession(path: string): SessionInfo | undefined {
 
   if (cwd === undefined) {
     const parent = basename(dirname(path))
-    cwd = decodeDirToCwd(parent)
+    const decoded = decodeDirToCwd(parent)
+    if (decoded) {
+      cwd = decoded
+    } else {
+      // Couldn't reverse-engineer the path — keep the encoded form so the
+      // session still appears in the sidebar rather than being hidden.
+      cwd = parent
+    }
   }
 
   // Skip files that are not actual Pi sessions (e.g. aborted/partial writes
