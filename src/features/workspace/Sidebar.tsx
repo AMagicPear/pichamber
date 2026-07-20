@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Archive, ChevronDown, FolderOpen, FolderPlus, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
+import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import { listAllSessionsGrouped, deleteSession as apiDeleteSession } from "../../api/client";
 import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
@@ -146,11 +146,8 @@ export function Sidebar(props: Props) {
       {/* ── Header row (OpenChamber-style) ── */}
       <div className="sidebar-header">
         <div className="sidebar-header-actions">
-          <IconButton label="Refresh sessions" className="tiny" onClick={load}>
-            <FolderOpen size={15} />
-          </IconButton>
           <IconButton label="Open project" className="tiny" onClick={() => setOpenProjectOpen(true)}>
-            <FolderPlus size={15} />
+            <FolderOpen size={15} />
           </IconButton>
           <IconButton label="New session" className="tiny" onClick={() => {
             const cwd = groups.length > 0 ? groups[0].cwd : "";
