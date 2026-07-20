@@ -1,5 +1,10 @@
 # Pichamber Changelog
 
+## 0.3.2 - 2026-xx-xx
+
+### Fixes
+- The CLI launcher no longer hardcodes `#!/usr/bin/env node`. The new `bin/pichamber` is a small POSIX `sh` script that picks Bun or Node from `PATH` (in that order) and exec's it into `bin/pichamber.js`. This means users who only have Bun and never installed Node can run `pichamber` after `npm install -g @amagicpear/pichamber` without hitting `env: node: No such file or directory`. The package's `bin` field now points at the shell launcher; npm accepts the sh-launched symlink for the bin slot.
+
 ## 0.3.1 - 2026-xx-xx
 
 ### Fixes

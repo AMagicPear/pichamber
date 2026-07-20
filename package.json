@@ -1,6 +1,6 @@
 {
   "name": "@amagicpear/pichamber",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A browser-based workspace for the Pi Coding Agent",
   "license": "MIT",
   "type": "module",
@@ -27,7 +27,7 @@
     "url": "https://github.com/AMagicPear/pichamber/issues"
   },
   "bin": {
-    "pichamber": "bin/pichamber.js"
+    "pichamber": "bin/pichamber"
   },
   "files": [
     "dist",

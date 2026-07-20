@@ -1,0 +1,43 @@
+#!/bin/sh
+# Pichamber launcher (polyglot).
+#
+# Run the JS wrapper using whichever JS runtime is on PATH first. This avoids
+# the "env: node: No such file or directory" trap when a user installs pichamber
+# globally via npm but only has Bun on their machine (or vice versa).
+
+set -e
+
+# Resolve the real path of this launcher (it may be a symlink, e.g. when
+# installed via npm which creates a `pichamber` symlink under node_modules/.bin).
+script=$0
+while [ -L "$script" ]; do
+  link=$(readlink "$script")
+  case $link in
+    /*) script=$link ;;
+    *) script=$(dirname "$script")/$link ;;
+  esac
+done
+dir=$(dirname "$script")
+
+wrapper=$dir/pichamber.js
+if [ ! -f "$wrapper" ]; then
+  echo "pichamber: wrapper not found at $wrapper" >&2
+  exit 1
+fi
+
+for rt in bun node; do
+  if command -v "$rt" >/dev/null 2>&1; then
+    # Reset argv[0] to the real wrapper path so the JS runtime sees its
+    # own location rather than the sh launcher.
+    exec "$rt" "$wrapper" "$@"
+  fi
+done
+
+cat >&2 <<MSG
+pichamber: needs a JavaScript runtime on PATH.
+
+Install either:
+  - Bun 1.3+    (https://bun.sh)    — preferred, what pichamber runs fastest on
+  - Node.js 22+ (https://nodejs.org) — works but not officially supported
+MSG
+exit 1
