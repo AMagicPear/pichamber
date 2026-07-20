@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
+import { useDialogDismiss } from "../../hooks/useDialogDismiss";
 import type { ThinkingLevel } from "../../runtime/types";
 
 type Section = "general" | "runtime" | "shortcuts";
@@ -31,6 +32,7 @@ export function SettingsModal({
   onPiPath(value: string): void;
   onClose(): void;
 }) {
+  const { closing, dismiss } = useDialogDismiss(onClose);
   const [section, setSection] = useState<Section>("general");
   const [draftTheme, setDraftTheme] = useState(theme as "light" | "dark" | "system");
   const [draftThinking, setDraftThinking] = useState(thinkingLevel);
@@ -47,12 +49,12 @@ export function SettingsModal({
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        dismiss();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, [dismiss]);
 
   const apply = () => {
     const trimmedPath = draftPiPath.trim();
@@ -60,7 +62,7 @@ export function SettingsModal({
     onThinking(draftThinking);
     if (trimmedPath !== piPath) onPiPath(trimmedPath);
     toast.success("Settings saved");
-    onClose();
+    dismiss();
   };
 
   const dirty =
@@ -70,9 +72,9 @@ export function SettingsModal({
 
   return (
     <div
-      className="modal-backdrop"
+      className={`modal-backdrop${closing ? " is-closing" : ""}`}
       role="presentation"
-      onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}
+      onMouseDown={(event) => { if (event.currentTarget === event.target) dismiss(); }}
     >
       <section className="settings-modal" role="dialog" aria-modal="true" aria-label="Settings">
         <header>
@@ -80,7 +82,7 @@ export function SettingsModal({
             <h2>Settings</h2>
             <p>Configure the browser shell and Pi defaults.</p>
           </div>
-          <IconButton label="Close settings" onClick={onClose}>
+          <IconButton label="Close settings" onClick={dismiss}>
             <X size={18} />
           </IconButton>
         </header>
@@ -187,7 +189,7 @@ export function SettingsModal({
             )}
 
             <footer className="settings-footer">
-              <button className="secondary-button" onClick={onClose}>Cancel</button>
+              <button className="secondary-button" onClick={dismiss}>Cancel</button>
               <button
                 className="primary-button"
                 onClick={apply}

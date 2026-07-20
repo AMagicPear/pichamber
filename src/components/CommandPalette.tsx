@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Files, FolderOpen, History, Plus, Search, Settings, TerminalSquare } from "lucide-react";
+import { useDialogDismiss } from "../hooks/useDialogDismiss";
 
 export interface PaletteAction {
   id: string;
@@ -12,6 +13,7 @@ export interface PaletteAction {
 const icons = { open: FolderOpen, new: Plus, files: Files, terminal: TerminalSquare, history: History, settings: Settings };
 
 export function CommandPalette({ actions, onClose }: { actions: PaletteAction[]; onClose(): void }) {
+  const { closing, dismiss } = useDialogDismiss(onClose);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -42,13 +44,13 @@ export function CommandPalette({ actions, onClose }: { actions: PaletteAction[];
     const action = filtered[idx];
     if (!action) return;
     action.run();
-    onClose();
+    dismiss();
   };
 
   return (
     <div
-      className="palette-backdrop"
-      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      className={`palette-backdrop${closing ? " is-closing" : ""}`}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) dismiss(); }}
     >
       <section className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette">
         <div className="palette-search">
@@ -60,7 +62,7 @@ export function CommandPalette({ actions, onClose }: { actions: PaletteAction[];
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.preventDefault();
-                onClose();
+                dismiss();
                 return;
               }
               if (event.key === "Enter") {

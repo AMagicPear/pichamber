@@ -95,16 +95,15 @@ export default function App() {
 
   return (
     <div className={`app-shell${state.sidebarOpen ? " with-sidebar" : ""}${state.inspectorOpen ? " with-inspector" : ""}`}>
-      {state.sidebarOpen && (
-       <Sidebar
-          activeSessionPath={activeSession?.sessionPath ?? null}
-         onOpenSession={actions.openSession}
-         onNewSession={actions.newSession}
-         onRenameSession={actions.renameSessionByPath}
-         onClose={state.toggleSidebar}
-         onSettings={() => setSettingsOpen(true)}
-        />
-      )}
+      <Sidebar
+        isOpen={state.sidebarOpen}
+        activeSessionPath={activeSession?.sessionPath ?? null}
+        onOpenSession={actions.openSession}
+        onNewSession={actions.newSession}
+        onRenameSession={actions.renameSessionByPath}
+        onClose={state.toggleSidebar}
+        onSettings={() => setSettingsOpen(true)}
+      />
       <main className="workspace">
         <WorkspaceHeader
           activeSession={activeSession}

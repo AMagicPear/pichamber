@@ -1,6 +1,6 @@
 const BASE = (window as unknown as Record<string, string>).__PICHAMBER_API_BASE__ || "http://localhost:1420";
 
-export function apiUrl(path: string): string {
+function apiUrl(path: string): string {
   return `${BASE}${path}`;
 }
 
@@ -13,15 +13,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error(text);
   }
   if (response.status === 204) return undefined as T;
-  // Handle empty 200 responses (e.g. rpc_send, rpc_stop)
+  // rpc_send / rpc_stop return an empty 200 body.
   const text = await response.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
 }
 
-// ── Session types (mirrors Rust) ────────────────────────────────────
+// ── Payload types (mirror the Rust backend) ─────────────────────────
 
-export interface SessionInfo {
+interface SessionInfo {
   id: string;
   name?: string;
   path: string;
@@ -36,12 +36,11 @@ export interface SessionInfo {
 export interface ProjectSessions {
   cwd: string;
   name: string;
+  available: boolean;
   sessions: SessionInfo[];
 }
 
-// ── File types ──────────────────────────────────────────────────────
-
-export interface TreeEntry {
+interface TreeEntry {
   name: string;
   path: string;
   kind: string;
@@ -49,14 +48,12 @@ export interface TreeEntry {
   children?: TreeEntry[];
 }
 
-export interface OpenFile {
+interface OpenFile {
   path: string;
   content: string;
   size: number;
   truncated: boolean;
 }
-
-// ── RPC types ────────────────────────────────────────────────────────
 
 export interface RpcStartResult {
   instanceId: string;
@@ -64,19 +61,7 @@ export interface RpcStartResult {
   executable: string;
 }
 
-export interface RpcEventEnvelope {
-  instanceId: string;
-  generation: number;
-  line: string;
-}
-
-export interface RpcClosedEnvelope {
-  instanceId: string;
-  generation: number;
-  code?: number;
-}
-
-// ── Public API ──────────────────────────────────────────────────────
+// ── Pi RPC ──────────────────────────────────────────────────────────
 
 export async function findPi(piPath?: string): Promise<string> {
   const params = piPath ? `?path=${encodeURIComponent(piPath)}` : "";
@@ -88,93 +73,55 @@ export async function startRpc(
   options: { cwd: string; piPath?: string; env?: Record<string, string> },
   instanceId: string,
 ): Promise<RpcStartResult> {
-  return request<RpcStartResult>("POST", "/api/rpc/start", {
-    ...options,
-    instanceId,
-  });
+  return request<RpcStartResult>("POST", "/api/rpc/start", { ...options, instanceId });
 }
 
 export async function sendRpc(command: unknown, instanceId: string): Promise<void> {
-  const id = encodeURIComponent(instanceId);
-  await request<void>("POST", `/api/rpc/${id}/send`, command);
+  await request<void>("POST", `/api/rpc/${encodeURIComponent(instanceId)}/send`, command);
 }
 
 export async function stopRpc(instanceId: string): Promise<void> {
-  const id = encodeURIComponent(instanceId);
-  await request<void>("POST", `/api/rpc/${id}/stop`);
+  await request<void>("POST", `/api/rpc/${encodeURIComponent(instanceId)}/stop`);
 }
+
+// ── Sessions ────────────────────────────────────────────────────────
 
 export async function listAllSessionsGrouped(): Promise<ProjectSessions[]> {
   return request<ProjectSessions[]>("GET", "/api/sessions");
-}
-
-export async function listSessions(): Promise<SessionInfo[]> {
-  return request<SessionInfo[]>("GET", "/api/sessions/flat");
 }
 
 export async function deleteSession(sessionPath: string): Promise<void> {
   await request<void>("DELETE", `/api/sessions?path=${encodeURIComponent(sessionPath)}`);
 }
 
-export async function workspaceTree(
-  root: string,
-  relative: string = "",
-  depth: number = 4,
-): Promise<TreeEntry[]> {
+// ── Workspace files ─────────────────────────────────────────────────
+
+export async function workspaceTree(root: string, relative = "", depth = 4): Promise<TreeEntry[]> {
   const params = new URLSearchParams({ root, relative, depth: String(depth) });
   return request<TreeEntry[]>("GET", `/api/workspace/tree?${params}`);
 }
 
-export async function workspaceReadFile(
-  root: string,
-  relative: string,
-  maxBytes: number = 2_097_152,
-): Promise<OpenFile> {
+export async function workspaceReadFile(root: string, relative: string, maxBytes = 2_097_152): Promise<OpenFile> {
   const params = new URLSearchParams({ root, relative, maxBytes: String(maxBytes) });
   return request<OpenFile>("GET", `/api/workspace/file?${params}`);
 }
 
-export async function startPty(options: {
-  cwd: string;
-  cols: number;
-  rows: number;
-}): Promise<{ ptyId: string }> {
+// ── Terminal (PTY) ──────────────────────────────────────────────────
+
+export async function startPty(options: { cwd: string; cols: number; rows: number }): Promise<{ ptyId: string }> {
   return request<{ ptyId: string }>("POST", "/api/pty/start", options);
 }
 
-// ── WebSocket helpers ────────────────────────────────────────────────
+// ── WebSocket helpers ───────────────────────────────────────────────
+
+function wsUrl(path: string): string {
+  return apiUrl(path).replace(/^http/, "ws");
+}
 
 export function rpcEventWs(instanceId: string): WebSocket {
-  const id = encodeURIComponent(instanceId);
-  return new WebSocket(apiUrl(`/api/rpc/${id}/events`).replace("http://", "ws://").replace("https://", "wss://"));
+  return new WebSocket(wsUrl(`/api/rpc/${encodeURIComponent(instanceId)}/events`));
 }
 
 export function ptyWs(ptyId: string): WebSocket {
-  const id = encodeURIComponent(ptyId);
-  return new WebSocket(apiUrl(`/api/pty/${id}`).replace("http://", "ws://").replace("https://", "wss://"));
-}
-
-// ── Project picker ───────────────────────────────────────────────────
-
-export async function openProject(): Promise<{ id: string; name: string; path: string } | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.webkitdirectory = true;
-    input.onchange = () => {
-      const files = input.files;
-      if (files && files.length > 0) {
-        // Extract root directory from first file's webkitRelativePath
-        const relativePath = files[0].webkitRelativePath;
-        const rootName = relativePath.split("/")[0];
-        // We can approximate the path — browser can't give the full path for security
-        resolve({ id: `dir:${rootName}`, name: rootName, path: `/projects/${rootName}` });
-      } else {
-        resolve(null);
-      }
-    };
-    // If user cancels
-    input.oncancel = () => resolve(null);
-    input.click();
-  });
+  return new WebSocket(wsUrl(`/api/pty/${encodeURIComponent(ptyId)}`));
 }

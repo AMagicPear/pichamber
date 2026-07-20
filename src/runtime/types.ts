@@ -70,6 +70,9 @@ export interface OpenFile {
 export interface PiSessionGroup {
   cwd: string;
   name: string;
+  /** Whether `cwd` still exists on disk. Sessions in an unavailable group
+   *  cannot be opened because Pi has no directory to run in. */
+  available: boolean;
   sessions: SessionInfo[];
 }
 

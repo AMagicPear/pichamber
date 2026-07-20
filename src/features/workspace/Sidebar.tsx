@@ -5,6 +5,7 @@ import { listAllSessionsGrouped, deleteSession as apiDeleteSession } from "../..
 import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
 
 interface Props {
+  isOpen: boolean;
   activeSessionPath: string | null;
   onOpenSession(sessionPath: string, cwd: string, title: string): void;
   onNewSession(cwd: string): void;
@@ -120,7 +121,12 @@ export function Sidebar(props: Props) {
   const totalSessions = groups.reduce((s, g) => s + g.sessions.length, 0);
 
   return (
-    <aside className="sidebar" aria-label="Pi sessions">
+    <aside
+      className={`sidebar${props.isOpen ? " is-open" : ""}`}
+      aria-label="Pi sessions"
+      aria-hidden={!props.isOpen}
+    >
+      <div className="sidebar-inner">
       {/* ── Header row (OpenChamber-style) ── */}
       <div className="sidebar-header">
         <div className="sidebar-header-actions">
@@ -196,9 +202,10 @@ export function Sidebar(props: Props) {
         )}
         {filtered.map((group) => {
           const isCollapsed = collapsed.has(group.cwd);
+          const unavailable = !group.available;
           return (
-            <section className="project-section" key={group.cwd}>
-              <div className={`project-header${!isCollapsed && group.sessions.length > 0 ? " is-expanded" : ""}`}>
+            <section className="project-section" key={group.cwd || "unknown"}>
+              <div className={`project-header${!isCollapsed && group.sessions.length > 0 ? " is-expanded" : ""}${unavailable ? " is-unavailable" : ""}`}>
                 <button
                   className="project-toggle"
                   onClick={() => toggleProject(group.cwd)}
@@ -206,19 +213,22 @@ export function Sidebar(props: Props) {
                 >
                   {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                 </button>
-                <button className="project-label" onClick={() => toggleProject(group.cwd)} title={group.cwd}>
+                <button className="project-label" onClick={() => toggleProject(group.cwd)} title={unavailable ? "Project directory is unavailable" : group.cwd}>
                   <FolderOpen size={12} />
                   <span className="project-name">{group.name}</span>
+                  {unavailable && <span className="project-badge">unavailable</span>}
                   <span className="project-cwd">{group.cwd}</span>
                 </button>
-                <div className="project-actions">
-                  <IconButton label="New session" className="tiny" onClick={(e) => {
-                    e.stopPropagation();
-                    props.onNewSession(group.cwd);
-                  }}>
-                    <Plus size={13} />
-                  </IconButton>
-                </div>
+                {!unavailable && (
+                  <div className="project-actions">
+                    <IconButton label="New session" className="tiny" onClick={(e) => {
+                      e.stopPropagation();
+                      props.onNewSession(group.cwd);
+                    }}>
+                      <Plus size={13} />
+                    </IconButton>
+                  </div>
+                )}
               </div>
               {!isCollapsed && (
                 <div className="session-list">
@@ -230,8 +240,12 @@ export function Sidebar(props: Props) {
                     const menuKey = `${group.cwd}:::${session.path}`;
                     const menuOpen = openMenuKey === menuKey;
                     const sessionName = session.name ?? session.id.slice(0, 8);
+                    const openSession = () => {
+                      if (unavailable) return;
+                      props.onOpenSession(session.path, group.cwd, sessionName);
+                    };
                     return (
-                      <div key={session.path} className={`session-row ${isActive ? "active" : ""}`}>
+                      <div key={session.path} className={`session-row ${isActive ? "active" : ""}${unavailable ? " is-unavailable" : ""}`}>
                         <span className={`session-dot${isActive ? " active" : ""}`} />
                         <SessionRowTitle
                           sessionName={sessionName}
@@ -239,7 +253,7 @@ export function Sidebar(props: Props) {
                           time={relativeTime(session.modifiedAt)}
                           search={normalized}
                           isActive={isActive}
-                          onOpen={() => props.onOpenSession(session.path, group.cwd, sessionName)}
+                          onOpen={openSession}
                           canRename={Boolean(props.onRenameSession)}
                           onRename={(next) => handleRenameSession(session, next)}
                           triggerRenameRef={(fn) => { renameTriggerRef.current[menuKey] = fn; }}
@@ -260,13 +274,15 @@ export function Sidebar(props: Props) {
                         </div>
                         {menuOpen && (
                           <div className="session-menu">
-                            <button onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuKey(null);
-                              props.onOpenSession(session.path, group.cwd, sessionName);
-                            }}>
-                              <MessageSquareText size={12} /> Open
-                            </button>
+                            {!unavailable && (
+                              <button onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuKey(null);
+                                openSession();
+                              }}>
+                                <MessageSquareText size={12} /> Open
+                              </button>
+                            )}
                             {props.onRenameSession && (
                               <button onClick={(e) => {
                                 e.stopPropagation();
@@ -302,6 +318,7 @@ export function Sidebar(props: Props) {
         {totalSessions > 0 && (
           <span className="sidebar-count">{totalSessions} session{totalSessions !== 1 ? "s" : ""}</span>
         )}
+      </div>
       </div>
     </aside>
   );

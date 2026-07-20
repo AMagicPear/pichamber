@@ -7,14 +7,14 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "serve": "cargo run --release",
+    "serve": "bun run src-server/server.ts",
+    "dev:all": "bun run scripts/dev-all.ts",
     "build:frontend": "tsc -b && vite build",
-    "build": "bun run build:frontend && cargo build --release",
+    "build": "bun run build:frontend",
     "check": "tsc -b --pretty false && eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:rust": "cargo check",
-    "test:rust": "cargo test"
+    "typecheck:server": "tsc --noEmit -p src-server/tsconfig.json"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
@@ -34,10 +34,6 @@
     "@eslint/js": "^9.33.0",
     "@tailwindcss/vite": "^4.1.12",
     "@testing-library/jest-dom": "^6.8.0",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^14.6.1",
-    "@types/dompurify": "^3.2.0",
-    "@types/morphdom": "^2.4.2",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.2",

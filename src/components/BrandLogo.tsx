@@ -70,11 +70,3 @@ export function BrandLogo({ size = 88, className, style, animated = false }: Pro
     </svg>
   );
 }
-
-export function BrandMark({ size = 24 }: { size?: number }) {
-  return (
-    <span className="brand-mark" style={{ width: size, height: size, fontSize: size * 0.7 }}>
-      π
-    </span>
-  );
-}
