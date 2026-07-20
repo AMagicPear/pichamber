@@ -99,6 +99,7 @@ export default function App() {
           activeSessionPath={activeSession?.sessionPath ?? null}
          onOpenSession={actions.openSession}
          onNewSession={actions.newSession}
+         onRenameSession={actions.renameSessionByPath}
          onClose={state.toggleSidebar}
          onSettings={() => setSettingsOpen(true)}
         />

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import { Brain, ChevronDown, Paperclip, Send, Square, X } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import type { ModelInfo, ThinkingLevel } from "../../runtime/types";
@@ -35,6 +35,16 @@ export function Composer(props: Props) {
   const draftRef = useRef("");
   const sending = text.trim().length > 0;
   const modelId = props.selectedModel?.id ?? "";
+
+  // OpenChamber-style textarea auto-grow: reset to scrollHeight on every
+  // change so the field grows as the user pastes/types and shrinks on delete,
+  // capped at the CSS max-height (180px).
+  useEffect(() => {
+    const el = textarea.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  }, [text]);
 
   const pushHistory = useCallback((value: string) => {
     if (value && historyRef.current[historyRef.current.length - 1] !== value) {

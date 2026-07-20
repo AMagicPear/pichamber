@@ -253,6 +253,22 @@ export function usePichamber() {
     if (getRuntime(key).connected) void getRuntime(key).request({ type: "set_session_name", name: title });
   }, [state]);
 
+  // Sidebar-driven rename: called when the user commits the inline rename
+  // input next to a Pi session row. Looks up the matching open tab (if any)
+  // and pushes the new name both to the local store and the Pi runtime.
+  const renameSessionByPath = useCallback(async (sessionPath: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    const tab = state.sessions.find((s) => s.sessionPath === sessionPath);
+    if (tab) state.renameSession(tab.id, trimmed);
+    const key = tab?.id ?? sessionKey(sessionPath);
+    if (getRuntime(key).connected) {
+      void getRuntime(key).request({ type: "set_session_name", name: trimmed }).catch((error) => {
+        console.warn("Failed to push session rename to Pi:", error);
+      });
+    }
+  }, [state]);
+
   const forkSession = useCallback(async () => {
     const key = state.activeSessionId;
     if (!key) return;
@@ -298,6 +314,7 @@ export function usePichamber() {
     attachFile,
     answerUiRequest,
     renameSession,
+    renameSessionByPath,
     forkSession,
     deleteSession,
   };

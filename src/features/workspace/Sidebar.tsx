@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
+import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
 import { listAllSessionsGrouped, deleteSession as apiDeleteSession } from "../../api/client";
 import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
@@ -8,6 +8,7 @@ interface Props {
   activeSessionPath: string | null;
   onOpenSession(sessionPath: string, cwd: string, title: string): void;
   onNewSession(cwd: string): void;
+  onRenameSession?(sessionPath: string, newTitle: string): void;
   onClose(): void;
   onSettings(): void;
 }
@@ -48,6 +49,9 @@ export function Sidebar(props: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Per-row imperative handle for the menu's "Rename" action to flip the
+  // row into edit mode without lifting state for every row up to the parent.
+  const renameTriggerRef = useRef<Record<string, () => void>>({});
   const normalized = query.trim().toLowerCase();
 
   const load = () => {
@@ -82,6 +86,18 @@ export function Sidebar(props: Props) {
           ? { ...g, sessions: g.sessions.filter((s) => s.path !== session.path) }
           : g
       ).filter((g) => g.sessions.length > 0)
+    );
+  };
+
+  const handleRenameSession = (session: SessionInfo, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    props.onRenameSession?.(session.path, trimmed);
+    setGroups((prev) =>
+      prev.map((g) => ({
+        ...g,
+        sessions: g.sessions.map((s) => s.path === session.path ? { ...s, name: trimmed } : s),
+      })),
     );
   };
 
@@ -213,28 +229,21 @@ export function Sidebar(props: Props) {
                     const isActive = session.path === props.activeSessionPath;
                     const menuKey = `${group.cwd}:::${session.path}`;
                     const menuOpen = openMenuKey === menuKey;
+                    const sessionName = session.name ?? session.id.slice(0, 8);
                     return (
                       <div key={session.path} className={`session-row ${isActive ? "active" : ""}`}>
                         <span className={`session-dot${isActive ? " active" : ""}`} />
-                        <button
-                          className="session-main"
-                          onClick={() =>
-                            props.onOpenSession(session.path, group.cwd, session.name ?? session.id)
-                          }
-                        >
-                          <span className="session-title">
-                            <RenderHighlight
-                              text={session.name ?? session.id.slice(0, 8)}
-                              search={normalized}
-                            />
-                          </span>
-                          <span className="session-meta">
-                            {messageCountLabel(session.messageCount)}
-                          </span>
-                          <span className="session-time">
-                            {relativeTime(session.modifiedAt)}
-                          </span>
-                        </button>
+                        <SessionRowTitle
+                          sessionName={sessionName}
+                          meta={messageCountLabel(session.messageCount)}
+                          time={relativeTime(session.modifiedAt)}
+                          search={normalized}
+                          isActive={isActive}
+                          onOpen={() => props.onOpenSession(session.path, group.cwd, sessionName)}
+                          canRename={Boolean(props.onRenameSession)}
+                          onRename={(next) => handleRenameSession(session, next)}
+                          triggerRenameRef={(fn) => { renameTriggerRef.current[menuKey] = fn; }}
+                        />
                         <div className="session-actions">
                           <div className="session-actions-inner">
                             <IconButton
@@ -254,10 +263,19 @@ export function Sidebar(props: Props) {
                             <button onClick={(e) => {
                               e.stopPropagation();
                               setOpenMenuKey(null);
-                              props.onOpenSession(session.path, group.cwd, session.name ?? session.id);
+                              props.onOpenSession(session.path, group.cwd, sessionName);
                             }}>
                               <MessageSquareText size={12} /> Open
                             </button>
+                            {props.onRenameSession && (
+                              <button onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuKey(null);
+                                renameTriggerRef.current[menuKey]?.();
+                              }}>
+                                <Pencil size={12} /> Rename
+                              </button>
+                            )}
                             <button className="danger" onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteSession(session as SessionInfo, group.cwd);
@@ -301,5 +319,92 @@ function RenderHighlight({ text, search }: { text: string; search: string }) {
       <mark>{text.slice(idx, idx + search.length)}</mark>
       {text.slice(idx + search.length)}
     </>
+  );
+}
+
+// ── Session row title (button or inline rename input) ────────────────
+
+interface SessionRowTitleProps {
+  sessionName: string;
+  meta: string;
+  time: string;
+  search: string;
+  isActive: boolean;
+  onOpen(): void;
+  canRename: boolean;
+  onRename(next: string): void;
+  triggerRenameRef(fn: () => void): void;
+}
+
+function SessionRowTitle({ sessionName, meta, time, search, isActive, onOpen, canRename, onRename, triggerRenameRef }: SessionRowTitleProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(sessionName);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  useEffect(() => {
+    if (!canRename) return;
+    triggerRenameRef(() => setEditing(true));
+    return () => triggerRenameRef(() => undefined);
+  }, [canRename, triggerRenameRef]);
+
+  // Cancel pending edit when the displayed name changes from outside (e.g.
+  // another tab updated it) so we don't overwrite it with stale draft text.
+  useEffect(() => {
+    if (!editing) setDraft(sessionName);
+  }, [sessionName, editing]);
+
+  const commit = () => {
+    const next = draft.trim();
+    setEditing(false);
+    if (next && next !== sessionName) onRename(next);
+    else setDraft(sessionName);
+  };
+
+  if (editing) {
+    return (
+      <span className="session-main session-rename">
+        <input
+          ref={inputRef}
+          className="session-rename-input"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Enter") { event.preventDefault(); commit(); }
+            if (event.key === "Escape") { event.preventDefault(); setDraft(sessionName); setEditing(false); }
+          }}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Rename session"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <button
+      className={`session-main${isActive ? " is-active" : ""}`}
+      onClick={onOpen}
+      onDoubleClick={(e) => {
+        if (!canRename) return;
+        e.stopPropagation();
+        e.preventDefault();
+        setEditing(true);
+      }}
+      title={canRename ? `${sessionName} (double-click to rename)` : sessionName}
+    >
+      <span className="session-title">
+        <RenderHighlight text={sessionName} search={search} />
+      </span>
+      <span className="session-meta">{meta}</span>
+      <span className="session-time">{time}</span>
+    </button>
   );
 }
