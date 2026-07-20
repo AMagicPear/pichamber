@@ -53,7 +53,11 @@ export function usePichamber() {
         const next = useAppStore.getState();
         next.reduceRuntimeEvent(key, event);
         if (event.type === "agent_start") next.setSessionRunning(key, true);
-        if (["agent_end", "rpc_disconnected"].includes(String(event.type))) next.setSessionRunning(key, false);
+        if (["agent_end", "rpc_disconnected"].includes(String(event.type))) {
+          next.setSessionRunning(key, false);
+          // Pi may have created a new session file — tell the sidebar to refresh.
+          window.dispatchEvent(new CustomEvent("pichamber:session-changed"));
+        }
         if (event.type === "extension_ui_request" && event.method === "notify") toast(String(event.message ?? event.title ?? "Pi notification"));
       });
       subscriptions.current.set(key, unsubscribe);

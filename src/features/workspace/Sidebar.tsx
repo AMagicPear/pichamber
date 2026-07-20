@@ -81,11 +81,11 @@ export function Sidebar(props: Props) {
   };
 
   useEffect(() => { load(); }, []);
-  // Reload when the page becomes visible — Pi may have created new sessions.
+  // Reload when Pi finishes processing (may have created new sessions).
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === "visible") load(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    const onSessionChanged = () => load();
+    window.addEventListener("pichamber:session-changed", onSessionChanged);
+    return () => window.removeEventListener("pichamber:session-changed", onSessionChanged);
   }, []);
   useEffect(() => { if (searchOpen && inputRef.current) inputRef.current.focus(); }, [searchOpen]);
 
