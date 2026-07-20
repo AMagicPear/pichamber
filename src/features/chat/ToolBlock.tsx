@@ -1,89 +1,394 @@
-import { useState } from "react";
-import { Check, ChevronRight, CircleAlert, FileCode, LoaderCircle, TerminalSquare, Wrench } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check,
+  ChevronRight,
+  CircleAlert,
+  Copy,
+  FileCode,
+  FileSearch,
+  FileText,
+  FolderSearch,
+  Globe,
+  ListChecks,
+  LoaderCircle,
+  Pencil,
+  Search as SearchIcon,
+  SquareTerminal,
+  Wrench,
+} from "lucide-react";
+import { Markdown } from "../../components/Markdown";
 import { IconButton } from "../../components/IconButton";
 import type { ToolActivity } from "../../runtime/types";
+import { getToolMetadata } from "../../vendor/openchamber/lib/toolHelpers";
+import {
+  coerceToText,
+  detectLanguageFromOutput,
+  formatEditOutput,
+  formatToolInput,
+  getRelativePath,
+  tryParseJsonOutput,
+} from "./toolRenderers";
 
-function formatToolOutput(value: unknown, maxLen = 2000): string {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") {
-    if (value.length > maxLen) return value.slice(0, maxLen) + "\n… truncated";
-    return value;
+const ICON_CLASS = "h-3.5 w-3.5 flex-shrink-0";
+
+function toolIcon(name: string) {
+  const t = name.toLowerCase();
+  if (t === "edit" || t === "multiedit" || t === "apply_patch" || t === "str_replace" || t === "str_replace_based_edit_tool") {
+    return <Pencil className={ICON_CLASS} />;
   }
-  try {
-    const json = JSON.stringify(value, null, 2);
-    if (json.length > maxLen) return json.slice(0, maxLen) + "\n… truncated";
-    return json;
-  } catch {
-    return String(value).slice(0, maxLen);
+  if (t === "write" || t === "create" || t === "file_write") {
+    return <FileCode className={ICON_CLASS} />;
   }
+  if (t === "read" || t === "view" || t === "file_read" || t === "cat") {
+    return <FileText className={ICON_CLASS} />;
+  }
+  if (t === "bash" || t === "shell" || t === "cmd" || t === "terminal" || t === "execute") {
+    return <SquareTerminal className={ICON_CLASS} />;
+  }
+  if (t === "list" || t === "ls" || t === "dir" || t === "list_files") {
+    return <FolderSearch className={ICON_CLASS} />;
+  }
+  if (t === "search" || t === "grep" || t === "find" || t === "ripgrep") {
+    return <SearchIcon className={ICON_CLASS} />;
+  }
+  if (t === "glob") {
+    return <FileSearch className={ICON_CLASS} />;
+  }
+  if (
+    t === "fetch"
+    || t === "curl"
+    || t === "wget"
+    || t === "webfetch"
+    || t === "web-search"
+    || t === "websearch"
+    || t === "search_web"
+  ) {
+    return <Globe className={ICON_CLASS} />;
+  }
+  if (t === "todowrite" || t === "todoread") {
+    return <ListChecks className={ICON_CLASS} />;
+  }
+  return <Wrench className={ICON_CLASS} />;
 }
 
-function shortenedLabel(input: Record<string, unknown> | undefined): string {
-  if (!input) return "";
-  if (typeof input.path === "string") return input.path;
-  if (typeof input.filePath === "string") return input.filePath;
-  if (typeof input.command === "string") {
-    const cmd = input.command;
-    return cmd.length > 80 ? cmd.slice(0, 80) + "…" : cmd;
+const MAX_DURATION_MS = 5 * 60 * 1000;
+const formatDuration = (start: number, end?: number, now = Date.now()) => {
+  const duration = Math.min(Math.max(0, (end ?? now) - start), MAX_DURATION_MS);
+  const seconds = duration / 1000;
+  const displaySeconds = seconds < 0.05 && end !== undefined ? 0.1 : seconds;
+  return `${displaySeconds.toFixed(1)}s`;
+};
+
+const useNow = (active: boolean, intervalMs = 250): number => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active || typeof window === "undefined") return;
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [active, intervalMs]);
+  return now;
+};
+
+type JsonView = "summary" | "formatted" | "raw";
+
+const JsonSummary = ({ data }: { data: unknown }) => {
+  if (data === null) return <span className="tool-output-json-summary">null</span>;
+  if (typeof data !== "object") {
+    return <span className="tool-output-json-summary">{String(data)}</span>;
   }
-  if (typeof input.url === "string") return input.url;
-  if (typeof input.query === "string") return input.query.length > 60 ? input.query.slice(0, 60) + "…" : input.query;
-  if (typeof input.pattern === "string") return input.pattern;
-  if (typeof input.name === "string") return input.name;
-  const keys = Object.keys(input).filter(k => k !== "path" && k !== "command");
-  if (keys.length > 0) {
-    const firstVal = input[keys[0]];
-    if (typeof firstVal === "string") return firstVal.length > 60 ? firstVal.slice(0, 60) + "…" : firstVal;
+  if (Array.isArray(data)) {
+    return (
+      <ul className="tool-output-json-summary">
+        {data.slice(0, 12).map((item, i) => (
+          <li key={i}>{summarize(item)}</li>
+        ))}
+        {data.length > 12 ? <li className="tool-output-json-more">+{data.length - 12} more…</li> : null}
+      </ul>
+    );
   }
-  return "";
+  const entries = Object.entries(data as Record<string, unknown>).slice(0, 12);
+  return (
+    <ul className="tool-output-json-summary">
+      {entries.map(([k, v]) => (
+        <li key={k}>
+          <span className="tool-output-json-key">{k}</span>: {summarize(v)}
+        </li>
+      ))}
+      {Object.keys(data as Record<string, unknown>).length > 12 ? (
+        <li className="tool-output-json-more">+{Object.keys(data as Record<string, unknown>).length - 12} more…</li>
+      ) : null}
+    </ul>
+  );
+};
+
+const summarize = (value: unknown): string => {
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  if (typeof value === "string") return value.length > 80 ? `"${value.slice(0, 80)}…"` : `"${value}"`;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+  if (Array.isArray(value)) return `Array(${value.length})`;
+  if (typeof value === "object") return `Object(${Object.keys(value as Record<string, unknown>).length})`;
+  return String(value);
+};
+
+const JsonTree = ({ data, depth = 0 }: { data: unknown; depth?: number }) => {
+  if (data === null || typeof data !== "object") {
+    return <span className="tool-output-json-tree">{summarize(data)}</span>;
+  }
+  const isArray = Array.isArray(data);
+  const entries = isArray
+    ? (data as unknown[]).map((v, i) => [String(i), v] as const)
+    : Object.entries(data as Record<string, unknown>);
+  return (
+    <ul className="tool-output-json-tree">
+      {entries.map(([k, v]) => (
+        <li key={k}>
+          <span className="tool-output-json-key">{k}</span>:{" "}
+          {v === null || typeof v !== "object" ? (
+            summarize(v)
+          ) : (
+            <JsonTree data={v} depth={depth + 1} />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+const JsonRaw = ({ text }: { text: string }) => (
+  <pre className="tool-output-json-raw">{text}</pre>
+);
+
+interface ToolBlockProps {
+  tool: ToolActivity;
+  onOpenFile: (path: string) => void;
+  /** Active working directory. Strips the prefix off absolute paths so the
+   *  tool summary shows short relative paths (OpenChamber-style). */
+  cwd?: string;
 }
 
-function toolIcon(toolName: string) {
-  const name = toolName.toLowerCase();
-  if (name.includes("bash") || name.includes("shell") || name.includes("execute")) return <TerminalSquare size={14} />;
-  if (name.includes("read") || name.includes("edit") || name.includes("write") || name.includes("apply_patch") || name.includes("grep")) return <FileCode size={14} />;
-  return <Wrench size={14} />;
-}
-
-export function ToolBlock({ tool, onOpenFile }: { tool: ToolActivity; onOpenFile(path: string): void }) {
+export function ToolBlock({ tool, onOpenFile, cwd }: ToolBlockProps) {
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [jsonView, setJsonView] = useState<JsonView>("summary");
 
-  const path = typeof tool.input?.path === "string" ? tool.input.path
-    : typeof tool.input?.filePath === "string" ? tool.input.filePath
-    : undefined;
+  const input = tool.input;
+  const isRunning = tool.status === "running";
+  const now = useNow(isRunning);
 
-  const statusIcon = tool.status === "running"
-    ? <LoaderCircle className="spin" size={14} />
-    : tool.status === "error"
-      ? <CircleAlert size={14} />
-      : <Check size={14} />;
+  const toolMeta = useMemo(() => getToolMetadata(tool.name), [tool.name]);
+  const displayName = toolMeta.displayName || tool.name;
 
-  const label = shortenedLabel(tool.input);
+  const descriptionPath = useMemo(() => {
+    if (!input) return undefined;
+    const p = input.path ?? input.filePath ?? input.file_path;
+    if (typeof p === "string") return p;
+    return undefined;
+  }, [input]);
+
+  const description = useMemo(
+    () => formatToolInput(input, tool.name),
+    [input, tool.name],
+  );
+
+  const relativeDescription = useMemo(() => {
+    if (descriptionPath && cwd) {
+      return getRelativePath(descriptionPath, cwd);
+    }
+    return description;
+  }, [description, descriptionPath, cwd]);
+
+  const outputText = useMemo(() => {
+    const raw = coerceToText(tool.output);
+    return toolMeta.outputLanguage === "diff" ? formatEditOutput(raw) : raw;
+  }, [tool.output, toolMeta.outputLanguage]);
+
+  const jsonResult = useMemo(() => tryParseJsonOutput(outputText), [outputText]);
+  const outputLanguage = useMemo(
+    () => detectLanguageFromOutput(outputText, tool.name),
+    [outputText, tool.name],
+  );
+
+  const durationLabel = formatDuration(tool.startedAt, tool.endedAt, now);
+  const hasError = tool.status === "error" || !!tool.error;
 
   return (
-    <div className={`tool-block ${tool.status}`}>
-      <div className="tool-row">
-        <button className="tool-summary" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <span className={`tool-disclosure${open ? " open" : ""}`}>
-            {open ? <ChevronRight size={14} /> : toolIcon(tool.name)}
-          </span>
-          <span className="tool-name">{tool.name}</span>
-          {label && <span className="tool-label">{label}</span>}
-          <span className="tool-status">{statusIcon}</span>
-        </button>
-        {path && (
-          <IconButton label={`Open ${path}`} onClick={() => onOpenFile(path)}>
-            <FileCode size={14} />
-          </IconButton>
-        )}
-      </div>
-      <div className={`tool-output-wrap${open ? " open" : ""}`}>
-        <div className="tool-output-inner">
-          <pre className="tool-output">
-            {formatToolOutput(tool.output ?? tool.input ?? {})}
-          </pre>
+    <div className={`tool-block ${hasError ? "error" : isRunning ? "running" : "complete"}`}>
+      <button
+        type="button"
+        className="tool-row"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        <span className={`tool-disclosure${open ? " open" : ""}`}>
+          {open ? <ChevronRight size={12} /> : toolIcon(tool.name)}
+        </span>
+        <span className="tool-name">{displayName}</span>
+        {relativeDescription ? (
+          <span className="tool-label" title={description}>{relativeDescription}</span>
+        ) : null}
+        <span className="tool-duration" title={`Started ${new Date(tool.startedAt).toLocaleTimeString()}`}>
+          {durationLabel}
+        </span>
+        <span className="tool-status">
+          {isRunning ? (
+            <LoaderCircle className="spin" size={12} />
+          ) : hasError ? (
+            <CircleAlert size={12} />
+          ) : (
+            <Check size={12} />
+          )}
+        </span>
+      </button>
+      {open && (hasError || outputText || descriptionPath) ? (
+        <div className="tool-output-wrap open">
+          <div className="tool-output-inner">
+            {descriptionPath ? (
+              <div className="tool-output-meta">
+                <button
+                  type="button"
+                  className="tool-output-path"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (descriptionPath) onOpenFile(descriptionPath);
+                  }}
+                >
+                  <FileCode size={11} /> {descriptionPath}
+                </button>
+              </div>
+            ) : null}
+            {hasError && tool.error ? (
+              <pre className="tool-output tool-output-error">{tool.error}</pre>
+            ) : null}
+            {!hasError && outputText ? (
+              <ToolOutputBody
+                tool={tool}
+                jsonResult={jsonResult}
+                outputText={outputText}
+                outputLanguage={outputLanguage}
+                jsonView={jsonView}
+                onJsonViewChange={setJsonView}
+                copied={copied}
+                onCopy={async () => {
+                  try {
+                    await navigator.clipboard.writeText(outputText);
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1400);
+                  } catch {
+                    /* clipboard unavailable */
+                  }
+                }}
+              />
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
+
+const ToolOutputBody = ({
+  tool,
+  jsonResult,
+  outputText,
+  outputLanguage,
+  jsonView,
+  onJsonViewChange,
+  copied,
+  onCopy,
+}: {
+  tool: ToolActivity;
+  jsonResult: { isJson: boolean; data: unknown };
+  outputText: string;
+  outputLanguage: string;
+  jsonView: JsonView;
+  onJsonViewChange: (view: JsonView) => void;
+  copied: boolean;
+  onCopy: () => void;
+}) => {
+  // For task / generic tools, prefer markdown rendering so the output reads
+  // like prose. Heuristic: tool name suggests text content (task, question,
+  // fetch returning markdown, etc).
+  const t = tool.name.toLowerCase();
+  const renderAsMarkdown = t === "task" || t === "question" || outputLanguage === "markdown";
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    onJsonViewChange("summary");
+  }, [outputText, onJsonViewChange]);
+
+  if (renderAsMarkdown) {
+    return (
+      <div className="tool-output tool-output-markdown">
+        <Markdown>{outputText}</Markdown>
+      </div>
+    );
+  }
+
+  if (jsonResult.isJson) {
+    return (
+      <div className="tool-output tool-output-json">
+        <div className="tool-output-actions">
+          <button
+            type="button"
+            className={`tool-output-action${jsonView === "summary" ? " active" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onJsonViewChange("summary"); }}
+            title="Summary"
+          >
+            <ListChecks size={11} />
+          </button>
+          <button
+            type="button"
+            className={`tool-output-action${jsonView === "formatted" ? " active" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onJsonViewChange("formatted"); }}
+            title="Formatted"
+          >
+            <FileCode size={11} />
+          </button>
+          <button
+            type="button"
+            className={`tool-output-action${jsonView === "raw" ? " active" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onJsonViewChange("raw"); }}
+            title="Raw"
+          >
+            <Pencil size={11} />
+          </button>
+          <button
+            type="button"
+            className="tool-output-action"
+            onClick={(e) => { e.stopPropagation(); onCopy(); }}
+            title={copied ? "Copied" : "Copy"}
+          >
+            {copied ? <Check size={11} /> : <Copy size={11} />}
+          </button>
+        </div>
+        <div ref={contentRef} className="tool-output-json-body">
+          {jsonView === "summary" ? <JsonSummary data={jsonResult.data} /> : null}
+          {jsonView === "formatted" ? <JsonTree data={jsonResult.data} /> : null}
+          {jsonView === "raw" ? <JsonRaw text={outputText} /> : null}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tool-output tool-output-text">
+      <div className="tool-output-actions">
+        <button
+          type="button"
+          className="tool-output-action"
+          onClick={(e) => { e.stopPropagation(); onCopy(); }}
+          title={copied ? "Copied" : "Copy"}
+        >
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+        </button>
+      </div>
+      <pre className="tool-output-text-pre">{outputText}</pre>
+    </div>
+  );
+};
+
+// IconButton is no longer used inside ToolBlock (the path is inlined as a
+// button-styled link inside the metadata row) but kept re-exported so other
+// modules importing it for fallback styles keep working.
+export { IconButton };

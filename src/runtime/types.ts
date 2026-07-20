@@ -27,8 +27,17 @@ export interface ToolActivity {
   name: string;
   input?: Record<string, unknown>;
   output?: unknown;
+  /** Tool-emitted error string. Surfaces above output when present so the
+   *  user sees the failure even if `output` is the partial stdout. */
+  error?: string;
   status: "running" | "complete" | "error";
   startedAt: number;
+  /** Unix-ms wall-clock when the tool finished. Used to render the duration
+   *  badge next to the tool name (OpenChamber-style). */
+  endedAt?: number;
+  /** Optional backend metadata — patch/diff text for edit tools, diagnostics,
+   *  multi-file lists, etc. Mirrors OpenChamber's ToolPart.metadata. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChatMessage {

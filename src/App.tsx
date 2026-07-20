@@ -129,6 +129,7 @@ export default function App() {
             <ChatView
               messages={messages}
               projectName={cwd ? cwd.split("/").pop() : undefined}
+              cwd={cwd}
               onOpenFile={(path) => void actions.openFile(path)}
               onSuggestion={handleSuggestion}
               onRegenerate={() => void actions.regeneratePrompt()}

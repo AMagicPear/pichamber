@@ -6,13 +6,16 @@ import { Message } from "./Message";
 interface Props {
   messages: ChatMessage[];
   projectName?: string;
+  /** Active working directory. Strips the prefix off absolute paths so tool
+   *  summaries show short relative paths (OpenChamber-style). */
+  cwd?: string;
   onOpenFile(path: string): void;
   onSuggestion(text: string): void;
   onRegenerate(): void;
   onFork(): void;
 }
 
-export function ChatView({ messages, projectName, onOpenFile, onSuggestion, onRegenerate, onFork }: Props) {
+export function ChatView({ messages, projectName, cwd, onOpenFile, onSuggestion, onRegenerate, onFork }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const followingRef = useRef(true);
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
@@ -59,6 +62,7 @@ export function ChatView({ messages, projectName, onOpenFile, onSuggestion, onRe
                 message={message}
                 onOpenFile={onOpenFile}
                 onOpenPath={(path) => onFileRef.current(path)}
+                cwd={cwd}
                 canRegenerate={message.role === "assistant" && message.id === lastAssistantId}
                 onRegenerate={onRegenerate}
                 onFork={onFork}

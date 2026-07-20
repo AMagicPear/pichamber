@@ -3,12 +3,14 @@ import { useState } from "react";
 import { Markdown } from "../../components/Markdown";
 import { IconButton } from "../../components/IconButton";
 import type { ChatMessage } from "../../runtime/types";
+import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolBlock } from "./ToolBlock";
 
 export function Message({
   message,
   onOpenFile,
   onOpenPath,
+  cwd,
   canRegenerate,
   onRegenerate,
   onFork,
@@ -16,6 +18,7 @@ export function Message({
   message: ChatMessage;
   onOpenFile(path: string): void;
   onOpenPath?(path: string): void;
+  cwd?: string;
   canRegenerate?: boolean;
   onRegenerate?(): void;
   onFork?(): void;
@@ -61,6 +64,12 @@ export function Message({
     );
   }
 
+  // Reasoning is auto-expanded while the upstream model is still streaming
+  // (we don't know it's "done" until the assistant message ends). After
+  // message.streaming flips false, ThinkingBlock collapses by default and the
+  // user can click to expand.
+  const thinkingStreaming = !!message.streaming && !!message.thinking;
+
   return (
     <article className="message assistant-message">
       <div className="assistant-heading">
@@ -75,13 +84,14 @@ export function Message({
       {(message.thinking || message.tools.length > 0) && (
         <div className="activity-rail">
           {message.thinking && (
-            <details className="thinking-block">
-              <summary>Thinking</summary>
-              <div>{message.thinking}</div>
-            </details>
+            <ThinkingBlock
+              text={message.thinking}
+              streaming={thinkingStreaming}
+              blockId={message.id}
+            />
           )}
           {message.tools.map((tool) => (
-            <ToolBlock key={tool.id} tool={tool} onOpenFile={onOpenFile} />
+            <ToolBlock key={tool.id} tool={tool} onOpenFile={onOpenFile} cwd={cwd} />
           ))}
         </div>
       )}

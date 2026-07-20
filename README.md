@@ -1,5 +1,7 @@
 # Pichamber
 
+![Pichamber screenshot](assets/screenshot.png)
+
 Pichamber is a browser-based interface for the [Pi Coding Agent](https://github.com/badlogic/pi-mono). It combines Pi's extension-first RPC runtime with a project, session, chat, tool, file, and terminal workflow inspired by OpenChamber — all running in a browser tab, served by a single local Rust binary.
 
 Version 0.2 makes Pichamber a browser-first application. No Electron, no Tauri: just `pichamber serve` and open `localhost:1420`.
