@@ -74,8 +74,10 @@ export function Inspector({ project, file, width, panelRef, resizeHandleRef, res
           <X size={14} />
         </IconButton>
       </div>
-      {tab === "files" && renderFiles(tab, file, tree, expanded, setExpanded, onFile)}
-      {tab === "context" && <ContextView project={project} />}
+      <div className="inspector-body">
+        {tab === "files" && renderFiles(tab, file, tree, expanded, setExpanded, onFile)}
+        {tab === "context" && <ContextView project={project} />}
+      </div>
     </aside>
   );
 }
@@ -84,11 +86,11 @@ function FileView({ file, onBack }: { file: OpenFile; onBack(): void }) {
   return (
     <div className="file-view">
       <div className="file-path">
-        <button type="button" onClick={onBack} aria-label="Back to tree" style={{ background: "transparent", border: 0, padding: 0, color: "inherit", cursor: "pointer" }}>
+        <button type="button" onClick={onBack} aria-label="Back to tree">
           <Folder size={13} />
         </button>
         <span className="badge">{file.path.split("/").pop()}</span>
-        <span>{file.path}</span>
+        <span className="file-path-text">{file.path}</span>
       </div>
       <pre>{file.content}{file.truncated ? "\n\n… truncated" : ""}</pre>
     </div>
@@ -180,21 +182,21 @@ function ContextView({ project }: { project?: Project }) {
   }
   return (
     <div className="context-panel">
-      <div className="context-row">
-        <strong>Project</strong>
-        <small>{project.name}</small>
+      <div className="context-section">
+        <div className="context-label">Project</div>
+        <div className="context-value">{project.name}</div>
       </div>
-      <div className="context-row">
-        <strong>Working directory</strong>
-        <small style={{ fontFamily: "var(--font-mono)" }}>{project.path}</small>
+      <div className="context-section">
+        <div className="context-label">Working directory</div>
+        <div className="context-value mono">{project.path}</div>
       </div>
-      <div className="context-row">
-        <strong>Runtime</strong>
-        <small>Pi RPC over a per-session child process.</small>
+      <div className="context-section">
+        <div className="context-label">Runtime</div>
+        <div className="context-value">Pi RPC over a per-session child process.</div>
       </div>
-      <div className="context-row">
-        <strong>Shortcuts</strong>
-        <small>⌘K command palette · ⌘N new session · ⇧↩ newline</small>
+      <div className="context-section">
+        <div className="context-label">Shortcuts</div>
+        <div className="context-value">⌘K Command palette · ⌘B Toggle sidebar · Esc Stop · ⇧↩ Newline</div>
       </div>
     </div>
   );

@@ -508,9 +508,23 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .stop-button { color: #fff; background: var(--danger); }
 .stop-button:hover:not(:disabled) { background: color-mix(in oklch, var(--danger) 88%, #000); }
 
-/* === Inspector ========================================================= */
-.inspector { position: relative; width: var(--inspector-w, 420px); min-width: var(--inspector-w, 420px); display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--surface); animation: slide-up var(--motion-base) var(--motion-ease) both; }
-/* Resize handle on the left edge of the inspector */
+/* === Inspector (OpenChamber-style right panel) ========================== */
+.inspector {
+  position: relative;
+  width: var(--inspector-w, 420px);
+  min-width: var(--inspector-w, 420px);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  animation: inspector-slide-in var(--motion-base) var(--motion-ease) both;
+}
+@keyframes inspector-slide-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Resize handle on the left edge */
 .inspector-resize-handle {
   position: absolute;
   z-index: 10;
@@ -526,34 +540,133 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .inspector-resize-handle.is-dragging {
   background: color-mix(in oklch, var(--primary) 30%, transparent);
 }
-.inspector-tabs { position: relative; display: flex; align-self: stretch; overflow: hidden; min-height: 38px; border-bottom: 1px solid var(--border); padding: 0 4px; gap: 0; }
-.inspector-tabs button { position: relative; padding: 0 14px; border: 0; background: transparent; color: var(--muted-foreground); cursor: pointer; font-size: 12px; font-weight: 500; transition: color var(--motion-fast) var(--motion-ease); min-height: 38px; }
-.inspector-tabs button::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 2px; border-radius: 2px; background: var(--primary); transform: scaleX(0); transform-origin: center; transition: transform var(--motion-base) var(--motion-ease); }
-.inspector-tabs button:hover { color: var(--foreground); }
-.inspector-tabs button.active { color: var(--foreground); }
-.inspector-tabs button.active::after { transform: scaleX(1); }
-.file-tree { min-height: 0; flex: 1; overflow: auto; padding: 8px; }
+
+/* Tab bar */
+.inspector-tabs {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 39px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border);
+  gap: 2px;
+  flex-shrink: 0;
+}
+.inspector-tabs button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+.inspector-tabs button:hover { background: var(--surface-hover); color: var(--foreground); }
+.inspector-tabs button.active { background: var(--surface-muted); color: var(--foreground); }
+
+/* Body area below tabs */
+.inspector-body { min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* File tree */
+.file-tree { min-height: 0; flex: 1; overflow: auto; padding: 6px 4px; }
 .tree-row-wrap { position: relative; display: block; }
-/* OpenChamber-style indent guides: small horizontal stub + vertical riser */
 .tree-guide-h { position: absolute; top: 13px; height: 1px; background: var(--border); pointer-events: none; }
 .tree-guide-v { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); pointer-events: none; }
-.tree-row { width: 100%; min-height: 27px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; text-align: left; cursor: pointer; font-size: 12px; color: var(--foreground); }
+.tree-row {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--foreground);
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
 .tree-row:hover { background: var(--surface-hover); }
-.tree-row.active { background: var(--surface-muted); color: var(--foreground); }
-.tree-row .tree-icon { width: 16px; height: 16px; display: grid; place-items: center; flex: 0 0 16px; color: var(--text-faint); }
-.tree-children { padding-left: 14px; }
-.tree-indent { width: 14px; flex: 0 0 14px; }
-.tree-empty { padding: 24px; color: var(--muted-foreground); font-size: 12px; text-align: center; }
+.tree-row.active { background: var(--surface-muted); }
+.tree-row .tree-icon {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 16px;
+  color: var(--text-faint);
+}
+.tree-empty { padding: 32px 20px; color: var(--muted-foreground); font-size: 12px; text-align: center; line-height: 1.5; }
+
+/* File view (when a file is opened) */
 .file-view { min-height: 0; flex: 1; display: flex; flex-direction: column; }
-.file-path { min-height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font: 11px var(--font-mono); }
-.file-path .badge { padding: 2px 6px; border-radius: 4px; background: color-mix(in oklch, var(--primary) 14%, transparent); color: var(--primary); font-weight: 600; font-size: 10px; }
-.file-view pre { min-height: 0; flex: 1; margin: 0; overflow: auto; padding: 16px; background: var(--surface-raised); color: var(--foreground); font: 12px/1.6 var(--font-mono); tab-size: 2; }
-.context-panel { padding: 14px; }
-.context-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
-.context-row:last-child { border-bottom: 0; }
-.context-row strong { display: block; font-size: 12px; margin-bottom: 2px; }
-.context-row small { color: var(--muted-foreground); font-size: 11px; }
-.panel-empty { padding: 28px 24px; color: var(--muted-foreground); text-align: center; font-size: 12px; line-height: 1.55; }
+.file-view .file-path {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.file-view .file-path button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+.file-view .file-path button:hover { background: var(--surface-hover); color: var(--foreground); }
+.file-view .file-path .badge {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 10.5px;
+}
+.file-view .file-path .file-path-text {
+  color: var(--muted-foreground);
+  font: 11px var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-view pre {
+  min-height: 0;
+  flex: 1;
+  margin: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  background: var(--surface-raised);
+  color: var(--foreground);
+  font: 12px/1.6 var(--font-mono);
+  tab-size: 2;
+}
+
+/* Context tab */
+.context-panel { padding: 16px 18px; overflow: auto; }
+.context-section { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.context-section:last-child { border-bottom: 0; }
+.context-label { font-size: 11px; font-weight: 600; color: var(--muted-foreground); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+.context-value { font-size: 12.5px; color: var(--foreground); line-height: 1.5; }
+.context-value.mono { font-family: var(--font-mono); font-size: 11px; }
+.panel-empty { padding: 40px 24px; color: var(--muted-foreground); text-align: center; font-size: 12px; line-height: 1.55; }
 
 /* === Terminal dock ===================================================== */
 .terminal-dock { height: clamp(180px, 32vh, 640px); min-height: 180px; display: flex; flex-direction: column; border-top: 1px solid var(--border); background: var(--terminal); animation: slide-up var(--motion-base) var(--motion-ease) both; transition: inset var(--motion-slow) var(--motion-ease), height var(--motion-slow) var(--motion-ease); }
