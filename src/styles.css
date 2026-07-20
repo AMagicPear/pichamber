@@ -220,6 +220,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .project-toggle { width: 22px; height: 22px; display: grid; place-items: center; flex: 0 0 22px; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
 .project-toggle:hover { color: var(--foreground); }
 .project-label { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 4px; border: 0; background: transparent; text-align: left; cursor: pointer; color: var(--muted-foreground); font-size: 12px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; overflow: hidden; }
+.project-label > svg { flex-shrink: 0; }
 .project-label:hover { color: var(--foreground); }
 .project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-cwd { display: none; }
