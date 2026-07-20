@@ -1,5 +1,14 @@
 # Pichamber Changelog
 
+## 0.3.1 - 2026-xx-xx
+
+### Fixes
+- Server banner and `/api/health` now read the version from `package.json` instead of a hardcoded string; `npm version` will propagate automatically.
+- README "Reference projects" URLs corrected to upstream repos (`openchamber/openchamber`, `gustavonline/pi-desktop`).
+
+### Features
+- Configurable port via `PICHAMBER_PORT` env, `--port N`, or `--port=N`. If the requested port is busy Pichamber walks forward and binds the next free port (up to ten tries) and prints the actual listening port, e.g. `listening on http://localhost:1421 (preferred 1420 busy)`.
+
 ## 0.3.0 - 2026-07-20
 
 ### Release

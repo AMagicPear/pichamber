@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "noEmit": true,
     "strict": true,
-    "types": []
+    "types": ["bun"]
   },
   "include": ["*.ts"]
 }

@@ -271,15 +271,30 @@ function onWsClose(state: AppState, ws: any): void {
   if (data?.type === "pty") state.pty.stop(data.id)
 }
 
-export function startServer(): void {
-  const port = Number(process.env.PICHAMBER_PORT ?? 1420)
-  const state: AppState = {
-    rpc: new RpcState(),
-    pty: new PtyState(),
+/** Parse --port / -p / --port=N from Bun.argv (returns null if absent). */
+function readCliPort(): number | null {
+  const argv = Bun.argv.slice(1)
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--port" || argv[i] === "-p") {
+      const v = Number(argv[i + 1])
+      if (Number.isFinite(v)) return v
+    }
+    const m = /^--port=(\d+)$/.exec(argv[i])
+    if (m) return Number(m[1])
   }
+  return null
+}
 
-  const server = Bun.serve({
-    port,
+/**
+ * Try to bind the given port. Returns the live Server on success, throws on
+ * EADDRINUSE so the caller can walk forward.
+ */
+function tryListen(
+  state: AppState,
+  preferred: number,
+): { server: Bun.Server<unknown>; port: number } {
+  const server: Bun.Server<unknown> = Bun.serve({
+    port: preferred,
     fetch: (req) => fetchHandler(state, req, server),
     websocket: {
       open: (ws) => onWsOpen(state, ws, ws.data),
@@ -287,9 +302,49 @@ export function startServer(): void {
       close: (ws) => onWsClose(state, ws),
     },
   })
+  return { server, port: server.port ?? preferred }
+}
 
-  const url = `http://localhost:${port}`
-  console.log(`Pichamber v${PICHAMBER_VERSION} listening on ${url}`)
+/**
+ * Pick a TCP port for Bun.serve to bind to. Honors PICHAMBER_PORT /
+ * --port / -p; if the preferred port is busy, walks forward and binds the
+ * next free port (up to PORT_PROBE_LIMIT tries). Returns the bound server
+ * and the actual port it ended up listening on.
+ */
+function bindWithFallback(
+  state: AppState,
+  preferred: number,
+): { server: Bun.Server<unknown>; port: number; preferred: number } {
+  const PORT_PROBE_LIMIT = 10
+  let lastErr: unknown
+  for (let i = 0; i < PORT_PROBE_LIMIT; i++) {
+    const candidate = preferred + i
+    try {
+      return { ...tryListen(state, candidate), preferred }
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  throw new Error(
+    `pichamber: could not bind a port near ${preferred} after ${PORT_PROBE_LIMIT} attempts (last error: ${String(lastErr)})`,
+  )
+}
+
+export function startServer(): void {
+  const preferred = Number(
+    process.env.PICHAMBER_PORT ?? readCliPort() ?? 1420,
+  )
+  const state: AppState = {
+    rpc: new RpcState(),
+    pty: new PtyState(),
+  }
+
+  const { server, port: boundPort, preferred: requestedPort } =
+    bindWithFallback(state, preferred)
+
+  const url = `http://localhost:${boundPort}`
+  const portNote = boundPort === requestedPort ? "" : ` (preferred ${requestedPort} busy)`
+  console.log(`Pichamber v${PICHAMBER_VERSION} listening on ${url}${portNote}`)
 
   if (!process.env.PICHAMBER_DEV) {
     if (process.platform === "darwin") {

@@ -1,5 +1,6 @@
 import { spawn, type Subprocess } from "bun"
 import { resolve, isAbsolute } from "node:path"
+import { existsSync } from "node:fs"
 
 const DEFAULT_INSTANCE = "main"
 
@@ -40,20 +41,20 @@ export class RpcState {
   discoverPi(overridePath?: string): string {
     if (overridePath && overridePath.trim()) {
       const expanded = this.expandHome(overridePath)
-      if (Bun.file(expanded).exists()) return expanded
+      if (existsSync(expanded)) return expanded
       throw new Error(`Configured Pi executable does not exist: ${expanded}`)
     }
     const envPath = process.env.PICHAMBER_PI_PATH
     if (envPath) {
       const candidate = this.expandHome(envPath)
-      if (Bun.file(candidate).exists()) return candidate
+      if (existsSync(candidate)) return candidate
     }
     const which = (Bun as any).which("pi")
     if (which) return which
     const home = os.homedir()
     for (const relative of [".bun/bin/pi", ".local/bin/pi", ".npm-global/bin/pi"]) {
       const candidate = `${home}/${relative}`
-      if (Bun.file(candidate).exists()) return candidate
+      if (existsSync(candidate)) return candidate
     }
     throw new Error("Pi CLI was not found. Install pi-coding-agent or configure its path.")
   }
@@ -167,7 +168,7 @@ export class RpcState {
     if (!proc) throw new Error(`Runtime ${id} is not running`)
     const stdin = proc.proc.stdin
     if (!stdin) throw new Error(`Runtime ${id} stdin is not available`)
-    await stdin.write(new TextEncoder().encode(command + "\n"))
+    await (stdin as Bun.FileSink).write(new TextEncoder().encode(command + "\n"))
   }
 
   async stop(id: string): Promise<void> {

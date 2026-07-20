@@ -62,6 +62,18 @@ pichamber
 
 The launcher opens Pichamber at <http://localhost:1420/>. Use the workspace picker in the sidebar to point at a project directory.
 
+### Customizing the port
+
+The default port is `1420`. Override it via env var or CLI flag — if the requested port is busy, Pichamber walks forward and binds the next free port (up to ten tries) and prints the actual port on boot:
+
+```bash
+PICHAMBER_PORT=1500 pichamber
+pichamber --port 1500
+pichamber --port=1500
+```
+
+The startup banner shows the real listening port, e.g. `Pichamber v0.3.0 listening on http://localhost:1421 (preferred 1420 busy)`.
+
 ## Developing from source
 
 ```bash

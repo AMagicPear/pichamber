@@ -67,9 +67,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const dark = state.theme === "dark" || (state.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+    const isSystem = state.theme === "system";
+    const dark = state.theme === "dark" || (isSystem && matchMedia("(prefers-color-scheme: dark)").matches);
     document.documentElement.classList.toggle("dark", dark);
-  }, [state.theme, state.theme === "system"]);
+  }, [state.theme]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -79,7 +80,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isStreaming, actions]);
+  }, [isStreaming, actions, state]);
 
   const paletteActions: PaletteAction[] = [
     ...(cwd ? [{ id: "new", label: "New session", icon: "new" as const, hint: "⌘N", run: () => void actions.newSession(cwd) }] : []),
