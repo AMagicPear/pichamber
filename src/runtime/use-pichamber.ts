@@ -107,17 +107,19 @@ export function usePichamber() {
     const key = state.activeSessionId;
     if (!key) return;
     const session = state.sessions.find((s) => s.id === key);
-    if (!session?.sessionPath) return; // not a Pi session — nothing to start
+    if (!session?.sessionPath) return;
 
-    const cwd = session.projectId; // we store cwd in projectId for Pi sessions
-    // Set loading if no messages yet (avoid flashing on tab switch to loaded tabs)
+    const cwd = session.projectId;
     const existing = state.messages[key];
     if (!existing || existing.length === 0) {
       state.setSessionLoading(key, true);
     }
     let cancelled = false;
     void ensureRuntime(key, cwd, session.sessionPath).catch((error) => {
-      if (!cancelled) state.setRuntimeError(error instanceof Error ? error.message : String(error));
+      if (!cancelled) {
+        state.setRuntimeError(error instanceof Error ? error.message : String(error));
+        state.setSessionLoading(key, false);
+      }
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,13 +173,13 @@ export function usePichamber() {
   const stopPrompt = useCallback(() => {
     const key = state.activeSessionId;
     if (!key) return;
-    // Immediately mark as not running so the UI reflects the stop right away.
     state.setSessionRunning(key, false);
-    // Fire-and-forget: don't wait for a response — Pi may be busy streaming
-    // and the abort may not get an explicit acknowledgement.
-    getRuntime(key).send({ type: "abort" }).catch(() => {
-      // If send itself fails (e.g. disconnected), the runtime will emit
-      // rpc_disconnected which already clears the running flag.
+    const client = getRuntime(key);
+    client.send({ type: "abort" }).catch(async () => {
+      // Send failed — the connection is dead. Force a clean restart so the
+      // session doesn't get stuck in a broken state.
+      try { await client.stop(); } catch {}
+      state.setSessionLoading(key, false);
     });
   }, [state]);
 
