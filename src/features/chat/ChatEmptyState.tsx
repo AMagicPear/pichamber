@@ -38,7 +38,7 @@ export function ChatEmptyState({ projectName, onSuggestion }: Props) {
           ))}
         </div>
         <div className="empty-hints">
-          <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a newline · <kbd>⌘</kbd>+<kbd>K</kbd> for the command palette
+          <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a newline · <kbd>⌘</kbd>+<kbd>K</kbd> for the command palette · <kbd>⌘</kbd>+<kbd>B</kbd> to toggle sidebar
         </div>
       </div>
     </div>

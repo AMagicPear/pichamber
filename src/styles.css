@@ -449,6 +449,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .setting-row strong { font-size: 13px; font-weight: 600; }
 .setting-row small { color: var(--muted-foreground); font-size: 11px; }
 .setting-row select, .setting-row input { min-height: 32px; min-width: 130px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--foreground); font-size: 13px; }
+.setting-row kbd { display: inline-block; min-height: 24px; padding: 2px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-muted); color: var(--muted-foreground); font: 11px var(--font-mono); }
 .setting-row > input { width: min(280px, 45%); font-family: var(--font-mono); font-size: 11px; }
 .settings-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 20px; }
 .status-pill { padding: 4px 8px; border-radius: 5px; background: color-mix(in oklch, var(--success) 13%, var(--surface)); color: var(--success); font-size: 11px; font-weight: 600; }

@@ -68,10 +68,11 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen(true); }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") { event.preventDefault(); state.toggleSidebar(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [state]);
 
   const paletteActions: PaletteAction[] = [
     ...(cwd ? [{ id: "new", label: "New session", icon: "new" as const, hint: "⌘N", run: () => actions.newSession(cwd) }] : []),
