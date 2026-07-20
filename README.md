@@ -65,5 +65,5 @@ The production binary is built with `cargo build --release` and embeds the front
 
 ## Reference projects
 
-- `../openchamber`: product interaction, responsive layout, visual hierarchy, architecture, and transport layer reference.
-- `../pi-desktop`: Pi RPC, session, process lifecycle, extension UI, and native host reference.
+- [openchamber](https://github.com/AMagicPear/openchamber): product interaction, responsive layout, visual hierarchy, architecture, and transport layer reference.
+- [pi-desktop](https://github.com/badlogic/pi-desktop): Pi RPC, session, process lifecycle, extension UI, and native host reference.
