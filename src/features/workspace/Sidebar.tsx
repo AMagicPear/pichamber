@@ -63,7 +63,19 @@ export function Sidebar(props: Props) {
   const load = () => {
     setLoading(true);
     listAllSessionsGrouped()
-      .then((g) => setGroups(g as PiSessionGroup[]))
+      .then((g) => {
+        const loaded = g as PiSessionGroup[];
+        setGroups(loaded);
+        // Default-collapse unavailable projects.
+        const unavailable = loaded.filter((p) => !p.available).map((p) => p.cwd);
+        if (unavailable.length > 0) {
+          setCollapsed((prev) => {
+            const next = new Set(prev);
+            for (const cwd of unavailable) next.add(cwd);
+            return next;
+          });
+        }
+      })
       .catch((error) => console.warn("Failed to load Pi sessions:", error))
       .finally(() => setLoading(false));
   };

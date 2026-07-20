@@ -67,7 +67,6 @@ function parseSession(filePath: string): SessionInfo | undefined {
   let name: string | undefined = typeof header.name === "string" ? header.name : undefined
 
   // Scan the file for message count, tokens, cost, and name.
-  let name: string | undefined
   let messageCount = 0
   let tokens = 0
   let cost = 0
@@ -159,7 +158,11 @@ export function listAllSessionsGrouped(): ProjectSessions[] {
     const name = cwd === "" ? "Unknown" : basename(cwd) || cwd
     projects.push({ cwd, name, available, sessions })
   }
-  projects.sort((a, b) => (b.sessions[0]?.modifiedAt ?? 0) - (a.sessions[0]?.modifiedAt ?? 0))
+  // Sort: available first (by recency), then unavailable (also by recency).
+  projects.sort((a, b) => {
+    if (a.available !== b.available) return a.available ? -1 : 1
+    return (b.sessions[0]?.modifiedAt ?? 0) - (a.sessions[0]?.modifiedAt ?? 0)
+  })
   return projects
 }
 
