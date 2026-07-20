@@ -7,27 +7,33 @@ interface UseResizableOptions {
   max: number;
   /** Initial width */
   initial: number;
-  /** Called while dragging with the new width */
+  /** Called ONLY on drag-end with the final width (for persistence). */
   onResize(width: number): void;
   /** Which edge of the panel is being dragged */
   edge: "left" | "right";
+  /** CSS custom property name to set on the panel element (e.g. "--sidebar-w") */
+  cssVar: string;
 }
 
 /**
- * OpenChamber-style panel resize hook. Returns refs to attach to the handle
- * element and a dragging flag for styling.
+ * Zero-React-overhead panel resize hook.
  *
- * Resize callbacks are throttled to once per frame (rAF) so the React tree
- * only re-renders at most 60 fps during a drag, regardless of mouse event
- * frequency.
+ * While dragging, the hook writes the new width directly to a CSS custom
+ * property on the panel DOM element — no React state updates, no
+ * reconciliation.  Only on mouse-up does it call `onResize` to persist the
+ * final width.  This gives butter-smooth 60 fps dragging that feels
+ * identical to native browser layout.
  */
-export function useResizable({ min, max, initial, onResize, edge }: UseResizableOptions) {
+export function useResizable({ min, max, initial, onResize, edge, cssVar }: UseResizableOptions) {
   const [dragging, setDragging] = useState(false);
   const widthRef = useRef(initial);
   const onResizeRef = useRef(onResize);
   useEffect(() => { onResizeRef.current = onResize; }, [onResize]);
 
+  /** Ref for the resize handle (the draggable edge). */
   const handleRef = useRef<HTMLDivElement>(null);
+  /** Ref for the panel itself — CSS custom property is written here. */
+  const panelRef = useRef<HTMLElement>(null);
 
   const onMouseDown = useCallback(
     (event: React.MouseEvent) => {
@@ -37,24 +43,22 @@ export function useResizable({ min, max, initial, onResize, edge }: UseResizable
 
       const startX = event.clientX;
       const startWidth = widthRef.current;
-      let raf = 0;
+      const panel = panelRef.current;
 
       const onMouseMove = (e: MouseEvent) => {
         const delta = edge === "right" ? e.clientX - startX : startX - e.clientX;
         const next = Math.min(max, Math.max(min, startWidth + delta));
         widthRef.current = next;
-        // Throttle state updates to once per animation frame.
-        if (!raf) {
-          raf = requestAnimationFrame(() => {
-            raf = 0;
-            onResizeRef.current(widthRef.current);
-          });
+        // Direct DOM write — no React involved. The CSS transition is
+        // suppressed by the `.no-transition` class during drag, so the
+        // panel follows the cursor pixel-for-pixel.
+        if (panel) {
+          panel.style.setProperty(cssVar, `${next}px`);
         }
       };
 
       const onMouseUp = () => {
-        if (raf) { cancelAnimationFrame(raf); raf = 0; }
-        // Push the final width synchronously so the persisted value is exact.
+        // Commit the final width to React state so it's persisted.
         onResizeRef.current(widthRef.current);
         setDragging(false);
         document.removeEventListener("mousemove", onMouseMove);
@@ -68,8 +72,8 @@ export function useResizable({ min, max, initial, onResize, edge }: UseResizable
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [edge, min, max],
+    [edge, min, max, cssVar],
   );
 
-  return { handleRef, dragging, onMouseDown };
+  return { handleRef, panelRef, dragging, onMouseDown };
 }

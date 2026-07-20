@@ -38,6 +38,7 @@ export default function App() {
     max: 480,
     initial: state.sidebarWidth,
     edge: "right",
+    cssVar: "--sidebar-w",
     onResize: state.setSidebarWidth,
   });
 
@@ -47,6 +48,7 @@ export default function App() {
     max: 800,
     initial: state.inspectorWidth,
     edge: "left",
+    cssVar: "--inspector-w",
     onResize: state.setInspectorWidth,
   });
 
@@ -125,6 +127,7 @@ export default function App() {
       <Sidebar
         isOpen={state.sidebarOpen}
         width={state.sidebarWidth}
+        panelRef={sidebarResize.panelRef}
         resizeHandleRef={sidebarResize.handleRef}
         resizeDragging={sidebarResize.dragging}
         onResizeMouseDown={sidebarResize.onMouseDown}
@@ -187,6 +190,7 @@ export default function App() {
               project={cwd ? { id: cwd, name: cwd.split("/").pop() ?? cwd, path: cwd } : undefined}
               file={state.openFile}
               width={state.inspectorWidth}
+              panelRef={inspectorResize.panelRef}
               resizeHandleRef={inspectorResize.handleRef}
               resizeDragging={inspectorResize.dragging}
               onResizeMouseDown={inspectorResize.onMouseDown}

@@ -7,6 +7,7 @@ import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
 interface Props {
   isOpen: boolean;
   width: number;
+  panelRef: React.RefObject<HTMLElement | null>;
   resizeHandleRef: React.RefObject<HTMLDivElement | null>;
   resizeDragging: boolean;
   onResizeMouseDown(e: React.MouseEvent): void;
@@ -126,6 +127,7 @@ export function Sidebar(props: Props) {
 
   return (
     <aside
+      ref={props.panelRef}
       className={`sidebar${props.isOpen ? " is-open" : ""}${props.resizeDragging ? " no-transition" : ""}`}
       aria-label="Pi sessions"
       aria-hidden={!props.isOpen}
