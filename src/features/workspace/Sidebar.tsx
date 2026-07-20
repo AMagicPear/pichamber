@@ -81,11 +81,15 @@ export function Sidebar(props: Props) {
   };
 
   useEffect(() => { load(); }, []);
-  // Reload when Pi finishes processing (may have created new sessions).
+  // Periodic refresh + event-driven refresh (Pi may create sessions from any tab).
   useEffect(() => {
     const onSessionChanged = () => load();
     window.addEventListener("pichamber:session-changed", onSessionChanged);
-    return () => window.removeEventListener("pichamber:session-changed", onSessionChanged);
+    const interval = setInterval(load, 5000);
+    return () => {
+      window.removeEventListener("pichamber:session-changed", onSessionChanged);
+      clearInterval(interval);
+    };
   }, []);
   useEffect(() => { if (searchOpen && inputRef.current) inputRef.current.focus(); }, [searchOpen]);
 
