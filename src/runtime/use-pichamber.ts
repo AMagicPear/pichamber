@@ -6,343 +6,294 @@ import { deleteSession as apiDeleteSession, workspaceReadFile, createSession } f
 import type { ModelInfo, OpenFile, ThinkingLevel } from "./types";
 import { useAppStore } from "../stores/app-store";
 
-const DEMO_FILES: Record<string, string> = {
-  "src/App.tsx": "export function App() {\n  return <main>Pichamber</main>;\n}\n",
-  "src/styles.css": ":root {\n  color-scheme: light dark;\n}\n",
-  "README.md": "# Pichamber\n\nA desktop workspace for the Pi Coding Agent.\n",
-  "package.json": "{\n  \"name\": \"pichamber\",\n  \"version\": \"0.1.0\"\n}\n",
-};
+// ── Helpers ──────────────────────────────────────────────────────────
 
-const demoOpenFile = (path: string): OpenFile => {
-  const content = DEMO_FILES[path] ?? `// ${path}\n`;
-  return { path, content, size: content.length, truncated: false };
-};
-
-const pathInsideProject = (projectPath: string, candidate: string): boolean => {
-  const root = projectPath.replace(/[\\/]+$/, "");
-  return candidate === root || candidate.startsWith(`${root}/`) || candidate.startsWith(`${root}\\`);
-};
-
-const relativeFromProject = (projectPath: string, absolute: string): string =>
-  absolute.slice(projectPath.replace(/[\\/]+$/, "").length).replace(/^[\\/]/, "").replaceAll("\\", "/");
-
-// Each Pi session we have open has a Pichamber-local tab id. We use a hash of
-// the session path so it's stable across restarts and short enough to fit the
-// Rust instance-id validation (≤256 chars, no slashes).
 function sessionKey(path: string): string {
   let hash = 0;
   for (let i = 0; i < path.length; i++) {
-    const c = path.charCodeAt(i);
-    hash = ((hash << 5) - hash + c) | 0;
+    hash = ((hash << 5) - hash + path.charCodeAt(i)) | 0;
   }
   return `pi:${Math.abs(hash).toString(36)}`;
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+// ── Hook ─────────────────────────────────────────────────────────────
+
 export function usePichamber() {
-  const state = useAppStore();
+  const store = useAppStore;
   const subscriptions = useRef(new Map<string, () => void>());
-  const activeSessionCwd = useRef<string | undefined>(undefined);
 
-  // Detach all event listeners on unmount.
-  useEffect(() => () => { subscriptions.current.forEach((unsubscribe) => unsubscribe()); }, []);
+  useEffect(() => () => {
+    subscriptions.current.forEach((unsub) => unsub());
+  }, []);
 
+  // ── Runtime lifecycle ──────────────────────────────────────────────
+
+  /** Start or reconnect the runtime for a session. Always clears loading. */
   const ensureRuntime = useCallback(async (key: string, cwd: string, sessionPath?: string) => {
     const client = getRuntime(key);
+
+    // Subscribe to events once per session lifetime.
     if (!subscriptions.current.has(key)) {
-      const unsubscribe = client.onEvent((event) => {
-        const next = useAppStore.getState();
-        next.reduceRuntimeEvent(key, event);
-        if (event.type === "agent_start") next.setSessionRunning(key, true);
-        if (["agent_end", "rpc_disconnected"].includes(String(event.type))) {
-          next.setSessionRunning(key, false);
-          // Pi may have created a new session file — link it to the active
-          // tab so the sidebar shows it as selected, then refresh.
-          client.request<{ sessionFile?: string }>({ type: "get_state" }).then((s) => {
-            if (s.sessionFile) {
-              const tab = useAppStore.getState().sessions.find((t) => t.id === key);
-              if (tab && !tab.sessionPath) {
-                useAppStore.getState().updateSessionPath(key, s.sessionFile);
-              }
-            }
-          }).catch(() => {});
-          window.dispatchEvent(new CustomEvent("pichamber:session-changed"));
+      subscriptions.current.set(key, client.onEvent((event) => {
+        const s = store.getState();
+        s.reduceRuntimeEvent(key, event);
+
+        if (event.type === "agent_start") s.setSessionRunning(key, true);
+
+        if (event.type === "agent_end" || event.type === "rpc_disconnected") {
+          s.setSessionRunning(key, false);
+          if (event.type === "agent_end") onAgentEnd(key, client);
         }
-        if (event.type === "extension_ui_request" && event.method === "notify") toast(String(event.message ?? event.title ?? "Pi notification"));
-      });
-      subscriptions.current.set(key, unsubscribe);
+
+        if (event.type === "extension_ui_request" && event.method === "notify") {
+          toast(String(event.message ?? event.title ?? "Pi notification"));
+        }
+      }));
     }
+
+    // First connection: start Pi, load history, fetch models.
     if (!client.connected) {
-      await client.start(cwd, state.piPath || undefined);
+      await client.start(cwd);
       if (sessionPath) {
         await client.request({ type: "switch_session", sessionPath });
-        const history = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
-        state.hydrateMessages(key, normalizeBackendMessages(history.messages ?? []));
+        const { messages } = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
+        store.getState().hydrateMessages(key, normalizeBackendMessages(messages ?? []));
       }
-      const modelData = await client.request<{ models: ModelInfo[] }>({ type: "get_available_models" }).catch(() => ({ models: [] }));
-      state.setModels(modelData.models ?? []);
+      const { models } = await client.request<{ models: ModelInfo[] }>({ type: "get_available_models" }).catch(() => ({ models: [] as ModelInfo[] }));
+      if (models.length) store.getState().setModels(models);
 
-      // Restore the session's model & thinking level from Pi state
       if (sessionPath) {
         const sessionState = await client.request<{
           model?: { provider: string; id: string };
           thinkingLevel?: ThinkingLevel;
-        }>({ type: "get_state" }).catch((): { model?: { provider: string; id: string }; thinkingLevel?: ThinkingLevel } => ({}));
-        if (sessionState.thinkingLevel) {
-          state.setThinkingLevel(sessionState.thinkingLevel);
-        }
-        const stateModelId = sessionState.model?.id;
-        if (stateModelId && modelData.models) {
-          const found = modelData.models.find((m) => m.id === stateModelId);
-          if (found) state.setSelectedModel(found);
+        }>({ type: "get_state" }).catch(() => ({} as Record<string, never>));
+        if (sessionState.thinkingLevel) store.getState().setThinkingLevel(sessionState.thinkingLevel);
+        if (sessionState.model?.id) {
+          const found = models.find((m) => m.id === sessionState.model!.id);
+          if (found) store.getState().setSelectedModel(found);
         }
       }
     }
-    // Ensure loading is cleared even if we skipped the start block.
-    state.setSessionLoading(key, false);
+
+    store.getState().setSessionLoading(key, false);
     return client;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeSessionId]);
+  }, []);
 
-  // Auto-start the runtime when the active session changes.
-  useEffect(() => {
-    const key = state.activeSessionId;
-    if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
-    if (!session?.sessionPath) return;
-
-    const cwd = session.projectId;
-    const existing = state.messages[key];
-    if (!existing || existing.length === 0) {
-      state.setSessionLoading(key, true);
-    }
-    let cancelled = false;
-    void ensureRuntime(key, cwd, session.sessionPath).catch((error) => {
-      if (!cancelled) {
-        state.setRuntimeError(error instanceof Error ? error.message : String(error));
-        state.setSessionLoading(key, false);
+  /** After Pi finishes a turn, link the session file and refresh sidebar. */
+  function onAgentEnd(key: string, client: ReturnType<typeof getRuntime>) {
+    client.request<{ sessionFile?: string }>({ type: "get_state" }).then((s) => {
+      if (s.sessionFile) {
+        const tab = store.getState().sessions.find((t) => t.id === key);
+        if (tab && !tab.sessionPath) {
+          store.getState().updateSessionPath(key, s.sessionFile);
+        }
       }
-    });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.activeSessionId]);
+    }).catch(() => {});
+    window.dispatchEvent(new CustomEvent("pichamber:session-changed"));
+  }
 
-  /**
-   * Open an existing Pi session from disk. Called by the Sidebar when the user
-   * clicks a session row.
-   */
+  // ── Session actions ────────────────────────────────────────────────
+
   const openSession = useCallback((sessionPath: string, cwd: string, title: string) => {
     const key = sessionKey(sessionPath);
-    state.openPiSession(key, cwd, title, sessionPath);
-    // Only show loading if this session hasn't been loaded before.
-    const existing = state.messages[key];
-    if (!existing || existing.length === 0) {
-      state.setSessionLoading(key, true);
-    }
-    activeSessionCwd.current = cwd;
-  }, [state]);
+    const s = store.getState();
+    s.openPiSession(key, cwd, title, sessionPath);
+    if (!s.messages[key]?.length) s.setSessionLoading(key, true);
+  }, []);
 
-  /**
-   * Start a brand-new Pi session in the given working directory. Calls the
-   * server to allocate a session file path, then opens a tab for it. Pi will
-   * create the `.jsonl` file on disk when it first switches to the session.
-   */
   const newSession = useCallback(async (cwd: string) => {
-    // Ensure the session directory exists — Pi creates the actual file.
     await createSession(cwd).catch(() => {});
     const key = `new:${sessionKey(cwd)}:${Date.now()}`;
-    state.openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`);
-    activeSessionCwd.current = cwd;
-  }, [state]);
+    store.getState().openPiSession(key, cwd, `Session in ${cwd.split("/").pop() ?? cwd}`);
+  }, []);
 
   const sendPrompt = useCallback(async (text: string) => {
-    const key = state.activeSessionId;
+    const s = store.getState();
+    const key = s.activeSessionId;
     if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
-    if (!session) return;
-    const cwd = session.projectId; // cwd stored in projectId
-    const attachments = state.attachments[key] ?? [];
-    const message = attachments.length > 0 ? `${text}\n\n${attachments.map((p) => `@${p}`).join("\n")}` : text;
-    state.addUserMessage(key, message, attachments);
-    state.removeAllAttachments(key);
-    state.setRuntimeError(undefined);
+    const session = s.sessions.find((t) => t.id === key);
+    if (!session?.projectId) return;
+
+    const attachments = s.attachments[key] ?? [];
+    const msg = attachments.length > 0
+      ? `${text}\n\n${attachments.map((p) => `@${p}`).join("\n")}`
+      : text;
+
+    s.addUserMessage(key, msg, attachments);
+    s.removeAllAttachments(key);
+    s.setRuntimeError(undefined);
+
     try {
-      const client = await ensureRuntime(key, cwd, session.sessionPath);
-      state.setSessionRunning(key, true);
-      await client.request({ type: "prompt", message, streamingBehavior: "followUp" });
-    } catch (error) {
-      state.setSessionRunning(key, false);
-      state.setRuntimeError(error instanceof Error ? error.message : String(error));
+      const client = await ensureRuntime(key, session.projectId, session.sessionPath);
+      s.setSessionRunning(key, true);
+      await client.request({ type: "prompt", message: msg, streamingBehavior: "followUp" });
+    } catch (err) {
+      s.setSessionRunning(key, false);
+      s.setRuntimeError(errorMessage(err));
     }
-  }, [state, ensureRuntime]);
+  }, [ensureRuntime]);
 
   const stopPrompt = useCallback(() => {
-    const key = state.activeSessionId;
+    const key = store.getState().activeSessionId;
     if (!key) return;
-    state.setSessionRunning(key, false);
+    store.getState().setSessionRunning(key, false);
     getRuntime(key).send({ type: "abort" }).catch(() => {});
-  }, [state]);
+  }, []);
+
+  // ── Model / thinking ───────────────────────────────────────────────
 
   const pickModel = useCallback((model: ModelInfo) => {
-    state.setSelectedModel(model);
-    const key = state.activeSessionId;
-    if (key && getRuntime(key).connected) {
-      void getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id }).then(() =>
-        getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" })
-      ).then((sessionState) => {
-        if (sessionState?.thinkingLevel) {
-          state.setThinkingLevel(sessionState.thinkingLevel);
-        }
-      }).catch(() => {});
-    }
-  }, [state]);
+    const s = store.getState();
+    s.setSelectedModel(model);
+    const key = s.activeSessionId;
+    if (!key || !getRuntime(key).connected) return;
+    getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id })
+      .then(() => getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" }))
+      .then((st) => { if (st?.thinkingLevel) s.setThinkingLevel(st.thinkingLevel); })
+      .catch(() => {});
+  }, []);
 
   const setThinking = useCallback((level: ThinkingLevel) => {
-    state.setThinkingLevel(level);
-    const key = state.activeSessionId;
-    if (key && getRuntime(key).connected) {
-      void getRuntime(key).request({ type: "set_thinking_level", level }).then(() =>
-        getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" })
-      ).then((sessionState) => {
-        if (sessionState?.thinkingLevel && sessionState.thinkingLevel !== level) {
-          state.setThinkingLevel(sessionState.thinkingLevel);
-          toast(`Thinking set to ${sessionState.thinkingLevel} (${level} not available for this model)`);
+    const s = store.getState();
+    s.setThinkingLevel(level);
+    const key = s.activeSessionId;
+    if (!key || !getRuntime(key).connected) return;
+    getRuntime(key).request({ type: "set_thinking_level", level })
+      .then(() => getRuntime(key).request<{ thinkingLevel?: ThinkingLevel }>({ type: "get_state" }))
+      .then((st) => {
+        if (st?.thinkingLevel && st.thinkingLevel !== level) {
+          s.setThinkingLevel(st.thinkingLevel);
+          toast(`Thinking set to ${st.thinkingLevel} (${level} not available for this model)`);
         }
-      }).catch(() => {});
-    }
-  }, [state]);
+      })
+      .catch(() => {});
+  }, []);
 
-  // OpenChamber-style regenerate: resend the last user prompt
+  // ── Session operations ─────────────────────────────────────────────
+
   const regeneratePrompt = useCallback(async () => {
-    const key = state.activeSessionId;
+    const s = store.getState();
+    const key = s.activeSessionId;
     if (!key) return;
-    const messages = state.messages[key] ?? [];
-    const lastUser = [...messages].reverse().find((m) => m.role === "user");
-    if (!lastUser) {
-      toast.error("Nothing to regenerate");
-      return;
-    }
+    const msgs = s.messages[key] ?? [];
+    const lastUser = msgs.findLast((m) => m.role === "user");
+    if (!lastUser) { toast.error("Nothing to regenerate"); return; }
     await sendPrompt(lastUser.text);
-  }, [state, sendPrompt]);
+  }, [sendPrompt]);
+
+  const forkSession = useCallback(async () => {
+    const s = store.getState();
+    const key = s.activeSessionId;
+    const session = key ? s.sessions.find((t) => t.id === key) : undefined;
+    if (!session?.projectId) return;
+    try {
+      const client = await ensureRuntime(key, session.projectId, session.sessionPath);
+      const data = await client.request<{ messages?: Array<{ id?: string; entryId?: string }> }>({ type: "get_fork_messages" });
+      const last = data.messages?.at(-1);
+      const entryId = last?.entryId ?? last?.id;
+      if (!entryId) throw new Error("This session does not have a forkable turn yet");
+      await client.request({ type: "fork", entryId });
+      const { messages } = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
+      s.hydrateMessages(key, normalizeBackendMessages(messages ?? []));
+      s.renameSession(key, `${session.title} (fork)`);
+      toast.success("Forked from the latest turn");
+    } catch (err) { toast.error(errorMessage(err)); }
+  }, [ensureRuntime]);
+
+  const deleteSession = useCallback(async () => {
+    const s = store.getState();
+    const key = s.activeSessionId;
+    const session = key ? s.sessions.find((t) => t.id === key) : undefined;
+    if (!session) return;
+    if (!window.confirm(`Delete "${session.title}"? This cannot be undone.`)) return;
+    subscriptions.current.get(key)?.();
+    subscriptions.current.delete(key);
+    await closeRuntime(key);
+    if (session.sessionPath) await apiDeleteSession(session.sessionPath).catch((e) => toast.error(String(e)));
+    s.closeSession(key);
+    s.setRuntimeError(undefined);
+  }, []);
+
+  // ── Files & attachments ────────────────────────────────────────────
 
   const openFile = useCallback(async (path: string) => {
-    const cwd = activeSessionCwd.current;
+    const key = store.getState().activeSessionId;
+    const cwd = key ? store.getState().sessions.find((t) => t.id === key)?.projectId : undefined;
     if (!cwd) return;
     try {
-      const file = await workspaceReadFile(cwd, path).catch(() => demoOpenFile(path));
-      state.setOpenFile(file);
-    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-  }, [state]);
+      const file = await workspaceReadFile(cwd, path);
+      store.getState().setOpenFile(file);
+    } catch (err) { toast.error(errorMessage(err)); }
+  }, []);
 
   const attachFile = useCallback(async (): Promise<string | undefined> => {
-    const key = state.activeSessionId;
-    if (!key) return undefined;
-    const cwd = state.sessions.find((s) => s.id === key)?.projectId;
-    if (!cwd) return undefined;
-    const p = await new Promise<string | null>((resolve) => {
+    const s = store.getState();
+    const key = s.activeSessionId;
+    if (!key) return;
+    const cwd = s.sessions.find((t) => t.id === key)?.projectId;
+    if (!cwd) return;
+    const filename = await new Promise<string | null>((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
-      input.onchange = () => {
-        const file = input.files?.[0];
-        if (file) resolve(file.name);
-        else resolve(null);
-      };
+      input.onchange = () => resolve(input.files?.[0]?.name ?? null);
       input.oncancel = () => resolve(null);
       input.click();
     });
-    if (!p) return undefined;
-    if (!pathInsideProject(cwd, p)) {
-      // The file picker only gives us the filename, so we trust it's in the project
-    }
-    const relative = pathInsideProject(cwd, p) ? relativeFromProject(cwd, p) : p;
-    state.addAttachment(key, relative);
-    return relative;
-  }, [state]);
+    if (!filename) return;
+    s.addAttachment(key, filename);
+    return filename;
+  }, []);
 
-  const answerUiRequest = useCallback((value: string | boolean | undefined) => {
-    const request = state.uiRequest;
-    const key = state.activeSessionId;
-    if (!request || !key) return;
-    const payload = value === undefined ? { type: "extension_ui_response", id: request.id, cancelled: true }
-      : request.method === "confirm" ? { type: "extension_ui_response", id: request.id, confirmed: value }
-      : { type: "extension_ui_response", id: request.id, value };
-    void getRuntime(key).send(payload);
-    state.setUiRequest(undefined);
-  }, [state]);
+  // ── Renames ────────────────────────────────────────────────────────
 
   const renameSession = useCallback(async () => {
-    const key = state.activeSessionId;
-    if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
+    const s = store.getState();
+    const key = s.activeSessionId;
+    const session = key ? s.sessions.find((t) => t.id === key) : undefined;
     if (!session) return;
     const title = window.prompt("Session name", session.title)?.trim();
     if (!title) return;
-    state.renameSession(key, title);
-    if (getRuntime(key).connected) void getRuntime(key).request({ type: "set_session_name", name: title });
-  }, [state]);
+    s.renameSession(key, title);
+    if (getRuntime(key).connected) getRuntime(key).request({ type: "set_session_name", name: title });
+  }, []);
 
-  // Sidebar-driven rename: called when the user commits the inline rename
-  // input next to a Pi session row. Looks up the matching open tab (if any)
-  // and pushes the new name both to the local store and the Pi runtime.
   const renameSessionByPath = useCallback(async (sessionPath: string, newTitle: string) => {
     const trimmed = newTitle.trim();
     if (!trimmed) return;
-    const tab = state.sessions.find((s) => s.sessionPath === sessionPath);
-    if (tab) state.renameSession(tab.id, trimmed);
+    const s = store.getState();
+    const tab = s.sessions.find((t) => t.sessionPath === sessionPath);
+    if (tab) s.renameSession(tab.id, trimmed);
     const key = tab?.id ?? sessionKey(sessionPath);
     if (getRuntime(key).connected) {
-      void getRuntime(key).request({ type: "set_session_name", name: trimmed }).catch((error) => {
-        console.warn("Failed to push session rename to Pi:", error);
+      getRuntime(key).request({ type: "set_session_name", name: trimmed }).catch((e) => {
+        console.warn("Failed to push session rename to Pi:", e);
       });
     }
-  }, [state]);
+  }, []);
 
-  const forkSession = useCallback(async () => {
-    const key = state.activeSessionId;
-    if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
-    if (!session) return;
-    const cwd = session.projectId;
-    try {
-      const client = await ensureRuntime(key, cwd, session.sessionPath);
-      const data = await client.request<{ messages?: Array<{ id?: string; entryId?: string }> }>({ type: "get_fork_messages" });
-      const entry = data.messages?.at(-1);
-      const entryId = entry?.entryId ?? entry?.id;
-      if (!entryId) throw new Error("This session does not have a forkable turn yet");
-      await client.request({ type: "fork", entryId });
-      const history = await client.request<{ messages: unknown[] }>({ type: "get_messages" });
-      state.hydrateMessages(key, normalizeBackendMessages(history.messages ?? []));
-      state.renameSession(key, `${session.title} (fork)`);
-      toast.success("Forked from the latest turn");
-    } catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
-  }, [state, ensureRuntime]);
+  // ── Misc ───────────────────────────────────────────────────────────
 
-  const deleteSession = useCallback(async () => {
-    const key = state.activeSessionId;
-    if (!key) return;
-    const session = state.sessions.find((s) => s.id === key);
-    if (!session) return;
-    if (!window.confirm(`Delete “${session.title}”? This cannot be undone.`)) return;
-    subscriptions.current.get(key)?.(); subscriptions.current.delete(key);
-    await closeRuntime(key);
-    if (session.sessionPath) await apiDeleteSession(session.sessionPath).catch((error) => toast.error(String(error)));
-    state.closeSession(key);
-    state.setRuntimeError(undefined);
-  }, [state]);
+  const answerUiRequest = useCallback((value: string | boolean | undefined) => {
+    const s = store.getState();
+    const request = s.uiRequest;
+    const key = s.activeSessionId;
+    if (!request || !key) return;
+    const payload = value === undefined
+      ? { type: "extension_ui_response" as const, id: request.id, cancelled: true }
+      : request.method === "confirm"
+        ? { type: "extension_ui_response" as const, id: request.id, confirmed: value }
+        : { type: "extension_ui_response" as const, id: request.id, value };
+    getRuntime(key).send(payload);
+    s.setUiRequest(undefined);
+  }, []);
 
   return {
-    openSession,
-    newSession,
-    sendPrompt,
-    regeneratePrompt,
-    stopPrompt,
-    pickModel,
-    setThinking,
-    openFile,
-    attachFile,
-    answerUiRequest,
-    renameSession,
-    renameSessionByPath,
-    forkSession,
-    deleteSession,
+    openSession, newSession, sendPrompt, regeneratePrompt, stopPrompt,
+    pickModel, setThinking, openFile, attachFile, answerUiRequest,
+    renameSession, renameSessionByPath, forkSession, deleteSession,
   };
 }
