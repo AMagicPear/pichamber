@@ -122,7 +122,7 @@ export class RpcState {
         while ((nl = buffer.indexOf("\n")) >= 0) {
           const line = buffer.slice(0, nl)
           buffer = buffer.slice(nl + 1)
-          this.emit(id, "events", line, generation, rpcProcess)
+          this.emit(id, line, generation, rpcProcess)
         }
       }
     })()
@@ -148,14 +148,12 @@ export class RpcState {
 
   private emit(
     id: string,
-    kind: "events" | "stderr",
     line: string,
     generation: number,
     proc: RpcProcess,
   ): void {
     const event: RpcEvent = { instanceId: id, generation, line }
-    const subs = kind === "events" ? proc.eventsSubscribers : proc.stderrSubscribers
-    for (const sub of subs) sub(event)
+    for (const sub of proc.eventsSubscribers) sub(event)
   }
 
   async send(command: string, instanceId?: string): Promise<void> {
@@ -206,12 +204,6 @@ export class RpcState {
     return () => proc.eventsSubscribers.delete(cb)
   }
 
-  subscribeStderr(id: string, cb: (event: RpcEvent) => void): () => void {
-    const proc = this.processes.get(id)
-    if (!proc) throw new Error("Instance not found")
-    proc.stderrSubscribers.add(cb)
-    return () => proc.stderrSubscribers.delete(cb)
-  }
 }
 
 import os from "node:os"

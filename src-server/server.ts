@@ -61,15 +61,6 @@ async function handleRpcEventsWs(state: AppState, id: string, server: any, req: 
   return undefined
 }
 
-async function handleRpcStderrWs(state: AppState, id: string, server: any, req: Request) {
-  if (!state.rpc.hasInstance(id)) {
-    return new Response("Instance not found", { status: 404 })
-  }
-  const success = server.upgrade(req, { data: { type: "rpc-stderr", id } })
-  if (!success) return new Response("WebSocket upgrade failed", { status: 500 })
-  return undefined
-}
-
 async function handlePtyWs(state: AppState, id: string, server: any, req: Request) {
   const success = server.upgrade(req, { data: { type: "pty", id } })
   if (!success) return new Response("WebSocket upgrade failed", { status: 500 })
@@ -141,11 +132,6 @@ async function fetchHandler(
     if (rpcEvents && req.method === "GET") {
       return handleRpcEventsWs(state, rpcEvents[1], server, req)
     }
-    const rpcStderr = path.match(/^\/api\/rpc\/([^/]+)\/stderr$/)
-    if (rpcStderr && req.method === "GET") {
-      return handleRpcStderrWs(state, rpcStderr[1], server, req)
-    }
-
     if (path === "/api/dialog/select-directory" && req.method === "POST") {
       try {
         let dir: string | null = null;
@@ -240,11 +226,6 @@ function findDistDir(): string {
 function onWsOpen(state: AppState, ws: any, data: any): void {
   if (data.type === "rpc-events") {
     const unsub = state.rpc.subscribeEvents(data.id, (event: RpcEvent) => {
-      ws.send(JSON.stringify(event))
-    })
-    ws.data.unsub = unsub
-  } else if (data.type === "rpc-stderr") {
-    const unsub = state.rpc.subscribeStderr(data.id, (event: RpcEvent) => {
       ws.send(JSON.stringify(event))
     })
     ws.data.unsub = unsub
