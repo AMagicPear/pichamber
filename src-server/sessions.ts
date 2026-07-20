@@ -1,4 +1,4 @@
-import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
+import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs"
 import { join, basename, resolve, normalize } from "node:path"
 import { homedir } from "node:os"
 
@@ -178,18 +178,14 @@ export function deleteSession(sessionPath: string): void {
   }
 }
 
-/** Create a new session file — uses Pi's exact encoding. */
-export function generateNewSessionPath(cwd: string): string {
+/** Ensure the session directory for a cwd exists — Pi will create the
+ *  actual session file when the first message is sent. */
+export function ensureSessionDir(cwd: string): string {
   const root = sessionsRoot()
   const dirName = encodeCwd(cwd)
   const dir = join(root, dirName)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
-  const id = crypto.randomUUID()
-  const path = join(dir, `${id}.jsonl`)
-  // Write minimal header so the session appears in listings immediately.
-  const header = JSON.stringify({ type: "session", version: 3, id, timestamp: new Date().toISOString(), cwd: resolve(normalize(cwd)) }) + "\n"
-  writeFileSync(path, header, "utf8")
-  return path
+  return dir
 }

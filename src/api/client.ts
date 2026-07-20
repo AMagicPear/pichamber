@@ -94,8 +94,8 @@ export async function deleteSession(sessionPath: string): Promise<void> {
   await request<void>("DELETE", `/api/sessions?path=${encodeURIComponent(sessionPath)}`);
 }
 
-export async function createSession(cwd: string): Promise<{ path: string }> {
-  return request<{ path: string }>("GET", `/api/sessions/new?cwd=${encodeURIComponent(cwd)}`);
+export async function createSession(cwd: string): Promise<{ dir: string }> {
+  return request<{ dir: string }>("GET", `/api/sessions/new?cwd=${encodeURIComponent(cwd)}`);
 }
 
 // ── Workspace files ─────────────────────────────────────────────────

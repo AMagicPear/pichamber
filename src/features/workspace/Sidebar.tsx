@@ -81,6 +81,12 @@ export function Sidebar(props: Props) {
   };
 
   useEffect(() => { load(); }, []);
+  // Reload when the page becomes visible — Pi may have created new sessions.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
   useEffect(() => { if (searchOpen && inputRef.current) inputRef.current.focus(); }, [searchOpen]);
 
   const toggleProject = (cwd: string) => {

@@ -1,6 +1,6 @@
 import { PtyState } from "./pty.ts"
 import { RpcState, type RpcEvent } from "./rpc.ts"
-import { listAllSessionsGrouped, listSessions, deleteSession, generateNewSessionPath } from "./sessions.ts"
+import { listAllSessionsGrouped, listSessions, deleteSession, ensureSessionDir } from "./sessions.ts"
 import { workspaceTree, workspaceReadFile } from "./workspace.ts"
 import { existsSync } from "node:fs"
 import { join, dirname } from "node:path"
@@ -106,8 +106,8 @@ async function fetchHandler(
     if (path === "/api/sessions/new" && req.method === "GET") {
       const q = getQuery(url)
       if (!q.cwd) return errorResponse("Missing cwd")
-      const sessionPath = generateNewSessionPath(q.cwd)
-      return json({ path: sessionPath })
+      const dir = ensureSessionDir(q.cwd)
+      return json({ dir })
     }
     if (path === "/api/sessions/flat" && req.method === "GET") {
       return json(listSessions())
