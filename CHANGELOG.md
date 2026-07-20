@@ -1,5 +1,23 @@
 # Pichamber Changelog
 
+## 0.3.0 - 2026-07-20
+
+### Release
+- First public npm release as the scoped package `@amagicpear/pichamber`.
+- Added a `pichamber` bin entry that launches the backend via Bun.
+- Added `prepublishOnly` script that runs `check` + `build` before publish.
+- Added `.npmignore` to keep the published surface to `dist/`, `src-server/`, `bin/`, `assets/`, and the top-level docs.
+
+### Internal (since 0.2.0)
+- Subscribed to Pi model / thinking-level events instead of polling `get_state` round-trips; Pi is now the single source of truth.
+- Switched the frontend end-to-end to Pi's native types — no local `ChatMessage` / `ModelInfo` / `reduceRuntimeEvent` clones remain.
+- Removed `clampThinkingLevel` (Pi clamps via events) and added the per-model `thinkingLevelMap` filter; reasoning-level UI now matches exactly what the selected model supports.
+- Loaded models globally instead of once per session.
+- Fixed session / model / thinking-level lifecycle bugs around mid-session switches.
+- Fixed WebSocket race on session start: now awaits socket open before sending commands, with a 10s open timeout and 15s start deadline.
+- Aligned server-side CORS on every HTTP response (Vite dev origin → Bun backend).
+- Resize rAF throttling plus `React.memo` on `Message` / `ChatView` plus `content-visibility: auto` for large-session rendering.
+
 ## 0.2.0 - 2026-07-20
 
 ### Architecture

@@ -4,7 +4,7 @@
 
 Pichamber is a browser-based interface for the [Pi Coding Agent](https://github.com/badlogic/pi-mono). It combines Pi's extension-first RPC runtime with a project, session, chat, tool, file, and terminal workflow inspired by OpenChamber — all running in a browser tab, served by a local Bun/TypeScript backend.
 
-No Electron, no Tauri: just `bun run dev:all` and open `localhost:1420`.
+No Electron, no Tauri: just install and open `localhost:1420`.
 
 ## Product direction
 
@@ -39,15 +39,37 @@ Browser ──fetch/WS──> Bun/TypeScript HTTP server ──stdin/stdout─�
 - **Backend**: Bun/TypeScript HTTP + WebSocket server, serves frontend dist in production
 - **No desktop framework**: no Electron, no Tauri — just a browser tab
 
-## Development
+## Requirements
 
-Prerequisites: Node.js 22+, Bun 1.3+, and an installed Pi CLI.
+Pichamber's backend runs on Bun and shells out to the Pi CLI. Install both before continuing:
+
+- Node.js 22+ (only for `npx pichamber`; not needed if you use Bun)
+- [Bun](https://bun.sh) 1.3+
+- [Pi Coding Agent CLI](https://github.com/badlogic/pi-mono) — install per its README
+
+## Installing the published release
 
 ```bash
-bun install
-bun run dev            # Vite dev server (frontend only)
-bun run dev:all        # Full stack (Vite + backend, starts on localhost:1420)
+# Once on the system
+npm install -g @amagicpear/pichamber
+
+# Start the backend (Bun must be installed and on PATH)
+pichamber
 ```
+
+The launcher opens Pichamber at <http://localhost:1420/>. Use the workspace picker in the sidebar to point at a project directory.
+
+## Developing from source
+
+```bash
+git clone https://github.com/AMagicPear/pichamber.git
+cd pichamber
+bun install
+bun run dev            # Vite dev server (frontend only, on :5173)
+bun run dev:all        # Full stack (Vite + backend, served on :1420)
+```
+
+The Bun backend uses `src-server/server.ts` and spawns Pi processes via stdin/stdout. See `AGENTS.md` for the project's copy-from-Pi conventions.
 
 ## Verification
 
@@ -57,7 +79,23 @@ bun run test           # Vitest
 bun run build          # Build frontend to dist/
 ```
 
-The frontend is built separately (`bun run build`) and served by the Bun backend in production mode.
+In production the backend serves the built `dist/` directory from the same origin, so the dev-mode cross-origin setup disappears at runtime.
+
+## Releasing
+
+This repository is published to npm as `@amagicpear/pichamber`. To publish a new version:
+
+```bash
+# 1. Update CHANGELOG.md and any version-bumped identifiers.
+# 2. Run the safety gate that mirrors `prepublishOnly`:
+bun run check && bun run build
+# 3. Tag and publish:
+git tag v0.x.y
+npm login                 # one-time; only the owner of @amagicpear can publish
+npm publish --access public
+```
+
+`prepublishOnly` reruns `check` + `build` automatically, so an accidental `npm publish` on a dirty tree is hard to make.
 
 ## Reference projects
 

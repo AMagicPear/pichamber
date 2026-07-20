@@ -1,0 +1,40 @@
+# Source files — published bundle is `dist/` (frontend) + `src-server/` (backend).
+src/
+tests/
+scripts/
+docs/
+
+# Build / dev configs — only the built output ships.
+vite.config.ts
+tsconfig.json
+tsconfig.app.json
+tsconfig.node.json
+eslint.config.js
+vitest.config.ts
+
+# Internal docs that don't belong in an installed package.
+AGENTS.md
+PLAN.md
+complex-output.md
+
+# Index template (Vite-specific, irrelevant to the published backend).
+index.html
+
+# Workspace-local Rust ghosts.
+Cargo.toml
+Cargo.lock
+
+# Tooling caches / repo metadata.
+.git/
+.gitignore
+.github/
+.bun/
+.bun.install/
+.vite/
+
+# Keep the screenshot/icon under assets/.
+!assets/
+
+# Don't ship lockfiles from this project's toolchain.
+bun.lock
+package-lock.json

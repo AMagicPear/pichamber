@@ -1,16 +1,55 @@
 {
-  "name": "pichamber",
-  "version": "0.2.0",
-  "private": true,
-  "type": "module",
+  "name": "@amagicpear/pichamber",
+  "version": "0.3.0",
   "description": "A browser-based workspace for the Pi Coding Agent",
   "license": "MIT",
+  "type": "module",
+  "author": {
+    "name": "AMagicPear",
+    "url": "https://github.com/AMagicPear"
+  },
+  "keywords": [
+    "pi",
+    "pi-coding-agent",
+    "coding-agent",
+    "ai",
+    "assistant",
+    "ide",
+    "workspace",
+    "bun"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AMagicPear/pichamber.git"
+  },
+  "homepage": "https://github.com/AMagicPear/pichamber#readme",
+  "bugs": {
+    "url": "https://github.com/AMagicPear/pichamber/issues"
+  },
+  "bin": {
+    "pichamber": "bin/pichamber.js"
+  },
+  "files": [
+    "dist",
+    "src-server",
+    "bin",
+    "assets",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "dev": "vite",
     "serve": "bun run src-server/server.ts",
     "dev:all": "bun run scripts/dev-all.ts",
     "build:frontend": "tsc -b && vite build",
     "build": "bun run build:frontend",
+    "prepublishOnly": "bun run check && bun run build",
     "check": "tsc -b --pretty false && eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -26,8 +65,6 @@
     "highlight.js": "^11.11.1",
     "katex": "^0.18.1",
     "lucide-react": "^0.468.0",
-    "marked": "^18.0.6",
-    "morphdom": "^2.7.8",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "remend": "^1.3.0",
@@ -59,7 +96,8 @@
     "vitest": "^3.2.4"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "bun": ">=1.3"
   },
   "packageManager": "bun@1.3.14"
 }
