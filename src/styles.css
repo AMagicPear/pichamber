@@ -299,8 +299,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .chat-scroll { min-height: 0; flex: 1; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
 
 /* === Empty chat state (OpenChamber centered logo) ====================== */
-.empty-chat { width: 100%; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 60px 24px 220px; animation: empty-fade-in var(--motion-slow) var(--motion-ease) both; }
-.chat-loading { width: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 60px 24px 220px; background: var(--background); }
+.empty-chat { width: 100%; min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 24px; animation: empty-fade-in var(--motion-slow) var(--motion-ease) both; }
+.chat-loading { width: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 24px; background: var(--background); }
 .chat-loading::after { content: ''; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; opacity: .6; }
 .empty-stack { width: min(640px, 100%); display: flex; flex-direction: column; align-items: center; gap: 26px; text-align: center; }
 .empty-logo { width: 72px; height: 72px; display: grid; place-items: center; border-radius: 14px; background: var(--surface-raised); box-shadow: 0 1px 0 var(--border), 0 8px 22px color-mix(in oklch, var(--foreground) 6%, transparent); animation: chip-rise 420ms var(--motion-ease) both; }
