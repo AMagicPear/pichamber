@@ -1,7 +1,6 @@
-import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync, createReadStream } from "node:fs"
+import { readdirSync, statSync, readFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs"
 import { join, basename, resolve, normalize } from "node:path"
 import { homedir } from "node:os"
-import { createInterface } from "node:readline"
 
 export interface ProjectSessions {
   cwd: string
@@ -71,37 +70,29 @@ function parseSession(filePath: string): SessionInfo | undefined {
   let tokens = 0
   let cost = 0
 
-  try {
-    const rl = createInterface({
-      input: createReadStream(filePath, { encoding: "utf8" }),
-      crlfDelay: Infinity,
-    })
-    let firstLine = true
-    for (const rawLine of rl) {
-      if (firstLine) { firstLine = false; continue }
-      if (!rawLine.trim()) continue
-      let value: any
-      try { value = JSON.parse(rawLine) } catch { continue }
+  const content = readFileSync(filePath, "utf8")
+  const lines = content.split("\n")
+  let firstLine = true
+  for (const rawLine of lines) {
+    if (firstLine) { firstLine = false; continue }
+    if (!rawLine.trim()) continue
+    let value: any
+    try { value = JSON.parse(rawLine) } catch { continue }
 
-      // Name: Pi writes it via session_info entries, but also on message
-      // entries (as name/sessionName). Check all sources.
-      if (name === undefined) {
-        name = value.name ?? value.sessionName ?? undefined
-      }
-      if (!name && value.type === "session_info") {
-        name = value.name?.trim() || undefined
-      }
-      if (value.type === "message" || value.role !== undefined) {
-        messageCount += 1
-      }
-      const usage = value.message?.usage ?? value.usage
-      if (usage) {
-        tokens += usage.totalTokens ?? usage.total_tokens ?? 0
-        cost += usage.cost?.total ?? usage.cost ?? 0
-      }
+    if (name === undefined) {
+      name = value.sessionName ?? value.name ?? undefined
     }
-  } catch {
-    // If streaming read fails, fall back to what we have.
+    if (value.type === "session_info" && value.name) {
+      name = value.name.trim()
+    }
+    if (value.type === "message" || value.role !== undefined) {
+      messageCount += 1
+    }
+    const usage = value.message?.usage ?? value.usage
+    if (usage) {
+      tokens += usage.totalTokens ?? usage.total_tokens ?? 0
+      cost += usage.cost?.total ?? usage.cost ?? 0
+    }
   }
 
   return {
