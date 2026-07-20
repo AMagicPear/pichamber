@@ -10,19 +10,18 @@ import { toast } from "sonner";
 import { closeRuntime, getRuntime } from "./registry";
 import { applyEvent, initialView } from "./events";
 import {
-  createSession,
   deleteSession as apiDeleteSession,
   listAllSessionsGrouped,
   workspaceReadFile,
 } from "../api/client";
-import type { AgentMessage, Model, ThinkingLevel } from "./types";
+import type { AgentMessage, Model, RpcSessionState, ThinkingLevel } from "./types";
 import { useAppStore } from "../stores/app-store";
 
 const SESSION_PREFIX = "pi:";
 
 /** Stable id derived from a session file path. Pi encodes the session id in
  *  the filename (`<timestamp>_<id>.jsonl`); we just extract it. */
-function keyFromSessionPath(path: string): string {
+export function keyFromSessionPath(path: string): string {
   const file = path.split("/").pop() ?? path;
   const stem = file.endsWith(".jsonl") ? file.slice(0, -6) : file;
   const underscore = stem.lastIndexOf("_");
@@ -31,8 +30,15 @@ function keyFromSessionPath(path: string): string {
 
 export function usePichamber() {
   const activeSessionId = useAppStore((s) => s.activeSessionId);
-  const sessions = useAppStore((s) => s.sessions);
-  const activeSession = sessions.find((s) => s.id === activeSessionId);
+  // Read only what we need from sessions to avoid unstable object references.
+  const activeProjectId = useAppStore((s) => {
+    const session = s.sessions.find((t) => t.id === s.activeSessionId);
+    return session?.projectId ?? null;
+  });
+  const activeSessionPath = useAppStore((s) => {
+    const session = s.sessions.find((t) => t.id === s.activeSessionId);
+    return session?.sessionPath;
+  });
 
   // ─── Subscribe to Pi events for the active session ────────────────────
   useEffect(() => {
@@ -60,27 +66,17 @@ export function usePichamber() {
       if (event.type === "entry_appended" || event.type === "session_info_changed" || event.type === "agent_end") {
         listAllSessionsGrouped().then((groups) => useAppStore.getState().setSessionGroups(groups)).catch(() => undefined);
       }
-      // New session: Pi gave us a file path via get_state.
-      if (event.type === "agent_end") {
-        client.request<{ sessionFile?: string }>({ type: "get_state" }).then((s) => {
-          if (s.sessionFile) {
-            const tab = useAppStore.getState().sessions.find((t) => t.id === activeSessionId);
-            if (tab && !tab.sessionPath) {
-              useAppStore.getState().upsertSession({ ...tab, sessionPath: s.sessionFile });
-            }
-          }
-        }).catch(() => undefined);
-      }
     });
     return () => { unsub(); };
   }, [activeSessionId]);
 
   // ─── Connect + load history when the active session changes ───────────
   useEffect(() => {
-    if (!activeSessionId || !activeSession?.sessionPath || !activeSession.projectId) return;
-    const client = getRuntime(activeSessionId);
-    const cwd = activeSession.projectId;
-    const sessionPath = activeSession.sessionPath;
+    if (!activeSessionId || !activeProjectId) return;
+    const sessionId = activeSessionId; // capture stable snapshot
+    const client = getRuntime(sessionId);
+    const cwd = activeProjectId;
+    const sessionPath = activeSessionPath;
     let cancelled = false;
 
     useAppStore.getState().setSessionLoading(true);
@@ -91,17 +87,41 @@ export function usePichamber() {
       try {
         await client.start(cwd, useAppStore.getState().piPath || undefined);
         if (cancelled) return;
-        await client.request({ type: "switch_session", sessionPath });
-        if (cancelled) return;
-        const history = await client.request<{ messages: AgentMessage[] }>({ type: "get_messages" });
-        if (cancelled) return;
-        useAppStore.getState().setView((prev) => ({ ...prev, messages: history.messages ?? [] }));
-        const sessionState = await client.request<{ state?: import("./types").RpcSessionState }>({ type: "get_state" }).catch(() => null);
-        if (cancelled) return;
-        if (sessionState?.state) useAppStore.getState().setState(sessionState.state);
-        if (!useAppStore.getState().models.length) {
-          const data = await client.request<{ models: Model[] }>({ type: "get_available_models" }).catch(() => ({ models: [] }));
-          if (!cancelled && data.models.length) useAppStore.getState().setModels(data.models);
+
+        // Fetch models once per app lifetime, using the first session's Pi
+        // process (which has the correct cwd for provider config).
+        if (!useAppStore.getState().models.length && !useAppStore.getState().modelsError) {
+          const data = await client.request<{ models: Model[] }>({ type: "get_available_models" }).catch(() => ({ models: [] as Model[] }));
+          if (!cancelled && data.models.length) {
+            useAppStore.getState().setModels(data.models);
+          } else if (!cancelled) {
+            useAppStore.getState().setModelsError("Could not load models from Pi");
+          }
+        }
+
+        if (sessionPath) {
+          await client.request({ type: "switch_session", sessionPath });
+          if (cancelled) return;
+
+          const history = await client.request<{ messages: AgentMessage[] }>({ type: "get_messages" });
+          if (cancelled) return;
+          // Dedup by role + timestamp: forked sessions may carry duplicate
+          // toolResult entries from Pi's branch copy process.
+          const deduped = (history.messages ?? []).filter(
+            (m, i, arr) =>
+              i ===
+              arr.findIndex(
+                (m2) => m2.role === m.role && (m2 as { timestamp: number }).timestamp === (m as { timestamp: number }).timestamp,
+              ),
+          );
+          useAppStore.getState().setView((prev) => ({ ...prev, messages: deduped }));
+
+          // get_state returns data: RpcSessionState directly
+          const sessionState = await client.request<RpcSessionState>({ type: "get_state" }).catch(() => null);
+          if (cancelled) return;
+          if (sessionState) {
+            useAppStore.getState().mergeViewState(sessionState);
+          }
         }
       } catch (error) {
         if (!cancelled) useAppStore.getState().setError(error instanceof Error ? error.message : String(error));
@@ -110,7 +130,7 @@ export function usePichamber() {
       }
     })();
     return () => { cancelled = true; };
-  }, [activeSessionId, activeSession?.sessionPath, activeSession?.projectId]);
+  }, [activeSessionId, activeProjectId, activeSessionPath]);
 
   // ─── Actions (UI intent → Pi RPC) ─────────────────────────────────────
   const sendPrompt = (text: string, images?: unknown[], behavior: "steer" | "followUp" = "followUp") => {
@@ -122,7 +142,13 @@ export function usePichamber() {
 
   const pickModel = (model: Model) => {
     useAppStore.getState().setSelectedModel(model);
-    if (activeSessionId) getRuntime(activeSessionId).request({ type: "set_model", provider: model.provider, modelId: model.id }).catch(() => undefined);
+    if (activeSessionId) {
+      // set_model response includes the confirmed Model from Pi
+      getRuntime(activeSessionId)
+        .request<Model>({ type: "set_model", provider: model.provider, modelId: model.id })
+        .then((confirmed) => useAppStore.getState().setSelectedModel(confirmed))
+        .catch(() => undefined);
+    }
   };
 
   const setThinking = (level: ThinkingLevel) => {
@@ -159,19 +185,44 @@ export function usePichamber() {
     useAppStore.getState().closeSession(activeSessionId);
   };
 
+  /** Create a new session using Pi's `new_session` RPC. */
   const newSession = async (cwd: string) => {
-    await createSession(cwd).catch(() => undefined);
-    // We don't have a session file yet — open a tab keyed by cwd. Pi will
-    // create the file on first prompt and we'll get the path from
-    // `get_state.sessionFile` (see agent_end handler above).
-    const key = `${SESSION_PREFIX}new:${cwd}:${Date.now()}`;
-    useAppStore.getState().upsertSession({
-      id: key,
-      projectId: cwd,
-      title: `New session`,
-      running: false,
-      unread: false,
-    });
+    // Use a temporary client to call new_session via Pi RPC.
+    const tempKey = `${SESSION_PREFIX}new:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const client = getRuntime(tempKey);
+    try {
+      await client.start(cwd, useAppStore.getState().piPath || undefined);
+
+      // Pi creates the .jsonl file and returns whether it was cancelled.
+      const result = await client.request<{ cancelled: boolean }>({ type: "new_session" });
+      if (result.cancelled) {
+        await closeRuntime(tempKey);
+        return;
+      }
+
+      // Get the session metadata (sessionFile path, sessionId, sessionName).
+      const state = await client.request<RpcSessionState>({ type: "get_state" });
+      const sessionPath = state.sessionFile;
+      const sessionId = sessionPath ? keyFromSessionPath(sessionPath) : tempKey;
+
+      // Clean up the temporary client.
+      await closeRuntime(tempKey);
+
+      useAppStore.getState().upsertSession({
+        id: sessionId,
+        projectId: cwd,
+        title: state.sessionName || `Session ${state.sessionId.slice(0, 8)}`,
+        sessionPath,
+        running: false,
+        unread: false,
+      });
+
+      // Refresh sidebar to show the new session.
+      listAllSessionsGrouped().then((groups) => useAppStore.getState().setSessionGroups(groups)).catch(() => undefined);
+    } catch (error) {
+      await closeRuntime(tempKey).catch(() => undefined);
+      toast.error(error instanceof Error ? error.message : "Failed to create session");
+    }
   };
 
   const openSession = (sessionPath: string, cwd: string, title: string) => {

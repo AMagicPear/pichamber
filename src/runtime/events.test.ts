@@ -76,12 +76,16 @@ describe("applyEvent", () => {
     expect(v.uiRequest?.method).toBe("confirm"); // unchanged
   });
 
-  it("mirrors thinking_level_changed and model_select into state", () => {
+  it("mirrors thinking_level_changed into state", () => {
     let v = initialView();
     v = applyEvent(v, { type: "thinking_level_changed", level: "high" });
-    v = applyEvent(v, { type: "model_select", model: { id: "m1", name: "M1", api: "anthropic-messages", provider: "anthropic", baseUrl: "x", reasoning: true, input: ["text"], contextWindow: 200000, maxTokens: 8192 } });
     expect(v.state.thinkingLevel).toBe("high");
-    expect(v.state.model?.id).toBe("m1");
+  });
+
+  it("unknown event types are silently ignored", () => {
+    const v = initialView();
+    const next = applyEvent(v, { type: "some_unknown_event" });
+    expect(next).toBe(v); // same reference — nothing changed
   });
 });
 

@@ -18,8 +18,10 @@ interface ClientContext {
 let piPathCached: string | undefined;
 
 async function resolvePi(piPath?: string): Promise<string> {
+  // Don't cache explicit paths (user may change config).
+  if (piPath?.trim()) return findPi(piPath);
   if (piPathCached) return piPathCached;
-  piPathCached = await findPi(piPath);
+  piPathCached = await findPi();
   return piPathCached;
 }
 

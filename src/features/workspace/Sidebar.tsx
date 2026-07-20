@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Archive, ChevronDown, FolderOpen, MoreHorizontal, PanelLeftClose, Pencil, Plus, Search, Settings as SettingsIcon, MessageSquareText } from "lucide-react";
 import { IconButton } from "../../components/IconButton";
-import { deleteSession as apiDeleteSession, selectDirectory } from "../../api/client";
+import { deleteSession as apiDeleteSession, listAllSessionsGrouped, selectDirectory } from "../../api/client";
+import { useAppStore } from "../../stores/app-store";
 import type { PiSessionGroup, SessionInfo } from "../../runtime/types";
 
 interface Props {
@@ -93,12 +94,13 @@ export function Sidebar(props: Props) {
   const handleDeleteSession = async (session: SessionInfo, groupCwd: string) => {
     try {
       await apiDeleteSession(session.path);
+      // Refresh the sidebar immediately — Pi doesn't emit an event for
+      // file deletion, so the stale row would otherwise persist.
+      listAllSessionsGrouped().then((groups) => useAppStore.getState().setSessionGroups(groups)).catch(() => undefined);
     } catch (error) {
       console.warn("Failed to delete session:", error);
     }
     setOpenMenuKey(null);
-    // The server-side group will refresh on the next event; for now just
-    // clear the menu so the row disappears.
     void groupCwd;
   };
 

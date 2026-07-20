@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useAppStore } from "./app-store";
+import { initialView } from "../runtime/events";
 
 describe("app-store", () => {
   beforeEach(() => {
     useAppStore.setState({
       sessions: [],
-      view: undefined as never,
+      view: initialView(),
       error: undefined,
       uiRequest: undefined,
     });

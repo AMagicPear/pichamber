@@ -15,7 +15,6 @@
 import type {
   AgentMessage,
   AssistantMessage,
-  Model,
   RpcExtensionUIRequest,
   RpcSessionState,
   RunningTool,
@@ -83,7 +82,11 @@ export function applyEvent(prev: SessionView, event: RuntimeEvent): SessionView 
   switch (t) {
     case "message_start": {
       const message = (event as { message: AgentMessage }).message;
-      return { ...prev, messages: [...prev.messages, message] };
+      // Dedup: when switching sessions, Pi may emit message_start for
+      // history entries that were already loaded by get_messages, and the
+      // async timing may cause them to arrive after the view was replaced.
+      // Use replaceByTimestamp to silently skip if already present.
+      return { ...prev, messages: replaceByTimestamp(prev.messages, message) };
     }
     case "message_update": {
       const message = (event as { message: AgentMessage }).message;
@@ -165,10 +168,6 @@ export function applyEvent(prev: SessionView, event: RuntimeEvent): SessionView 
     case "thinking_level_changed": {
       const level = (event as { level: ThinkingLevel }).level;
       return { ...prev, state: { ...prev.state, thinkingLevel: level } };
-    }
-    case "model_select": {
-      const model = (event as unknown as { model: Model }).model;
-      return { ...prev, state: { ...prev.state, model } };
     }
     case "session_info_changed": {
       const name = (event as { name: string | undefined }).name;

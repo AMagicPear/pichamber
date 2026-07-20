@@ -7,16 +7,14 @@ import type {
   PiSessionGroup,
   Project,
   RpcExtensionUIRequest,
-  RpcSessionState,
   SessionTab,
   ThinkingLevel,
 } from "../runtime/types";
 import { initialView } from "../runtime/events";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// pichamber's only persistent state is UI preferences and the active session
-// pointer. Everything else (messages, models, thinking level, running tools)
-// is owned by Pi and mirrored from events through `use-pichamber`.
+// pichamber's store: UI preferences (persisted) + session view (transient).
+// Pi owns all domain state; pichamber mirrors it in `view` by folding events.
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AppState {
@@ -31,14 +29,15 @@ interface AppState {
   activeProjectId: string | null;
   projects: Project[];
 
-  // Mirror of Pi's `get_state` response.
-  state: RpcSessionState;
-
-  // Live view of the active session — built by folding Pi events.
+  // Live view of the active session — THE single source of truth.
+  // Inlines RpcSessionState (thinkingLevel, model, isStreaming, etc.)
+  // plus messages, runningTools, uiRequest, error.
   view: SessionView;
 
-  // Available models, fetched once from Pi.
+  // Available models, fetched once at app startup.
   models: Model[];
+  // Whether the initial model bootstrap failed.
+  modelsError?: string;
 
   // Current UI request from Pi, if any.
   uiRequest?: RpcExtensionUIRequest;
@@ -65,9 +64,11 @@ interface AppState {
   closeSession(id: string): void;
   upsertSession(tab: SessionTab): void;
   setProjects(projects: Project[]): void;
-  setState(state: RpcSessionState): void;
+  /** Merge Pi state fields into the live view.state. Used after get_state RPC. */
+  mergeViewState(patch: Partial<SessionView["state"]>): void;
   setView(view: SessionView | ((prev: SessionView) => SessionView)): void;
   setModels(models: Model[]): void;
+  setModelsError(error: string): void;
   setUiRequest(req?: RpcExtensionUIRequest): void;
   setOpenFile(file?: OpenFile): void;
   setError(error?: string): void;
@@ -80,14 +81,16 @@ interface AppState {
   toggleInspector(): void;
   setInspectorWidth(width: number): void;
   toggleTerminal(): void;
+  /** Clean up stale session tabs after zustand rehydration. */
+  cleanupStaleSessions(): void;
 }
 
 const initialState: Omit<AppState,
   | "setSessionGroups" | "setSessionLoading" | "setActiveSession" | "closeSession"
-  | "upsertSession" | "setProjects" | "setState" | "setView" | "setModels" | "setUiRequest"
+  | "upsertSession" | "setProjects" | "mergeViewState" | "setView" | "setModels" | "setModelsError" | "setUiRequest"
   | "setOpenFile" | "setError" | "setPiPath" | "setTheme" | "setThinkingLevel"
   | "setSelectedModel" | "toggleSidebar" | "setSidebarWidth" | "toggleInspector"
-  | "setInspectorWidth" | "toggleTerminal"
+  | "setInspectorWidth" | "toggleTerminal" | "cleanupStaleSessions"
 > = {
   sessionGroups: [],
   sessionLoading: false,
@@ -95,17 +98,6 @@ const initialState: Omit<AppState,
   activeSessionId: null,
   activeProjectId: null,
   projects: [],
-  state: {
-    thinkingLevel: "medium",
-    isStreaming: false,
-    isCompacting: false,
-    steeringMode: "all",
-    followUpMode: "all",
-    sessionId: "",
-    autoCompactionEnabled: true,
-    messageCount: 0,
-    pendingMessageCount: 0,
-  },
   view: initialView(),
   models: [],
   piPath: "",
@@ -137,24 +129,44 @@ export const useAppStore = create<AppState>()(persist((set) => ({
     return { sessions, activeSessionId: tab.id, activeProjectId: tab.projectId };
   }),
   setProjects: (projects) => set({ projects, activeProjectId: projects[0]?.id ?? null }),
-  setState: (state) => set({ state }),
+  mergeViewState: (patch) => set((prev) => ({
+    view: { ...prev.view, state: { ...prev.view.state, ...patch } },
+  })),
   setView: (view) => set((state) => ({ view: typeof view === "function" ? view(state.view) : view })),
-  setModels: (models) => set({ models }),
+  setModels: (models) => set({ models, modelsError: undefined }),
+  setModelsError: (modelsError) => set({ modelsError }),
   setUiRequest: (uiRequest) => set({ uiRequest }),
   setOpenFile: (openFile) => set({ openFile, inspectorOpen: Boolean(openFile) }),
   setError: (error) => set({ error }),
   setPiPath: (piPath) => set({ piPath }),
   setTheme: (theme) => set({ theme }),
-  setThinkingLevel: (thinkingLevel) => set((state) => ({ state: { ...state.state, thinkingLevel } })),
-  setSelectedModel: (model) => set((state) => ({ state: { ...state.state, model } })),
+  setThinkingLevel: (thinkingLevel) => set((state) => ({
+    view: { ...state.view, state: { ...state.view.state, thinkingLevel } },
+  })),
+  setSelectedModel: (model) => set((state) => ({
+    view: { ...state.view, state: { ...state.view.state, model } },
+  })),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarWidth: (sidebarWidth) => set({ sidebarWidth }),
   toggleInspector: () => set((state) => ({ inspectorOpen: !state.inspectorOpen })),
   setInspectorWidth: (inspectorWidth) => set({ inspectorWidth }),
   toggleTerminal: () => set((state) => ({ terminalOpen: !state.terminalOpen })),
+  cleanupStaleSessions: () => set((state) => {
+    // Remove synthetic "pi:new:..." tabs that never got a real sessionPath.
+    const valid = state.sessions.filter(
+      (s) => !s.id.startsWith("pi:new:") || s.sessionPath,
+    );
+    if (valid.length === state.sessions.length) return {};
+    const activeStillValid = valid.some((s) => s.id === state.activeSessionId);
+    return {
+      sessions: valid,
+      activeSessionId: activeStillValid ? state.activeSessionId : valid.at(-1)?.id ?? null,
+    };
+  }),
 }), {
-  name: "pichamber-shell-v2",
+  name: "pichamber-shell-v3",
   partialize: (state) => ({
+    sessions: state.sessions,
     activeSessionId: state.activeSessionId,
     activeProjectId: state.activeProjectId,
     theme: state.theme,

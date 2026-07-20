@@ -28,6 +28,7 @@ export default function App() {
   const isStreaming = state.view.state.isStreaming;
   const thinkingLevel = state.view.state.thinkingLevel;
   const selectedModel = state.view.state.model ?? state.models[0];
+  const modelsError = state.modelsError;
 
   const actions = usePichamber();
 
@@ -48,6 +49,7 @@ export default function App() {
     onResize: state.setInspectorWidth,
   });
 
+  // ─── Startup: load sessions, clean stale tabs ───────────────────────
   useEffect(() => {
     let cancelled = false;
     listAllSessionsGrouped()
@@ -55,7 +57,14 @@ export default function App() {
       .catch(() => undefined);
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.setSessionGroups]);
+  }, []);
+
+  // Clean up stale "pi:new:..." tabs that never got a real sessionPath
+  // (surviving from a previous page load before persist was added).
+  useEffect(() => {
+    state.cleanupStaleSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const dark = state.theme === "dark" || (state.theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -116,6 +125,12 @@ export default function App() {
           <div className="runtime-error">
             <span>{state.error}</span>
             <button onClick={() => state.setError(undefined)}>Dismiss</button>
+          </div>
+        )}
+        {modelsError && (
+          <div className="runtime-error">
+            <span>{modelsError}</span>
+            <button onClick={() => state.setModelsError("")}>Dismiss</button>
           </div>
         )}
         <div className="workspace-body">

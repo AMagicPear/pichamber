@@ -174,6 +174,9 @@ export function deleteSession(sessionPath: string): void {
     throw new Error("Session path must point to a .jsonl file")
   }
   try { unlinkSync(resolvedTarget) } catch (e: any) {
+    // ENOENT means the file was already removed (e.g. by Pi compaction
+    // or session replacement during switch_session). Treat as success.
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return
     throw new Error(`Unable to delete session: ${e.message ?? e}`)
   }
 }
