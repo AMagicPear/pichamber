@@ -33,7 +33,6 @@ export class RpcClient {
   private context?: ClientContext;
   private startInFlight: Promise<void> | null = null;
   connected = false;
-  private stderrTail = "";
 
   constructor(instanceId: string) {
     this.instanceId = instanceId;
@@ -182,9 +181,7 @@ export class RpcClient {
       } catch {
         return this.demoRequest<T>(command);
       }
-      throw new Error(
-        this.recentStderr() || "Pi runtime is not connected",
-      );
+      throw new Error("Pi runtime is not connected");
     }
     const id = `req_${++this.requestSequence}`;
     const payload = { ...command, id };
@@ -213,7 +210,7 @@ export class RpcClient {
         code: undefined,
         error: detail,
       });
-      throw new Error(this.recentStderr() || detail);
+      throw new Error(detail);
     }
     return promise;
   }
@@ -339,10 +336,5 @@ export class RpcClient {
     await this.teardownWs();
     if (this.connected) await stopRpc(this.instanceId).catch(() => undefined);
     this.connected = false;
-    this.stderrTail = "";
-  }
-
-  recentStderr(): string {
-    return this.stderrTail;
   }
 }

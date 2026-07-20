@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { closeRuntime, getRuntime } from "./registry";
 import { normalizeBackendMessages } from "./normalize";
 import { deleteSession as apiDeleteSession, workspaceReadFile, createSession } from "../api/client";
-import type { ModelInfo, OpenFile, ThinkingLevel } from "./types";
+import { type ModelInfo, type OpenFile, type ThinkingLevel, getSupportedThinkingLevels } from "./types";
 import { useAppStore } from "../stores/app-store";
 
 const DEMO_FILES: Record<string, string> = {
@@ -170,6 +170,11 @@ export function usePichamber() {
   const pickModel = useCallback((model: ModelInfo) => {
     const s = useAppStore.getState();
     s.setSelectedModel(model);
+    // Clamp thinking level immediately to avoid showing unsupported option.
+    const supported = getSupportedThinkingLevels(model);
+    if (!supported.includes(s.thinkingLevel)) {
+      s.setThinkingLevel(supported[0]);
+    }
     const key = s.activeSessionId;
     if (key && getRuntime(key).connected) {
       getRuntime(key).request({ type: "set_model", provider: model.provider, modelId: model.id })

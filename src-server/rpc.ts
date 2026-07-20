@@ -15,7 +15,6 @@ interface RpcProcess {
   generation: number
   pid?: number
   eventsSubscribers: Set<(event: RpcEvent) => void>
-  stderrSubscribers: Set<(event: RpcEvent) => void>
 }
 
 export class RpcState {
@@ -107,7 +106,7 @@ export class RpcState {
       generation,
       pid: proc.pid,
       eventsSubscribers: new Set(),
-      stderrSubscribers: new Set(),
+
     }
     this.processes.set(id, rpcProcess)
 
@@ -128,6 +127,7 @@ export class RpcState {
       }
     })()
 
+    // Drain stderr to avoid deadlock — logged to console for debugging.
     const errReader = proc.stderr.getReader()
     ;(async () => {
       let buffer = ""
@@ -137,9 +137,8 @@ export class RpcState {
         buffer += decoder.decode(value, { stream: true })
         let nl: number
         while ((nl = buffer.indexOf("\n")) >= 0) {
-          const line = buffer.slice(0, nl)
+          console.warn(`[pi stderr] ${buffer.slice(0, nl)}`)
           buffer = buffer.slice(nl + 1)
-          this.emit(id, "stderr", line, generation, rpcProcess)
         }
       }
     })()
