@@ -82,7 +82,6 @@ export function usePichamber() {
       state.setModels(modelData.models ?? []);
 
       // Restore the session's model & thinking level from Pi state
-      // Pi returns model as nested object: { model: { provider, id, ... } }
       if (sessionPath) {
         const sessionState = await client.request<{
           model?: { provider: string; id: string };
@@ -98,6 +97,8 @@ export function usePichamber() {
         }
       }
     }
+    // Ensure loading is cleared even if we skipped the start block.
+    state.setSessionLoading(key, false);
     return client;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.activeSessionId]);
@@ -132,7 +133,11 @@ export function usePichamber() {
   const openSession = useCallback((sessionPath: string, cwd: string, title: string) => {
     const key = sessionKey(sessionPath);
     state.openPiSession(key, cwd, title, sessionPath);
-    state.setSessionLoading(key, true);
+    // Only show loading if this session hasn't been loaded before.
+    const existing = state.messages[key];
+    if (!existing || existing.length === 0) {
+      state.setSessionLoading(key, true);
+    }
     activeSessionCwd.current = cwd;
   }, [state]);
 
