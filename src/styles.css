@@ -27,6 +27,22 @@
   --focus: oklch(0.6 0.15 230);
   --radius: 0.625rem;
 
+  /* Shiki markdown syntax tokens (vendored from OpenChamber — referenced by
+     markdownShikiThemeDefinition. Token color is set on each highlighted span
+     so a theme switch only repaints the variables, not the rendered HTML). */
+  --md-syntax-foreground: oklch(0.25 0.02 40);
+  --md-syntax-comment: oklch(0.5 0.01 70);
+  --md-syntax-string: oklch(0.5 0.18 145);
+  --md-syntax-number: oklch(0.55 0.18 55);
+  --md-syntax-keyword: oklch(0.6 0.19 290);
+  --md-syntax-operator: oklch(0.45 0.02 50);
+  --md-syntax-function: oklch(0.55 0.17 240);
+  --md-syntax-type: oklch(0.58 0.16 265);
+  --md-syntax-variable: oklch(0.25 0.02 40);
+  --md-syntax-property: oklch(0.55 0.14 265);
+  --md-syntax-inserted: oklch(0.5 0.18 145);
+  --md-syntax-deleted: oklch(0.55 0.25 25);
+
   --titlebar-height: 48px;
   --titlebar-inset: 14px;
   --motion-fast: 140ms;
@@ -71,6 +87,20 @@
   --info: oklch(0.7 0.12 230);
   --terminal: oklch(0.13 0.01 30);
   --focus: oklch(0.7 0.12 230);
+
+  /* Dark Shiki syntax tokens — see the light-mode block for context. */
+  --md-syntax-foreground: oklch(0.85 0.02 90);
+  --md-syntax-comment: oklch(0.55 0.01 70);
+  --md-syntax-string: oklch(0.78 0.14 145);
+  --md-syntax-number: oklch(0.8 0.14 65);
+  --md-syntax-keyword: oklch(0.78 0.16 290);
+  --md-syntax-operator: oklch(0.7 0.02 80);
+  --md-syntax-function: oklch(0.78 0.14 240);
+  --md-syntax-type: oklch(0.78 0.14 265);
+  --md-syntax-variable: oklch(0.85 0.02 90);
+  --md-syntax-property: oklch(0.78 0.13 265);
+  --md-syntax-inserted: oklch(0.78 0.14 145);
+  --md-syntax-deleted: oklch(0.7 0.18 25);
 }
 
 * { box-sizing: border-box; }
