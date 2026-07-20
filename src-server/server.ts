@@ -2,8 +2,18 @@ import { PtyState } from "./pty.ts"
 import { RpcState, type RpcEvent } from "./rpc.ts"
 import { listAllSessionsGrouped, listSessions, deleteSession, ensureSessionDir } from "./sessions.ts"
 import { workspaceTree, workspaceReadFile } from "./workspace.ts"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join, dirname } from "node:path"
+
+// Resolve version from the package.json shipped alongside the server. One
+// source of truth — `npm version` bumps this, the server prints it on boot.
+const PICHAMBER_VERSION = (() => {
+  try {
+    return JSON.parse(readFileSync(join(import.meta.dirname, "..", "package.json"), "utf8")).version as string
+  } catch {
+    return "unknown"
+  }
+})()
 
 class AppError extends Error {}
 
@@ -82,7 +92,7 @@ async function fetchHandler(
 
   try {
     if (path === "/api/health") {
-      return json({ status: "ok", version: "0.2.0" })
+      return json({ status: "ok", version: PICHAMBER_VERSION })
     }
 
     if (path === "/api/sessions" && req.method === "GET") {
@@ -279,7 +289,7 @@ export function startServer(): void {
   })
 
   const url = `http://localhost:${port}`
-  console.log(`Pichamber v0.2.0 listening on ${url}`)
+  console.log(`Pichamber v${PICHAMBER_VERSION} listening on ${url}`)
 
   if (!process.env.PICHAMBER_DEV) {
     if (process.platform === "darwin") {
