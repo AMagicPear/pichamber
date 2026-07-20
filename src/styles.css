@@ -496,8 +496,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .spin { animation: spin 1s linear infinite; }
 
 /* === Composer (OpenChamber-style) ====================================== */
-.composer-wrap { width: min(48rem, 100%); margin: 0 auto; padding: 0 0 16px; pointer-events: auto; }
-.composer { width: min(48rem, 100%); margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 6px 22px color-mix(in oklch, var(--foreground) 7%, transparent); transition: border-color var(--motion-base) var(--motion-ease), box-shadow var(--motion-base) var(--motion-ease), transform var(--motion-base) var(--motion-ease); animation: slide-up var(--motion-base) var(--motion-ease) both; }
+.composer-wrap { max-width: 48rem; width: 100%; margin: 0 auto; padding: 0 12px 16px; pointer-events: auto; }
+.composer { width: 100%; margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-raised); box-shadow: 0 6px 22px color-mix(in oklch, var(--foreground) 7%, transparent); transition: border-color var(--motion-base) var(--motion-ease), box-shadow var(--motion-base) var(--motion-ease), transform var(--motion-base) var(--motion-ease); animation: slide-up var(--motion-base) var(--motion-ease) both; }
 .composer:focus-within { border-color: color-mix(in oklch, var(--focus) 55%, var(--border)); box-shadow: 0 0 0 3px color-mix(in oklch, var(--focus) 22%, transparent), 0 8px 24px color-mix(in oklch, var(--foreground) 9%, transparent); transform: translateY(-1px); }
 .composer textarea { width: 100%; min-height: 56px; max-height: 180px; resize: none; padding: 14px 14px 6px; border: 0; outline: 0; background: transparent; color: var(--foreground); line-height: 1.5; }
 .composer textarea::placeholder { color: var(--text-faint); }
