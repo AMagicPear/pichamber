@@ -254,12 +254,11 @@ SDK 推过来的事件原样转发。`event` 字段是 SDK 的 `AgentSessionEven
 // packages/server/src/ws.ts
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { ServerWebSocket } from "bun";
-import { upgradeWebSocket } from "hono/bun";
-import type { WSContext } from "hono/ws";
 import { deactivateSession, getSession } from "./session";
 
-// hono/bun 每次事件都 new WSContext 包装器,Set 必须用底层 Bun WS (ws.raw) 做身份
-type BunWS = ServerWebSocket<unknown>;
+// 每个 ws 自带 data.sessionId(Bun.serve upgrade 时塞入)
+type WSData = { sessionId: string };
+type BunWS = ServerWebSocket<WSData>;
 
 const socketsBySession = new Map<string, Set<BunWS>>();
 
@@ -274,57 +273,88 @@ const attachListener = (sessionId: string, session: AgentSession) => {
 };
 
 // Y 策略:最后一个 ws 关就 dispose
-const detachListener = (sessionId: string, ws: WSContext) => {
+const detachListener = (sessionId: string, ws: BunWS) => {
   const sockets = socketsBySession.get(sessionId);
   if (!sockets) return;
-  const raw = ws.raw as BunWS | undefined;
-  if (raw) sockets.delete(raw);
+  sockets.delete(ws);
   if (sockets.size !== 0) return;
   socketsBySession.delete(sessionId);
   deactivateSession(sessionId);
 };
 
-export const wsHandler = upgradeWebSocket(async (c) => {
-  const sessionId = c.req.param("id")!;
-  return {
-    onOpen: async (_evt, ws) => {
-      const session = await getSession(sessionId);
-      if (!session) {
-        ws.send(JSON.stringify({ type: "error", error: "session not found" }));
-        ws.close();
-        return;
-      }
-      attachListener(sessionId, session);
-      const raw = ws.raw as BunWS | undefined;
-      if (raw) socketsBySession.get(sessionId)!.add(raw);
-      ws.send(JSON.stringify({ type: "ready", sessionId }));
-    },
-    onMessage: async (evt, ws) => {
-      const msg = JSON.parse(evt.data as string);
-      if (msg.type !== "prompt") return;
-      const session = await getSession(sessionId);
-      if (!session) {
-        ws.send(JSON.stringify({ type: "error", error: "session not found" }));
-        return;
-      }
-      session.prompt(msg.message).catch((err) =>
-        ws.send(JSON.stringify({ type: "error", error: String(err) })),
-      );
-    },
-    onClose: (_evt, ws) => {
-      detachListener(sessionId, ws);
-    },
-  };
-});
+export const wsHandlers = {
+  async open(ws: BunWS) {
+    const { sessionId } = ws.data;
+    const session = await getSession(sessionId);
+    if (!session) {
+      ws.send(JSON.stringify({ type: "error", error: "session not found" }));
+      ws.close();
+      return;
+    }
+    attachListener(sessionId, session);
+    socketsBySession.get(sessionId)!.add(ws);
+    ws.send(JSON.stringify({ type: "ready", sessionId }));
+  },
+  async message(ws: BunWS, message: string | Buffer) {
+    const msg = JSON.parse(message as string);
+    if (msg.type !== "prompt") return;
+    const { sessionId } = ws.data;
+    const session = await getSession(sessionId);
+    if (!session) {
+      ws.send(JSON.stringify({ type: "error", error: "session not found" }));
+      return;
+    }
+    session.prompt(msg.message).catch((err: unknown) =>
+      ws.send(JSON.stringify({ type: "error", error: String(err) })),
+    );
+  },
+  close(ws: BunWS) {
+    const { sessionId } = ws.data;
+    detachListener(sessionId, ws);
+  },
+};
 
 // packages/server/src/index.ts
-import { websocket } from "hono/bun";
-app.get("/ws/:id", wsHandler);
-export default {
+import { createSessionWithCwd, deleteSession, getSession, listAllSessions } from "./session";
+import { wsHandlers } from "./ws";
+
+Bun.serve({
   port: 3000,
-  fetch: app.fetch,
-  websocket, // hono/bun 适配器,负责 open/close/message
-};
+  routes: {
+    "/api/health": { GET: () => Response.json({ ok: true }) },
+    "/api/sessions": {
+      GET: async () => Response.json(await listAllSessions()),
+      POST: async (req) => {
+        const { cwd } = (await req.json()) as { cwd: string };
+        const session = await createSessionWithCwd(cwd);
+        return Response.json({ sessionId: session.sessionId });
+      },
+    },
+    "/api/sessions/:id": {
+      GET: async (req) => {
+        const session = await getSession(req.params.id);
+        if (!session) return Response.json({ error: "session not found" }, { status: 404 });
+        return Response.json(session.sessionManager.getEntries());
+      },
+      DELETE: async (req) => {
+        const result = await deleteSession(req.params.id);
+        if (!result.ok) return Response.json({ error: "session not found" }, { status: 404 });
+        return Response.json({ ok: true });
+      },
+    },
+  },
+  fetch(req, server) {
+    const url = new URL(req.url);
+    if (url.pathname.startsWith("/ws/")) {
+      const sessionId = url.pathname.slice(4);
+      const success = server.upgrade(req, { data: { sessionId } });
+      if (success) return undefined;
+      return new Response("WebSocket upgrade failed", { status: 400 });
+    }
+    return new Response("Not found", { status: 404 });
+  },
+  websocket: wsHandlers,
+});
 ```
 
 ### 5.4 前端使用示例
@@ -413,11 +443,17 @@ SDK 的 `SessionManager._persist()` 要等到 **首条 assistant 消息** 才会
 
 **不为之加保质逻辑** — 这不是 bug,是 pi 的设计。“没发过消息的会话”= 不存在。前端如果意外丢失 sessionId,重新 POST 即可。
 
-### 7.4 WSContext 包装器坑点(坑点)
+### 7.4 Bun.serve 直接,不要 Hono(决策)
 
-`hono/bun` 在每次 ws 事件(open/close/message)都会 `new WSContext(...)`,返回不同的包装器对象。如果在 `Set` 里存 `WSContext`,add 和 delete 会命中不同对象 → **永远删除不了**。
+之前用 `hono` + `hono/bun`,走了一圈发现是 over-engineering:
+- 我们锁 Bun runtime,不需要跨运行时抽象
+- 6 个路由 + 1 个 WS,用 Bun.serve 原生 `routes` + `websocket` 足够
+- Hono 的 `WSContext` 包装器本身就是个坑(见原 7.4,已失效)
 
-修复:存底层 `BunWS`(`ws.raw`),不受包装器重建影响。
+切换后:
+- 卸 `hono` 依赖,少一层抽象
+- `ws.ts` 直接 export `{ open, message, close }`,不需要 `upgradeWebSocket` wrapper
+- `ws.data.sessionId` 在 Bun upgrade 时塞入,handlers 直接读,不需要从 context 解析
 
 ### 7.5 还保留为 “暂不做” 的事项
 
@@ -429,7 +465,8 @@ SDK 的 `SessionManager._persist()` 要等到 **首条 assistant 消息** 才会
 
 ## 8. 实现状态
 
-- `packages/server/src/ws.ts` ✅ 方案 A + Y dispose + ws.raw 身份
-- `packages/server/src/index.ts` ✅ 导入 `websocket` 适配器 + `app.get("/ws/:id", wsHandler)`
+- `packages/server/src/ws.ts` ✅ 方案 A + Y dispose + Bun.serve 原生 ws handlers
+- `packages/server/src/index.ts` ✅ `Bun.serve({ routes, fetch, websocket })`
 - `packages/server/src/session.ts` ✅ `deactivateSession(id)` 供 ws.ts 调用
-- 端到端测试:单 ws / 多 ws fan-out / 不存在会话 / dispose 后 GET / prompt 后 GET 均通过
+- 依赖:卸掉 `hono`,只留 SDK + shared
+- 端到端测试:HTTP 6 端点 / 单 ws / 多 ws fan-out / 不存在会话 / dispose 后 GET / prompt 后 GET / DELETE 幂等 均通过

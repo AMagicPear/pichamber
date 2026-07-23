@@ -12,8 +12,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.81.1",
-    "@pichamber/shared": "workspace:*",
-    "hono": "^4.12.31"
+    "@pichamber/shared": "workspace:*"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",

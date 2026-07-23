@@ -1,46 +1,45 @@
-import { Hono } from "hono";
-import { websocket } from "hono/bun";
 import { createSessionWithCwd, deleteSession, getSession, listAllSessions } from "./session";
-import { wsHandler } from "./ws";
+import { wsHandlers } from "./ws";
 
-const app = new Hono();
-
-app.get("/api/health", (context) => context.json({ ok: true }));
-
-// 列出所有已有的会话
-app.get("/api/sessions", async (context) => {
-  const sessions = await listAllSessions();
-  return context.json(sessions);
-});
-
-// 传入一个cwd创建新的会话 并返回ID
-app.post("/api/sessions", async (context) => {
-  const { cwd } = await context.req.json<{ cwd: string }>();
-  const session = await createSessionWithCwd(cwd);
-  return context.json({ sessionId: session.sessionId });
-});
-
-// 根据ID获取会话的信息
-app.get("/api/sessions/:id", async (context) => {
-  const id = context.req.param("id");
-  const session = await getSession(id);
-  if (!session) return context.json({ error: "session not found" }, 404);
-  return context.json(session.sessionManager.getEntries());
-});
-
-// 根据ID删除会话（同时删除本地文件）
-app.delete("/api/sessions/:id", async (context) => {
-  const id = context.req.param("id");
-  const deleted = await deleteSession(id);
-  if (!deleted) return context.json({ error: "session not found" }, 404);
-  return context.json({ ok: true });
-});
-
-// WebSocket：每会话一个连接（详见 docs/realtime.md）
-app.get("/ws/:id", wsHandler);
-
-export default {
+Bun.serve({
   port: 3000,
-  fetch: app.fetch,
-  websocket, // hono/bun 的 websocket 适配器，转发 open/close/message 到 wsHandler
-};
+  routes: {
+    "/api/health": {
+      GET: () => Response.json({ ok: true }),
+    },
+    "/api/sessions": {
+      GET: async () => Response.json(await listAllSessions()),
+      POST: async (req) => {
+        const { cwd } = (await req.json()) as { cwd: string };
+        const session = await createSessionWithCwd(cwd);
+        return Response.json({ sessionId: session.sessionId });
+      },
+    },
+    "/api/sessions/:id": {
+      GET: async (req) => {
+        const session = await getSession(req.params.id);
+        if (!session) return Response.json({ error: "session not found" }, { status: 404 });
+        return Response.json(session.sessionManager.getEntries());
+      },
+      DELETE: async (req) => {
+        const result = await deleteSession(req.params.id);
+        if (!result.ok) return Response.json({ error: "session not found" }, { status: 404 });
+        return Response.json({ ok: true });
+      },
+    },
+  },
+  fetch(req, server) {
+    // WebSocket 升级：/ws/:sessionId
+    const url = new URL(req.url);
+    if (url.pathname.startsWith("/ws/")) {
+      const sessionId = url.pathname.slice(4);
+      const success = server.upgrade(req, { data: { sessionId } });
+      if (success) return undefined;
+      return new Response("WebSocket upgrade failed", { status: 400 });
+    }
+    return new Response("Not found", { status: 404 });
+  },
+  websocket: wsHandlers,
+});
+
+console.log("Server listening on http://localhost:3000");
