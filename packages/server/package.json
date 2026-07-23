@@ -1,0 +1,21 @@
+{
+  "name": "@pichamber/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pichamber/shared": "workspace:*",
+    "hono": "^4.12.31"
+  },
+  "devDependencies": {
+    "@tsconfig/node24": "^24.0.4",
+    "typescript": "~6.0.0"
+  }
+}

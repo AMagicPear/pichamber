@@ -1,54 +1,95 @@
 # pichamber
 
-This template should help get you started developing with Vue 3 in Vite.
+A monorepo workspace for the **pichamber** project, using [Bun](https://bun.sh) workspaces.
 
-## Recommended IDE Setup
+## Project structure
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+```
+pichamber/
+├── package.json              # workspace root, dev orchestration scripts
+├── tsconfig.json             # references all packages
+├── eslint.config.ts          # lint config applied to all packages
+├── .oxlintrc.json
+├── bun.lock
+└── packages/
+    ├── web/                  # Vue 3 + Vite frontend (@pichamber/web)
+    ├── server/               # Bun HTTP server (@pichamber/server)
+    └── shared/               # framework-agnostic shared types/utils (@pichamber/shared)
+```
 
-## Recommended Browser Setup
+| Package                                          | Stack                       | Purpose                                      |
+| ------------------------------------------------ | ---------------------------- | -------------------------------------------- |
+| [`@pichamber/web`](./packages/web)              | Vue 3 (rc) · Vite · Pinia · Vue Router | Browser SPA                              |
+| [`@pichamber/server`](./packages/server)         | Bun runtime                  | HTTP server                                 |
+| [`@pichamber/shared`](./packages/shared)         | TypeScript                   | Types, constants, code shared by web+server  |
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+## Prerequisites
 
-## Type Support for `.vue` Imports in TS
+- [Bun](https://bun.sh) ≥ 1.3
+- Node ≥ 22.18 (only needed for tooling that runs through Node — the server itself uses Bun)
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
+## Setup
 
 ```sh
 bun install
 ```
 
-### Compile and Hot-Reload for Development
+This installs all workspaces' dependencies in one pass thanks to Bun workspaces.
+
+## Daily scripts
+
+Run from the repo root:
 
 ```sh
-bun dev
-```
+# Start web dev server (Vite, http://localhost:5173) AND server (Bun, http://localhost:3000)
+bun run dev
 
-### Type-Check, Compile and Minify for Production
+# Start them individually
+bun run dev:web
+bun run dev:server
 
-```sh
+# Build everything
 bun run build
+
+# Type-check all packages (uses project references)
+bun run type-check
+
+# Run web's Vitest unit tests
+bun run test:unit
+
+# Lint everything (oxlint + eslint)
+bun run lint
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+Per-package scripts use Bun's `--filter`:
 
 ```sh
-bun test:unit
+bun --filter @pichamber/web dev
+bun --filter @pichamber/server start
+bun --filter @pichamber/shared type-check
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+## Conventions
+
+- Vue 3 + Vite + Pinia + Vue Router conventions live in `packages/web/`.
+- The server uses Bun's native `Bun.serve()` HTTP runtime — keep imports Bun-compatible.
+- Anything imported by both `web` and `server` belongs in `packages/shared`.
+- Use TypeScript path aliases within a package (e.g. `@/*` → `packages/web/src/*`), and the `workspace:*` protocol across packages (e.g. `@pichamber/shared`).
+
+## Type-checking with project references
+
+The root `tsconfig.json` references each package via project references. To type-check everything:
 
 ```sh
-bun lint
+bun run type-check
+```
+
+This uses `tsc --build` under the hood for each package.
+
+## Linting
+
+ESLint and oxlint are configured at the root and scan `packages/*/src/**`. Run:
+
+```sh
+bun run lint
 ```

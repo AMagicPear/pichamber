@@ -9,8 +9,9 @@ lerna-debug.log*
 
 node_modules
 .DS_Store
-dist
-dist-ssr
+# Build outputs (any package)
+**/dist
+**/dist-ssr
 coverage
 *.local
 
@@ -37,3 +38,6 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Bun
+packages/server/dist

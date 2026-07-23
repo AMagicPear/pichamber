@@ -1,10 +1,15 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["eslint", "typescript", "unicorn", "oxc", "vue", "vitest"],
+  "plugins": ["typescript", "unicorn", "oxc", "vue", "vitest"],
   "env": {
-    "browser": true
+    "browser": true,
+    "node": true
   },
   "categories": {
     "correctness": "error"
-  }
+  },
+  "ignorePatterns": [
+    "packages/*/node_modules/**",
+    "packages/*/dist/**"
+  ]
 }
