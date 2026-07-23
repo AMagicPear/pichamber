@@ -9,152 +9,173 @@
 ```
 [Vue web]  ──HTTP/WS──▶  [Bun server (Hono)]
                               │
-                              ├─ http/routes.ts         (HTTP 端点, 直接调 SDK)
-                              └─ ws/handler.ts          (WS 协议)
-                                          │
-                                          ▼
-                                    AgentSessionRuntime (官方, lazy 按需建)
+                              ├─ src/index.ts          (HTTP routes + WS handler)
+                              └─ Map<sessionPath, AgentSessionRuntime>
+                                       │
+                                       │ 每个 session 一个 runtime
+                                       ▼
+                                  独立运行的 N 条 session
+                                  (各自的 cwd 来自各自的文件头)
 ```
 
 关键原则:
 
-1. **服务器启动时没有任何 agent 在跑** —— 不调 `createAgentSessionRuntime`
-2. **路由处理函数直接调 SDK** —— 不预先建 service 层,YAGNI
-3. **每个 session 各自一个 runtime** —— 互不影响,切换 session 时可以销毁旧的(只在真的需要时再抽象)
-4. **agent 的 cwd 永远来自 session 文件头** —— 跟在该 session 原本目录运行 `pi` CLI 行为一致
-5. **不预先抽象**:同一函数被多处调用、要缓存、要 mock、SDK 不稳定时才抽
+1. **每个被选中的 session 一个独立 runtime** —— 同时支持多条对话并行(多 tab / 多用户 / 后台任务)
+2. **不调用 `runtime.switchSession()`** —— 每个 runtime 只服务一个 session,不切换
+3. **路由处理函数直接调 SDK** —— 不预先建 service 层,YAGNI
+4. **agent 的 cwd 永远来自 session 文件头** —— 读 `SessionManager.open(path).getHeader().cwd` 传进 `createAgentSessionRuntime`
+5. **不发明新类型**:只用 SDK 已有的 `AgentSessionRuntime`、`AgentSession`、`AgentSessionEvent`
 
 ## 1. HTTP 端点:列 sessions
 
-> **YAGNI 原则**:不要为 `SessionManager.listAll()` 这种一行调用包一层函数/文件。需要抽象的时候自然会抽象。
+> **YAGNI 原则**:不要为 `SessionManager.listAll()` 这种一行调用包一层函数/文件。
 
-### 1.1 修改 `packages/server/src/http/routes.ts`
+### 1.1 修改 `packages/server/src/index.ts`
 
 直接在路由处理函数里调 SDK,**不新建任何 service 文件**:
 
 - `import { SessionManager } from "@earendil-works/pi-coding-agent";`
-- 新增路由 `GET /api/sessions`,handler 里 `return c.json(await SessionManager.listAll());`
-- 新增路由 `GET /api/sessions/:path(*)`,handler 里用 `SessionManager.open(path)` 拿到 manager 后取历史,返回 JSON
+- `GET /api/sessions` → `return c.json(await SessionManager.listAll());`
+- `GET /api/sessions/*` → 用 `c.req.path.slice('/api/sessions/'.length)` + `decodeURIComponent` 拿到 sessionPath,`SessionManager.open(sessionPath).getEntries()` 返回 JSON
 
 ### 1.2 验证
 
 ```bash
 bun --filter @pichamber/server type-check
-bun --filter @pichamber/server dev
+bun --filter @pichamber/server start
 ```
 
 另开终端:
 
 ```bash
+curl localhost:3000/api/health
 curl localhost:3000/api/sessions | jq '.[0].cwd'
-curl 'localhost:3000/api/sessions/<full-path-of-one-session>' | jq '.[0].type'
+SP=$(curl -s localhost:3000/api/sessions | jq -r '.[0].path')
+curl --get "localhost:3000/api/sessions/$(node -e "console.log(encodeURIComponent('$SP'))")" | jq '.[0].type'
 ```
 
-⚠️ 如果 `~/.pi/agent/sessions/` 为空,`listAll()` 返回 `[]`。先用 `pi --mode print "hello"` 跑一下造一个 session 出来。
+⚠️ 如果 `~/.pi/agent/sessions/` 为空,`listAll()` 返回 `[]`。
 
 ### 1.3 何时才考虑抽出 service 文件
-
-出现以下任一情况再抽象(到时候单独讨论,不预先建):
 
 - 同一个调用在多个 route 出现且传参不同
 - 需要包一层做缓存/错误处理/日志
 - 测试需要 mock
 - SDK API 不稳定需要 buffer
 
-## 2. (后续步骤待 Step 1 完成后细化)
+## 2. 已确认的后续步骤
 
-Step 1 跑通后,我们再讨论:
+Step 1 跑通后,接下来按顺序做:
 
-- Lazy agent factory 怎么写(是真的需要,因为要 `Map<path, Runtime>`)
-- 消息发送端点
-- WebSocket 协议
+- **Step 3**: Map<sessionPath, AgentSessionRuntime> 懒加载(每个被选中的 session 一个 runtime)
+- **Step 4**: 消息发送端点(`runtime.session.prompt`)
+- **Step 5**: WebSocket 把 `runtime.session.subscribe(...)` 的事件推给前端
+- (Step 6 web 端,不属于 server 包)
 
-现在不预先设计。
+不再预先设计更多步骤,做一步看一步。
 
-## 3. Lazy agent factory
+## 3. Map<sessionPath, AgentSessionRuntime> 懒加载
 
-### 3.1 新建 `packages/server/src/services/agent.ts`
+### 3.1 修改 `packages/server/src/index.ts`
 
-职责:**按 session 路径**管理 `AgentSessionRuntime` 生命周期。每个路径独立一份。
+在 `app.get(...)` 旁边加:
 
-内部状态:
+- 工厂函数 `createRuntime` **完全照抄** `examples/sdk/13-session-runtime.ts` 的 `CreateAgentSessionRuntimeFactory` lambda
+- `const runtimes = new Map<string, AgentSessionRuntime>()`
+- `async function getRuntime(sessionPath: string): Promise<AgentSessionRuntime>`:
+  - Map 里有就返回
+  - 没有就:读 `SessionManager.open(sessionPath).getHeader().cwd` → `createAgentSessionRuntime(createRuntime, { cwd, agentDir: getAgentDir(), sessionManager: SessionManager.create(cwd) })` → `await runtime.session.bindExtensions({})` → 存入 Map → 返回
+- `async function removeRuntime(sessionPath: string)`:从 Map 取出,`await runtime.dispose()`,从 Map 删
 
-- `Map<sessionPath, RuntimeEntry>` 缓存
-- `RuntimeEntry` 至少包含:
-  - runtime 实例
-  - 当前活跃订阅者集合(`Set<AgentSessionEventListener>`)
-  - session 引用
+**不调 `runtime.switchSession()`** —— 每个 runtime 固定服务一个 session,生命周期跟 session 一一对应。
 
-导出函数:
+### 3.2 操作 runtime(全部都是 SDK 已有的方法)
 
-| 函数 | 签名 | 行为 |
+| 动作 | SDK 调用 | 出处 |
 |---|---|---|
-| `getAgent` | `(sessionPath: string) => Promise<AgentHandle>` | Map 里没有 → 新建(用 session 文件头的 cwd 建 runtime,rebind);有 → 直接返回 |
-| `disposeAgent` | `(sessionPath: string) => Promise<void>` | 清订阅 + `runtime.dispose()` + 从 Map 删 |
+| 建 runtime | `createAgentSessionRuntime(createRuntime, options)` | `core/sdk.ts` |
+| 取当前活跃 session | `runtime.session`(getter) | `core/agent-session-runtime.ts` |
+| 发消息 | `runtime.session.prompt(text)` | `core/agent-session.ts` |
+| 订阅事件 | `runtime.session.subscribe(listener) → unsubscribe` | 同上 |
+| 当前 session 文件路径 | `runtime.session.sessionFile` | 同上(getter) |
+| 读 session header | `SessionManager.open(path).getHeader()` | `core/session-manager.ts` |
+| 关停 | `await runtime.dispose()` | `core/agent-session-runtime.ts` |
 
-`AgentHandle` 接口(同文件内导出,types only):
+### 3.3 不用到的方法
 
-| 方法/属性 | 类型 | 说明 |
-|---|---|---|
-| `session` | `AgentSession` | 当前活跃 session |
-| `subscribe` | `(listener) => () => void` | 注册事件监听;返回的函数取消注册 |
-| `prompt` | `(text, opts?) => Promise<void>` | 转发到 `session.prompt` |
-| `steer` | `(text) => Promise<void>` | 转发到 `session.steer` |
-| `followUp` | `(text) => Promise<void>` | 转发到 `session.followUp` |
-| `abort` | `() => Promise<void>` | 转发到 `session.abort` |
-| `dispose` | `() => Promise<void>` | 等价于 `disposeAgent(handle.sessionFile)` |
+- `runtime.switchSession` / `runtime.newSession` / `runtime.fork` / `runtime.importFromJsonl` — 本设计不走 runtime 内部的状态切换,这些不调用(但不代表 SDK 没用,只是不适合 web 多会话场景)
+- `session.bindExtensions({})` — 仅在 lazy 创建时调一次,不需要 rebind 模式
 
-关键设计点(用文字描述,不在 spec 里写代码):
+### 3.4 不发明的东西
 
-- **创建 runtime 时,cwd 来自 session 文件头**:用 `SessionManager.open(path)` 或者直接读 jsonl 第一行拿到 header.cwd,然后把 cwd 传进 `createAgentSessionRuntime(createRuntime, { cwd: headerCwd, agentDir: getAgentDir(), sessionManager: ... })`
-- **runtime 工厂函数**完全照抄官方 `examples/sdk/13-session-runtime.ts`(`createAgentSessionServices` + `createAgentSessionFromServices` + `createAgentSessionRuntime`)
-- **不调 `runtime.newSession()` / `runtime.switchSession()`** —— 我们要的是"按需建独立 runtime",不是"切换全局 active session"
-- `getAgent` 同路径二次调用应该返回同一个 handle(`Map` 缓存保证)
+- ❌ `RuntimeEntry` / `AgentHandle` — 都是我之前臆想的类型,SDK 没这两个,也不要造
+- ❌ `services/agent.ts` — 先 inline 在 `index.ts`,以后真拆再说
+- ❌ 自定义 fan-out `Set<...>` — Step 5 做多 ws 时再说
+- ❌ `bindSession()` 重订模式 — 不需要,因为不会调 `switchSession`
 
-### 3.2 验证
+### 3.5 验证
 
 ```bash
 bun --filter @pichamber/server type-check
+bun --filter @pichamber/server start
 ```
 
-在 Bun REPL:
+临时验证(REPL):
 
 ```bash
-> import { getAgent } from "./src/services/agent"
-> const a = await getAgent("/path/to/some/session.jsonl")
-> const b = await getAgent("/path/to/some/session.jsonl")
-> console.log(a === b)   // 应为 true
-> console.log(a.session.sessionFile)   // 应等于传入的 path
-> await a.dispose()
+cd packages/server && bun repl
+> const { getRuntime, runtimes } = await import("./src/index")
+> const r1 = await getRuntime("/path/to/session.jsonl")
+> const r2 = await getRuntime("/path/to/session.jsonl")
+> console.log(r1 === r2)  // 应为 true,Map 缓存命中
+> console.log(r1.session.sessionFile)  // 应等于传入的 path
 ```
+
+⚠️ `createAgentSessionRuntime` 首次调用会检查 `~/.pi/agent/auth.json` 或环境变量里的 API key。如果没有,会报错。临时验证可能需要设 `ANTHROPIC_API_KEY` 之类。
+
+### 3.6 设计取舍
+
+| 维度 | 决定 | 理由 |
+|---|---|---|
+| 单 vs 多 runtime | **多** | 支持同时多个对话 |
+| runtime 复用 vs 每次新建 | **复用(懒建)** | 重建 model client 代价高 |
+| switchSession vs 独立 runtime | **独立** | 切 session 不丢上下文,符合 web 多 tab 场景 |
+| 生命周期 owner | session path | 一个 session 一个 runtime,1:1 |
 
 ## 4. 消息发送 HTTP 端点
 
-### 4.1 修改 `packages/server/src/http/routes.ts`
+### 4.1 修改 `packages/server/src/index.ts`
 
-新增路由:
+新增路由(URL 形态 Hono `*` 通配可用,Step 1 验证过):
 
-| 方法 | 路径 | body | 处理 |
-|---|---|---|---|
-| `POST` | `/api/sessions/:path(*)/messages` | `{ message: string }` | `getAgent(path)` 拿 handle,然后 **`handle.prompt(body.message).catch(console.error)`**(fire-and-forget) |
+- `POST /api/sessions/*/messages` —— path 段携带 sessionPath,body `{ message }`
 
-**重要**:`prompt()` 的 Promise 会等到 retry / queue 全部结束才 resolve。如果在 HTTP handler 里 await,请求会长时间挂死。所以必须 fire-and-forget,流式输出靠下一步的 WebSocket 推。
+handler 行为:
+
+1. 从 path 段解出 sessionPath(`c.req.path.slice(...).decodeURIComponent()`)
+2. `const runtime = await getRuntime(sessionPath)`
+3. **`runtime.session.prompt(body.message).catch(console.error)`** —— fire-and-forget
+
+**重要**:`prompt()` 的 Promise 等到 retry/queue 全部结束才 resolve。HTTP handler 不能 await(请求会挂死),流式输出靠 Step 5 的 WebSocket 推。
 
 ### 4.2 验证
 
-需要先有会话在跑(本地有 `~/.pi/agent/sessions/` 里的真实 session,以及至少一个 provider 的 API key 已配置)。
+需要至少一个 provider 的 API key 已配置。
 
 ```bash
+SP=$(curl -s localhost:3000/api/sessions | jq -r '.[0].path')
 curl -X POST -H 'Content-Type: application/json' \
   -d '{"message":"hello"}' \
-  'http://localhost:3000/api/sessions/<path>/messages'
+  --get "http://localhost:3000/api/sessions/$(node -e "console.log(encodeURIComponent('$SP'))")/messages"
 ```
 
-应立刻返回 200 / 202,**不**等 agent 完成。在 server 日志里能看到 prompt 被接收,以及 agent 的流式活动。
+应立刻返回,**不**等 agent 完成。
 
 ## 5. WebSocket 流式事件
 
-### 5.1 修改 `packages/server/src/ws/handler.ts`(目前是空骨架)
+### 5.1 修改 `packages/server/src/index.ts`
+
+Bun 自带 WebSocket 升级,直接在 `export default { fetch, websocket }` 里挂 handler。
 
 WS 协议(JSON,一帧一行):
 
@@ -162,45 +183,42 @@ WS 协议(JSON,一帧一行):
 
 | 消息 | 含义 |
 |---|---|
-| `{type: "subscribe", sessionPath}` | 订阅该 session 的事件流 |
-| `{type: "unsubscribe", sessionPath}` | 取消订阅 |
-| `{type: "prompt", sessionPath, message}` | 等价于走 HTTP POST,方便纯 WS 客户端 |
+| `{type: "subscribe", sessionPath}` | 订阅该 session;服务端调 `getRuntime(path)` 拿到对应 runtime 并 subscribe |
+| `{type: "unsubscribe", sessionPath}` | 取消订阅(从该 path 的 listener set 里移除) |
+| `{type: "prompt", sessionPath, message}` | 在指定 session 上发消息(等价于 HTTP POST) |
 
 **服务端 → 客户端**:
 
 | 消息 | 含义 |
 |---|---|
-| `{type: "subscribed", sessionPath}` | subscribe 成功回执 |
-| `{type: "unsubscribed", sessionPath}` | unsubscribe 回执 |
-| `{type: "event", sessionPath, event}` | `event` 字段是 `AgentSessionEvent` |
-| `{type: "error", sessionPath?, error}` | 出错 |
+| `{type: "subscribed", sessionPath}` | subscribe 回执 |
+| `{type: "event", sessionPath, event}` | `event` 是 `AgentSessionEvent` |
+| `{type: "error", error}` | 出错 |
 
-实现要点:
+### 5.2 实现要点
 
-- 维护 `Map<WebSocket, Set<sessionPath>>`:每条 ws 各自跟踪订阅了哪些 session
-- 处理 `subscribe` 时:如果 `getAgent(path)` 的缓存里没有,**立即**创建(用户既然订阅了就说明他很快要发消息,提前起 agent 避免首字延迟)
-- `subscribe` 注册一个 listener 到 `handle.subscribe(...)`,listener 内部查 `Map` 把 event 推给所有订阅了该 path 的 ws
-- ws `close` 时,清理该 ws 在 Map 里的记录;**不**自动 disposeAgent(可能有其它 ws 还订阅着)
-- `prompt` 通过 WS 发时,行为跟 HTTP POST 一致:`handle.prompt(message).catch(...)`
+- 维护 `Map<sessionPath, Set<WebSocket>>` —— 每个 session 各自一个 ws 订阅者 set
+- 处理 `subscribe`:从 Map 取 runtime(不存在就 `getRuntime` 懒建),对该 runtime 的 session 调 `subscribe(listener)`(全局只挂一次,用 runtime 维度 fan-out),listener 内部查 Map 把 event 推给该 session 的所有 ws
+- ws `close` 时清理该 ws 在所有 session set 里的记录
+- 同一个 runtime 可能被多个 sessionPath 订阅?不会,`getRuntime(path)` 按 path 唯一对应一个 runtime
+- **不主动 `removeRuntime`** —— runtime 跟 session 一一对应,生命周期跟 session 文件同寿,重启 server 会重新加载
 
-### 5.2 验证
+### 5.3 验证
 
-用 `websocat` 或手写 nc 脚本:
+用 `websocat`:
 
 ```bash
 websocat ws://localhost:3000/ws
 > {"type":"subscribe","sessionPath":"/path/to/session.jsonl"}
 < {"type":"subscribed","sessionPath":"..."}
-> {"type":"prompt","sessionPath":"...","message":"hi"}
-< {"type":"event","event":{"type":"message_update",...},"assistantMessageEvent":{"type":"text_delta",...}}
-< {"type":"event","event":{"type":"agent_end",...}}
+> {"type":"prompt","sessionPath":"/path/to/session.jsonl","message":"hi"}
+< {"type":"event","sessionPath":"...","event":{"type":"message_update",...},"assistantMessageEvent":{"type":"text_delta","delta":"..."}}
+< {"type":"event","sessionPath":"...","event":{"type":"agent_end",...}}
 ```
 
 确认 `text_delta` 能流式推过来,`agent_end` 在最后到达。
 
 ## 6. Web 端集成(本次范围之外,只列大纲)
-
-> 之所以单独列,是因为这一层不属于 `packages/server`,但用户提了"web 调用"的最终目标。
 
 新建/修改文件:
 
@@ -214,20 +232,20 @@ websocat ws://localhost:3000/ws
 
 不做的事:
 
-- 没有"打开项目文件夹"创建新 session 的 UX(本阶段只支持打开已有 session,跟用户当前描述一致)
+- 没有"打开项目文件夹"创建新 session 的 UX(本阶段只支持打开已有 session)
 - 没有鉴权 / 多用户隔离
-- 没有扩展 UI 子协议(select/confirm/input 等)—— SDK 直调不需要这些
+- 没有扩展 UI 子协议 —— SDK 直调不需要这些
 
 ## 7. 不在本次范围 / 后续再说
 
-- 服务端如何"知道"用户的项目目录在哪:目前假设 `~/.pi/agent/sessions/` 已经被各种方式填好(`pi` CLI 在用户机器上跑过、或者别的方式)
+- 服务端如何"知道"用户的项目目录在哪:目前假设 `~/.pi/agent/sessions/` 已经被各种方式填好
 - 前端新建 session 的入口
 - 跨 server 实例的 session 共享
-- pi 的扩展系统本身(目前假设用户的 `~/.pi/agent/extensions/` 没有或者不需要)
+- pi 的扩展系统本身
 
 ## 8. 引用
 
 - SDK 总览:`@earendil-works/pi-coding-agent/docs/sdk.md`
-- 多 session runtime 范例:`@earendil-works/pi-coding-agent/examples/sdk/13-session-runtime.ts`
-- RPC 协议备查(本次不直接用):`@earendil-works/pi-coding-agent/docs/rpc.md` / `docs/rpc.md`
-- 本仓库已有的服务文件骨架:`packages/server/src/services/process.ts`(留作历史占位)、`packages/server/src/services/command.ts`(同上)
+- 工厂函数(`createRuntime` lambda)直接照搬:`@earendil-works/pi-coding-agent/examples/sdk/13-session-runtime.ts`
+- 本设计**不调用**官方范例里的 `bindSession()` / `runtime.switchSession()`(它们是单 runtime 切换模式用的,我们走多 runtime 懒建)
+- RPC 协议备查(本次不直接用,只是知识):`@earendil-works/pi-coding-agent/docs/rpc.md` / `docs/rpc.md`

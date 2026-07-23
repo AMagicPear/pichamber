@@ -41,3 +41,5 @@ __screenshots__/
 
 # Bun
 packages/server/dist
+
+temp/
