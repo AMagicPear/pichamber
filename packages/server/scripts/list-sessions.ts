@@ -8,10 +8,3 @@ console.assert(firstSession.getSessionFile() == sessions[0].path);
 // 看第一个会话的entry
 const firstSessionEntries = firstSession.getEntries();
 console.log(firstSessionEntries[0].type);
-
-// 创建Runtime
-// const runtime = await createAgentSessionRuntime(createRuntime, {
-//   ,
-//   agentDir: getAgentDir(),
-//   sessionManager: SessionManager.open(firstSession.getSessionFile()),
-// });

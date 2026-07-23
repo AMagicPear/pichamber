@@ -1,5 +1,7 @@
 import { Hono } from "hono";
+import { websocket } from "hono/bun";
 import { createSessionWithCwd, deleteSession, getSession, listAllSessions } from "./session";
+import { wsHandler } from "./ws";
 
 const app = new Hono();
 
@@ -34,7 +36,11 @@ app.delete("/api/sessions/:id", async (context) => {
   return context.json({ ok: true });
 });
 
+// WebSocket：每会话一个连接（详见 docs/realtime.md）
+app.get("/ws/:id", wsHandler);
+
 export default {
   port: 3000,
   fetch: app.fetch,
+  websocket, // hono/bun 的 websocket 适配器，转发 open/close/message 到 wsHandler
 };
