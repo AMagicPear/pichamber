@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.81.1",
     "@pichamber/shared": "workspace:*",
     "hono": "^4.12.31"
   },

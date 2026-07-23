@@ -5,10 +5,4 @@
  * Anything in here should be importable from any TS project (browser, server, edge).
  */
 
-export const APP_NAME = 'pichamber';
-
-export interface ApiResponse<T> {
-  ok: boolean;
-  data?: T;
-  error?: string;
-}
+export const APP_NAME = "pichamber";
