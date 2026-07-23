@@ -12,7 +12,6 @@
     "type-check": "vue-tsc --build --force"
   },
   "dependencies": {
-    "@pichamber/shared": "workspace:*",
     "pinia": "^4.0.2",
     "vue": "rc",
     "vue-router": "^5.2.0"

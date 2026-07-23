@@ -11,8 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.81.1",
-    "@pichamber/shared": "workspace:*"
+    "@earendil-works/pi-coding-agent": "^0.81.1"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",

@@ -9,7 +9,6 @@
     "dev": "concurrently -k -n \"SERVER,WEB\" -c \"cyan,magenta\" \"bun run dev:server\" \"bun run dev:web\"",
     "dev:web": "bun --filter @pichamber/web dev",
     "dev:server": "bun --filter @pichamber/server dev",
-    "dev:shared": "bun --filter @pichamber/shared dev",
     "build": "bun --filter '*' build",
     "build:web": "bun --filter @pichamber/web build",
     "build:server": "bun --filter @pichamber/server build",
