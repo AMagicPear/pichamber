@@ -12,7 +12,11 @@
     "type-check": "vue-tsc --build --force"
   },
   "dependencies": {
+    "katex": "^0.18.1",
+    "markstream-vue": "^1.0.7-beta.5",
+    "mermaid": "^11.16.0",
     "pinia": "^4.0.2",
+    "stream-diffs": "^0.0.2",
     "vue": "rc",
     "vue-router": "^5.2.0"
   },
@@ -30,7 +34,6 @@
     "typescript": "~6.0.0",
     "vite": "^8.1.5",
     "vite-plugin-vue-devtools": "^8.1.5",
-    "vitest": "^4.1.10",
     "vue-tsc": "^3.3.7"
   }
 }
