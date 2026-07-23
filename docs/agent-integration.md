@@ -9,10 +9,11 @@
 ```
 [Vue web]  ──HTTP/WS──▶  [Bun server (Hono)]
                               │
-                              ├─ src/index.ts          (HTTP routes, 22 行)
+                              ├─ src/index.ts          (HTTP routes, ~30 行)
                               ├─ src/agent.ts          (运行时池)
-                              │     Map<sessionPath, AgentSession>
-                              │     getSession / removeSession
+                              │     Map<sessionId, AgentSession>
+                              │     Map<sessionId, sessionFile>   (id → path 索引)
+                              │     getSession / createSessionWithCwd / listAllSessions / removeSession
                               └─ src/ws/handler.ts     (Step 5)
                                        │
                                        │ 每个 session 一个 AgentSession
@@ -24,46 +25,86 @@
 关键原则:
 
 1. **每个被选中的 session 一个独立 `AgentSession`** —— 同时支持多条对话并行(多 tab / 多用户 / 后台任务)
-2. **不调 `runtime.switchSession()`** —— 我们没有 runtime 包装,直接持有 `AgentSession`,每个固定服务一个 session
-3. **路由处理函数直接调 SDK** —— 不预先建 service 层,YAGNI
-4. **`createAgentSession` 而不是 `createAgentSessionRuntime` + factory** —— 因为我们从不切 session,工厂模式(为 `switchSession` 服务)不需要
-5. **agent 的 cwd 永远来自 session 文件头** —— `SessionManager.open(path).getCwd()` 传进 `createAgentSession`
-6. **不发明新类型**:只用 SDK 已有的 `AgentSession`、`AgentSessionEvent`、`SessionManager`、`createAgentSession`
+2. **id 作为对外标识** —— sessionId(UUID)贯穿 HTTP 和 WS,跟 `pi` CLI 一致(`pi` 也允许用户用 id 前缀查找)。path 是存储地址,只在内部用。
+3. **`createAgentSession` 而不是 `createAgentSessionRuntime` + factory** —— 因为我们从不切 session,工厂模式(为 `switchSession` 服务)不需要
+4. **agent 的 cwd 永远来自 session 文件头** —— `SessionManager.open(path).getCwd()` 传进 `createAgentSession`
+5. **不发明新类型**:只用 SDK 已有的 `AgentSession`、`AgentSessionEvent`、`SessionManager`、`SessionInfo`、`createAgentSession`
 
-## 1. HTTP 端点:列 sessions
+## 1. HTTP 端点
 
-> **YAGNI 原则**:不要为 `SessionManager.listAll()` 这种一行调用包一层函数/文件。
+### 1.1 当前路由(`packages/server/src/index.ts`)
 
-### 1.1 修改 `packages/server/src/index.ts`
+```ts
+import { Hono } from "hono";
+import { createSessionWithCwd, deleteSession, getSession, listAllSessions } from "./agent";
 
-直接在路由处理函数里调 SDK,**不新建任何 service 文件**:
+const app = new Hono();
 
-- `import { SessionManager } from "@earendil-works/pi-coding-agent";`
-- `GET /api/health` → `c.json({ ok: true })`
-- `GET /api/sessions` → `return c.json(await SessionManager.listAll());`
-- `GET /api/sessions/*` → 用 `c.req.path.slice('/api/sessions/'.length)` + `decodeURIComponent` 拿到 sessionPath,`SessionManager.open(sessionPath).getEntries()` 返回 JSON
+app.get("/api/health", (c) => c.json({ ok: true }));
 
-⚠️ Hono 通配必须用 `*`(多段),不能用 `:path{*}`——后者会被 SmartRouter 解析为非法 regex 而**不**触发 fallback。
+app.get("/api/sessions", async (c) => {
+    const sessions = await listAllSessions();
+    return c.json(sessions);
+});
 
-### 1.2 验证
+app.post("/api/sessions", async (c) => {
+    const { cwd } = await c.req.json<{ cwd: string }>();
+    const session = await createSessionWithCwd(cwd);
+    return c.json({ sessionId: session.sessionId });
+});
+
+app.get("/api/sessions/:id", async (c) => {
+    const id = c.req.param("id");
+    const session = await getSession(id);
+    if (!session) return c.json({ error: "session not found" }, 404);
+    return c.json(session.sessionManager.getEntries());
+});
+
+app.delete("/api/sessions/:id", async (c) => {
+    const id = c.req.param("id");
+    const deleted = await deleteSession(id);
+    if (!deleted) return c.json({ error: "session not found" }, 404);
+    return c.json({ ok: true });
+});
+
+export default { port: 3000, fetch: app.fetch };
+```
+
+### 1.2 端点总览
+
+| Method | Path | Body | 返回 | 说明 |
+|---|---|---|---|---|
+| GET | `/api/health` | — | `{ok: true}` | 健康检查 |
+| GET | `/api/sessions` | — | `SessionInfo[]` | 列出所有 session。**顺带建 id→path 索引**(见 Step 3) |
+| POST | `/api/sessions` | `{cwd: string}` | `{sessionId: string}` | 在 cwd 下创建新 session,返回 id |
+| GET | `/api/sessions/:id` | — | `SessionEntry[]` 或 404 | 读 session 历史 entries |
+| DELETE | `/api/sessions/:id` | — | `{ok: true}` 或 404 | 删除 session(清理内存 + 删本地 `.jsonl` 文件) |
+
+### 1.3 验证
 
 ```bash
 bun --filter @pichamber/server type-check
 bun --filter @pichamber/server start
 ```
 
-另开终端:
-
 ```bash
+# 列 session(取第一个 id)
 curl localhost:3000/api/health
-curl localhost:3000/api/sessions | jq '.[0].cwd'
-SP=$(curl -s localhost:3000/api/sessions | jq -r '.[0].path')
-curl --get "localhost:3000/api/sessions/$(node -e "console.log(encodeURIComponent('$SP'))")" | jq '.[0].type'
+FIRST=$(curl -s localhost:3000/api/sessions | jq -r '.[0].id')
+curl -s "localhost:3000/api/sessions/$FIRST" | jq '.[0].type'
+
+# 创建
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"cwd":"/path/to/project"}' \
+  http://localhost:3000/api/sessions
+# {"sessionId":"019f8ea9-..."}
+
+# 不存在的 id → 404
+curl -s -w "%{http_code}\n" "localhost:3000/api/sessions/00000000-0000-0000-0000-000000000000"
+# {"error":"session not found"}404
 ```
 
-⚠️ 如果 `~/.pi/agent/sessions/` 为空,`listAll()` 返回 `[]`。
-
-### 1.3 何时才考虑抽出 service 文件
+### 1.4 何时才考虑抽出 service 文件
 
 - 同一个调用在多个 route 出现且传参不同
 - 需要包一层做缓存/错误处理/日志
@@ -74,50 +115,100 @@ curl --get "localhost:3000/api/sessions/$(node -e "console.log(encodeURIComponen
 
 Step 1 跑通后,接下来按顺序做:
 
-- **Step 3**: Map<sessionPath, AgentSession> 懒加载(每个被选中的 session 一个 AgentSession)
+- **Step 3**: Map<sessionId, AgentSession> 懒加载 + id→path 索引
 - **Step 4**: 消息发送端点(`session.prompt`)
 - **Step 5**: WebSocket 把 `session.subscribe(...)` 的事件推给前端
 - (Step 6 web 端,不属于 server 包)
 
 不再预先设计更多步骤,做一步看一步。
 
-## 3. Map<sessionPath, AgentSession> 懒加载
+## 3. Map<sessionId, AgentSession> 懒加载
 
-### 3.1 新建 `packages/server/src/agent.ts`
+### 3.1 `packages/server/src/agent.ts`
 
 独立文件,不 inline 在 `index.ts`。理由:这一块将来会被 `index.ts` 和 `ws/handler.ts` 都用到,而且有自己的 state(`Map`),抽出来避免污染 HTTP 路由层。
 
-完整文件内容(48 行):
+**两个 Map**:
+- `activeSessions: Map<sessionId, AgentSession>` —— 活跃 session 池(AgentSession 已创建)
+- `sessionFileLookup: Map<sessionId, sessionFile>` —— id → path 索引,供冷启动时按 id 找文件
+
+完整文件:
 
 ```ts
+import { unlink } from "node:fs/promises";
 import {
     type AgentSession,
     createAgentSession,
     getAgentDir,
+    type SessionInfo,
     SessionManager,
 } from "@earendil-works/pi-coding-agent";
 
-const sessions = new Map<string, AgentSession>();
+// id → session 文件路径(冷启动后用)
+const sessionFileLookup = new Map<string, string>();
 
-export async function getSession(sessionPath: string): Promise<AgentSession> {
-    const cached = sessions.get(sessionPath);
+// id → 活跃的 AgentSession(已建好)
+const activeSessions = new Map<string, AgentSession>();
+
+// 副作用:顺带把 id→path 索引建好
+export async function listAllSessions(): Promise<SessionInfo[]> {
+    const sessions: SessionInfo[] = await SessionManager.listAll();
+    sessionFileLookup.clear();
+    for (const session of sessions) {
+        sessionFileLookup.set(session.id, session.path);
+    }
+    return sessions;
+}
+
+export async function getSession(id: string): Promise<AgentSession | null> {
+    const cached = activeSessions.get(id);
     if (cached) return cached;
-
-    const sm = SessionManager.open(sessionPath);
+    let sessionFile = sessionFileLookup.get(id);
+    if (!sessionFile) {
+        await listAllSessions();   // 刷新索引
+        sessionFile = sessionFileLookup.get(id);
+    }
+    if (!sessionFile) return null;  // 不存在 → null(HTTP 转 404)
+    const sessionManager = SessionManager.open(sessionFile);
     const { session } = await createAgentSession({
-        cwd: sm.getCwd(),
+        cwd: sessionManager.getCwd(),
         agentDir: getAgentDir(),
-        sessionManager: sm,
+        sessionManager,
     });
-    sessions.set(sessionPath, session);
+    activeSessions.set(id, session);
     return session;
 }
 
-export async function removeSession(sessionPath: string) {
-    const session = sessions.get(sessionPath);
+export async function removeSession(id: string) {
+    const session = activeSessions.get(id);
     if (!session) return;
     session.dispose();
-    sessions.delete(sessionPath);
+    activeSessions.delete(id);
+}
+
+// 删内存中的 AgentSession + 删本地 jsonl 文件
+// 返回 true 表示处理过（存在过）、false 表示这个 id 完全不存在
+export async function deleteSession(id: string): Promise<boolean> {
+    let file = sessionFileLookup.get(id);
+    if (!file) {
+        await listAllSessions();  // 刷新索引
+        file = sessionFileLookup.get(id);
+    }
+    const session = activeSessions.get(id);
+    if (session) {
+        session.dispose();
+        activeSessions.delete(id);
+    }
+    if (!file && !session) return false;
+    if (file) {
+        try {
+            await unlink(file);
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+        }
+        sessionFileLookup.delete(id);
+    }
+    return true;
 }
 
 export async function createSessionWithCwd(cwd: string): Promise<AgentSession> {
@@ -125,14 +216,25 @@ export async function createSessionWithCwd(cwd: string): Promise<AgentSession> {
     const { session } = await createAgentSession({
         cwd,
         agentDir: getAgentDir(),
-        sessionManager: sessionManager,
+        sessionManager,
     });
-    sessions.set(session.sessionFile!, session); // 只有 inMemory() 的才会不存在文件路径
+    activeSessions.set(session.sessionId, session);  // 跟 getSession 一致用 id
     return session;
 }
 ```
 
-### 3.2 为什么用 `createAgentSession` 而不是 `createAgentSessionRuntime` + factory
+### 3.2 为什么 id 作 key 而不是 path
+
+| 维度 | path 作 key | id 作 key |
+|---|---|---|
+| 用户的友好标识 | path 长得像 `/Users/.../sessions/--cwd--/<timestamp>_<uuid>.jsonl`,没法手打 | id 是 UUID 前缀,可手打(`pi` CLI 支持) |
+| inMemory 兼容 | inMemory 没文件,没法用 path 作 key | id 永远有 |
+| 跟 pi CLI 对齐 | pi 也用 path 存,但对外暴露 id | ✅ 一致 |
+| 反查复杂度 | 传 path 直接 `SessionManager.open(path)` | 需要 id → path 索引 |
+
+我们选 **id 作 key**(外)+ path 作内部索引(内)。
+
+### 3.3 为什么用 `createAgentSession` 而不是 `createAgentSessionRuntime` + factory
 
 `createAgentSessionRuntime(factory, options)` 的工厂模式是为**单 runtime + 切 session** 场景设计的:factory 封装"如何为新 cwd 重建 services",runtime 内部在 `switchSession` / `newSession` 时反复调它。
 
@@ -148,24 +250,24 @@ export async function createSessionWithCwd(cwd: string): Promise<AgentSession> {
 | `session.dispose()` (sync) | `runtime.dispose()` (async) |
 | `runtime.switchSession` / `newSession` / `fork` |  |
 
-### 3.3 关键调用(`getSession` 内)
+### 3.4 关键调用
 
 | 调用 | 作用 |
 |---|---|
-| `SessionManager.open(sessionPath)` | 打开已有的 session 文件,拿到 manager(同一实例复用,避免开两次) |
-| `sm.getCwd()` | 读 session 文件头里的 cwd 字段,直接返回 `string` |
-| `createAgentSession({ cwd, agentDir, sessionManager })` | 创建 `AgentSession`,内部已完成 services 装配 + extensions bind,返回 `{ session }` |
-| `sessions.set(sessionPath, session)` | 缓存 |
+| `SessionManager.open(sessionFile)` | 打开已有的 session 文件,拿到 manager |
+| `sm.getCwd()` | 读 session 文件头里的 cwd,直接返回 `string` |
+| `createAgentSession({ cwd, agentDir, sessionManager })` | 创建 `AgentSession`,内部已完成 services 装配 + extensions bind |
+| `activeSessions.set(session.sessionId, session)` | 缓存(跟 `getSession` 的 key 一致) |
 
-### 3.4 不发明的东西
+### 3.5 不发明的东西
 
 - ❌ `RuntimeEntry` / `AgentHandle` — 都是我之前臆想的类型,SDK 没这两个,也不要造
-- ❌ `runtimes` 改名为 `sessions`、`getRuntime` 改名为 `getSession` —— 因为持有的就是 `AgentSession`,不要用 `runtime` 这个含糊词
 - ❌ 自定义 fan-out `Set<...>` — Step 5 做多 ws 时再说
 - ❌ `bindExtensions({})` 单独调用 —— `createAgentSession` 内部已做,不要重复
 - ❌ `bindSession()` 重订模式 —— 不需要,从来不切 session
+- ❌ 兼容旧的 path API —— 前端还没做,直接换
 
-### 3.5 验证
+### 3.6 验证
 
 ```bash
 bun --filter @pichamber/server type-check
@@ -176,20 +278,21 @@ bun --filter @pichamber/server start
 
 ```bash
 cd packages/server
-SP="/Users/.../agent/sessions/--Users-x-projects-pichamber--/2026-07-23T..._uuid.jsonl"
 
 bun -e "
-import { getSession } from './src/agent';
-const s1 = await getSession(process.argv[1]);
-console.log('matches:', s1.sessionFile === process.argv[1]);  // true
-const s2 = await getSession(process.argv[1]);
-console.log('cache:', s1 === s2);                              // true
-" "$SP"
+import { createSessionWithCwd, getSession } from './src/agent';
+const s1 = await createSessionWithCwd('/tmp/test-foo-' + Date.now());
+console.log('id:', s1.sessionId);
+const s2 = await getSession(s1.sessionId);
+console.log('cache hit (true):', s2 === s1);
+const missing = await getSession('nonexistent-id');
+console.log('missing → null:', missing === null);
+"
 ```
 
-⚠️ `createAgentSession` 首次调用会检查 `~/.pi/agent/auth.json` 或环境变量里的 API key。如果没有,会报错。临时验证需要设 `ANTHROPIC_API_KEY` 之类。
+⚠️ `createAgentSession` 首次调用会检查 `~/.pi/agent/auth.json` 或环境变量里的 API key。如果没有,会报错。
 
-### 3.6 设计取舍
+### 3.7 设计取舍
 
 | 维度 | 决定 | 理由 |
 |---|---|---|
@@ -197,70 +300,49 @@ console.log('cache:', s1 === s2);                              // true
 | AgentSession 复用 vs 每次新建 | **复用(懒建)** | 重建 model client 代价高 |
 | switchSession vs 独立 AgentSession | **独立** | 切 session 不丢上下文,符合 web 多 tab 场景 |
 | AgentSession vs AgentSessionRuntime | **AgentSession** | 不需要 runtime 的 session-replacement 能力 |
-| 生命周期 owner | session path | 一个 session 一个 AgentSession,1:1 |
+| Key: id vs path | **id** | 友好、inMemory 兼容、跟 pi CLI 对齐 |
+| 找不到 session 的处理 | **返回 null** | 让 HTTP 层决定 404(而不是 throw 出 500) |
+| 删除是否同时删文件 | **是** | 用 `unlink`(`node:fs/promises`),SDK 不提供 |
+| 删除是否留空目录 | **是** | `SessionManager.create()` 创建的 session 目录会留下,但影响为 0 |
 | 文件位置 | `src/agent.ts` | 独立,被 index 和 ws 都用,有自己的 state |
 
-## 4. HTTP 写端点:创建 session + 发送消息
+## 4. 消息发送 HTTP 端点
 
-### 4.1 创建 session
-
-新增路由:
-
-- `POST /api/sessions`,body `{ cwd: string }`,返回 `{ sessionPath: string }`
-
-handler:
-
-```ts
-app.post("/api/sessions", async (c) => {
-    const { cwd } = await c.req.json<{ cwd: string }>();
-    const session = await createSessionWithCwd(cwd);   // from ./agent
-    return c.json({ sessionPath: session.sessionFile });
-});
-```
-
-`POST /api/sessions` 和 `GET /api/sessions` method 不同、不冲突。
-
-**重要约束**:`SessionManager.create(cwd)` 只创建目录 + 内存中的 session,**不立即写文件**。所以 `sessionPath` 指向的文件还没存在,要等第一次 `prompt()` 才会写盘。这带来的边界:
-
-- ✅ `Map` 里有缓存期间,`getSession(sessionPath)` 命中,正常工作
-- ⚠️ 如果服务端在第一次 prompt 之前重启,缓存丢,`getSession(sessionPath)` 会调 `SessionManager.open(path)`,找不到文件 → `getCwd()` fallback 到 `process.cwd()`,**原始 cwd 丢失**
-- ✅ 第一次 prompt 后文件存在,以后都正常
-
-实际不会出问题(用户 POST 完会马上发消息),但记一笔。
-
-### 4.2 发送消息
+### 4.1 发送消息
 
 新增路由:
 
-- `POST /api/sessions/*/messages`,body `{ message: string }`
+- `POST /api/sessions/:id/messages`,body `{ message: string }`
 
 handler:
 
-1. 从 path 段解出 sessionPath(`c.req.path.slice(...).decodeURIComponent()`)
-2. `const session = await getSession(sessionPath)`
+1. `const id = c.req.param("id")`
+2. `const session = await getSession(id)` —— `null` → 404
 3. **`session.prompt(body.message).catch(console.error)`** —— fire-and-forget
 
 **重要**:`prompt()` 的 Promise 等到 retry/queue 全部结束才 resolve。HTTP handler 不能 await(请求会挂死),流式输出靠 Step 5 的 WebSocket 推。
 
-### 4.3 验证
+### 4.2 验证
 
 需要至少一个 provider 的 API key 已配置。
 
 ```bash
-# 创建
-curl -X POST -H 'Content-Type: application/json' \
+ID=$(curl -s -X POST -H 'Content-Type: application/json' \
   -d '{"cwd":"/path/to/project"}' \
-  http://localhost:3000/api/sessions
-# {"sessionPath":"/Users/.../agent/sessions/--path-to-project--/2026-..._.jsonl"}
+  http://localhost:3000/api/sessions | jq -r '.sessionId')
 
-# 发消息
-SP="/Users/.../agent/sessions/--path-to-project--/2026-..._.jsonl"
 curl -X POST -H 'Content-Type: application/json' \
   -d '{"message":"hello"}' \
-  --get "http://localhost:3000/api/sessions/$(node -e "console.log(encodeURIComponent('$SP'))")/messages"
+  "http://localhost:3000/api/sessions/$ID/messages"
 ```
 
-发消息应立刻返回,**不**等 agent 完成。
+应立刻返回,**不**等 agent 完成。
+
+### 4.3 创建后找不到的边界(已不存)
+
+旧版本用 path 时,POST 后文件还没写盘,`getSession(path)` 会 fallback cwd 到 `process.cwd()`。
+
+现在用 id 后,新建 session 立刻进 `activeSessions`(`createSessionWithCwd` 用 `session.sessionId` 作 key 写入),**没有任何 fallback 窗口**。这个边界消失了。
 
 ## 5. WebSocket 流式事件(Hono)
 
@@ -271,52 +353,55 @@ curl -X POST -H 'Content-Type: application/json' \
 ```ts
 import { upgradeWebSocket, type WSContext } from "hono/bun";
 import { Hono } from "hono";
-import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import { getSession, createSessionWithCwd } from "../agent";
+import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { getSession } from "../agent";
 
 type WsCtx = WSContext<unknown>;
-// 每个 sessionPath -> 订阅它的 ws 集合 + 挂在该 session 上的 SDK listener
-const subs = new Map<string, { session: import("@earendil-works/pi-coding-agent").AgentSession; sockets: Set<WsCtx> }>();
-// 每个 ws -> 它订阅了哪些 sessionPath(close 时清理)
+const subs = new Map<string, { session: AgentSession; sockets: Set<WsCtx> }>();
 const wsOwn = new WeakMap<WsCtx, Set<string>>();
 
-function attachListener(sessionPath: string, session: import("@earendil-works/pi-coding-agent").AgentSession) {
-    if (subs.has(sessionPath)) return;  // 已挂过就不重复
+function attachListener(sessionId: string, session: AgentSession) {
+    if (subs.has(sessionId)) return;
     const sockets = new Set<WsCtx>();
     session.subscribe((evt: AgentSessionEvent) => {
-        for (const ws of sockets) ws.send(JSON.stringify({ type: "event", sessionPath, event: evt }));
+        for (const ws of sockets) ws.send(JSON.stringify({ type: "event", sessionId, event: evt }));
     });
-    subs.set(sessionPath, { session, sockets });
+    subs.set(sessionId, { session, sockets });
 }
 
 export function wsRoutes(): Hono {
     const app = new Hono();
-    app.get("/ws", upgradeWebSocket((_c) => ({
+    app.get("/ws", upgradeWebSocket(() => ({
         onOpen: (_evt, ws) => wsOwn.set(ws, new Set()),
         onMessage: async (evt, ws) => {
             const msg = JSON.parse(evt.data as string);
             if (msg.type === "subscribe") {
-                const session = await getSession(msg.sessionPath);
-                attachListener(msg.sessionPath, session);
-                subs.get(msg.sessionPath)!.sockets.add(ws);
-                wsOwn.get(ws)!.add(msg.sessionPath);
-                ws.send(JSON.stringify({ type: "subscribed", sessionPath: msg.sessionPath }));
+                const session = await getSession(msg.sessionId);
+                if (!session) {
+                    ws.send(JSON.stringify({ type: "error", error: `session ${msg.sessionId} not found` }));
+                    return;
+                }
+                attachListener(msg.sessionId, session);
+                subs.get(msg.sessionId)!.sockets.add(ws);
+                wsOwn.get(ws)!.add(msg.sessionId);
+                ws.send(JSON.stringify({ type: "subscribed", sessionId: msg.sessionId }));
             } else if (msg.type === "unsubscribe") {
-                const entry = subs.get(msg.sessionPath);
+                const entry = subs.get(msg.sessionId);
                 if (entry) entry.sockets.delete(ws);
-                wsOwn.get(ws)?.delete(msg.sessionPath);
+                wsOwn.get(ws)?.delete(msg.sessionId);
             } else if (msg.type === "prompt") {
-                const session = await getSession(msg.sessionPath);
+                const session = await getSession(msg.sessionId);
+                if (!session) {
+                    ws.send(JSON.stringify({ type: "error", error: `session ${msg.sessionId} not found` }));
+                    return;
+                }
                 session.prompt(msg.message).catch((err) => ws.send(JSON.stringify({ type: "error", error: String(err) })));
             }
         },
         onClose: (_evt, ws) => {
             const owned = wsOwn.get(ws);
             if (!owned) return;
-            for (const path of owned) {
-                const entry = subs.get(path);
-                if (entry) entry.sockets.delete(ws);
-            }
+            for (const id of owned) subs.get(id)?.sockets.delete(ws);
             wsOwn.delete(ws);
         },
     })));
@@ -328,39 +413,57 @@ export function wsRoutes(): Hono {
 
 ```ts
 import { wsRoutes } from "./ws/handler";
+import { websocket } from "hono/bun";
 const app = new Hono();
 // ... 现有路由 ...
-app.route("/", wsRoutes());  // 挂上 /ws
-export default { port: 3000, fetch: app.fetch, websocket };  // ← import websocket from "hono/bun"
+app.route("/", wsRoutes());
+export default { port: 3000, fetch: app.fetch, websocket };
 ```
 
-### 5.3 关键设计点
+### 5.3 协议
 
-- **同一个 session 只挂一次 SDK listener** —— 用 `subs.has(sessionPath)` 幂等保护,多 ws 订阅同一个 sessionPath 也只触发一次 `session.subscribe(...)`
-- **fan-out 在 SDK listener 内部**:listener 读 `subs.get(path).sockets`,推到该 session 的所有 ws
-- **`WeakMap<ws, Set<path>>`** —— 记录每个 ws 订阅了哪些 path,close 时反向清理
+**客户端 → 服务端**:
+
+| 消息 | 含义 |
+|---|---|
+| `{type: "subscribe", sessionId}` | 订阅该 session;服务端 `getSession(id)`,挂 SDK listener,加 ws 到 fan-out |
+| `{type: "unsubscribe", sessionId}` | 取消订阅 |
+| `{type: "prompt", sessionId, message}` | 在指定 session 上发消息(等价于 HTTP POST) |
+
+**服务端 → 客户端**:
+
+| 消息 | 含义 |
+|---|---|
+| `{type: "subscribed", sessionId}` | subscribe 回执 |
+| `{type: "event", sessionId, event}` | `event` 是 `AgentSessionEvent` |
+| `{type: "error", error}` | 出错(如 sessionId 不存在) |
+
+### 5.4 关键设计点
+
+- **同一个 session 只挂一次 SDK listener** —— `subs.has(sessionId)` 幂等保护
+- **fan-out 在 SDK listener 内部**:listener 读 `subs.get(id).sockets`,推到该 session 的所有 ws
+- **`WeakMap<ws, Set<id>>`** —— close 时反向清理
+- **`getSession` 返回 null 时主动报错**给客户端,不静默丢消息
 - **不主动 `removeSession`** —— session 跟 session 文件一一对应,生命周期跟文件同寿
 
-### 5.4 验证
+### 5.5 验证
 
 ```bash
 websocat ws://localhost:3000/ws
-> {"type":"subscribe","sessionPath":"/path/to/session.jsonl"}
-< {"type":"subscribed","sessionPath":"..."}
-> {"type":"prompt","sessionPath":"/path/to/session.jsonl","message":"hi"}
-< {"type":"event","sessionPath":"...","event":{"type":"message_update",...},"assistantMessageEvent":{"type":"text_delta","delta":"..."}}
-< {"type":"event","sessionPath":"...","event":{"type":"agent_end",...}}
+> {"type":"subscribe","sessionId":"019f8cb5-..."}
+< {"type":"subscribed","sessionId":"019f8cb5-..."}
+> {"type":"prompt","sessionId":"019f8cb5-...","message":"hi"}
+< {"type":"event","sessionId":"...","event":{"type":"message_update",...}}
+< {"type":"event","sessionId":"...","event":{"type":"agent_end",...}}
 ```
-
-确认 `text_delta` 能流式推过来,`agent_end` 在最后到达。
 
 ## 6. Web 端集成(本次范围之外,只列大纲)
 
 新建/修改文件:
 
 - `packages/web/src/stores/sessions.ts` — Pinia store
-  - state: `sessions: SessionInfo[]`、`currentPath: string | null`、`messages: SessionEntry[]`、`isStreaming: boolean`
-  - actions: `fetchSessions()`、`selectSession(path)`、`sendMessage(text)`、`onWsEvent(evt)`
+  - state: `sessions: SessionInfo[]`、`currentId: string | null`、`messages: SessionEntry[]`、`isStreaming: boolean`
+  - actions: `fetchSessions()`、`selectSession(id)`、`sendMessage(text)`、`onWsEvent(evt)`
 - `packages/web/src/api/client.ts` — fetch 调 `/api/sessions` 系列
 - `packages/web/src/api/ws.ts` — WebSocket 连接 + 重连 + 订阅管理
 - `packages/web/src/components/SessionList.vue` — 按 `cwd` 分组展示 sessions
@@ -381,4 +484,5 @@ websocat ws://localhost:3000/ws
 
 - SDK 总览:`@earendil-works/pi-coding-agent/docs/sdk.md`
 - 本设计**不抄**官方 `examples/sdk/13-session-runtime.ts` 的工厂模式 —— 那是单 runtime + `switchSession` 场景,我们的多 session 场景不需要
+- 跟 `pi` CLI 的 `resolveSessionPath` 一致:id 是友好标识,path 是存储地址
 - RPC 协议备查(本次不直接用,只是知识):`@earendil-works/pi-coding-agent/docs/rpc.md` / `docs/rpc.md`
