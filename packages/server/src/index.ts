@@ -12,7 +12,11 @@ Bun.serve({
       POST: async (req) => {
         const { cwd } = (await req.json()) as { cwd: string };
         const session = await createSessionWithCwd(cwd);
-        return Response.json({ sessionId: session.sessionId });
+        return Response.json({
+          sessionId: session.sessionId,
+          sessionFile: session.sessionFile,
+          tools: session.getActiveToolNames(),
+        });
       },
     },
     "/api/sessions/:id": {
@@ -24,7 +28,7 @@ Bun.serve({
       DELETE: async (req) => {
         const result = await deleteSession(req.params.id);
         if (!result.ok) return Response.json({ error: "session not found" }, { status: 404 });
-        return Response.json({ ok: true });
+        return Response.json(result);
       },
     },
   },
