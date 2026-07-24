@@ -25,8 +25,26 @@ const direction = isLeftish ? 1 : -1;
 const cssVar = props.mode === "bottom" ? "--split-h" : "--split-w";
 const horizontal = props.mode !== "bottom";
 
+// Cursor used when the resize handle is dragged into a clamp boundary.
+// `direction` tells us which screen direction GROWS the panel:
+//   left / settings panels: +1 → right grows
+//   right panel:            -1 → left grows
+//   bottom panel:           -1 → up grows
+// At the min boundary only the grow direction can still do work; at the max
+// boundary only the shrink direction can. Matches native widgets like VSCode.
+const CLAMPED_CURSOR = {
+  h: {
+    "-1": { min: "w-resize", max: "e-resize" },
+    "1": { min: "e-resize", max: "w-resize" },
+  },
+  v: {
+    "-1": { min: "n-resize", max: "s-resize" },
+    "1": { min: "s-resize", max: "n-resize" },
+  },
+} as const;
+
 const panelRef = useTemplateRef<HTMLElement>("panelRef");
-const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag({
+const { dragging, clamped, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag({
   panelRef,
   horizontal,
   direction,
@@ -36,6 +54,13 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
   maxSize: props.maxSize,
   onCommit: (size) => ui.setSize(props.mode, size),
 });
+
+const handleStyle = computed(() => {
+  if (!dragging.value || clamped.value === null) return undefined;
+  const axis = horizontal ? "h" : "v";
+  const sign = direction === 1 ? "1" : "-1";
+  return { cursor: CLAMPED_CURSOR[axis][sign][clamped.value] };
+});
 </script>
 
 <template>
@@ -44,6 +69,7 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
     <div
       class="split-pane__handle"
       :class="{ 'is-open': isOpen, 'is-dragging': dragging }"
+      :style="handleStyle"
       role="separator"
       :aria-orientation="horizontal ? 'vertical' : 'horizontal'"
       @pointerdown="onPointerDown"

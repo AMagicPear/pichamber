@@ -37,8 +37,10 @@ const presets = [
         <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
         <IconButton size="compact" label="Permissions"><ShieldUserIcon /></IconButton>
         <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
-        <strong><span class="model-mark">Ƶ</span> Big Pickle</strong>
-        <IconButton size="compact" label="Model options"><AiAgentIcon class="model-icon" /></IconButton>
+        <strong><span class="model-mark">Ƶ</span> GLM5.2</strong>
+        <IconButton size="compact" label="Model options"
+          ><AiAgentIcon class="model-icon"
+        /></IconButton>
         <IconButton size="compact" label="Dictation"><MicIcon /></IconButton>
         <IconButton size="compact" label="Send" disabled><SendIcon /></IconButton>
       </div>
