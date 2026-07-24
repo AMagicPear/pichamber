@@ -11,14 +11,14 @@ const ui = useUiStore();
       <SplitPane mode="right">
         <template #default>
           <SplitPane mode="bottom">
-            <template #default><div class="debug-fill debug-fill--main" /></template>
-            <template #sidebar><div class="debug-fill debug-fill--right" /></template>
+            <template #default />
+            <template #sidebar />
           </SplitPane>
         </template>
-        <template #sidebar><div class="debug-fill debug-fill--left" /></template>
+        <template #sidebar />
       </SplitPane>
     </template>
-    <template #sidebar><div class="debug-fill debug-fill--bottom" /></template>
+    <template #sidebar />
   </SplitPane>
   <div class="debug-controls">
     <button type="button" @click="ui.toggle('left')">切换左栏</button>
@@ -33,22 +33,6 @@ body,
 #app {
   height: 100%;
   margin: 0;
-}
-.debug-fill {
-  width: 100%;
-  height: 100%;
-}
-.debug-fill--main {
-  background: #fef08a;
-}
-.debug-fill--left {
-  background: #fca5a5;
-}
-.debug-fill--right {
-  background: #93c5fd;
-}
-.debug-fill--bottom {
-  background: #86efac;
 }
 .debug-controls {
   position: fixed;

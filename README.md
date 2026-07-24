@@ -2,6 +2,11 @@
 
 A monorepo workspace for the **pichamber** project, using [Bun](https://bun.sh) workspaces.
 
+## Acknowledgements
+
+- [earendil-works/pi](https://github.com/earendil-works/pi) — provides the coding-agent runtime used by the server.
+- [openchamber/openchamber](https://github.com/openchamber/openchamber) — served as a reference for the UI design.
+
 ## Project structure
 
 ```
@@ -13,15 +18,13 @@ pichamber/
 ├── bun.lock
 └── packages/
     ├── web/                  # Vue 3 + Vite frontend (@pichamber/web)
-    ├── server/               # Bun HTTP server (@pichamber/server)
-    └── shared/               # framework-agnostic shared types/utils (@pichamber/shared)
+    └── server/               # Bun HTTP server (@pichamber/server)
 ```
 
-| Package                                          | Stack                       | Purpose                                      |
-| ------------------------------------------------ | ---------------------------- | -------------------------------------------- |
-| [`@pichamber/web`](./packages/web)              | Vue 3 (rc) · Vite · Pinia · Vue Router | Browser SPA                              |
-| [`@pichamber/server`](./packages/server)         | Bun runtime                  | HTTP server                                 |
-| [`@pichamber/shared`](./packages/shared)         | TypeScript                   | Types, constants, code shared by web+server  |
+| Package                                  | Stack                                | Purpose     |
+| ---------------------------------------- | ------------------------------------ | ----------- |
+| [`@pichamber/web`](./packages/web)       | Vue 3 (rc) · Vite · Pinia · Vue Router | Browser SPA |
+| [`@pichamber/server`](./packages/server) | Bun runtime                          | HTTP server |
 
 ## Prerequisites
 
@@ -66,15 +69,13 @@ Per-package scripts use Bun's `--filter`:
 ```sh
 bun --filter @pichamber/web dev
 bun --filter @pichamber/server start
-bun --filter @pichamber/shared type-check
 ```
 
 ## Conventions
 
 - Vue 3 + Vite + Pinia + Vue Router conventions live in `packages/web/`.
 - The server uses Bun's native `Bun.serve()` HTTP runtime — keep imports Bun-compatible.
-- Anything imported by both `web` and `server` belongs in `packages/shared`.
-- Use TypeScript path aliases within a package (e.g. `@/*` → `packages/web/src/*`), and the `workspace:*` protocol across packages (e.g. `@pichamber/shared`).
+- Use TypeScript path aliases within a package (e.g. `@/*` → `packages/web/src/*`).
 
 ## Type-checking with project references
 

@@ -56,7 +56,9 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
       class="split-pane__panel"
       :class="{ 'is-open': isOpen, 'is-dragging': dragging }"
     >
-      <slot name="sidebar"> 边栏 </slot>
+      <div class="split-pane__content">
+        <slot name="sidebar">边栏</slot>
+      </div>
     </section>
   </div>
 </template>
@@ -100,8 +102,7 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
   overflow: hidden;
 }
 .split-pane__panel {
-  display: grid;
-  place-items: center;
+  display: flex;
   align-self: stretch;
   flex: 0 0 0;
   min-width: 0;
@@ -111,6 +112,13 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
     flex-basis 180ms ease,
     width 180ms ease,
     height 180ms ease;
+}
+.split-pane__content {
+  flex: 0 0 var(--split-w, 280px);
+  width: var(--split-w, 280px);
+  height: 100%;
+  min-width: var(--split-w, 280px);
+  overflow: hidden;
 }
 .split-pane--left > .split-pane__panel,
 .split-pane--right > .split-pane__panel {
@@ -123,6 +131,13 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
 }
 .split-pane--bottom > .split-pane__panel {
   height: 0;
+}
+.split-pane--bottom > .split-pane__panel > .split-pane__content {
+  flex-basis: var(--split-h, 280px);
+  width: 100%;
+  height: var(--split-h, 280px);
+  min-width: 0;
+  min-height: var(--split-h, 280px);
 }
 .split-pane--bottom > .split-pane__panel.is-open {
   height: var(--split-h, 280px);
