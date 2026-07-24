@@ -12,26 +12,15 @@
     "build": "bun --filter '*' build",
     "build:web": "bun --filter @pichamber/web build",
     "build:server": "bun --filter @pichamber/server build",
-    "test": "bun --filter '*' test",
-    "test:unit": "bun --filter @pichamber/web test:unit",
     "type-check": "bun --filter '*' type-check",
-    "lint": "run-s \"lint:*\"",
-    "lint:oxlint": "oxlint . --fix",
-    "lint:eslint": "eslint . --fix --cache"
+    "lint": "oxlint . --fix"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
     "@types/node": "^26.1.1",
-    "@vitest/eslint-plugin": "^1.6.23",
-    "@vue/eslint-config-typescript": "^14.9.0",
     "concurrently": "^10.0.3",
-    "eslint": "^10.7.0",
-    "eslint-plugin-oxlint": "~1.75.0",
-    "eslint-plugin-vue": "~10.10.0",
-    "npm-run-all2": "^9.0.2",
     "oxlint": "~1.75.0",
     "typescript": "~7.0.2",
-    "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^3.3.8"
   },
   "engines": {

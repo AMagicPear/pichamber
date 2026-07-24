@@ -13,8 +13,7 @@ A monorepo workspace for the **pichamber** project, using [Bun](https://bun.sh) 
 pichamber/
 ├── package.json              # workspace root, dev orchestration scripts
 ├── tsconfig.json             # references all packages
-├── eslint.config.ts          # lint config applied to all packages
-├── .oxlintrc.json
+├── .oxlintrc.json            # lint config applied to all packages
 ├── bun.lock
 └── packages/
     ├── web/                  # Vue 3 + Vite frontend (@pichamber/web)
@@ -57,10 +56,7 @@ bun run build
 # Type-check all packages (uses project references)
 bun run type-check
 
-# Run web's Vitest unit tests
-bun run test:unit
-
-# Lint everything (oxlint + eslint)
+# Lint everything with oxlint
 bun run lint
 ```
 
@@ -89,7 +85,7 @@ This uses `tsc --build` under the hood for each package.
 
 ## Linting
 
-ESLint and oxlint are configured at the root and scan `packages/*/src/**`. Run:
+oxlint is configured at the root and scans the workspace. Run:
 
 ```sh
 bun run lint
