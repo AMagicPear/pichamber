@@ -1,30 +1,43 @@
 <script setup lang="ts">
-import SplitPane from "@/components/SplitPane.vue";
-import { useUiStore } from "@/stores/ui";
-
-const ui = useUiStore();
+import SplitPane from "@/components/layout/SplitPane.vue";
+import ContextPanel from "@/components/workspace/ContextPanel.vue";
+import ConversationPanel from "@/components/workspace/ConversationPanel.vue";
+import SessionHeader from "@/components/workspace/SessionHeader.vue";
+import SessionSidebar from "@/components/workspace/SessionSidebar.vue";
+import TerminalPanel from "@/components/workspace/TerminalPanel.vue";
 </script>
 
 <template>
   <SplitPane mode="left">
-    <template #default>
-      <SplitPane mode="right">
-        <template #default>
-          <SplitPane mode="bottom">
-            <template #default />
-            <template #sidebar />
-          </SplitPane>
-        </template>
-        <template #sidebar />
-      </SplitPane>
+    <template #sidebar>
+      <SessionSidebar />
     </template>
-    <template #sidebar />
+
+    <template #default>
+      <section class="workspace">
+        <SessionHeader />
+
+        <div class="workspace__body">
+          <SplitPane mode="right">
+            <template #default>
+              <SplitPane mode="bottom">
+                <template #default>
+                  <ConversationPanel />
+                </template>
+                <template #sidebar>
+                  <TerminalPanel />
+                </template>
+              </SplitPane>
+            </template>
+
+            <template #sidebar>
+              <ContextPanel />
+            </template>
+          </SplitPane>
+        </div>
+      </section>
+    </template>
   </SplitPane>
-  <div class="debug-controls">
-    <button type="button" @click="ui.toggle('left')">切换左栏</button>
-    <button type="button" @click="ui.toggle('bottom')">切换下栏</button>
-    <button type="button" @click="ui.toggle('right')">切换右栏</button>
-  </div>
 </template>
 
 <style>
@@ -34,10 +47,29 @@ body,
   height: 100%;
   margin: 0;
 }
-.debug-controls {
-  position: fixed;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.workspace {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.workspace__body {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
 }
 </style>

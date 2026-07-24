@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, useTemplateRef } from "vue";
 import { useUiStore, type SplitMode } from "@/stores/ui";
-import { useSplitPaneDrag } from "@/composables/useSplitPaneDrag";
+import { useSplitPaneDrag } from "@/composables/layout/useSplitPaneDrag";
 
 defineOptions({ name: "SplitPane" });
 

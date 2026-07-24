@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { createSession, deleteSession, getEntries, listSessions } from "../api/client";
-import { connectWs, type WsHandle } from "../api/ws";
+import { createSession, deleteSession, getEntries, listSessions } from "../../api/client";
+import { connectWs, type WsHandle } from "../../api/ws";
 
 const cwd = ref("/tmp");
 const sessionId = ref<string | null>(null);

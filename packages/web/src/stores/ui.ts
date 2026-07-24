@@ -6,8 +6,8 @@ export const useUiStore = defineStore("ui", {
   state: () => ({
     panels: {
       left: { open: true },
-      right: { open: false },
-      bottom: { open: false },
+      right: { open: true },
+      bottom: { open: true },
     },
   }),
   actions: {
