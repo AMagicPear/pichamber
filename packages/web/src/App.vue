@@ -6,11 +6,11 @@ const ui = useUiStore();
 </script>
 
 <template>
-  <SplitPane mode="bottom">
+  <SplitPane mode="left">
     <template #default>
-      <SplitPane mode="left">
+      <SplitPane mode="right">
         <template #default>
-          <SplitPane mode="right">
+          <SplitPane mode="bottom">
             <template #default><div class="debug-fill debug-fill--main" /></template>
             <template #sidebar><div class="debug-fill debug-fill--right" /></template>
           </SplitPane>
