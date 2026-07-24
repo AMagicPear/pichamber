@@ -13,15 +13,11 @@ const ui = useUiStore();
 </script>
 
 <template>
-  <header class="session-header">
+  <header
+    class="session-header"
+    :class="{ 'is-left-collapsed': !ui.panels.left.open }"
+  >
     <div class="session-header__leading">
-      <PanelToggleButton
-        v-if="!ui.panels.left.open"
-        panel="left"
-        label="Show left sidebar"
-      >
-        <LayoutLeftIcon />
-      </PanelToggleButton>
       <div class="session-header__title">
         <h1>New session</h1>
         <p>amagicpear</p>
@@ -51,6 +47,9 @@ const ui = useUiStore();
   justify-content: space-between;
   padding: 0 10px 0 16px;
   border-bottom: 1px solid #e8e6df;
+}
+.session-header.is-left-collapsed {
+  padding-left: 48px;
 }
 .session-header__leading,
 .session-header__tools {

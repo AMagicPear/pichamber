@@ -8,6 +8,7 @@ interface SplitPaneDragOptions {
   initialSize: number;
   minSize: number;
   maxSize: number;
+  onCommit?: (size: number) => void;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -44,6 +45,9 @@ export function useSplitPaneDrag(options: SplitPaneDragOptions) {
   }
 
   function onPointerUp() {
+    if (dragging.value) {
+      options.onCommit?.(size);
+    }
     dragging.value = false;
   }
 

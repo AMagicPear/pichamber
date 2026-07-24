@@ -5,12 +5,10 @@ import ChatNewIcon from "@/assets/icons/ChatNew.svg";
 import CheckboxMultipleIcon from "@/assets/icons/CheckboxMultiple.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
 import InformationIcon from "@/assets/icons/Information.svg";
-import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
 import QuestionIcon from "@/assets/icons/Question.svg";
 import SearchIcon from "@/assets/icons/Search.svg";
 import SettingsIcon from "@/assets/icons/Settings3.svg";
 import SortDescIcon from "@/assets/icons/SortDesc.svg";
-import PanelToggleButton from "@/components/PanelToggleButton.vue";
 import { ArrowsMerge } from "@/components/ArrowsMerge";
 import IconButton from "@/components/IconButton.vue";
 </script>
@@ -18,9 +16,6 @@ import IconButton from "@/components/IconButton.vue";
 <template>
   <aside class="sidebar">
     <div class="sidebar__topbar">
-      <PanelToggleButton panel="left" label="Toggle left sidebar">
-        <LayoutLeftIcon />
-      </PanelToggleButton>
       <div class="sidebar__search-group">
         <IconButton class="search-primary" label="Search"><SearchIcon /></IconButton>
         <IconButton label="Search options"><ArrowDownSIcon /></IconButton>
@@ -96,7 +91,8 @@ import IconButton from "@/components/IconButton.vue";
 .sidebar__topbar {
   flex: 0 0 48px;
   gap: 14px;
-  padding: 8px 14px;
+  align-items: center;
+  padding: 8px 14px 8px 48px;
 }
 .sidebar__search-group {
   display: flex;

@@ -59,9 +59,11 @@ const presets = [
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 24px;
   width: 100%;
   height: 100%;
-  padding: 0 24px 16px;
+  padding: 24px 24px 16px;
   overflow: auto;
   scrollbar-width: none;
 }
@@ -69,7 +71,7 @@ const presets = [
   display: none;
 }
 .conversation h2 {
-  margin: -9px 0 58px;
+  margin: 0;
   font-size: 28px;
   font-weight: 500;
   line-height: 1.12;
@@ -81,6 +83,7 @@ const presets = [
   padding: 18px 12px 12px;
   border: 1px solid #dedbd2;
   border-radius: 13px;
+  margin: 0;
 }
 .composer p {
   margin: 0 0 28px;
@@ -116,7 +119,7 @@ const presets = [
   justify-content: center;
   gap: 7px;
   flex-wrap: wrap;
-  margin-top: 16px;
+  margin: 0;
 }
 .presets > button:not(.presets__add) {
   display: inline-flex;

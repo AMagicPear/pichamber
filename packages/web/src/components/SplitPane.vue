@@ -8,19 +8,18 @@ defineOptions({ name: "SplitPane" });
 const props = withDefaults(
   defineProps<{
     mode?: SplitMode;
-    initialSize?: number;
     minSize?: number;
     maxSize?: number;
   }>(),
   {
     mode: "left",
-    initialSize: 280,
     minSize: 160,
     maxSize: 600,
   },
 );
 const ui = useUiStore();
 const isOpen = computed(() => ui.panels[props.mode].open);
+const initialSize = computed(() => ui.panels[props.mode].size);
 const direction = props.mode === "left" ? 1 : -1;
 const cssVar = props.mode === "bottom" ? "--split-h" : "--split-w";
 const horizontal = props.mode !== "bottom";
@@ -31,9 +30,10 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
   horizontal,
   direction,
   cssVar,
-  initialSize: props.initialSize,
+  initialSize: initialSize.value,
   minSize: props.minSize,
   maxSize: props.maxSize,
+  onCommit: (size) => ui.setSize(props.mode, size),
 });
 </script>
 
@@ -167,7 +167,7 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
   bottom: 0;
   left: 4px;
   width: 1px;
-  background: #bdbdbd;
+  background: #e8e6df;
   transition:
     left 120ms ease,
     width 120ms ease,
@@ -197,7 +197,7 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
 }
 .split-pane__handle.is-dragging .split-pane__line,
 .split-pane__handle:hover .split-pane__line {
-  background: rgba(96, 96, 96, 0.55);
+  background: rgba(0, 0, 0, 0.25);
   left: 3px;
   width: 3px;
 }

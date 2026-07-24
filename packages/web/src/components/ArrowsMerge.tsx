@@ -23,5 +23,3 @@ export const ArrowsMerge = defineComponent({
     );
   },
 });
-
-export default ArrowsMerge;
