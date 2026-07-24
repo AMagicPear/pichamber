@@ -11,6 +11,8 @@ import SettingsIcon from "@/assets/icons/Settings3.svg";
 import SortDescIcon from "@/assets/icons/SortDesc.svg";
 import { ArrowsMerge } from "@/components/ArrowsMerge";
 import IconButton from "@/components/IconButton.vue";
+
+const emit = defineEmits<{ openSettings: [] }>();
 </script>
 
 <template>
@@ -63,7 +65,9 @@ import IconButton from "@/components/IconButton.vue";
     </section>
 
     <footer class="sidebar__footer">
-      <IconButton size="large" label="Settings"><SettingsIcon /></IconButton>
+      <IconButton size="large" label="Settings" @click="emit('openSettings')">
+        <SettingsIcon />
+      </IconButton>
       <IconButton size="large" label="Keyboard shortcuts"><QuestionIcon /></IconButton>
       <IconButton size="large" label="About"><InformationIcon /></IconButton>
       <button type="button" class="sidebar__update">update</button>

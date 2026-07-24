@@ -20,7 +20,8 @@ const props = withDefaults(
 const ui = useUiStore();
 const isOpen = computed(() => ui.panels[props.mode].open);
 const initialSize = computed(() => ui.panels[props.mode].size);
-const direction = props.mode === "left" ? 1 : -1;
+const isLeftish = props.mode === "left" || props.mode === "settings";
+const direction = isLeftish ? 1 : -1;
 const cssVar = props.mode === "bottom" ? "--split-h" : "--split-w";
 const horizontal = props.mode !== "bottom";
 
@@ -75,13 +76,16 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
   box-sizing: border-box;
   overflow: hidden;
 }
-.split-pane--left > .split-pane__main {
+.split-pane--left > .split-pane__main,
+.split-pane--settings > .split-pane__main {
   order: 2;
 }
-.split-pane--left > .split-pane__handle {
+.split-pane--left > .split-pane__handle,
+.split-pane--settings > .split-pane__handle {
   order: 1;
 }
-.split-pane--left > .split-pane__panel {
+.split-pane--left > .split-pane__panel,
+.split-pane--settings > .split-pane__panel {
   order: 0;
 }
 .split-pane--right > .split-pane__handle {
@@ -121,10 +125,12 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
   overflow: hidden;
 }
 .split-pane--left > .split-pane__panel,
+.split-pane--settings > .split-pane__panel,
 .split-pane--right > .split-pane__panel {
   width: 0;
 }
 .split-pane--left > .split-pane__panel.is-open,
+.split-pane--settings > .split-pane__panel.is-open,
 .split-pane--right > .split-pane__panel.is-open {
   width: var(--split-w, 280px);
   flex-basis: var(--split-w, 280px);
@@ -174,6 +180,7 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
     background-color 120ms ease;
 }
 .split-pane--left > .split-pane__handle,
+.split-pane--settings > .split-pane__handle,
 .split-pane--right > .split-pane__handle {
   cursor: col-resize;
 }

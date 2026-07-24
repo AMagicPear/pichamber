@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
 import PanelToggleButton from "@/components/PanelToggleButton.vue";
 import SplitPane from "@/components/SplitPane.vue";
+import SettingsModal from "@/components/SettingsModal.vue";
+import SettingsView from "@/components/settings/SettingsView.vue";
 import { startUiStorePersistence } from "@/stores/ui";
 import ContextPanel from "@/components/workspace/ContextPanel.vue";
 import ConversationPanel from "@/components/workspace/ConversationPanel.vue";
@@ -10,6 +13,8 @@ import SessionSidebar from "@/components/workspace/SessionSidebar.vue";
 import TerminalPanel from "@/components/workspace/TerminalPanel.vue";
 
 startUiStorePersistence();
+
+const settingsOpen = ref(false);
 </script>
 
 <template>
@@ -20,7 +25,7 @@ startUiStorePersistence();
 
     <SplitPane mode="left">
       <template #sidebar>
-        <SessionSidebar />
+        <SessionSidebar @open-settings="settingsOpen = true" />
       </template>
 
       <template #default>
@@ -48,6 +53,12 @@ startUiStorePersistence();
         </section>
       </template>
     </SplitPane>
+
+    <SettingsModal :show="settingsOpen" @close="settingsOpen = false">
+      <template #body>
+        <SettingsView @close="settingsOpen = false" />
+      </template>
+    </SettingsModal>
   </div>
 </template>
 

@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-export type SplitMode = "left" | "right" | "bottom";
+export type SplitMode = "left" | "right" | "bottom" | "settings";
 
 export interface PanelState {
   open: boolean;
@@ -15,9 +15,10 @@ const DEFAULT_PANELS: PanelsState = {
   left: { open: true, size: 280 },
   right: { open: true, size: 356 },
   bottom: { open: true, size: 225 },
+  settings: { open: true, size: 216 },
 };
 
-const SPLIT_MODES: readonly SplitMode[] = ["left", "right", "bottom"];
+const SPLIT_MODES: readonly SplitMode[] = ["left", "right", "bottom", "settings"];
 
 function hasStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
