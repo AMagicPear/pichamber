@@ -133,11 +133,12 @@ const { dragging, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag
   height: 0;
 }
 .split-pane--bottom > .split-pane__panel > .split-pane__content {
-  flex-basis: var(--split-h, 280px);
+  flex: 1 1 auto;
   width: 100%;
   height: var(--split-h, 280px);
   min-width: 0;
   min-height: var(--split-h, 280px);
+  overflow: hidden;
 }
 .split-pane--bottom > .split-pane__panel.is-open {
   height: var(--split-h, 280px);
