@@ -147,10 +147,28 @@ async function ensureTerminal(): Promise<Terminal | null> {
     fontFamily:
       '"Maple Mono NF CN", "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
     theme: {
-      background: "#171816",
-      foreground: "#d6d7d2",
-      cursor: "#d9a441",
-      selectionBackground: "#4a4d47",
+      background: "#fffdf4",
+      foreground: "#100f0f",
+      cursor: "#100f0f",
+      cursorAccent: "#fffdf4",
+      selectionBackground: "#76736f30",
+      selectionForeground: "#100f0f",
+      black: "#100f0f",
+      red: "#af3029",
+      green: "#66800b",
+      yellow: "#bc5215",
+      blue: "#205ea6",
+      magenta: "#5e409d",
+      cyan: "#24837b",
+      white: "#fffdf4",
+      brightBlack: "#6f6e69",
+      brightRed: "#af3029",
+      brightGreen: "#66800b",
+      brightYellow: "#bc5215",
+      brightBlue: "#205ea6",
+      brightMagenta: "#5e409d",
+      brightCyan: "#24837b",
+      brightWhite: "#fffdf4",
     },
     scrollback: 5000,
   });
@@ -266,7 +284,7 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #171816;
+  background: #fffdf4;
 }
 .terminal-view__host {
   width: 100%;
@@ -292,7 +310,7 @@ onMounted(async () => {
 }
 .terminal-view__overlay strong {
   display: block;
-  color: #d9a441;
+  color: #bc5215;
 }
 .terminal-view__overlay span {
   display: block;

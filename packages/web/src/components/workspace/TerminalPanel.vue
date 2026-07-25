@@ -19,7 +19,7 @@
  *
  * Styling intentionally mirrors the original TerminalPanel (light theme,
  * `#dedbd2` header border, `#b65323` orange underline for the active tab).
- * Only the canvas body is dark — terminals are typically dark for contrast.
+ * The terminal canvas uses the same fixed light palette as the surrounding UI.
  */
 
 import { computed, ref, watch } from "vue";
@@ -396,7 +396,7 @@ watch(bottomOpen, (open) => {
   position: relative;
   flex: 1 1 0;
   min-height: 0;
-  background: #ffffff;
+  background: #fffdf4;
 }
 .terminal__pane {
   position: absolute;
