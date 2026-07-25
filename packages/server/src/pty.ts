@@ -4,7 +4,9 @@ import { statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { spawn, type IDisposable, type IPty } from "bun-pty";
 
-import { getHomeDir } from "./home";
+import { getWorkspace, shortPath } from "./workspace";
+
+export { shortPath };
 
 export interface PtyHandle {
   id: string;
@@ -45,15 +47,8 @@ function getDefaultShell(): string {
   return "/bin/zsh";
 }
 
-function shortPath(cwd: string): string {
-  const home = getHomeDir();
-  if (cwd === home) return "~";
-  if (cwd.startsWith(`${home}/`)) return `~${cwd.slice(home.length)}`;
-  return cwd;
-}
-
 function resolveCwd(input: string | undefined): string {
-  const fallback = getHomeDir();
+  const fallback = getWorkspace();
   if (!input) return fallback;
   const cwd = isAbsolute(input) ? input : resolve(process.cwd(), input);
   try {
@@ -202,5 +197,3 @@ export function stopPty(ptyId: string): void {
 export function stopAllPtys(): void {
   for (const id of handles.keys()) stopPty(id);
 }
-
-export { shortPath };

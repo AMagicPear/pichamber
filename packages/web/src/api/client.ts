@@ -67,3 +67,26 @@ export const stopPty = (ptyId: string) =>
   fetch(`${BASE}/pty/${encodeURIComponent(ptyId)}`, { method: "DELETE" }).then((r) =>
     jsonOrThrow<{ ok: true }>(r),
   );
+
+// ─── Filesystem (files panel) ────────────────────────────────────────
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  /** Path relative to the active workspace root, or "" if outside. */
+  relativePath: string;
+  isDirectory: boolean;
+  isFile: boolean;
+  isSymbolicLink: boolean;
+}
+
+export interface ListResult {
+  path: string;
+  displayPath: string;
+  entries: DirEntry[];
+}
+
+export const listDirectory = (path?: string) => {
+  const url = path ? `${BASE}/fs/list?path=${encodeURIComponent(path)}` : `${BASE}/fs/list`;
+  return fetch(url).then((r) => jsonOrThrow<ListResult>(r));
+};

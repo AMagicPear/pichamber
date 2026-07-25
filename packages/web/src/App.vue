@@ -44,6 +44,7 @@ const ui = useUiStore();
               mode="right"
               :open="ui.panels.right.open"
               :size="ui.panels.right.size"
+              :min-size="300"
               @update:size="ui.setSize('right', $event)"
             >
               <template #default>
