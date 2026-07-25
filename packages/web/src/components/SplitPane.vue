@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useTemplateRef } from "vue";
+import { computed, useTemplateRef, watch } from "vue";
 import { useUiStore, type SplitMode } from "@/stores/ui";
 import { useSplitPaneDrag } from "@/composables/layout/useSplitPaneDrag";
 
@@ -20,6 +20,7 @@ const props = withDefaults(
 const ui = useUiStore();
 const isOpen = computed(() => ui.panels[props.mode].open);
 const initialSize = computed(() => ui.panels[props.mode].size);
+const isMaximized = computed(() => props.mode === "bottom" && ui.maximized[props.mode]);
 const isLeftish = props.mode === "left" || props.mode === "settings";
 const direction = isLeftish ? 1 : -1;
 const cssVar = props.mode === "bottom" ? "--split-h" : "--split-w";
@@ -44,15 +45,34 @@ const CLAMPED_CURSOR = {
 } as const;
 
 const panelRef = useTemplateRef<HTMLElement>("panelRef");
-const { dragging, clamped, onPointerDown, onPointerMove, onPointerUp } = useSplitPaneDrag({
+const dragMaxSize = props.maxSize;
+const getDragMaxSize =
+  props.mode === "bottom"
+    ? () =>
+        Math.max(dragMaxSize, panelRef.value?.parentElement?.getBoundingClientRect().height ?? 0)
+    : undefined;
+const { dragging, clamped, onPointerDown, onPointerMove, onPointerUp, setSize } = useSplitPaneDrag({
   panelRef,
   horizontal,
   direction,
   cssVar,
   initialSize: initialSize.value,
   minSize: props.minSize,
-  maxSize: props.maxSize,
+  maxSize: dragMaxSize,
+  getMaxSize: getDragMaxSize,
   onCommit: (size) => ui.setSize(props.mode, size),
+});
+
+function onSplitPointerDown(event: PointerEvent): void {
+  if (props.mode === "bottom" && isMaximized.value && panelRef.value) {
+    setSize(panelRef.value.getBoundingClientRect().height);
+    ui.setMaximized(props.mode, false);
+  }
+  onPointerDown(event);
+}
+
+watch(isOpen, (open) => {
+  if (!open) ui.setMaximized(props.mode, false);
 });
 
 const handleStyle = computed(() => {
@@ -72,7 +92,7 @@ const handleStyle = computed(() => {
       :style="handleStyle"
       role="separator"
       :aria-orientation="horizontal ? 'vertical' : 'horizontal'"
-      @pointerdown="onPointerDown"
+      @pointerdown="onSplitPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
     >
@@ -81,7 +101,7 @@ const handleStyle = computed(() => {
     <section
       ref="panelRef"
       class="split-pane__panel"
-      :class="{ 'is-open': isOpen, 'is-dragging': dragging }"
+      :class="{ 'is-open': isOpen, 'is-dragging': dragging, 'is-maximized': isMaximized }"
     >
       <div class="split-pane__content">
         <slot name="sidebar">边栏</slot>
@@ -177,14 +197,11 @@ const handleStyle = computed(() => {
   flex-basis: var(--split-h, 280px);
 }
 
-/* Maximize is still a normal bottom-panel resize. The handle remains in the
-   layout, so the panel fills the available height without changing the
-   SplitPane's existing open/drag transition model. */
-.split-pane--bottom:has(.terminal.is-maximized) > .split-pane__panel {
+.split-pane--bottom > .split-pane__panel.is-maximized {
   height: calc(100% - 9px);
   flex-basis: calc(100% - 9px);
 }
-.split-pane--bottom:has(.terminal.is-maximized) > .split-pane__panel > .split-pane__content {
+.split-pane--bottom > .split-pane__panel.is-maximized > .split-pane__content {
   height: 100%;
   min-height: 0;
 }

@@ -8,8 +8,8 @@
  *   - "+" creates a new tab with a fresh PTY.
  *   - "×" on a tab kills its PTY and removes the tab. Killing the active tab
  *     focuses the previous one (or the next, if it was the leftmost).
- *   - The "maximize" button toggles a class that lets the parent bottom
- *     SplitPane resize itself to fill its available height.
+ *   - The "maximize" button delegates panel geometry to the parent bottom
+ *     SplitPane.
  *   - Tabs that the server has already torn down (status === "closed" with no
  *     restart prompt) auto-prune via the `onExited` handler.
  *
@@ -17,8 +17,8 @@
  * a disconnected WS only releases its subscription so HMR/reconnect can
  * reuse the same shell during the short server-side grace period.
  *
- * Styling intentionally mirrors the original TerminalPanel (light theme,
- * `#dedbd2` header border, `#b65323` orange underline for the active tab).
+ * Styling intentionally mirrors the original TerminalPanel (light theme and
+ * `#b65323` orange underline for the active tab).
  * The terminal canvas uses the same fixed light palette as the surrounding UI.
  */
 
@@ -55,7 +55,7 @@ const bottomOpen = computed(() => ui.panels.bottom.open);
 
 const tabs = ref<Tab[]>([]);
 const activeId = ref<string | null>(null);
-const maximized = ref(false);
+const maximized = computed(() => ui.maximized.bottom);
 
 function focusTab(id: string): void {
   activeId.value = id;
@@ -135,7 +135,7 @@ async function reopenTab(id: string): Promise<void> {
 }
 
 function toggleMaximize(): void {
-  maximized.value = !maximized.value;
+  ui.toggleMaximized("bottom");
 }
 
 // Auto-create one tab the first time the panel becomes visible. Spawning a
@@ -148,15 +148,10 @@ watch(
   { immediate: true },
 );
 
-// Reset maximize when the panel closes so re-opening at full screen is
-// never surprising.
-watch(bottomOpen, (open) => {
-  if (!open) maximized.value = false;
-});
 </script>
 
 <template>
-  <section class="terminal" :class="{ 'is-maximized': maximized }">
+  <section class="terminal">
     <header class="terminal__header">
       <div class="terminal__tabs" role="tablist">
         <div

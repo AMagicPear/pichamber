@@ -33,8 +33,26 @@ function createDefaultPanels(): PanelsState {
   ) as PanelsState;
 }
 
+function createDefaultMaximized(): Record<SplitMode, boolean> {
+  return Object.fromEntries(SPLIT_MODES.map((mode) => [mode, false])) as Record<SplitMode, boolean>;
+}
+
+function loadMaximized(): Record<SplitMode, boolean> {
+  if (!hasStorage()) return createDefaultMaximized();
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
+    return (parsed.maximized as Record<SplitMode, boolean> | undefined) ?? createDefaultMaximized();
+  } catch {
+    return createDefaultMaximized();
+  }
+}
+
 function clampSize(mode: SplitMode, size: number): number {
-  const [min, max] = SIZE_LIMITS[mode];
+  const [min, configuredMax] = SIZE_LIMITS[mode];
+  const max =
+    mode === "bottom" && typeof window !== "undefined"
+      ? Math.max(configuredMax, window.innerHeight)
+      : configuredMax;
   return Math.min(max, Math.max(min, size));
 }
 
@@ -57,8 +75,7 @@ function loadPanels(): PanelsState | null {
     for (const mode of SPLIT_MODES) {
       const entry = source[mode] as { open?: unknown; size?: unknown } | undefined;
       if (!entry || typeof entry !== "object") continue;
-      const open =
-        typeof entry.open === "boolean" ? entry.open : DEFAULT_PANELS[mode].open;
+      const open = typeof entry.open === "boolean" ? entry.open : DEFAULT_PANELS[mode].open;
       const size =
         typeof entry.size === "number" && Number.isFinite(entry.size)
           ? clampSize(mode, entry.size)
@@ -71,10 +88,10 @@ function loadPanels(): PanelsState | null {
   }
 }
 
-function savePanels(panels: PanelsState): void {
+function saveUiState(panels: PanelsState, maximized: Record<SplitMode, boolean>): void {
   if (!hasStorage()) return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ panels }));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ panels, maximized }));
   } catch {
     /* ignore quota / privacy-mode errors */
   }
@@ -83,6 +100,7 @@ function savePanels(panels: PanelsState): void {
 export const useUiStore = defineStore("ui", {
   state: () => ({
     panels: loadPanels() ?? createDefaultPanels(),
+    maximized: loadMaximized(),
   }),
   actions: {
     toggle(mode: SplitMode) {
@@ -90,6 +108,12 @@ export const useUiStore = defineStore("ui", {
     },
     setSize(mode: SplitMode, size: number) {
       this.panels[mode].size = clampSize(mode, size);
+    },
+    toggleMaximized(mode: SplitMode) {
+      this.maximized[mode] = !this.maximized[mode];
+    },
+    setMaximized(mode: SplitMode, value: boolean) {
+      this.maximized[mode] = value;
     },
   },
 });
@@ -105,6 +129,6 @@ export function startUiStorePersistence(): void {
   persistenceStarted = true;
   const ui = useUiStore();
   ui.$subscribe((_mutation, state) => {
-    savePanels(state.panels as PanelsState);
+    saveUiState(state.panels as PanelsState, state.maximized as Record<SplitMode, boolean>);
   });
 }

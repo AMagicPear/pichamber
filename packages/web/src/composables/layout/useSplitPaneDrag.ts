@@ -8,6 +8,7 @@ interface SplitPaneDragOptions {
   initialSize: number;
   minSize: number;
   maxSize: number;
+  getMaxSize?: () => number;
   onCommit?: (size: number) => void;
 }
 
@@ -21,8 +22,9 @@ export function useSplitPaneDrag(options: SplitPaneDragOptions) {
   const dragging = ref(false);
   const clamped = ref<ClampedAxis>(null);
   const minSize = Math.min(options.minSize, options.maxSize);
-  const maxSize = Math.max(options.minSize, options.maxSize);
-  let size = clamp(options.initialSize, minSize, maxSize);
+  const defaultMaxSize = Math.max(options.minSize, options.maxSize);
+  const currentMaxSize = () => Math.max(minSize, options.getMaxSize?.() ?? defaultMaxSize);
+  let size = clamp(options.initialSize, minSize, currentMaxSize());
   let startCoordinate = 0;
   let startSize = size;
 
@@ -31,9 +33,16 @@ export function useSplitPaneDrag(options: SplitPaneDragOptions) {
   }
 
   function recomputeClamped() {
+    const maxSize = currentMaxSize();
     if (size <= minSize) clamped.value = "min";
     else if (size >= maxSize) clamped.value = "max";
     else clamped.value = null;
+  }
+
+  function setSize(nextSize: number) {
+    size = clamp(nextSize, minSize, currentMaxSize());
+    applySize();
+    recomputeClamped();
   }
 
   watch(options.panelRef, applySize, { flush: "post" });
@@ -52,7 +61,11 @@ export function useSplitPaneDrag(options: SplitPaneDragOptions) {
     if (!dragging.value) return;
     const coordinate = options.horizontal ? event.clientX : event.clientY;
     const previous = size;
-    size = clamp(startSize + options.direction * (coordinate - startCoordinate), minSize, maxSize);
+    size = clamp(
+      startSize + options.direction * (coordinate - startCoordinate),
+      minSize,
+      currentMaxSize(),
+    );
     if (size !== previous) applySize();
     recomputeClamped();
   }
@@ -64,5 +77,5 @@ export function useSplitPaneDrag(options: SplitPaneDragOptions) {
     dragging.value = false;
   }
 
-  return { dragging, clamped, onPointerDown, onPointerMove, onPointerUp };
+  return { dragging, clamped, onPointerDown, onPointerMove, onPointerUp, setSize };
 }
