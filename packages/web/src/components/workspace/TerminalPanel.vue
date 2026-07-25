@@ -212,7 +212,7 @@ watch(bottomOpen, (open) => {
       <template v-if="tabs.length === 0">
         <div class="terminal__empty">
           <p>No terminals yet.</p>
-          <button type="button" class="terminal__empty-action" @click="createTab">
+          <button type="button" class="terminal__action" @click="createTab">
             <AddIcon />
             <span>New terminal</span>
           </button>
@@ -243,14 +243,18 @@ watch(bottomOpen, (open) => {
               <strong>Terminal failed to start.</strong>
               <span>{{ tab.errorMessage }}</span>
             </p>
-            <button type="button" @click="reopenTab(tab.id)">Try again</button>
+            <button type="button" class="terminal__action" @click="reopenTab(tab.id)">
+              Try again
+            </button>
           </div>
           <div v-else class="terminal__state">
             <p>
               <strong>Terminal closed.</strong>
               <span>{{ tab.errorMessage || "Shell exited." }}</span>
             </p>
-            <button type="button" @click="reopenTab(tab.id)">Restart</button>
+            <button type="button" class="terminal__action" @click="reopenTab(tab.id)">
+              Restart
+            </button>
           </div>
         </div>
       </template>
@@ -416,24 +420,10 @@ watch(bottomOpen, (open) => {
   color: #777;
   font-size: 13px;
 }
-.terminal__state button {
+.terminal__action {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid #dedbd2;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #171717;
-  font-size: 13px;
-}
-.terminal__state button:hover {
-  background: #f6f5f0;
-}
-.terminal__empty-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
   height: 30px;
   padding: 0 10px;
   border: 1px solid #dad8ce;
@@ -449,17 +439,17 @@ watch(bottomOpen, (open) => {
     background 120ms ease,
     color 120ms ease;
 }
-.terminal__empty-action :deep(svg) {
+.terminal__action :deep(svg) {
   width: 14px;
   height: 14px;
   color: #b65323;
 }
-.terminal__empty-action:hover {
+.terminal__action:hover {
   border-color: #b65323;
   background: #fffaf5;
   color: #171717;
 }
-.terminal__empty-action:focus-visible {
+.terminal__action:focus-visible {
   outline: 2px solid #b65323;
   outline-offset: 2px;
 }
