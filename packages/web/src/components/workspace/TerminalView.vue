@@ -18,7 +18,8 @@
  *   4. On `ws.onopen`, send one initial resize so the PTY matches the
  *      already-fitted terminal dimensions.
  *   5. Unmount: `terminal.dispose()` tears down the addon (which clears the
- *      ResizeObserver) and disconnects the WS; the server kills the PTY.
+ *      ResizeObserver) and disconnects the WS. The PTY is owned by its tab;
+ *      explicit tab close calls the server DELETE endpoint.
  *
  * Note: the parent provides the ptyId — this component does NOT call
  * startPty itself. Decoupling ptyId creation from mount keeps the :key
@@ -50,9 +51,45 @@ let ws: WebSocket | undefined;
 const disposers: IDisposable[] = [];
 let registeredHost: HTMLElement | undefined;
 let disposed = false;
+let pendingOutput = "";
+let outputFrame: number | undefined;
+let outputWriting = false;
+
+function flushOutput(): void {
+  outputFrame = undefined;
+  if (outputWriting || !terminal || !pendingOutput) return;
+
+  const data = pendingOutput;
+  pendingOutput = "";
+  outputWriting = true;
+  terminal.write(data, () => {
+    outputWriting = false;
+    if (pendingOutput) scheduleOutputFlush();
+  });
+}
+
+function scheduleOutputFlush(): void {
+  if (outputFrame !== undefined) return;
+  outputFrame = window.requestAnimationFrame(flushOutput);
+}
+
+function enqueueOutput(data: string): void {
+  pendingOutput += data;
+  scheduleOutputFlush();
+}
+
+function resetOutputQueue(): void {
+  pendingOutput = "";
+  outputWriting = false;
+  if (outputFrame !== undefined) {
+    window.cancelAnimationFrame(outputFrame);
+    outputFrame = undefined;
+  }
+}
 
 function teardown(): void {
   disposed = true;
+  resetOutputQueue();
 
   for (const d of disposers) d.dispose();
   disposers.length = 0;
@@ -174,7 +211,7 @@ function openSocket(ptyId: string): void {
   socket.onmessage = (event) => {
     if (!terminal) return;
     if (typeof event.data === "string") {
-      terminal.write(event.data);
+      enqueueOutput(event.data);
     }
   };
 

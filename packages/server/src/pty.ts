@@ -1,28 +1,16 @@
-/**
- * PTY state — real shell sessions backed by Bun's native PTY.
- *
- * One module-scoped `handles` Map per process. Each `ptyId` is the key for
- * a single Bun.Terminal + child process pair. Subscribers (WebSocket senders)
- * are added per connection; explicit DELETE owns termination, while an
- * unobserved PTY is reclaimed after a short reconnect grace period.
- *
- * This module follows the same shape as ./session.ts and ./ws.ts (module
- * level Maps + exported functions + an exported `ptyHandlers` object for
- * the WebSocket lifecycle), so adding a new server-side resource doesn't
- * require learning a new pattern.
- */
+/** PTY sessions backed by bun-pty. */
 
 import { statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
+import { spawn, type IDisposable, type IPty } from "bun-pty";
 
 import { getHomeDir } from "./home";
 
-// ─── Types ─────────────────────────────────────────────────────────────
-
 export interface PtyHandle {
   id: string;
-  terminal: Bun.Terminal;
-  proc: Bun.Subprocess;
+  terminal: IPty;
+  outputSubscription: IDisposable;
+  exitSubscription: IDisposable;
   subscribers: Set<(data: string) => void>;
   exitSubscribers: Set<() => void>;
   orphanTimer?: ReturnType<typeof setTimeout>;
@@ -48,12 +36,13 @@ export interface PtyStartResult {
   title: string;
 }
 
-// ─── Defaults ──────────────────────────────────────────────────────────
+const handles = new Map<string, PtyHandle>();
+const ORPHAN_GRACE_MS = 5_000;
 
 function getDefaultShell(): string {
   if (process.env.SHELL) return process.env.SHELL;
   if (process.platform === "win32") return process.env.COMSPEC ?? "cmd.exe";
-  return "/bin/sh";
+  return "/bin/zsh";
 }
 
 function shortPath(cwd: string): string {
@@ -68,94 +57,25 @@ function resolveCwd(input: string | undefined): string {
   if (!input) return fallback;
   const cwd = isAbsolute(input) ? input : resolve(process.cwd(), input);
   try {
-    const stat = statSync(cwd);
-    if (!stat.isDirectory()) return fallback;
-    return cwd;
+    return statSync(cwd).isDirectory() ? cwd : fallback;
   } catch {
     return fallback;
   }
 }
 
-// ─── State ─────────────────────────────────────────────────────────────
-
-const handles = new Map<string, PtyHandle>();
-const ORPHAN_GRACE_MS = 5_000;
-
-export function hasPty(ptyId: string): boolean {
-  return handles.has(ptyId);
-}
-
-// ─── Lifecycle ─────────────────────────────────────────────────────────
-
-export function startPty(options: PtyStartOptions): PtyStartResult {
-  const cwd = resolveCwd(options.cwd);
-  const shell = options.shell ?? getDefaultShell();
-  const id = crypto.randomUUID();
-
-  // Forward-declared so the Bun.Terminal `data` callback can close over it
-  // before the handle is fully constructed.
-  let handle: PtyHandle | undefined;
-
-  const terminal = new Bun.Terminal({
-    cols: Math.max(2, Math.floor(options.cols)),
-    rows: Math.max(2, Math.floor(options.rows)),
-    data: (_term, data) => {
-      if (!handle) return;
-      const text = new TextDecoder().decode(data);
-      for (const sub of handle.subscribers) sub(text);
-    },
-  });
-
-  // Disable the PTY driver's kernel echo. Without this, the kernel echoes
-  // every input character back to the output side AND the shell's line
-  // editor (zle/bash readline) also re-renders the character — so the user
-  // sees every keystroke twice ("aa" for one 'a' press). Raw mode lets the
-  // shell own all echo logic. Set it before spawn so the child inherits it.
-  terminal.setRawMode(true);
-
-  const proc = Bun.spawn([shell], {
-    cwd,
-    terminal,
-    env: process.env,
-  });
-
-  handle = {
-    id,
-    terminal,
-    proc,
-    subscribers: new Set(),
-    exitSubscribers: new Set(),
-    shell,
-    cwd,
-    title: shortPath(cwd),
-  };
-  handles.set(id, handle);
-
-  proc.exited.then(() => {
-    const h = handles.get(id);
-    if (!h) return;
-    const subscribers = [...h.subscribers];
-    const exitSubscribers = [...h.exitSubscribers];
-    h.subscribers.clear();
-    h.exitSubscribers.clear();
-    handles.delete(id);
-    try {
-      terminal.close();
-    } catch {
-      /* ignore */
-    }
-    for (const sub of subscribers) sub("\x1b[33mTerminal exited\x1b[0m\r\n");
-    for (const sub of exitSubscribers) sub();
-  });
-
-  return { ptyId: id, shell, cwd, title: handle.title };
-}
-
-/** Push raw stdin bytes into the shell (keystrokes, pasted text, etc.). */
-export function writePty(ptyId: string, data: string): void {
-  const handle = handles.get(ptyId);
-  if (!handle) throw new Error("Terminal is not running");
-  handle.terminal.write(data);
+function getTerminalEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) env[key] = value;
+  }
+  env.TERM = "xterm-256color";
+  env.COLORTERM = "truecolor";
+  env.LANG ||= process.platform === "darwin" ? "en_US.UTF-8" : "C.UTF-8";
+  env.LC_CTYPE ||= process.platform === "darwin" ? "UTF-8" : "C.UTF-8";
+  delete env.BASH_XTRACEFD;
+  delete env.BASH_ENV;
+  delete env.ENV;
+  return env;
 }
 
 function cancelOrphanStop(handle: PtyHandle): void {
@@ -172,17 +92,74 @@ function scheduleOrphanStop(handle: PtyHandle): void {
   }, ORPHAN_GRACE_MS);
 }
 
+export function hasPty(ptyId: string): boolean {
+  return handles.has(ptyId);
+}
+
+export function startPty(options: PtyStartOptions): PtyStartResult {
+  const cwd = resolveCwd(options.cwd);
+  const shell = options.shell ?? getDefaultShell();
+  const id = crypto.randomUUID();
+  let handle: PtyHandle | undefined;
+
+  const terminal = spawn(shell, [], {
+    name: "xterm-256color",
+    cols: Math.max(2, Math.floor(options.cols)),
+    rows: Math.max(2, Math.floor(options.rows)),
+    cwd,
+    env: getTerminalEnv(),
+  });
+
+  const outputSubscription = terminal.onData((data) => {
+    const current = handle;
+    if (!current) return;
+    for (const sub of current.subscribers) sub(data);
+  });
+
+  const exitSubscription = terminal.onExit(() => {
+    const current = handles.get(id);
+    if (!current) return;
+    const subscribers = [...current.subscribers];
+    const exitSubscribers = [...current.exitSubscribers];
+    current.subscribers.clear();
+    current.exitSubscribers.clear();
+    current.outputSubscription.dispose();
+    current.exitSubscription.dispose();
+    handles.delete(id);
+    for (const sub of subscribers) sub("\x1b[33mTerminal exited\x1b[0m\r\n");
+    for (const sub of exitSubscribers) sub();
+  });
+
+  handle = {
+    id,
+    terminal,
+    outputSubscription,
+    exitSubscription,
+    subscribers: new Set(),
+    exitSubscribers: new Set(),
+    shell,
+    cwd,
+    title: shortPath(cwd),
+  };
+  handles.set(id, handle);
+
+  return { ptyId: id, shell, cwd, title: handle.title };
+}
+
+/** Push raw stdin bytes into the shell (keystrokes, pasted text, etc.). */
+export function writePty(ptyId: string, data: string): void {
+  const handle = handles.get(ptyId);
+  if (!handle) throw new Error("Terminal is not running");
+  handle.terminal.write(data);
+}
+
 export function resizePty(ptyId: string, cols: number, rows: number): void {
   const handle = handles.get(ptyId);
   if (!handle) throw new Error("Terminal is not running");
   handle.terminal.resize(Math.max(2, Math.floor(cols)), Math.max(2, Math.floor(rows)));
 }
 
-/**
- * Register a chunk sink for a PTY. Returns an unsubscribe function. Used by
- * the WebSocket handler — every chunk the PTY emits is forwarded to the
- * subscriber until the WS closes.
- */
+/** Register a sink for PTY output. */
 export function subscribePty(ptyId: string, cb: (data: string) => void): () => void {
   const handle = handles.get(ptyId);
   if (!handle) throw new Error("PTY not found");
@@ -197,19 +174,15 @@ export function subscribePty(ptyId: string, cb: (data: string) => void): () => v
   };
 }
 
+/** Register a callback for the PTY's natural exit. */
 export function subscribePtyExit(ptyId: string, cb: () => void): () => void {
   const handle = handles.get(ptyId);
   if (!handle) throw new Error("PTY not found");
   handle.exitSubscribers.add(cb);
-  return () => {
-    handle.exitSubscribers.delete(cb);
-  };
+  return () => handle.exitSubscribers.delete(cb);
 }
 
-/**
- * Force-stop a single PTY. Called by the explicit DELETE path when a tab is
- * closed. Idempotent — missing ids are no-ops.
- */
+/** Explicitly terminate a tab-owned PTY. Idempotent for missing ids. */
 export function stopPty(ptyId: string): void {
   const handle = handles.get(ptyId);
   if (!handle) return;
@@ -217,23 +190,17 @@ export function stopPty(ptyId: string): void {
   handles.delete(ptyId);
   handle.subscribers.clear();
   handle.exitSubscribers.clear();
+  handle.outputSubscription.dispose();
+  handle.exitSubscription.dispose();
   try {
-    handle.proc.kill();
+    handle.terminal.kill();
   } catch {
-    /* ignore */
-  }
-  try {
-    handle.terminal.close();
-  } catch {
-    /* ignore */
+    /* already exited */
   }
 }
 
-/** Best-effort cleanup for SIGINT/SIGTERM. */
 export function stopAllPtys(): void {
   for (const id of handles.keys()) stopPty(id);
 }
 
-// Re-exported so the client only needs the title once we hand back
-// `PtyStartResult` (it never has to compute `~/foo` itself).
 export { shortPath };

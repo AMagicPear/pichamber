@@ -13,8 +13,9 @@
  *   - Tabs that the server has already torn down (status === "closed" with no
  *     restart prompt) auto-prune via the `onExited` handler.
  *
- * PTY lifecycle is owned by the server: when the WS closes (component unmount
- * OR PTY process exit), the server kills the shell.
+ * PTY lifecycle is explicit: closing a tab calls the server DELETE endpoint;
+ * a disconnected WS only releases its subscription so HMR/reconnect can
+ * reuse the same shell during the short server-side grace period.
  *
  * Styling intentionally mirrors the original TerminalPanel (light theme,
  * `#dedbd2` header border, `#b65323` orange underline for the active tab).
