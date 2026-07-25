@@ -396,7 +396,7 @@ watch(bottomOpen, (open) => {
   position: relative;
   flex: 1 1 0;
   min-height: 0;
-  background: #fffdf4;
+  background: #ffffff;
 }
 .terminal__pane {
   position: absolute;
