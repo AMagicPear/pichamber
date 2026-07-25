@@ -62,3 +62,8 @@ export const startPty = (options: PtyStartOptions) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(options),
   }).then((r) => jsonOrThrow<PtyStartResult>(r));
+
+export const stopPty = (ptyId: string) =>
+  fetch(`${BASE}/pty/${encodeURIComponent(ptyId)}`, { method: "DELETE" }).then((r) =>
+    jsonOrThrow<{ ok: true }>(r),
+  );

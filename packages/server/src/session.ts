@@ -76,7 +76,10 @@ export const deleteSession = async (
   session.dispose();
   activeSessions.delete(id);
   const sessionPath = session.sessionFile;
-  if (!sessionPath) return { ok: true, method: "inmemory" };
+  if (!sessionPath) {
+    sessionFileLookup.delete(id);
+    return { ok: true, method: "inmemory" };
+  }
   // Try `trash` first (if installed)
   const trashArgs = sessionPath.startsWith("-") ? ["--", sessionPath] : [sessionPath];
   const trashResult = spawnSync("trash", trashArgs, { encoding: "utf-8" });
@@ -96,12 +99,14 @@ export const deleteSession = async (
 
   // If trash reports success, or the file is gone afterwards, treat it as successful
   if (trashResult.status === 0 || !existsSync(sessionPath)) {
+    sessionFileLookup.delete(id);
     return { ok: true, method: "trash" };
   }
 
   // Fallback to permanent deletion
   try {
     await unlink(sessionPath);
+    sessionFileLookup.delete(id);
     return { ok: true, method: "unlink" };
   } catch (err) {
     const unlinkError = err instanceof Error ? err.message : String(err);

@@ -29,6 +29,7 @@ import { onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { FitAddon, Terminal, type Ghostty, type IDisposable } from "ghostty-web";
 import { ptyWs } from "@/api/ws";
 import { useGhosttyInit } from "@/composables/useGhostty";
+import { releaseTerminalCleanup, replaceTerminalCleanup } from "@/composables/terminalRegistry";
 
 const props = defineProps<{
   /** Server-assigned ptyId. The WebSocket is opened against this id. */
@@ -45,11 +46,14 @@ const status = ref<"loading" | "connecting" | "ready" | "closed" | "error">("loa
 const errorMessage = ref<string>("");
 
 let terminal: Terminal | undefined;
-let fitAddon: FitAddon | undefined;
 let ws: WebSocket | undefined;
 const disposers: IDisposable[] = [];
+let registeredHost: HTMLElement | undefined;
+let disposed = false;
 
 function teardown(): void {
+  disposed = true;
+
   for (const d of disposers) d.dispose();
   disposers.length = 0;
 
@@ -67,19 +71,22 @@ function teardown(): void {
 
   if (terminal) {
     try {
-      // Disposes the FitAddon too, which clears the ResizeObserver set up
-      // by `fitAddon.observeResize()`.
+      // Terminal disposal also disposes the FitAddon and its ResizeObserver.
       terminal.dispose();
     } catch {
       /* ignore */
     }
     terminal = undefined;
-    fitAddon = undefined;
+  }
+
+  if (registeredHost) {
+    releaseTerminalCleanup(registeredHost, teardown);
+    registeredHost = undefined;
   }
 }
 
 async function ensureTerminal(): Promise<Terminal | null> {
-  if (terminal) return terminal;
+  if (disposed || terminal) return terminal ?? null;
   if (!hostRef.value) return null;
   const host = hostRef.value;
 
@@ -92,6 +99,7 @@ async function ensureTerminal(): Promise<Terminal | null> {
     errorMessage.value = err instanceof Error ? err.message : String(err);
     return null;
   }
+  if (disposed || hostRef.value !== host) return null;
 
   // 2) Pass the pre-loaded Ghostty instance so ghostty-web skips its own
   //    internal `init()` and the WASM bytes we already fetched get reused.
@@ -130,12 +138,12 @@ async function ensureTerminal(): Promise<Terminal | null> {
   );
 
   terminal = term;
-  fitAddon = fit;
+  registeredHost = host;
+  replaceTerminalCleanup(host, teardown);
   return term;
 }
 
-function openSocket(ptyId: string): void {
-  // Tear down any previous WS (e.g., after a re-spawn).
+function closeSocket(): void {
   if (ws) {
     ws.onclose = null;
     ws.onerror = null;
@@ -146,32 +154,37 @@ function openSocket(ptyId: string): void {
     }
     ws = undefined;
   }
+}
 
-  ws = ptyWs(ptyId);
+function openSocket(ptyId: string): void {
+  closeSocket();
 
-  ws.onopen = () => {
+  const socket = ptyWs(ptyId);
+  ws = socket;
+
+  socket.onopen = () => {
     // Send an initial resize so the server PTY matches the (potentially
     // re-fitted) terminal dimensions.
     if (terminal) {
-      ws!.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
+      socket.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
     }
     if (status.value === "connecting") status.value = "ready";
   };
 
-  ws.onmessage = (event) => {
+  socket.onmessage = (event) => {
     if (!terminal) return;
     if (typeof event.data === "string") {
       terminal.write(event.data);
     }
   };
 
-  ws.onclose = (event) => {
+  socket.onclose = (event) => {
     if (!terminal) return; // teardown raced us
     status.value = "closed";
     emit("exited", { reason: event.reason || `closed (${event.code})` });
   };
 
-  ws.onerror = () => {
+  socket.onerror = () => {
     if (!terminal) return;
     status.value = "error";
     errorMessage.value = "WebSocket connection failed";
@@ -186,7 +199,7 @@ onMounted(async () => {
   // is already the real server id.
   status.value = "connecting";
   const term = await ensureTerminal();
-  if (!term || !props.ptyId) return;
+  if (!term || disposed || !props.ptyId) return;
   openSocket(props.ptyId);
 });
 </script>

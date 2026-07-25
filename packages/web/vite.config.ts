@@ -19,12 +19,9 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  // ghostty-web ships a sibling WASM file that the bundle loads at runtime via
-  // its script's base href. If Vite pre-bundles ghostty-web into
-  // /node_modules/.vite/deps/... that base href stops matching the public
-  // /ghostty-vt.wasm we copied, so the load falls back to its absolute-path
-  // attempt (`/ghostty-vt.wasm`) and still works — but skipping pre-bundling
-  // avoids the double round-trip and keeps sourcemaps clean.
+  // The app imports ghostty-web's WASM through `?url` in useGhostty.ts.
+  // Keep the package out of Vite's dependency pre-bundle so that import
+  // remains a normal asset URL in both dev and production builds.
   optimizeDeps: {
     exclude: ['ghostty-web'],
   },

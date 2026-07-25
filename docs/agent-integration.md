@@ -1,4 +1,9 @@
-# pichamber × pi 集成:分步实施计划
+# pichamber × pi 集成:历史实施计划
+
+> 本文记录早期设计方案，不是当前代码结构。当前服务端使用 Bun 原生
+> `Bun.serve()`，运行时实现位于 `packages/server/src/session.ts` 和
+> `packages/server/src/ws.ts`；新增功能请以代码和仓库根目录 `AGENTS.md`
+> 的约定为准。
 
 > 本文档对应从 `packages/server` 出发,接入 `@earendil-works/pi-coding-agent` SDK,实现"web 端多会话切换 + 在每个 session 自己的项目目录里启动 agent"的目标。
 >

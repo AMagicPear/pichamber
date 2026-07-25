@@ -1,6 +1,16 @@
 # 实时通信方案分析
 
-> 状态:分析稿,待决策。讨论"前端怎么跟服务端多个活跃会话同时交互"。
+> 状态:当前实现参考。本文保留方案推导；如果与代码不一致，以
+> `packages/server/src/index.ts`、`packages/server/src/ws.ts` 和
+> `packages/web/src/api/ws.ts` 为准。
+
+## 当前实现
+
+- AI session 使用 `/ws/:sessionId`，JSON 消息为 `{ type: "prompt", message }`，服务端事件包装为 `{ type: "event", event }`。
+- 终端 PTY 使用独立的 `/ws/pty/:ptyId`，输入是原始字符串，resize 使用 JSON 控制帧，输出是带 ANSI 的字符串。
+- 两种协议各自一条连接，由服务端 `WsHandler` 分派；没有把 session 和 PTY 复用到同一条多路复用连接。
+
+下文的方案比较是历史设计讨论，不应视为当前接口契约。
 
 ---
 
@@ -395,7 +405,7 @@ function send(text: string) {
 | 首次 `getSession(id)` | 加载 jsonl + 创建 AgentSession,缓存到 Map |
 | 后续 `getSession(id)`(同 id) | 直接返回 Map 里的 |
 | WS connect | 调 `getSession(id)`,可能触发首次加载 |
-| 最后一个 WS close | dispose + 从 Map 删除(Y 策略) |
+| 最后一个 WS close | 解除 listener；PTY 保留短暂 grace period，session dispose |
 | 多 tab 中间一个 WS close | 只从 Set 移除 ws,不 dispose |
 | `DELETE /api/sessions/:id` | dispose + 从 Map 删除 + 删文件 |
 
@@ -403,9 +413,9 @@ function send(text: string) {
 
 ---
 
-## 6. 跟现状 `ws.ts` 的差异
+## 6. 历史方案对比
 
-| | 现状(B 方案) | 推荐(A 方案) |
+| | 历史 B 方案 | 当前实现 |
 |---|---|---|
 | URL | `/ws` | `/ws/:id` |
 | 客户端消息类型 | 3 (`subscribe`/`unsubscribe`/`prompt`) | 1 (`prompt`) |

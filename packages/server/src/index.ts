@@ -7,9 +7,10 @@ import {
   stopAllPtys,
   stopPty,
   subscribePty,
+  subscribePtyExit,
   writePty,
 } from "./pty";
-import { sessionWsHandler } from "./ws";
+import { closeSessionSockets, sessionWsHandler } from "./ws";
 
 // ─── WebSocket protocol multiplexing ───────────────────────────────────
 //
@@ -38,6 +39,8 @@ export type SessionWsData = {
   protocol: "session";
   handler: WsHandler;
   sessionId: string;
+  closed?: boolean;
+  attached?: boolean;
 };
 
 export type WsData = PtyWsData | SessionWsData;
@@ -47,9 +50,16 @@ const ptyWsHandler: WsHandler = {
     const data = ws.data as PtyWsData;
     // Subscribe the WS to PTY output. Stash the unsub on ws.data so close
     // can release it.
-    data.unsub = subscribePty(data.ptyId, (chunk) => {
+    const unsubOutput = subscribePty(data.ptyId, (chunk) => {
       if (ws.readyState === 1) ws.send(chunk);
     });
+    const unsubExit = subscribePtyExit(data.ptyId, () => {
+      if (ws.readyState === 1) ws.close(1000, "PTY exited");
+    });
+    data.unsub = () => {
+      unsubOutput();
+      unsubExit();
+    };
   },
   message(ws, message) {
     const data = ws.data as PtyWsData;
@@ -75,9 +85,6 @@ const ptyWsHandler: WsHandler = {
   close(ws) {
     const data = ws.data as PtyWsData;
     data.unsub?.();
-    // Tear the shell down with the socket. If the user opens another tab
-    // later, they'll get a fresh ptyId from /api/pty/start.
-    stopPty(data.ptyId);
   },
 };
 
@@ -108,6 +115,7 @@ Bun.serve({
         return Response.json(session.sessionManager.getEntries());
       },
       DELETE: async (req) => {
+        closeSessionSockets(req.params.id);
         const result = await deleteSession(req.params.id);
         if (!result.ok) return Response.json({ error: "session not found" }, { status: 404 });
         return Response.json(result);
@@ -138,6 +146,12 @@ Bun.serve({
           const message = err instanceof Error ? err.message : String(err);
           return Response.json({ error: message }, { status: 500 });
         }
+      },
+    },
+    "/api/pty/:id": {
+      DELETE: (req) => {
+        stopPty(req.params.id);
+        return Response.json({ ok: true });
       },
     },
   },

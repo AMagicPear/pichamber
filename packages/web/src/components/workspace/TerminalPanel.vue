@@ -21,7 +21,7 @@
  * Only the canvas body is dark — terminals are typically dark for contrast.
  */
 
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import AddIcon from "@/assets/icons/Add.svg";
 import CloseIcon from "@/assets/icons/Close.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
@@ -30,7 +30,7 @@ import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import PanelToggleButton from "@/components/PanelToggleButton.vue";
 import IconButton from "@/components/IconButton.vue";
 import TerminalView from "@/components/workspace/TerminalView.vue";
-import { startPty } from "@/api/client";
+import { startPty, stopPty } from "@/api/client";
 import { useUiStore } from "@/stores/ui";
 
 type TabStatus = "creating" | "ready" | "closed" | "error";
@@ -78,32 +78,35 @@ async function createTab(): Promise<void> {
 
   try {
     const result = await startPty({ cols: 80, rows: 24 });
-    const idx = tabs.value.findIndex((t) => t.id === localId);
-    if (idx === -1) return; // user closed the tab before we got back
-    const existing = tabs.value[idx]!;
-    tabs.value[idx] = {
-      ...existing,
+    const existing = tabs.value.find((t) => t.id === localId);
+    if (!existing) {
+      // The request can finish after the user closes the optimistic tab.
+      // The WS was never opened, so explicitly release the server PTY.
+      await stopPty(result.ptyId);
+      return;
+    }
+    Object.assign(existing, {
       ptyId: result.ptyId,
       title: result.title,
-      status: "ready",
+      status: "ready" as const,
       errorMessage: "",
-    };
+    });
   } catch (err) {
-    const idx = tabs.value.findIndex((t) => t.id === localId);
-    if (idx !== -1) {
-      tabs.value[idx] = {
-        ...tabs.value[idx]!,
-        title: "error",
-        status: "error",
-        errorMessage: err instanceof Error ? err.message : String(err),
-      };
-    }
+    const existing = tabs.value.find((t) => t.id === localId);
+    if (!existing) return;
+    Object.assign(existing, {
+      title: "error",
+      status: "error" as const,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
 function closeTab(id: string): void {
   const idx = tabs.value.findIndex((t) => t.id === id);
   if (idx === -1) return;
+  const ptyId = tabs.value[idx]!.ptyId;
+  if (ptyId) void stopPty(ptyId);
   const wasActive = activeId.value === id;
   tabs.value.splice(idx, 1);
 
@@ -115,13 +118,12 @@ function closeTab(id: string): void {
 }
 
 function onTabExited(id: string, payload: { reason: string }): void {
-  const idx = tabs.value.findIndex((t) => t.id === id);
-  if (idx === -1) return;
-  tabs.value[idx] = {
-    ...tabs.value[idx]!,
+  const existing = tabs.value.find((t) => t.id === id);
+  if (!existing) return;
+  Object.assign(existing, {
     status: "closed",
     errorMessage: payload.reason,
-  };
+  });
 }
 
 async function reopenTab(id: string): Promise<void> {
@@ -150,25 +152,22 @@ watch(
 watch(bottomOpen, (open) => {
   if (!open) maximized.value = false;
 });
-
-async function handleCreate(): Promise<void> {
-  await createTab();
-  await nextTick();
-}
 </script>
 
 <template>
   <section class="terminal" :class="{ 'is-maximized': maximized }">
     <header class="terminal__header">
       <div class="terminal__tabs" role="tablist">
-        <button
+        <div
           v-for="tab in tabs"
           :key="tab.id"
-          type="button"
           role="tab"
+          tabindex="0"
           :aria-selected="tab.id === activeId"
           :class="['terminal__tab', { 'is-active': tab.id === activeId }]"
           @click="focusTab(tab.id)"
+          @keydown.enter.prevent="focusTab(tab.id)"
+          @keydown.space.prevent="focusTab(tab.id)"
           @auxclick="(e) => e.button === 1 && closeTab(tab.id)"
           @dblclick="closeTab(tab.id)"
         >
@@ -182,13 +181,13 @@ async function handleCreate(): Promise<void> {
           >
             <CloseIcon />
           </button>
-        </button>
+        </div>
         <button
           type="button"
           class="terminal__new"
           aria-label="New terminal"
           title="New terminal"
-          @click="handleCreate"
+          @click="createTab"
         >
           <AddIcon />
         </button>
@@ -212,7 +211,7 @@ async function handleCreate(): Promise<void> {
       <template v-if="tabs.length === 0">
         <div class="terminal__empty">
           <p>No terminals yet.</p>
-          <button type="button" @click="handleCreate">
+          <button type="button" @click="createTab">
             <AddIcon /> Start a new shell
           </button>
         </div>
@@ -224,10 +223,7 @@ async function handleCreate(): Promise<void> {
           :key="tab.id"
           class="terminal__pane"
         >
-          <!--
-            :key is the stable local id; the TerminalView watches `ptyId` and
-            re-uses its WS when it changes, instead of remounting.
-          -->
+          <!-- The local id stays stable while the server ptyId is assigned. -->
           <TerminalView
             v-if="(tab.status === 'ready' || tab.status === 'creating') && tab.ptyId"
             :key="tab.id"
@@ -319,6 +315,10 @@ async function handleCreate(): Promise<void> {
 }
 .terminal__tab:hover {
   color: #171717;
+}
+.terminal__tab:focus-visible {
+  outline: 2px solid #b65323;
+  outline-offset: -2px;
 }
 .terminal__tab.is-active {
   color: #171717;

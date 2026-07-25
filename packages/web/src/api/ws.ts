@@ -5,7 +5,7 @@
 // have).
 //
 // Two protocols live here today:
-//   - AI session: `/ws/:sessionId` (JSON envelopes, see ./ws.ts original)
+//   - AI session: `/ws/:sessionId` (JSON envelopes, handled by server/src/ws.ts)
 //   - PTY:        `/ws/pty/:ptyId` (raw bytes + JSON control frames)
 //
 // They return different abstractions on purpose: the AI session protocol is

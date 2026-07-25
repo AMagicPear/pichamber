@@ -11,7 +11,7 @@ export type PanelsState = Record<SplitMode, PanelState>;
 
 const STORAGE_KEY = "pichamber.ui.v1";
 
-const DEFAULT_PANELS: PanelsState = {
+const DEFAULT_PANELS: Readonly<PanelsState> = {
   left: { open: true, size: 280 },
   right: { open: true, size: 356 },
   bottom: { open: true, size: 225 },
@@ -19,6 +19,24 @@ const DEFAULT_PANELS: PanelsState = {
 };
 
 const SPLIT_MODES: readonly SplitMode[] = ["left", "right", "bottom", "settings"];
+
+const SIZE_LIMITS: Record<SplitMode, readonly [number, number]> = {
+  left: [160, 600],
+  right: [160, 600],
+  bottom: [160, 600],
+  settings: [176, 280],
+};
+
+function createDefaultPanels(): PanelsState {
+  return Object.fromEntries(
+    SPLIT_MODES.map((mode) => [mode, { ...DEFAULT_PANELS[mode] }]),
+  ) as PanelsState;
+}
+
+function clampSize(mode: SplitMode, size: number): number {
+  const [min, max] = SIZE_LIMITS[mode];
+  return Math.min(max, Math.max(min, size));
+}
 
 function hasStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -43,7 +61,7 @@ function loadPanels(): PanelsState | null {
         typeof entry.open === "boolean" ? entry.open : DEFAULT_PANELS[mode].open;
       const size =
         typeof entry.size === "number" && Number.isFinite(entry.size)
-          ? entry.size
+          ? clampSize(mode, entry.size)
           : DEFAULT_PANELS[mode].size;
       hydrated[mode] = { open, size };
     }
@@ -64,14 +82,14 @@ function savePanels(panels: PanelsState): void {
 
 export const useUiStore = defineStore("ui", {
   state: () => ({
-    panels: loadPanels() ?? DEFAULT_PANELS,
+    panels: loadPanels() ?? createDefaultPanels(),
   }),
   actions: {
     toggle(mode: SplitMode) {
       this.panels[mode].open = !this.panels[mode].open;
     },
     setSize(mode: SplitMode, size: number) {
-      this.panels[mode].size = size;
+      this.panels[mode].size = clampSize(mode, size);
     },
   },
 });
