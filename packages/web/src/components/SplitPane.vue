@@ -1,36 +1,43 @@
 <script setup lang="ts">
 import { computed, useTemplateRef, watch } from "vue";
-import { useUiStore, type SplitMode } from "@/stores/ui";
 import { useSplitPaneDrag } from "@/composables/layout/useSplitPaneDrag";
 
 defineOptions({ name: "SplitPane" });
 
+type SplitPaneMode = "top" | "bottom" | "left" | "right";
+
 const props = withDefaults(
   defineProps<{
-    mode?: SplitMode;
+    mode?: SplitPaneMode;
+    open?: boolean;
+    size?: number;
     minSize?: number;
     maxSize?: number;
+    maximized?: boolean;
   }>(),
   {
     mode: "left",
+    open: true,
+    size: 280,
     minSize: 160,
     maxSize: 600,
+    maximized: false,
   },
 );
-const ui = useUiStore();
-const isOpen = computed(() => ui.panels[props.mode].open);
-const initialSize = computed(() => ui.panels[props.mode].size);
-const isMaximized = computed(() => props.mode === "bottom" && ui.maximized[props.mode]);
-const isLeftish = props.mode === "left" || props.mode === "settings";
-const direction = isLeftish ? 1 : -1;
-const cssVar = props.mode === "bottom" ? "--split-h" : "--split-w";
-const horizontal = props.mode !== "bottom";
+const emit = defineEmits<{
+  "update:size": [size: number];
+  "update:maximized": [maximized: boolean];
+}>();
+
+const isVertical = props.mode === "top" || props.mode === "bottom";
+const horizontal = !isVertical;
+const direction = props.mode === "left" || props.mode === "top" ? 1 : -1;
+const cssVar = isVertical ? "--split-h" : "--split-w";
 
 // Cursor used when the resize handle is dragged into a clamp boundary.
 // `direction` tells us which screen direction GROWS the panel:
-//   left / settings panels: +1 → right grows
-//   right panel:            -1 → left grows
-//   bottom panel:           -1 → up grows
+//   left / top panels:  +1 → right / down grows
+//   right / bottom:     -1 → left / up grows
 // At the min boundary only the grow direction can still do work; at the max
 // boundary only the shrink direction can. Matches native widgets like VSCode.
 const CLAMPED_CURSOR = {
@@ -46,34 +53,44 @@ const CLAMPED_CURSOR = {
 
 const panelRef = useTemplateRef<HTMLElement>("panelRef");
 const dragMaxSize = props.maxSize;
-const getDragMaxSize =
-  props.mode === "bottom"
-    ? () =>
-        Math.max(dragMaxSize, panelRef.value?.parentElement?.getBoundingClientRect().height ?? 0)
-    : undefined;
+const getDragMaxSize = () => {
+  const rect = panelRef.value?.parentElement?.getBoundingClientRect();
+  return Math.max(dragMaxSize, rect ? (horizontal ? rect.width : rect.height) : 0);
+};
 const { dragging, clamped, onPointerDown, onPointerMove, onPointerUp, setSize } = useSplitPaneDrag({
   panelRef,
   horizontal,
   direction,
   cssVar,
-  initialSize: initialSize.value,
+  initialSize: props.size,
   minSize: props.minSize,
   maxSize: dragMaxSize,
   getMaxSize: getDragMaxSize,
-  onCommit: (size) => ui.setSize(props.mode, size),
+  onCommit: (size) => emit("update:size", size),
 });
 
 function onSplitPointerDown(event: PointerEvent): void {
-  if (props.mode === "bottom" && isMaximized.value && panelRef.value) {
-    setSize(panelRef.value.getBoundingClientRect().height);
-    ui.setMaximized(props.mode, false);
+  if (props.maximized && panelRef.value) {
+    const rect = panelRef.value.getBoundingClientRect();
+    setSize(horizontal ? rect.width : rect.height);
+    emit("update:maximized", false);
   }
   onPointerDown(event);
 }
 
-watch(isOpen, (open) => {
-  if (!open) ui.setMaximized(props.mode, false);
-});
+watch(
+  () => props.open,
+  (open) => {
+    if (!open && props.maximized) emit("update:maximized", false);
+  },
+);
+
+watch(
+  () => props.size,
+  (size) => {
+    if (!dragging.value) setSize(size);
+  },
+);
 
 const handleStyle = computed(() => {
   if (!dragging.value || clamped.value === null) return undefined;
@@ -88,7 +105,7 @@ const handleStyle = computed(() => {
     <main class="split-pane__main"><slot /></main>
     <div
       class="split-pane__handle"
-      :class="{ 'is-open': isOpen, 'is-dragging': dragging }"
+      :class="{ 'is-open': open, 'is-dragging': dragging }"
       :style="handleStyle"
       role="separator"
       :aria-orientation="horizontal ? 'vertical' : 'horizontal'"
@@ -101,7 +118,7 @@ const handleStyle = computed(() => {
     <section
       ref="panelRef"
       class="split-pane__panel"
-      :class="{ 'is-open': isOpen, 'is-dragging': dragging, 'is-maximized': isMaximized }"
+      :class="{ 'is-open': open, 'is-dragging': dragging, 'is-maximized': maximized }"
     >
       <div class="split-pane__content">
         <slot name="sidebar">边栏</slot>
@@ -123,23 +140,18 @@ const handleStyle = computed(() => {
   overflow: hidden;
 }
 .split-pane--left > .split-pane__main,
-.split-pane--settings > .split-pane__main {
+.split-pane--top > .split-pane__main {
   order: 2;
 }
 .split-pane--left > .split-pane__handle,
-.split-pane--settings > .split-pane__handle {
+.split-pane--top > .split-pane__handle {
   order: 1;
 }
 .split-pane--left > .split-pane__panel,
-.split-pane--settings > .split-pane__panel {
+.split-pane--top > .split-pane__panel {
   order: 0;
 }
-.split-pane--right > .split-pane__handle {
-  order: 1;
-}
-.split-pane--right > .split-pane__panel {
-  order: 2;
-}
+.split-pane--top,
 .split-pane--bottom {
   flex-direction: column;
 }
@@ -171,19 +183,29 @@ const handleStyle = computed(() => {
   overflow: hidden;
 }
 .split-pane--left > .split-pane__panel,
-.split-pane--settings > .split-pane__panel,
 .split-pane--right > .split-pane__panel {
   width: 0;
 }
 .split-pane--left > .split-pane__panel.is-open,
-.split-pane--settings > .split-pane__panel.is-open,
 .split-pane--right > .split-pane__panel.is-open {
   width: var(--split-w, 280px);
   flex-basis: var(--split-w, 280px);
 }
+.split-pane--left > .split-pane__panel.is-maximized,
+.split-pane--right > .split-pane__panel.is-maximized {
+  width: calc(100% - 9px);
+  flex-basis: calc(100% - 9px);
+}
+.split-pane--left > .split-pane__panel.is-maximized > .split-pane__content,
+.split-pane--right > .split-pane__panel.is-maximized > .split-pane__content {
+  width: 100%;
+  min-width: 100%;
+}
+.split-pane--top > .split-pane__panel,
 .split-pane--bottom > .split-pane__panel {
   height: 0;
 }
+.split-pane--top > .split-pane__panel > .split-pane__content,
 .split-pane--bottom > .split-pane__panel > .split-pane__content {
   flex: 1 1 auto;
   width: 100%;
@@ -192,15 +214,18 @@ const handleStyle = computed(() => {
   min-height: var(--split-h, 280px);
   overflow: hidden;
 }
+.split-pane--top > .split-pane__panel.is-open,
 .split-pane--bottom > .split-pane__panel.is-open {
   height: var(--split-h, 280px);
   flex-basis: var(--split-h, 280px);
 }
 
+.split-pane--top > .split-pane__panel.is-maximized,
 .split-pane--bottom > .split-pane__panel.is-maximized {
   height: calc(100% - 9px);
   flex-basis: calc(100% - 9px);
 }
+.split-pane--top > .split-pane__panel.is-maximized > .split-pane__content,
 .split-pane--bottom > .split-pane__panel.is-maximized > .split-pane__content {
   height: 100%;
   min-height: 0;
@@ -235,20 +260,27 @@ const handleStyle = computed(() => {
     background-color 120ms ease;
 }
 .split-pane--left > .split-pane__handle,
-.split-pane--settings > .split-pane__handle,
 .split-pane--right > .split-pane__handle {
   cursor: col-resize;
 }
+.split-pane--top > .split-pane__handle,
 .split-pane--bottom > .split-pane__handle {
   width: 100%;
   height: 0;
   cursor: row-resize;
 }
+.split-pane--left > .split-pane__handle.is-open,
+.split-pane--right > .split-pane__handle.is-open {
+  flex-basis: 9px;
+  width: 9px;
+}
+.split-pane--top > .split-pane__handle.is-open,
 .split-pane--bottom > .split-pane__handle.is-open {
   flex-basis: 9px;
   height: 9px;
   width: 100%;
 }
+.split-pane--top > .split-pane__handle > .split-pane__line,
 .split-pane--bottom > .split-pane__handle > .split-pane__line {
   top: 4px;
   right: 0;
@@ -263,6 +295,8 @@ const handleStyle = computed(() => {
   left: 3px;
   width: 3px;
 }
+.split-pane--top > .split-pane__handle:hover > .split-pane__line,
+.split-pane--top > .split-pane__handle.is-dragging > .split-pane__line,
 .split-pane--bottom > .split-pane__handle:hover > .split-pane__line,
 .split-pane--bottom > .split-pane__handle.is-dragging > .split-pane__line {
   top: 3px;

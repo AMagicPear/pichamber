@@ -11,10 +11,12 @@ import ConversationPanel from "@/components/workspace/ConversationPanel.vue";
 import SessionHeader from "@/components/workspace/SessionHeader.vue";
 import SessionSidebar from "@/components/workspace/SessionSidebar.vue";
 import TerminalPanel from "@/components/workspace/TerminalPanel.vue";
+import { useUiStore } from "@/stores/ui";
 
 startUiStorePersistence();
 
 const settingsOpen = ref(false);
+const ui = useUiStore();
 </script>
 
 <template>
@@ -23,7 +25,12 @@ const settingsOpen = ref(false);
       <LayoutLeftIcon />
     </PanelToggleButton>
 
-    <SplitPane mode="left">
+    <SplitPane
+      mode="left"
+      :open="ui.panels.left.open"
+      :size="ui.panels.left.size"
+      @update:size="ui.setSize('left', $event)"
+    >
       <template #sidebar>
         <SessionSidebar @open-settings="settingsOpen = true" />
       </template>
@@ -33,9 +40,21 @@ const settingsOpen = ref(false);
           <SessionHeader />
 
           <div class="workspace__body">
-            <SplitPane mode="right">
+            <SplitPane
+              mode="right"
+              :open="ui.panels.right.open"
+              :size="ui.panels.right.size"
+              @update:size="ui.setSize('right', $event)"
+            >
               <template #default>
-                <SplitPane mode="bottom">
+                <SplitPane
+                  mode="bottom"
+                  :open="ui.panels.bottom.open"
+                  :size="ui.panels.bottom.size"
+                  :maximized="ui.maximized.bottom"
+                  @update:size="ui.setSize('bottom', $event)"
+                  @update:maximized="ui.setMaximized('bottom', $event)"
+                >
                   <template #default>
                     <ConversationPanel />
                   </template>

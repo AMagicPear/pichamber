@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-export type SplitMode = "left" | "right" | "bottom" | "settings";
+export type SplitMode = "top" | "bottom" | "left" | "right";
 
 export interface PanelState {
   open: boolean;
@@ -12,19 +12,19 @@ export type PanelsState = Record<SplitMode, PanelState>;
 const STORAGE_KEY = "pichamber.ui.v1";
 
 const DEFAULT_PANELS: Readonly<PanelsState> = {
+  top: { open: true, size: 225 },
+  bottom: { open: true, size: 225 },
   left: { open: true, size: 280 },
   right: { open: true, size: 356 },
-  bottom: { open: true, size: 225 },
-  settings: { open: true, size: 216 },
 };
 
-const SPLIT_MODES: readonly SplitMode[] = ["left", "right", "bottom", "settings"];
+const SPLIT_MODES: readonly SplitMode[] = ["top", "bottom", "left", "right"];
 
 const SIZE_LIMITS: Record<SplitMode, readonly [number, number]> = {
   left: [160, 600],
   right: [160, 600],
+  top: [160, 600],
   bottom: [160, 600],
-  settings: [176, 280],
 };
 
 function createDefaultPanels(): PanelsState {
@@ -50,8 +50,8 @@ function loadMaximized(): Record<SplitMode, boolean> {
 function clampSize(mode: SplitMode, size: number): number {
   const [min, configuredMax] = SIZE_LIMITS[mode];
   const max =
-    mode === "bottom" && typeof window !== "undefined"
-      ? Math.max(configuredMax, window.innerHeight)
+    typeof window !== "undefined"
+      ? Math.max(configuredMax, mode === "left" || mode === "right" ? window.innerWidth : window.innerHeight)
       : configuredMax;
   return Math.min(max, Math.max(min, size));
 }

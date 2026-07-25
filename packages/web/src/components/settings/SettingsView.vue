@@ -60,6 +60,7 @@ const navItems: NavItem[] = [
 
 const activeKey = ref<string>("home");
 const searchQuery = ref("");
+const settingsSize = ref(216);
 
 const visibleNavItems = computed(() =>
   navItems.filter((item) => item.label.toLowerCase().includes(searchQuery.value.trim().toLowerCase())),
@@ -89,7 +90,13 @@ function openHomeCard(key: string) {
 </script>
 
 <template>
-  <SplitPane mode="settings" :min-size="176" :max-size="280">
+  <SplitPane
+    mode="left"
+    :size="settingsSize"
+    :min-size="176"
+    :max-size="280"
+    @update:size="settingsSize = $event"
+  >
     <template #sidebar>
       <aside class="settings-nav">
         <div class="settings-nav__search">
