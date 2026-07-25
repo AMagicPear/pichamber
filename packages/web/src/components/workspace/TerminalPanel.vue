@@ -30,7 +30,7 @@ import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import PanelToggleButton from "@/components/PanelToggleButton.vue";
 import IconButton from "@/components/IconButton.vue";
 import TerminalView from "@/components/workspace/TerminalView.vue";
-import { startPty } from "@/api/terminal";
+import { startPty } from "@/api/client";
 import { useUiStore } from "@/stores/ui";
 
 type TabStatus = "creating" | "ready" | "closed" | "error";
@@ -60,14 +60,6 @@ function focusTab(id: string): void {
   activeId.value = id;
 }
 
-function shortPath(cwd: string): string {
-  // Show the last path segment to keep tabs compact. The server returns the
-  // full path; "~" is preserved as-is.
-  if (cwd === "~" || !cwd) return cwd || "~";
-  const parts = cwd.split("/").filter(Boolean);
-  return parts.at(-1) ?? cwd;
-}
-
 async function createTab(): Promise<void> {
   // Optimistically add a tab so the user sees something immediately. The
   // tab starts with `ptyId: null`; on success we mutate the existing entry's
@@ -92,7 +84,7 @@ async function createTab(): Promise<void> {
     tabs.value[idx] = {
       ...existing,
       ptyId: result.ptyId,
-      title: shortPath(result.cwd),
+      title: result.title,
       status: "ready",
       errorMessage: "",
     };

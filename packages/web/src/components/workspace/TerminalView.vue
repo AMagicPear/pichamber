@@ -27,7 +27,7 @@
 
 import { onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { FitAddon, Terminal, type Ghostty, type IDisposable } from "ghostty-web";
-import { ptyWs } from "@/api/terminal";
+import { ptyWs } from "@/api/ws";
 import { useGhosttyInit } from "@/composables/useGhostty";
 
 const props = defineProps<{
