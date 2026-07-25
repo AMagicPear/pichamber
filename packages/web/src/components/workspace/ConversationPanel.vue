@@ -31,16 +31,14 @@ const presets = [
     <h2>What are we working<br />on in amagicpear?</h2>
 
     <div class="composer">
-      <p>Use @ / ! # for helpers</p>
+      <p>@ for files/agents; / for commands and skills; ! for shell; # for snippets</p>
       <div class="composer__footer">
         <IconButton size="compact" label="Add attachment"><AddCircleIcon /></IconButton>
         <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
         <IconButton size="compact" label="Permissions"><ShieldUserIcon /></IconButton>
         <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
-        <strong><span class="model-mark">Ƶ</span> GLM5.2</strong>
-        <IconButton size="compact" label="Model options"
-          ><AiAgentIcon class="model-icon"
-        /></IconButton>
+        <strong><span class="model-mark">Ƶ</span> Big Pickle</strong>
+        <span class="model-mode"><AiAgentIcon class="model-icon" />Build</span>
         <IconButton size="compact" label="Dictation"><MicIcon /></IconButton>
         <IconButton size="compact" label="Send" disabled><SendIcon /></IconButton>
       </div>
@@ -113,7 +111,18 @@ const presets = [
   line-height: 1;
 }
 .model-icon {
+  width: 16px;
+  height: 16px;
   color: #718d28;
+}
+.model-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #718d28;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .presets {
   display: flex;

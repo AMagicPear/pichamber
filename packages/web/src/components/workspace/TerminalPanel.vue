@@ -70,7 +70,7 @@ async function createTab(): Promise<void> {
   const tab: Tab = {
     id: localId,
     ptyId: null,
-    title: "…",
+      title: "Terminal",
     status: "creating",
     errorMessage: "",
   };
@@ -88,7 +88,7 @@ async function createTab(): Promise<void> {
     }
     Object.assign(existing, {
       ptyId: result.ptyId,
-      title: result.title,
+      title: result.title === "~" ? "Terminal" : result.title,
       status: "ready" as const,
       errorMessage: "",
     });
@@ -181,15 +181,9 @@ watch(
           </span>
           <span class="terminal__tab-title">{{ tab.title }}</span>
         </div>
-        <button
-          type="button"
-          class="terminal__new"
-          aria-label="New terminal"
-          title="New terminal"
-          @click="createTab"
-        >
+        <IconButton size="compact" label="New terminal" @click="createTab">
           <AddIcon />
-        </button>
+        </IconButton>
       </div>
       <div class="terminal__actions">
         <IconButton
@@ -377,45 +371,6 @@ watch(
   white-space: nowrap;
   font-size: 14px;
 }
-/* ── "+ new tab" affordance ────────────────────────────────────────── */
-.terminal__new {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  align-self: center;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #777;
-  cursor: pointer;
-  flex: 0 0 auto;
-  transition:
-    background-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 80ms ease;
-}
-.terminal__new :deep(svg) {
-  width: 16px;
-  height: 16px;
-}
-.terminal__new:hover {
-  background: rgb(0 0 0 / 5%);
-  color: #171717;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
-}
-.terminal__new:focus-visible {
-  outline: 2px solid #3978d4;
-  outline-offset: 2px;
-  background: rgb(0 0 0 / 4%);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
-}
-.terminal__new:active {
-  transform: scale(0.94);
-}
-
 /* ── Header actions (maximize / close-panel) ───────────────────────── */
 .terminal__actions {
   display: flex;
