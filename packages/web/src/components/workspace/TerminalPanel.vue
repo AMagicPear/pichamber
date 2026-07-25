@@ -8,8 +8,8 @@
  *   - "+" creates a new tab with a fresh PTY.
  *   - "×" on a tab kills its PTY and removes the tab. Killing the active tab
  *     focuses the previous one (or the next, if it was the leftmost).
- *   - The "maximize" button toggles a class on the panel so CSS can expand it
- *     to fill the workspace body, hiding the conversation above it.
+ *   - The "maximize" button toggles a class that lets the parent bottom
+ *     SplitPane resize itself to fill its available height.
  *   - Tabs that the server has already torn down (status === "closed" with no
  *     restart prompt) auto-prune via the `onExited` handler.
  *
@@ -27,7 +27,7 @@ import AddIcon from "@/assets/icons/Add.svg";
 import CloseIcon from "@/assets/icons/Close.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
 import FullscreenExitIcon from "@/assets/icons/FullscreenExit.svg";
-import TerminalIcon from "@/assets/icons/TerminalBox.svg";
+import TerminalIcon from "@/assets/icons/Terminal.svg";
 import PanelToggleButton from "@/components/PanelToggleButton.vue";
 import IconButton from "@/components/IconButton.vue";
 import TerminalView from "@/components/workspace/TerminalView.vue";
@@ -172,16 +172,19 @@ watch(bottomOpen, (open) => {
           @auxclick="(e) => e.button === 1 && closeTab(tab.id)"
           @dblclick="closeTab(tab.id)"
         >
-          <TerminalIcon class="terminal__tab-icon" />
+          <span class="terminal__tab-icon-wrap">
+            <TerminalIcon class="terminal__tab-icon" />
+            <button
+              type="button"
+              class="terminal__tab-icon-close"
+              aria-label="Close terminal tab"
+              title="Close terminal tab"
+              @click.stop="closeTab(tab.id)"
+            >
+              <CloseIcon />
+            </button>
+          </span>
           <span class="terminal__tab-title">{{ tab.title }}</span>
-          <button
-            type="button"
-            class="terminal__tab-close"
-            aria-label="Close terminal tab"
-            @click.stop="closeTab(tab.id)"
-          >
-            <CloseIcon />
-          </button>
         </div>
         <button
           type="button"
@@ -219,12 +222,7 @@ watch(bottomOpen, (open) => {
         </div>
       </template>
       <template v-else>
-        <div
-          v-for="tab in tabs"
-          v-show="tab.id === activeId"
-          :key="tab.id"
-          class="terminal__pane"
-        >
+        <div v-for="tab in tabs" v-show="tab.id === activeId" :key="tab.id" class="terminal__pane">
           <!-- The local id stays stable while the server ptyId is assigned. -->
           <TerminalView
             v-if="(tab.status === 'ready' || tab.status === 'creating') && tab.ptyId"
@@ -235,10 +233,7 @@ watch(bottomOpen, (open) => {
           <div v-else-if="tab.status === 'creating'" class="terminal__state">
             <p>Starting shell…</p>
           </div>
-          <div
-            v-else-if="tab.status === 'error'"
-            class="terminal__state terminal__state--error"
-          >
+          <div v-else-if="tab.status === 'error'" class="terminal__state terminal__state--error">
             <p>
               <strong>Terminal failed to start.</strong>
               <span>{{ tab.errorMessage }}</span>
@@ -275,16 +270,13 @@ watch(bottomOpen, (open) => {
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
-/* Mirrors the original TerminalPanel: 34px tall, 12px horizontal padding,
-   #dedbd2 bottom border, 14px font-size. The orange active-tab underline
-   sits on top of the header's bottom border. */
+/* The orange active-tab underline sits on the header's bottom edge. */
 .terminal__header {
   display: flex;
-  flex: 0 0 34px;
+  flex: 0 0 30px;
   align-items: stretch;
   justify-content: space-between;
-  padding: 0 12px;
-  border-bottom: 1px solid #dedbd2;
+  padding: 0 6px 0 12px;
   font-size: 14px;
 }
 
@@ -294,7 +286,7 @@ watch(bottomOpen, (open) => {
   flex: 1 1 auto;
   min-width: 0;
   align-items: stretch;
-  gap: 14px;
+  gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -302,18 +294,14 @@ watch(bottomOpen, (open) => {
   display: none;
 }
 
-/* Each tab fills the header's 34px and aligns an icon + title + close button
-   on a single row, matching the original's 7px gap and 16×16 icon size. The
-   2px transparent border-bottom becomes the orange accent for the active
-   tab. */
 .terminal__tab {
+  position: relative;
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 4px 0 0;
-  border-bottom: 2px solid transparent;
+  gap: 6px;
+  height: 100%;
+  padding: 0 8px;
   background: transparent;
   color: #777;
   cursor: pointer;
@@ -328,13 +316,64 @@ watch(bottomOpen, (open) => {
 }
 .terminal__tab.is-active {
   color: #171717;
-  border-bottom-color: #b65323;
+}
+.terminal__tab.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  background: #b65323;
+  content: "";
 }
 .terminal__tab-icon {
-  flex: 0 0 auto;
   width: 16px;
   height: 16px;
-  color: inherit;
+  color: #777;
+  transition: opacity 120ms ease;
+}
+.terminal__tab.is-active .terminal__tab-icon {
+  color: #b65323;
+}
+.terminal__tab-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.terminal__tab-icon-close {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #777;
+  opacity: 0;
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease;
+}
+.terminal__tab-icon-close :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+.terminal__tab:hover .terminal__tab-icon {
+  opacity: 0;
+}
+.terminal__tab:hover .terminal__tab-icon-close {
+  opacity: 1;
+}
+.terminal__tab-icon-close:hover {
+  background: rgb(0 0 0 / 6%);
 }
 .terminal__tab-title {
   max-width: 140px;
@@ -343,49 +382,43 @@ watch(bottomOpen, (open) => {
   white-space: nowrap;
   font-size: 14px;
 }
-.terminal__tab-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  color: #888;
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.terminal__tab-close :deep(svg) {
-  width: 12px;
-  height: 12px;
-}
-.terminal__tab:hover .terminal__tab-close,
-.terminal__tab.is-active .terminal__tab-close {
-  opacity: 1;
-}
-.terminal__tab-close:hover {
-  background: rgb(0 0 0 / 6%);
-  color: #171717;
-}
-
 /* ── "+ new tab" affordance ────────────────────────────────────────── */
 .terminal__new {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 24px;
+  height: 24px;
   align-self: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
   color: #777;
+  cursor: pointer;
   flex: 0 0 auto;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 80ms ease;
 }
 .terminal__new :deep(svg) {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 .terminal__new:hover {
   background: rgb(0 0 0 / 5%);
   color: #171717;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+.terminal__new:focus-visible {
+  outline: 2px solid #3978d4;
+  outline-offset: 2px;
+  background: rgb(0 0 0 / 4%);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+.terminal__new:active {
+  transform: scale(0.94);
 }
 
 /* ── Header actions (maximize / close-panel) ───────────────────────── */
@@ -393,7 +426,7 @@ watch(bottomOpen, (open) => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 
 /* ── Body ──────────────────────────────────────────────────────────── */
@@ -470,15 +503,4 @@ watch(bottomOpen, (open) => {
 }
 
 /* ── Maximize ──────────────────────────────────────────────────────── */
-/* Fill the workspace body, hiding the conversation panel above. We use
-   position:fixed so we escape any ancestor with overflow:hidden (the
-   SplitPane chains). */
-.terminal.is-maximized {
-  position: fixed;
-  inset: 9px 9px 9px 9px;
-  z-index: 50;
-  border-radius: 10px;
-  border: 1px solid #dedbd2;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-}
 </style>

@@ -177,6 +177,18 @@ const handleStyle = computed(() => {
   flex-basis: var(--split-h, 280px);
 }
 
+/* Maximize is still a normal bottom-panel resize. The handle remains in the
+   layout, so the panel fills the available height without changing the
+   SplitPane's existing open/drag transition model. */
+.split-pane--bottom:has(.terminal.is-maximized) > .split-pane__panel {
+  height: calc(100% - 9px);
+  flex-basis: calc(100% - 9px);
+}
+.split-pane--bottom:has(.terminal.is-maximized) > .split-pane__panel > .split-pane__content {
+  height: 100%;
+  min-height: 0;
+}
+
 .split-pane__handle {
   position: relative;
   flex: 0 0 0;
