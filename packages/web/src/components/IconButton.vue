@@ -1,4 +1,8 @@
 <script setup lang="ts">
+const emit = defineEmits<{
+  click: [event: MouseEvent];
+}>();
+
 withDefaults(
   defineProps<{
     label: string;
@@ -23,6 +27,7 @@ withDefaults(
     :title="label"
     :aria-pressed="pressed"
     :disabled="disabled"
+    @click="emit('click', $event)"
   >
     <slot />
   </button>

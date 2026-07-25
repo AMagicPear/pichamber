@@ -19,12 +19,11 @@ const FileTreeNode = defineComponent({
   setup(props) {
     const expanded = ref(false);
     const children = ref<DirEntry[] | null>(null);
-    const loading = ref(false);
     const error = ref("");
 
     async function loadChildren(): Promise<void> {
-      if (!props.entry.isDirectory || loading.value) return;
-      loading.value = true;
+      if (!props.entry.isDirectory || children.value !== null) return;
+      children.value = [];
       error.value = "";
       try {
         const result: ListResult = await listDirectory(props.entry.path);
@@ -32,8 +31,6 @@ const FileTreeNode = defineComponent({
       } catch (err) {
         error.value = err instanceof Error ? err.message : String(err);
         console.error("[files] failed to list", props.entry.path, err);
-      } finally {
-        loading.value = false;
       }
     }
 
@@ -48,20 +45,23 @@ const FileTreeNode = defineComponent({
         <button type="button" class="file-tree__row" onClick={toggle}>
           <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}>
             {props.entry.isDirectory ? (
-              expanded.value ? <FolderOpenIcon /> : <FolderIcon />
-            ) : <FileList2Icon />}
+              expanded.value ? (
+                <FolderOpenIcon />
+              ) : (
+                <FolderIcon />
+              )
+            ) : (
+              <FileList2Icon />
+            )}
           </span>
           <span class="file-tree__name">{props.entry.name}</span>
-          {loading.value && <span class="file-tree__spinner" aria-hidden="true" />}
         </button>
         {expanded.value && (
           <ul class="file-tree__list file-tree__children">
             {error.value ? (
               <li class="file-tree__state file-tree__state--error">{error.value}</li>
             ) : (
-              children.value?.map((child) => (
-                <FileTreeNode key={child.path} entry={child} />
-              ))
+              children.value?.map((child) => <FileTreeNode key={child.path} entry={child} />)
             )}
           </ul>
         )}
@@ -74,24 +74,17 @@ export default defineComponent({
   name: "FileTree",
   setup() {
     const entries = ref<DirEntry[]>([]);
-    const loading = ref(false);
-    const loaded = ref(false);
     const error = ref("");
     const search = ref("");
 
     async function load(): Promise<void> {
-      if (loading.value) return;
-      loading.value = true;
       error.value = "";
       try {
         const result: ListResult = await listDirectory();
         entries.value = result.entries;
-        loaded.value = true;
       } catch (err) {
         error.value = err instanceof Error ? err.message : String(err);
         console.error("[files] failed to list workspace root", err);
-      } finally {
-        loading.value = false;
       }
     }
 
@@ -107,7 +100,9 @@ export default defineComponent({
       <div class="file-tree file-tree--root">
         <div class="file-tree__toolbar">
           <div class="file-tree__search">
-            <SearchIcon class="file-tree__search-icon" />
+            <span class="file-tree__search-icon">
+              <SearchIcon />
+            </span>
             <input
               value={search.value}
               type="search"
@@ -119,16 +114,20 @@ export default defineComponent({
             />
           </div>
           <div class="file-tree__actions">
-            <IconButton size="standard" label="New file"><FileAddIcon /></IconButton>
-            <IconButton size="standard" label="New folder"><FolderAddIcon /></IconButton>
-            <IconButton size="standard" label="Reload" onClick={load}><RefreshIcon /></IconButton>
+            <IconButton size="standard" label="New file">
+              <FileAddIcon />
+            </IconButton>
+            <IconButton size="standard" label="New folder">
+              <FolderAddIcon />
+            </IconButton>
+            <IconButton size="standard" label="Reload" onClick={load}>
+              <RefreshIcon />
+            </IconButton>
           </div>
         </div>
 
         {error.value ? (
           <p class="file-tree__state file-tree__state--error">{error.value}</p>
-        ) : !loaded.value && loading.value ? (
-          <p class="file-tree__state">Loading...</p>
         ) : visibleEntries.value.length > 0 ? (
           <ul class="file-tree__list">
             {visibleEntries.value.map((entry) => (
@@ -182,6 +181,11 @@ export default defineComponent({
   height: 16px;
   flex: 0 0 auto;
   color: #666;
+}
+.file-tree__search-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .file-tree__search input {
   flex: 1;
@@ -281,14 +285,6 @@ export default defineComponent({
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.file-tree__spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid #aaa;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: file-tree-spin 700ms linear infinite;
-}
 .file-tree__state {
   margin: 0;
   padding: 16px;
@@ -297,10 +293,5 @@ export default defineComponent({
 }
 .file-tree__state--error {
   color: #a33;
-}
-@keyframes file-tree-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>
