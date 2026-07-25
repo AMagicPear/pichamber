@@ -13,30 +13,15 @@
  * Only the `files` tab has real data; git and context are placeholders
  * for now.
  */
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import FileListIcon from "@/assets/icons/FileList2.svg";
 import FolderIcon from "@/assets/icons/Folder.svg";
 import GitBranchIcon from "@/assets/icons/GitBranch.svg";
 import FileTree from "@/components/workspace/FileTree.vue";
-import type { DirEntry } from "@/api/client";
-import { listDirectory } from "@/api/client";
 
 type Tab = "git" | "files" | "context";
 
 const activeTab = ref<Tab>("files");
-const rootEntries = ref<DirEntry[]>([]);
-
-async function reloadRoot() {
-  try {
-    const result = await listDirectory();
-    rootEntries.value = result.entries;
-  } catch (err) {
-    console.error("[files] failed to list workspace root", err);
-    rootEntries.value = [];
-  }
-}
-
-onMounted(reloadRoot);
 </script>
 
 <template>
@@ -91,7 +76,7 @@ onMounted(reloadRoot);
         role="tabpanel"
         aria-label="files"
       >
-        <FileTree :nodes="rootEntries" @reload="reloadRoot" />
+        <FileTree />
       </div>
 
       <div
