@@ -212,8 +212,9 @@ watch(bottomOpen, (open) => {
       <template v-if="tabs.length === 0">
         <div class="terminal__empty">
           <p>No terminals yet.</p>
-          <button type="button" @click="createTab">
-            <AddIcon /> Start a new shell
+          <button type="button" class="terminal__empty-action" @click="createTab">
+            <AddIcon />
+            <span>New terminal</span>
           </button>
         </div>
       </template>
@@ -415,7 +416,6 @@ watch(bottomOpen, (open) => {
   color: #777;
   font-size: 13px;
 }
-.terminal__empty button,
 .terminal__state button {
   display: inline-flex;
   align-items: center;
@@ -427,9 +427,41 @@ watch(bottomOpen, (open) => {
   color: #171717;
   font-size: 13px;
 }
-.terminal__empty button:hover,
 .terminal__state button:hover {
   background: #f6f5f0;
+}
+.terminal__empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #dad8ce;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #333230;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgb(16 15 15 / 4%);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+}
+.terminal__empty-action :deep(svg) {
+  width: 14px;
+  height: 14px;
+  color: #b65323;
+}
+.terminal__empty-action:hover {
+  border-color: #b65323;
+  background: #fffaf5;
+  color: #171717;
+}
+.terminal__empty-action:focus-visible {
+  outline: 2px solid #b65323;
+  outline-offset: 2px;
 }
 .terminal__state strong {
   color: #b65323;
