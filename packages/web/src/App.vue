@@ -47,7 +47,7 @@ watch(
           <SessionHeader />
 
           <div class="workspace__body">
-            <SplitPane mode="right" :open="ui.panels.right.open" :size="ui.panels.right.size" :min-size="300"
+            <SplitPane mode="right" :open="ui.panels.right.open" :size="ui.panels.right.size" :min-size="200"
               @update:size="ui.setSize('right', $event)">
               <template #default>
                 <SplitPane mode="bottom" :open="ui.panels.bottom.open" :size="ui.panels.bottom.size"

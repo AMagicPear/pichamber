@@ -10,6 +10,7 @@ import SearchIcon from "@/assets/icons/Search.svg";
 import type { DirEntry } from "@/api/client";
 import { listDirectory, toMessage } from "@/api/client";
 import IconButton from "@/components/IconButton.vue";
+import { workspace } from "@/stores/workspace";
 
 const FileTreeNode = defineComponent({
   name: "FileTreeNode",
@@ -89,6 +90,7 @@ export default defineComponent({
       try {
         const result = await listDirectory();
         if (currentRequest !== requestVersion) return;
+        workspace.cwd = result.path;
         entries.value = result.entries;
       } catch (err) {
         if (currentRequest !== requestVersion) return;
@@ -270,6 +272,10 @@ export default defineComponent({
 }
 .file-tree__row:hover {
   background: rgb(0 0 0 / 4%);
+}
+.file-tree__row:focus-visible {
+  outline: 2px solid #3978d4;
+  outline-offset: -2px;
 }
 .file-tree__icon {
   display: inline-flex;

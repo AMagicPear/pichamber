@@ -2,95 +2,64 @@
 /**
  * Right-side context panel. Hosts the git / files / context tabs.
  *
- * Switching tabs is a *decorative* change: all three panes stay mounted
- * at all times and we toggle visibility with `v-show`. This means:
+ * Switching tabs uses Transition + KeepAlive. This means:
  *   - FileTree keeps its expanded/loaded state when you tab away and back.
- *   - No re-fetch on tab switch (no re-mounting FileTree).
- *   - No vertical "jump" — every pane lives in the same `.pane` container
- *     sized to fill the body, so switching is just one pane fading out
- *     and another fading in at the same coordinates.
+ *   - No re-fetch on tab switch (the FileTree instance is cached).
+ *   - No vertical "jump" because each pane fills the same body container.
  *
  * Only the `files` tab has real data; git and context are placeholders
  * for now.
  */
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import FileListIcon from "@/assets/icons/FileList2.svg";
 import FolderIcon from "@/assets/icons/Folder.svg";
 import GitBranchIcon from "@/assets/icons/GitBranch.svg";
-import FileTree from "@/components/workspace/FileTree.vue";
+import ContextPane from "@/components/workspace/ContextPane.vue";
+import FilesPane from "@/components/workspace/FilesPane.vue";
+import GitPane from "@/components/workspace/GitPane.vue";
 
-type Tab = "git" | "files" | "context";
+const tabs = [
+  {
+    id: "git",
+    label: "git",
+    icon: GitBranchIcon,
+    component: GitPane,
+  },
+  {
+    id: "files",
+    label: "files",
+    icon: FolderIcon,
+    component: FilesPane,
+  },
+  {
+    id: "context",
+    label: "context",
+    icon: FileListIcon,
+    component: ContextPane,
+  },
+] as const;
+
+type Tab = (typeof tabs)[number]["id"];
 
 const activeTab = ref<Tab>("files");
+const activeTabConfig = computed(() => tabs.find((tab) => tab.id === activeTab.value)!);
 </script>
 
 <template>
   <aside class="context-panel">
     <nav class="context-panel__tabs" role="tablist">
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'git'"
-        :class="{ 'is-active': activeTab === 'git' }"
-        @click="activeTab = 'git'"
-      >
-        <GitBranchIcon /><span>git</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'files'"
-        :class="{ 'is-active': activeTab === 'files' }"
-        @click="activeTab = 'files'"
-      >
-        <FolderIcon /><span>files</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'context'"
-        :class="{ 'is-active': activeTab === 'context' }"
-        @click="activeTab = 'context'"
-      >
-        <FileListIcon /><span>context</span>
+      <button v-for="tab in tabs" :key="tab.id" type="button" role="tab" :aria-selected="activeTab === tab.id"
+        :class="{ 'is-active': activeTab === tab.id }" @click="activeTab = tab.id">
+        <component :is="tab.icon" /><span>{{ tab.label }}</span>
       </button>
     </nav>
 
     <div class="context-panel__body">
-      <div
-        class="context-panel__pane"
-        :hidden="activeTab !== 'git'"
-        role="tabpanel"
-        aria-label="git"
-      >
-        <div class="context-panel__empty">
-          <GitBranchIcon />
-          <p>This directory is not a Git repository</p>
-          <span>Initialize Git in this directory or open a repository.</span>
-        </div>
-      </div>
-
-      <div
-        class="context-panel__pane"
-        :hidden="activeTab !== 'files'"
-        role="tabpanel"
-        aria-label="files"
-      >
-        <FileTree />
-      </div>
-
-      <div
-        class="context-panel__pane"
-        :hidden="activeTab !== 'context'"
-        role="tabpanel"
-        aria-label="context"
-      >
-        <div class="context-panel__empty">
-          <FileListIcon />
-          <p>Context</p>
-          <span>Files added to the next message will appear here.</span>
-        </div>
-      </div>
+      <Transition name="context-pane" mode="out-in">
+        <KeepAlive>
+          <component :is="activeTabConfig.component" :key="activeTab" />
+        </KeepAlive>
+      </Transition>
     </div>
   </aside>
 </template>
@@ -103,6 +72,11 @@ const activeTab = ref<Tab>("files");
   height: 100%;
   overflow: hidden;
   color: #171717;
+  /* Container queries let the tab strip decide on its own when labels
+     no longer fit — no JS needed. Threshold sits a hair above the
+     right-pane min (200px) so labels still show at the very minimum. */
+  container-type: inline-size;
+  container-name: right-panel;
 }
 
 /* ── Tabs ─────────────────────────────────────────────────────────── */
@@ -117,7 +91,9 @@ const activeTab = ref<Tab>("files");
   padding: 3px;
   border-radius: 10px;
   background: #f7f7f5;
+  transition: margin 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
 .context-panel__tabs button {
   display: inline-flex;
   flex: 1 1 0;
@@ -131,54 +107,107 @@ const activeTab = ref<Tab>("files");
   color: #686868;
   font-size: 14px;
   font-weight: 600;
-  line-height: 1;
   cursor: pointer;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
-    color 120ms ease;
+    color 120ms ease,
+    padding 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    gap 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
 .context-panel__tabs button:hover {
   background: rgb(255 255 255 / 60%);
   color: #222;
 }
+
 .context-panel__tabs button:focus-visible {
   outline: 2px solid #3978d4;
   outline-offset: 1px;
 }
+
 .context-panel__tabs button svg {
   width: 16px;
   height: 16px;
 }
+
 .context-panel__tabs .is-active {
   border-color: #e2dfd5;
   background: #fff;
   color: #222;
   box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
 }
+
 .context-panel__tabs .is-active:hover {
   background: #fff;
 }
 
+.context-panel__tabs button>span {
+  max-width: 100px;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 100ms ease;
+}
+
+@container right-panel (max-width: 220px) {
+  .context-panel__tabs {
+    margin-inline: 6px;
+  }
+
+  .context-panel__tabs button {
+    padding: 0;
+    gap: 0;
+  }
+
+  .context-panel__tabs button>span {
+    max-width: 0;
+    opacity: 0;
+  }
+}
+
 /* ── Body & panes ──────────────────────────────────────────────────── */
-/* All panes are stacked in the same flex container; `hidden` removes
-   the inactive ones from layout. They each fill the body identically,
-   so switching tabs is purely visual — no vertical reflow. */
 .context-panel__body {
   flex: 1;
   min-height: 0;
   display: flex;
 }
-.context-panel__pane {
-  flex: 1 1 0;
-  min-height: 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+
+.context-pane-enter-active,
+.context-pane-leave-active {
+  transition:
+    opacity 90ms ease,
+    transform 100ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.context-panel__pane[hidden] {
-  display: none;
+
+.context-pane-enter-from,
+.context-pane-leave-to {
+  opacity: 0;
+  transform: translateY(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .context-panel__tabs,
+  .context-panel__tabs button,
+  .context-panel__tabs button>span,
+  .context-pane-enter-active,
+  .context-pane-leave-active {
+    transition: none;
+  }
+}
+</style>
+
+<!-- 下面的这些样式是被三个子页面共用的 不要scoped -->
+<style>
+.context-panel__pane {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .context-panel__empty {
@@ -190,17 +219,20 @@ const activeTab = ref<Tab>("files");
   padding: 32px 16px;
   text-align: center;
 }
-.context-panel__empty > svg {
+
+.context-panel__empty>svg {
   width: 24px;
   height: 24px;
   margin-bottom: 14px;
   color: #777;
 }
+
 .context-panel__empty p {
   margin: 0 0 6px;
   font-size: 14px;
   font-weight: 600;
 }
+
 .context-panel__empty span {
   color: #777;
   font-size: 12px;

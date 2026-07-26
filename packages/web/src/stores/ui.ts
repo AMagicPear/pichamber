@@ -21,7 +21,7 @@ const SPLIT_MODES: readonly SplitMode[] = ["bottom", "left", "right"];
 
 const SIZE_LIMITS: Record<SplitMode, readonly [number, number]> = {
   left: [160, 600],
-  right: [300, 600],
+  right: [200, 600],
   bottom: [160, 600],
 };
 
