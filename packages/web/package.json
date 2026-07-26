@@ -28,6 +28,7 @@
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
     "@vue/tsconfig": "^0.9.1",
+    "catppuccin-vsc-icons": "github:catppuccin/vscode-icons#b6915da9f6889b683a110aa747de96c2820a537d",
     "jiti": "^2.7.0",
     "npm-run-all2": "^9.0.2",
     "typescript": "~7.0.2",

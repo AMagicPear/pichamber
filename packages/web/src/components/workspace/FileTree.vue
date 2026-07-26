@@ -1,16 +1,14 @@
 <script lang="tsx">
 import { computed, defineComponent, onMounted, ref, type PropType } from "vue";
 import FileAddIcon from "@/assets/icons/FileAdd.svg";
-import FileList2Icon from "@/assets/icons/FileList2.svg";
-import FolderIcon from "@/assets/icons/Folder.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
-import FolderOpenIcon from "@/assets/icons/FolderOpen.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
 import SearchIcon from "@/assets/icons/Search.svg";
 import type { DirEntry } from "@/api/client";
 import { listDirectory, toMessage } from "@/api/client";
 import IconButton from "@/components/IconButton.vue";
 import { workspace } from "@/stores/workspace";
+import { getEntryIcon } from "./fileIcon";
 
 const FileTreeNode = defineComponent({
   name: "FileTreeNode",
@@ -42,11 +40,7 @@ const FileTreeNode = defineComponent({
     };
 
     return () => {
-      const EntryIcon = props.entry.isDirectory
-        ? expanded.value
-          ? FolderOpenIcon
-          : FolderIcon
-        : FileList2Icon;
+      const EntryIcon = getEntryIcon(props.entry.name, props.entry.isDirectory, expanded.value);
 
       return (
         <li class="file-tree__item">
@@ -56,8 +50,8 @@ const FileTreeNode = defineComponent({
             aria-expanded={props.entry.isDirectory ? expanded.value : undefined}
             onClick={toggle}
           >
-            <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}>
-              <EntryIcon />
+            <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}> 
+              <img src={EntryIcon} alt="" />
             </span>
             <span class="file-tree__name">{props.entry.name}</span>
           </button>
@@ -290,6 +284,11 @@ export default defineComponent({
   color: #399cf0;
 }
 .file-tree__icon svg {
+  width: 18px;
+  height: 18px;
+}
+.file-tree__icon img {
+  display: block;
   width: 18px;
   height: 18px;
 }
