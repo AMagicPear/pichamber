@@ -7,8 +7,8 @@ import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
 import FolderOpenIcon from "@/assets/icons/FolderOpen.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
 import SearchIcon from "@/assets/icons/Search.svg";
-import type { DirEntry, ListResult } from "@/api/client";
-import { listDirectory } from "@/api/client";
+import type { DirEntry } from "@/api/client";
+import { listDirectory, toMessage } from "@/api/client";
 import IconButton from "@/components/IconButton.vue";
 
 const FileTreeNode = defineComponent({
@@ -19,54 +19,59 @@ const FileTreeNode = defineComponent({
   setup(props) {
     const expanded = ref(false);
     const children = ref<DirEntry[] | null>(null);
-    const error = ref("");
+    const error = ref<string | null>(null);
 
-    async function loadChildren(): Promise<void> {
+    const loadChildren = async () => {
       if (!props.entry.isDirectory || children.value !== null) return;
       children.value = [];
-      error.value = "";
+      error.value = null;
       try {
-        const result: ListResult = await listDirectory(props.entry.path);
-        children.value = result.entries;
+        children.value = (await listDirectory(props.entry.path)).entries;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : String(err);
+        children.value = null;
+        error.value = toMessage(err);
         console.error("[files] failed to list", props.entry.path, err);
       }
-    }
+    };
 
-    function toggle(): void {
+    const toggle = () => {
       if (!props.entry.isDirectory) return;
       expanded.value = !expanded.value;
-      if (expanded.value && children.value === null) void loadChildren();
-    }
+      if (expanded.value && children.value === null) loadChildren();
+    };
 
-    return () => (
-      <li class="file-tree__item">
-        <button type="button" class="file-tree__row" onClick={toggle}>
-          <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}>
-            {props.entry.isDirectory ? (
-              expanded.value ? (
-                <FolderOpenIcon />
+    return () => {
+      const EntryIcon = props.entry.isDirectory
+        ? expanded.value
+          ? FolderOpenIcon
+          : FolderIcon
+        : FileList2Icon;
+
+      return (
+        <li class="file-tree__item">
+          <button
+            type="button"
+            class="file-tree__row"
+            aria-expanded={props.entry.isDirectory ? expanded.value : undefined}
+            onClick={toggle}
+          >
+            <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}>
+              <EntryIcon />
+            </span>
+            <span class="file-tree__name">{props.entry.name}</span>
+          </button>
+          {expanded.value && (
+            <ul class="file-tree__list file-tree__children">
+              {error.value ? (
+                <li class="file-tree__state file-tree__state--error">{error.value}</li>
               ) : (
-                <FolderIcon />
-              )
-            ) : (
-              <FileList2Icon />
-            )}
-          </span>
-          <span class="file-tree__name">{props.entry.name}</span>
-        </button>
-        {expanded.value && (
-          <ul class="file-tree__list file-tree__children">
-            {error.value ? (
-              <li class="file-tree__state file-tree__state--error">{error.value}</li>
-            ) : (
-              children.value?.map((child) => <FileTreeNode key={child.path} entry={child} />)
-            )}
-          </ul>
-        )}
-      </li>
-    );
+                children.value?.map((child) => <FileTreeNode key={child.path} entry={child} />)
+              )}
+            </ul>
+          )}
+        </li>
+      );
+    };
   },
 });
 
@@ -74,19 +79,23 @@ export default defineComponent({
   name: "FileTree",
   setup() {
     const entries = ref<DirEntry[]>([]);
-    const error = ref("");
+    const error = ref<string | null>(null);
     const search = ref("");
+    let requestVersion = 0;
 
-    async function load(): Promise<void> {
-      error.value = "";
+    const load = async () => {
+      const currentRequest = ++requestVersion;
+      error.value = null;
       try {
-        const result: ListResult = await listDirectory();
+        const result = await listDirectory();
+        if (currentRequest !== requestVersion) return;
         entries.value = result.entries;
       } catch (err) {
-        error.value = err instanceof Error ? err.message : String(err);
+        if (currentRequest !== requestVersion) return;
+        error.value = toMessage(err);
         console.error("[files] failed to list workspace root", err);
       }
-    }
+    };
 
     const visibleEntries = computed(() => {
       const query = search.value.trim().toLowerCase();
@@ -94,7 +103,7 @@ export default defineComponent({
       return entries.value.filter((entry) => entry.relativePath.toLowerCase().includes(query));
     });
 
-    onMounted(() => void load());
+    onMounted(load);
 
     return () => (
       <div class="file-tree file-tree--root">
@@ -108,7 +117,7 @@ export default defineComponent({
               type="search"
               placeholder="Search files..."
               aria-label="Search files"
-              onInput={(event) => {
+              onInput={(event: Event) => {
                 search.value = (event.target as HTMLInputElement).value;
               }}
             />

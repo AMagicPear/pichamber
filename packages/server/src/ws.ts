@@ -1,6 +1,6 @@
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { ServerWebSocket } from "bun";
-import { deactivateSession, getSession } from "./session";
+import { toMessage } from "./error";
 import type { SessionWsData, WsHandler } from "./index";
 
 type BunWS = ServerWebSocket<SessionWsData>;
@@ -13,7 +13,7 @@ type SessionChannel = {
 // sessionId → one shared SDK listener plus all subscribed sockets.
 const channelsBySession = new Map<string, SessionChannel>();
 
-function attachListener(sessionId: string, session: AgentSession): SessionChannel {
+const attachListener = (sessionId: string, session: AgentSession): SessionChannel => {
   const existing = channelsBySession.get(sessionId);
   if (existing) return existing;
 
@@ -29,19 +29,21 @@ function attachListener(sessionId: string, session: AgentSession): SessionChanne
   });
   channelsBySession.set(sessionId, channel);
   return channel;
-}
+};
 
-function detachListener(sessionId: string, ws: BunWS): void {
+const detachListener = (sessionId: string, ws: BunWS) => {
   const channel = channelsBySession.get(sessionId);
   if (!channel) return;
   channel.sockets.delete(ws);
   if (channel.sockets.size !== 0) return;
   channel.unsubscribe();
   channelsBySession.delete(sessionId);
-  void deactivateSession(sessionId);
-}
+  deactivateSession(sessionId).catch((error) => {
+    console.error("Failed to deactivate session", sessionId, error);
+  });
+};
 
-export function closeSessionSockets(sessionId: string): void {
+export const closeSessionSockets = (sessionId: string) => {
   const channel = channelsBySession.get(sessionId);
   if (!channel) return;
   channel.unsubscribe();
@@ -52,11 +54,11 @@ export function closeSessionSockets(sessionId: string): void {
     if (ws.readyState === 1) ws.close(1000, "Session deleted");
   }
   channel.sockets.clear();
-}
+};
 
-function sendError(ws: BunWS, error: string): void {
+const sendError = (ws: BunWS, error: string) => {
   if (ws.readyState === 1) ws.send(JSON.stringify({ type: "error", error }));
-}
+};
 
 export const sessionWsHandler: WsHandler = {
   async open(ws) {
@@ -65,7 +67,11 @@ export const sessionWsHandler: WsHandler = {
     bunWS.data.closed = false;
     const session = await getSession(sessionId);
     if (bunWS.data.closed) {
-      if (!channelsBySession.has(sessionId)) void deactivateSession(sessionId);
+      if (!channelsBySession.has(sessionId)) {
+        deactivateSession(sessionId).catch((error) => {
+          console.error("Failed to deactivate session", sessionId, error);
+        });
+      }
       return;
     }
     if (!session) {
@@ -111,7 +117,7 @@ export const sessionWsHandler: WsHandler = {
     session
       .prompt(input.message)
       .catch((err: unknown) =>
-        sendError(bunWS, String(err)),
+        sendError(bunWS, toMessage(err)),
       );
   },
   close(ws) {

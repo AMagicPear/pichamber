@@ -4,7 +4,7 @@
 
 const BASE = "/api";
 
-async function jsonOrThrow<T>(res: Response): Promise<T> {
+const jsonOrThrow = async <T>(res: Response): Promise<T> => {
   const data = (await res.json().catch(() => ({}))) as { error?: unknown };
   if (!res.ok) {
     const message =
@@ -12,12 +12,15 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
     throw new Error(message);
   }
   return data as T;
-}
+};
+
+// `catch` variables are `unknown` since TS 4.0. Every throw in this codebase
+// is an `Error`, so this narrowing is the single conversion site.
+export const toMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // ─── AI sessions ──────────────────────────────────────────────────────
 
-export const listSessions = () =>
-  fetch(`${BASE}/sessions`).then((r) => jsonOrThrow<unknown[]>(r));
+export const listSessions = () => fetch(`${BASE}/sessions`).then((r) => jsonOrThrow<unknown[]>(r));
 
 export const createSession = (cwd: string) =>
   fetch(`${BASE}/sessions`, {
@@ -86,7 +89,8 @@ export interface ListResult {
   entries: DirEntry[];
 }
 
-export const listDirectory = (path?: string) => {
+export const listDirectory = async (path?: string) => {
   const url = path ? `${BASE}/fs/list?path=${encodeURIComponent(path)}` : `${BASE}/fs/list`;
-  return fetch(url).then((r) => jsonOrThrow<ListResult>(r));
+  const r = await fetch(url);
+  return await jsonOrThrow<ListResult>(r);
 };

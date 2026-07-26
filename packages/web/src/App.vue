@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
-import PanelToggleButton from "@/components/PanelToggleButton.vue";
+import IconButton from "@/components/IconButton.vue";
 import SplitPane from "@/components/SplitPane.vue";
 import SettingsModal from "@/components/SettingsModal.vue";
 import SettingsView from "@/components/settings/SettingsView.vue";
@@ -21,9 +21,14 @@ const ui = useUiStore();
 
 <template>
   <div class="app-shell">
-    <PanelToggleButton panel="left" class="app-shell__sidebar-toggle" label="Toggle left sidebar">
+    <IconButton
+      class="app-shell__sidebar-toggle"
+      label="Toggle left sidebar"
+      :pressed="ui.panels.left.open"
+      @click="ui.toggle('left')"
+    >
       <LayoutLeftIcon />
-    </PanelToggleButton>
+    </IconButton>
 
     <SplitPane
       mode="left"

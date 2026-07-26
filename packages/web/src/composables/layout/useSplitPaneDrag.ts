@@ -14,11 +14,9 @@ interface SplitPaneDragOptions {
 
 type ClampedAxis = "min" | "max" | null;
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-export function useSplitPaneDrag(options: SplitPaneDragOptions) {
+export const useSplitPaneDrag = (options: SplitPaneDragOptions) => {
   const dragging = ref(false);
   const clamped = ref<ClampedAxis>(null);
   const minSize = Math.min(options.minSize, options.maxSize);
@@ -28,36 +26,33 @@ export function useSplitPaneDrag(options: SplitPaneDragOptions) {
   let startCoordinate = 0;
   let startSize = size;
 
-  function applySize() {
+  const applySize = () => {
     options.panelRef.value?.style.setProperty(options.cssVar, `${size}px`);
-  }
+  };
 
-  function recomputeClamped() {
+  const recomputeClamped = () => {
     const maxSize = currentMaxSize();
     if (size <= minSize) clamped.value = "min";
     else if (size >= maxSize) clamped.value = "max";
     else clamped.value = null;
-  }
+  };
 
-  function setSize(nextSize: number) {
+  const setSize = (nextSize: number) => {
     size = clamp(nextSize, minSize, currentMaxSize());
     applySize();
     recomputeClamped();
-  }
+  };
 
-  watch(options.panelRef, applySize, { flush: "post" });
-  recomputeClamped();
-
-  function onPointerDown(event: PointerEvent) {
+  const onPointerDown = (event: PointerEvent) => {
     if (event.button !== 0) return;
     (event.currentTarget as Element).setPointerCapture(event.pointerId);
     dragging.value = true;
     startCoordinate = options.horizontal ? event.clientX : event.clientY;
     startSize = size;
     recomputeClamped();
-  }
+  };
 
-  function onPointerMove(event: PointerEvent) {
+  const onPointerMove = (event: PointerEvent) => {
     if (!dragging.value) return;
     const coordinate = options.horizontal ? event.clientX : event.clientY;
     const previous = size;
@@ -68,14 +63,17 @@ export function useSplitPaneDrag(options: SplitPaneDragOptions) {
     );
     if (size !== previous) applySize();
     recomputeClamped();
-  }
+  };
 
-  function onPointerUp() {
+  const onPointerUp = () => {
     if (dragging.value) {
       options.onCommit?.(size);
     }
     dragging.value = false;
-  }
+  };
+
+  watch(options.panelRef, applySize, { flush: "post" });
+  recomputeClamped();
 
   return { dragging, clamped, onPointerDown, onPointerMove, onPointerUp, setSize };
-}
+};

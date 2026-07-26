@@ -80,13 +80,13 @@ const homeCards: HomeCard[] = [
   { key: "usage", title: "Usage", description: "Quota + spend visibility" },
 ];
 
-function selectItem(key: string) {
+const selectItem = (key: string) => {
   activeKey.value = key;
-}
+};
 
-function openHomeCard(key: string) {
+const openHomeCard = (key: string) => {
   activeKey.value = key;
-}
+};
 </script>
 
 <template>

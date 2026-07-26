@@ -41,13 +41,13 @@ export interface PtyStartResult {
 const handles = new Map<string, PtyHandle>();
 const ORPHAN_GRACE_MS = 5_000;
 
-function getDefaultShell(): string {
+const getDefaultShell = (): string => {
   if (process.env.SHELL) return process.env.SHELL;
   if (process.platform === "win32") return process.env.COMSPEC ?? "cmd.exe";
   return "/bin/zsh";
-}
+};
 
-function resolveCwd(input: string | undefined): string {
+const resolveCwd = (input: string | undefined): string => {
   const fallback = getWorkspace();
   if (!input) return fallback;
   const cwd = isAbsolute(input) ? input : resolve(process.cwd(), input);
@@ -56,9 +56,9 @@ function resolveCwd(input: string | undefined): string {
   } catch {
     return fallback;
   }
-}
+};
 
-function getTerminalEnv(): Record<string, string> {
+const getTerminalEnv = (): Record<string, string> => {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined) env[key] = value;
@@ -71,27 +71,27 @@ function getTerminalEnv(): Record<string, string> {
   delete env.BASH_ENV;
   delete env.ENV;
   return env;
-}
+};
 
-function cancelOrphanStop(handle: PtyHandle): void {
+const cancelOrphanStop = (handle: PtyHandle) => {
   if (handle.orphanTimer === undefined) return;
   clearTimeout(handle.orphanTimer);
   handle.orphanTimer = undefined;
-}
+};
 
-function scheduleOrphanStop(handle: PtyHandle): void {
+const scheduleOrphanStop = (handle: PtyHandle) => {
   if (handle.orphanTimer !== undefined || handle.subscribers.size !== 0) return;
   handle.orphanTimer = setTimeout(() => {
     handle.orphanTimer = undefined;
     if (handle.subscribers.size === 0) stopPty(handle.id);
   }, ORPHAN_GRACE_MS);
-}
+};
 
-export function hasPty(ptyId: string): boolean {
+export const hasPty = (ptyId: string): boolean => {
   return handles.has(ptyId);
-}
+};
 
-export function startPty(options: PtyStartOptions): PtyStartResult {
+export const startPty = (options: PtyStartOptions): PtyStartResult => {
   const cwd = resolveCwd(options.cwd);
   const shell = options.shell ?? getDefaultShell();
   const id = crypto.randomUUID();
@@ -139,23 +139,23 @@ export function startPty(options: PtyStartOptions): PtyStartResult {
   handles.set(id, handle);
 
   return { ptyId: id, shell, cwd, title: handle.title };
-}
+};
 
 /** Push raw stdin bytes into the shell (keystrokes, pasted text, etc.). */
-export function writePty(ptyId: string, data: string): void {
+export const writePty = (ptyId: string, data: string) => {
   const handle = handles.get(ptyId);
   if (!handle) throw new Error("Terminal is not running");
   handle.terminal.write(data);
-}
+};
 
-export function resizePty(ptyId: string, cols: number, rows: number): void {
+export const resizePty = (ptyId: string, cols: number, rows: number) => {
   const handle = handles.get(ptyId);
   if (!handle) throw new Error("Terminal is not running");
   handle.terminal.resize(Math.max(2, Math.floor(cols)), Math.max(2, Math.floor(rows)));
-}
+};
 
 /** Register a sink for PTY output. */
-export function subscribePty(ptyId: string, cb: (data: string) => void): () => void {
+export const subscribePty = (ptyId: string, cb: (data: string) => void): (() => void) => {
   const handle = handles.get(ptyId);
   if (!handle) throw new Error("PTY not found");
   cancelOrphanStop(handle);
@@ -167,18 +167,18 @@ export function subscribePty(ptyId: string, cb: (data: string) => void): () => v
     handle.subscribers.delete(cb);
     scheduleOrphanStop(handle);
   };
-}
+};
 
 /** Register a callback for the PTY's natural exit. */
-export function subscribePtyExit(ptyId: string, cb: () => void): () => void {
+export const subscribePtyExit = (ptyId: string, cb: () => void): (() => void) => {
   const handle = handles.get(ptyId);
   if (!handle) throw new Error("PTY not found");
   handle.exitSubscribers.add(cb);
   return () => handle.exitSubscribers.delete(cb);
-}
+};
 
 /** Explicitly terminate a tab-owned PTY. Idempotent for missing ids. */
-export function stopPty(ptyId: string): void {
+export const stopPty = (ptyId: string) => {
   const handle = handles.get(ptyId);
   if (!handle) return;
   cancelOrphanStop(handle);
@@ -192,8 +192,8 @@ export function stopPty(ptyId: string): void {
   } catch {
     /* already exited */
   }
-}
+};
 
-export function stopAllPtys(): void {
+export const stopAllPtys = () => {
   for (const id of handles.keys()) stopPty(id);
-}
+};

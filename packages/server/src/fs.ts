@@ -48,23 +48,23 @@ export class WorkspaceError extends Error {
 /**
  * Reject any path that escapes the workspace, including symlink targets.
  */
-async function ensureWithinWorkspace(input: string): Promise<string> {
+const ensureWithinWorkspace = async (input: string): Promise<string> => {
   const resolved = resolveInWorkspace(input);
   const checkedPath = await realpath(resolved);
   if (!isWithinWorkspace(checkedPath)) {
     throw new WorkspaceError("Path is outside of the active workspace");
   }
   return checkedPath;
-}
+};
 
-function toRelative(path: string): string {
+const toRelative = (path: string): string => {
   const workspace = getWorkspace();
   if (path === workspace) return "";
   if (path.startsWith(`${workspace}/`)) return path.slice(workspace.length + 1);
   return "";
-}
+};
 
-export async function listDirectory(input?: string): Promise<ListResult> {
+export const listDirectory = async (input?: string): Promise<ListResult> => {
   const target = input === undefined || input === "" ? getWorkspace() : await ensureWithinWorkspace(input);
   const dirents = await readdir(target, { withFileTypes: true });
   const entries = await Promise.all(
@@ -94,5 +94,5 @@ export async function listDirectory(input?: string): Promise<ListResult> {
     return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
   });
   return { path: target, displayPath: shortPath(target), entries };
-}
+};
 

@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { FitAddon, Terminal, type Ghostty, type IDisposable } from "ghostty-web";
 import { ptyWs } from "@/api/ws";
+import { toMessage } from "@/api/client";
 import { useGhosttyInit } from "@/composables/useGhostty";
 import { releaseTerminalCleanup, replaceTerminalCleanup } from "@/composables/terminalRegistry";
 
@@ -10,7 +11,7 @@ const emit = defineEmits<{ exited: [{ reason: string }] }>();
 
 const hostRef = useTemplateRef<HTMLDivElement>("hostRef");
 const status = ref<"loading" | "connecting" | "ready" | "closed" | "error">("loading");
-const errorMessage = ref("");
+const errorMessage = ref<string | null>(null);
 
 const disposers: IDisposable[] = [];
 let terminal: Terminal | undefined;
@@ -29,7 +30,7 @@ const terminalTheme = {
   selectionBackground: "#d9d9d9",
 };
 
-function flushOutput(): void {
+const flushOutput = () => {
   outputFrame = undefined;
   if (outputWriting || !terminal || !pendingOutput) return;
 
@@ -40,18 +41,18 @@ function flushOutput(): void {
     outputWriting = false;
     if (pendingOutput) scheduleOutput();
   });
-}
+};
 
-function scheduleOutput(): void {
+const scheduleOutput = () => {
   if (outputFrame === undefined) outputFrame = window.requestAnimationFrame(flushOutput);
-}
+};
 
-function enqueueOutput(data: string): void {
+const enqueueOutput = (data: string) => {
   pendingOutput += data;
   scheduleOutput();
-}
+};
 
-function closeSocket(): void {
+const closeSocket = () => {
   const current = socket;
   socket = undefined;
   if (!current) return;
@@ -62,9 +63,9 @@ function closeSocket(): void {
   if (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING) {
     current.close();
   }
-}
+};
 
-function teardown(): void {
+const teardown = () => {
   disposed = true;
   pendingOutput = "";
   outputWriting = false;
@@ -81,9 +82,9 @@ function teardown(): void {
     releaseTerminalCleanup(registeredHost, teardown);
     registeredHost = undefined;
   }
-}
+};
 
-async function createTerminal(): Promise<Terminal | null> {
+const createTerminal = async (): Promise<Terminal | null> => {
   const host = hostRef.value;
   if (!host || disposed || terminal) return terminal ?? null;
 
@@ -92,7 +93,7 @@ async function createTerminal(): Promise<Terminal | null> {
     ghostty = await useGhosttyInit();
   } catch (error) {
     status.value = "error";
-    errorMessage.value = error instanceof Error ? error.message : String(error);
+    errorMessage.value = toMessage(error);
     return null;
   }
   if (disposed || hostRef.value !== host) return null;
@@ -128,9 +129,9 @@ async function createTerminal(): Promise<Terminal | null> {
   registeredHost = host;
   replaceTerminalCleanup(host, teardown);
   return term;
-}
+};
 
-function connect(): void {
+const connect = () => {
   closeSocket();
   const current = ptyWs(props.ptyId);
   socket = current;
@@ -154,7 +155,7 @@ function connect(): void {
     status.value = "closed";
     emit("exited", { reason: event.reason || `closed (${event.code})` });
   };
-}
+};
 
 onMounted(async () => {
   status.value = "connecting";

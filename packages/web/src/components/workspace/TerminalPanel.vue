@@ -28,10 +28,9 @@ import CloseIcon from "@/assets/icons/Close.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
 import FullscreenExitIcon from "@/assets/icons/FullscreenExit.svg";
 import TerminalIcon from "@/assets/icons/Terminal.svg";
-import PanelToggleButton from "@/components/PanelToggleButton.vue";
 import IconButton from "@/components/IconButton.vue";
 import TerminalView from "@/components/workspace/TerminalView.vue";
-import { startPty, stopPty } from "@/api/client";
+import { startPty, stopPty, toMessage } from "@/api/client";
 import { useUiStore } from "@/stores/ui";
 
 type TabStatus = "creating" | "ready" | "closed" | "error";
@@ -57,11 +56,11 @@ const tabs = ref<Tab[]>([]);
 const activeId = ref<string | null>(null);
 const maximized = computed(() => ui.maximized.bottom);
 
-function focusTab(id: string): void {
+const focusTab = (id: string) => {
   activeId.value = id;
-}
+};
 
-async function createTab(): Promise<void> {
+const createTab = async () => {
   // Optimistically add a tab so the user sees something immediately. The
   // tab starts with `ptyId: null`; on success we mutate the existing entry's
   // ptyId in place — the tab's `id` (used as Vue's :key) never changes, so
@@ -70,7 +69,7 @@ async function createTab(): Promise<void> {
   const tab: Tab = {
     id: localId,
     ptyId: null,
-      title: "Terminal",
+    title: "Terminal",
     status: "creating",
     errorMessage: "",
   };
@@ -98,16 +97,20 @@ async function createTab(): Promise<void> {
     Object.assign(existing, {
       title: "error",
       status: "error" as const,
-      errorMessage: err instanceof Error ? err.message : String(err),
+      errorMessage: toMessage(err),
     });
   }
-}
+};
 
-function closeTab(id: string): void {
+const closeTab = (id: string) => {
   const idx = tabs.value.findIndex((t) => t.id === id);
   if (idx === -1) return;
   const ptyId = tabs.value[idx]!.ptyId;
-  if (ptyId) void stopPty(ptyId);
+  if (ptyId) {
+    stopPty(ptyId).catch((error) => {
+      console.error("Failed to stop terminal PTY", ptyId, error);
+    });
+  }
   const wasActive = activeId.value === id;
   tabs.value.splice(idx, 1);
 
@@ -116,34 +119,38 @@ function closeTab(id: string): void {
     const next = tabs.value[idx - 1] ?? tabs.value[idx] ?? null;
     activeId.value = next?.id ?? null;
   }
-}
+};
 
-function onTabExited(id: string, payload: { reason: string }): void {
+const onTabExited = (id: string, payload: { reason: string }) => {
   const existing = tabs.value.find((t) => t.id === id);
   if (!existing) return;
   Object.assign(existing, {
     status: "closed",
     errorMessage: payload.reason,
   });
-}
+};
 
-async function reopenTab(id: string): Promise<void> {
+const reopenTab = async (id: string) => {
   // Drop the dead tab and start fresh.
   const idx = tabs.value.findIndex((t) => t.id === id);
   if (idx !== -1) tabs.value.splice(idx, 1);
   await createTab();
-}
+};
 
-function toggleMaximize(): void {
+const toggleMaximize = () => {
   ui.toggleMaximized("bottom");
-}
+};
 
 // Auto-create one tab the first time the panel becomes visible. Spawning a
 // shell behind a closed panel would create a useless 0×0 PTY.
 watch(
   bottomOpen,
   (open) => {
-    if (open && tabs.value.length === 0) void createTab();
+    if (open && tabs.value.length === 0) {
+      createTab().catch((error) => {
+        console.error("Failed to create terminal tab", error);
+      });
+    }
   },
   { immediate: true },
 );
@@ -194,9 +201,14 @@ watch(
           <FullscreenExitIcon v-if="maximized" />
           <FullscreenIcon v-else />
         </IconButton>
-        <PanelToggleButton size="compact" panel="bottom" label="Close terminal panel">
+        <IconButton
+          size="compact"
+          label="Close terminal panel"
+          :pressed="ui.panels.bottom.open"
+          @click="ui.toggle('bottom')"
+        >
           <CloseIcon />
-        </PanelToggleButton>
+        </IconButton>
       </div>
     </header>
 

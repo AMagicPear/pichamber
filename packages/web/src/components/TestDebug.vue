@@ -11,44 +11,44 @@ const ws = ref<WsHandle | null>(null);
 // All results are written to the browser console; the debug surface stays minimal.
 const log = (label: string, value: unknown) => console.log(`[${label}]`, value);
 
-async function onList() {
+const onList = async () => {
   log("GET /api/sessions", await listSessions());
-}
+};
 
-async function onCreate() {
+const onCreate = async () => {
   const result = await createSession(cwd.value);
   sessionId.value = result.sessionId;
   log("POST /api/sessions", result);
-}
+};
 
-async function onGetEntries() {
+const onGetEntries = async () => {
   if (!sessionId.value) return console.warn("no sessionId");
   log(`GET /api/sessions/${sessionId.value}`, await getEntries(sessionId.value));
-}
+};
 
-async function onDelete() {
+const onDelete = async () => {
   if (!sessionId.value) return console.warn("no sessionId");
   log(`DELETE /api/sessions/${sessionId.value}`, await deleteSession(sessionId.value));
   ws.value?.close();
   ws.value = null;
   sessionId.value = null;
-}
+};
 
-function onConnect() {
+const onConnect = () => {
   if (!sessionId.value) return console.warn("no sessionId");
   ws.value?.close();
   ws.value = connectWs(sessionId.value, (event) => log("ws event", event));
-}
+};
 
-function onSend() {
+const onSend = () => {
   if (!ws.value) return console.warn("no ws");
   ws.value.send({ type: "prompt", message: promptText.value });
-}
+};
 
-function onCloseWs() {
+const onCloseWs = () => {
   ws.value?.close();
   ws.value = null;
-}
+};
 </script>
 
 <template>
