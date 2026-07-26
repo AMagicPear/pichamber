@@ -24,8 +24,15 @@ const error = ref<string | null>(null);
 
 const sessionTitle = (session: SessionInfo) => session.name?.trim() || session.firstMessage.trim();
 
+const toTime = (value: unknown) => {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "number") return value;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : Date.now();
+};
+
 const sessionAge = (session: SessionInfo) => {
-  const elapsed = Math.max(0, Date.now() - session.modified.getTime());
+  const elapsed = Math.max(0, Date.now() - toTime(session.modified));
   const minutes = Math.floor(elapsed / 60000);
   if (minutes < 60) return `${Math.max(1, minutes)}m`;
   const hours = Math.floor(minutes / 60);
