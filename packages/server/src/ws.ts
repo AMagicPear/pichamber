@@ -1,5 +1,5 @@
-import type { ServerMessage } from "@pichamber/shared";
-import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import type { AgentSessionEvent, ServerMessage, SessionEntry } from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "./error";
 import { deactivateSession, getSession } from "./session";
@@ -86,7 +86,11 @@ export const sessionWsHandler: WsHandler = {
     const channel = attachListener(sessionId, session);
     channel.sockets.add(bunWS);
     bunWS.data.attached = true;
-    const msg: ServerMessage = { type: "ready", sessionId };
+    const msg: ServerMessage = {
+      type: "ready",
+      sessionId,
+      entries: session.sessionManager.getEntries() as unknown as SessionEntry[],
+    };
     bunWS.send(JSON.stringify(msg));
   },
   async message(ws, message) {

@@ -7,7 +7,6 @@ import SettingsModal from "@/components/SettingsModal.vue";
 import SettingsView from "@/components/settings/SettingsView.vue";
 import { startUiStorePersistence } from "@/stores/ui";
 import ContextPanel from "@/components/workspace/ContextPanel.vue";
-import ConversationPanel from "@/components/workspace/ConversationPanel.vue";
 import SessionHeader from "@/components/workspace/SessionHeader.vue";
 import SessionSidebar from "@/components/workspace/SessionSidebar.vue";
 import TerminalPanel from "@/components/workspace/TerminalPanel.vue";
@@ -61,18 +60,12 @@ const ui = useUiStore();
                   @update:size="ui.setSize('bottom', $event)"
                   @update:maximized="ui.setMaximized('bottom', $event)"
                 >
-                  <template #default>
-                    <ConversationPanel />
-                  </template>
-                  <template #sidebar>
-                    <TerminalPanel />
-                  </template>
+                  <template #default><RouterView /></template>
+                  <template #sidebar><TerminalPanel /></template>
                 </SplitPane>
               </template>
 
-              <template #sidebar>
-                <ContextPanel />
-              </template>
+              <template #sidebar><ContextPanel /></template>
             </SplitPane>
           </div>
         </section>

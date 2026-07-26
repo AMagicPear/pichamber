@@ -11,8 +11,49 @@ import SettingsIcon from "@/assets/icons/Settings3.svg";
 import SortDescIcon from "@/assets/icons/SortDesc.svg";
 import { ArrowsMerge } from "@/components/ArrowsMerge";
 import IconButton from "@/components/IconButton.vue";
+import { listSessions, toMessage } from "@/api/client";
+import type { SessionInfo } from "@pichamber/shared";
+import { computed, onMounted, ref } from "vue";
+import { RouterLink } from "vue-router";
 
 const emit = defineEmits<{ openSettings: [] }>();
+
+const sessions = ref<SessionInfo[]>([]);
+const loading = ref(true);
+const error = ref<string | null>(null);
+
+const sortedSessions = computed(() =>
+  [...sessions.value].sort((a, b) => toTime(b.modified) - toTime(a.modified)),
+);
+
+const toTime = (value: Date | string) =>
+  typeof value === "string" ? Date.parse(value) : value.getTime();
+
+const sessionTitle = (session: SessionInfo) =>
+  session.name?.trim() || session.firstMessage.trim() || "New session";
+
+const sessionAge = (session: SessionInfo) => {
+  const elapsed = Math.max(0, Date.now() - toTime(session.modified));
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 60) return `${Math.max(1, minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo`;
+  return `${Math.floor(months / 12)}y`;
+};
+
+onMounted(async () => {
+  try {
+    sessions.value = await listSessions();
+  } catch (err) {
+    error.value = toMessage(err);
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
 
 <template>
@@ -27,7 +68,9 @@ const emit = defineEmits<{ openSettings: [] }>();
     <div class="sidebar__actions" aria-label="Workspace actions">
       <div>
         <IconButton label="Add project"><FolderAddIcon /></IconButton>
-        <IconButton label="New session"><ChatNewIcon /></IconButton>
+        <RouterLink to="/sessions/new" custom v-slot="{ navigate }">
+          <IconButton label="New session" @click="navigate"><ChatNewIcon /></IconButton>
+        </RouterLink>
         <IconButton label="New multi-run"><ArrowsMerge /></IconButton>
         <IconButton label="Scheduled tasks"><CalendarScheduleIcon /></IconButton>
       </div>
@@ -41,27 +84,20 @@ const emit = defineEmits<{ openSettings: [] }>();
 
     <section class="session-list">
       <h2><ArrowDownSIcon /> <span>Recent</span></h2>
-      <button type="button" class="session-list__item">
-        <span>复杂格式示例：表格、代码、...</span>
-        <time>13h</time>
-      </button>
-      <button type="button" class="session-list__item">
-        <span>Skill 安装位置选择与指南</span>
-        <time>4mo</time>
-      </button>
-      <button type="button" class="session-list__item">
-        <span>Home 目录可清理文件检查</span>
-        <time>4mo</time>
-      </button>
-      <button type="button" class="session-list__item">
-        <span>New Computer Setup Request</span>
-        <time>6mo</time>
-      </button>
-      <button type="button" class="session-list__item">
-        <span>Analyzing Plan-Mode Read...</span>
-        <time>6mo</time>
-      </button>
-      <button type="button" class="session-list__more">Show more sessions</button>
+      <p v-if="loading" class="session-list__state">Loading sessions...</p>
+      <p v-else-if="error" class="session-list__state session-list__state--error">{{ error }}</p>
+      <p v-else-if="sortedSessions.length === 0" class="session-list__state">No sessions yet.</p>
+      <RouterLink
+        v-for="session in sortedSessions"
+        v-else
+        :key="session.id"
+        :to="{ name: 'session', params: { sessionId: session.id } }"
+        class="session-list__item"
+        active-class="is-active"
+      >
+        <span>{{ sessionTitle(session) }}</span>
+        <time>{{ sessionAge(session) }}</time>
+      </RouterLink>
     </section>
 
     <footer class="sidebar__footer">
@@ -149,9 +185,15 @@ const emit = defineEmits<{ openSettings: [] }>();
   min-height: 31px;
   padding: 6px 7px 6px 28px;
   border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
   text-align: left;
   font-size: 14px;
   line-height: 19px;
+}
+.session-list__item.is-active,
+.session-list__item.is-active:hover {
+  background: rgb(0 0 0 / 7%);
 }
 .session-list__item span {
   overflow: hidden;
@@ -168,6 +210,14 @@ const emit = defineEmits<{ openSettings: [] }>();
   padding: 5px 7px 5px 28px;
   color: #8b8b8b;
   font-size: 12px;
+}
+.session-list__state {
+  margin: 12px 7px 0 28px;
+  color: #888;
+  font-size: 12px;
+}
+.session-list__state--error {
+  color: #b3261e;
 }
 .sidebar__footer {
   flex: 0 0 42px;
