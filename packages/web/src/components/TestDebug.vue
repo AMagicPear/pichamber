@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { createSession, deleteSession, getEntries, listSessions } from "../api/client";
-import { connectWs, type WsHandle } from "../api/ws";
+import { connectSessionWs, type WsHandle } from "../api/ws";
 
 const cwd = ref("/tmp");
 const sessionId = ref<string | null>(null);
@@ -37,8 +37,8 @@ const onDelete = async () => {
 const onConnect = () => {
   if (!sessionId.value) return console.warn("no sessionId");
   ws.value?.close();
-  ws.value = connectWs(sessionId.value, (event) => log("ws event", event));
-};
+  ws.value = connectSessionWs(sessionId.value, (event) => log("ws event", event));
+}
 
 const onSend = () => {
   if (!ws.value) return console.warn("no ws");

@@ -21,6 +21,7 @@
     "concurrently": "^10.0.3",
     "oxlint": "~1.75.0",
     "typescript": "~7.0.2",
+    "typescript6": "npm:@typescript/typescript6@^6.0.2",
     "vue-tsc": "^3.3.8"
   },
   "engines": {

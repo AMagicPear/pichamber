@@ -1,6 +1,8 @@
+import type { ServerMessage } from "@pichamber/shared";
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "./error";
+import { deactivateSession, getSession } from "./session";
 import type { SessionWsData, WsHandler } from "./index";
 
 type BunWS = ServerWebSocket<SessionWsData>;
@@ -22,7 +24,8 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     unsubscribe: () => undefined,
   };
   channel.unsubscribe = session.subscribe((event: AgentSessionEvent) => {
-    const payload = JSON.stringify({ type: "event", event });
+    const msg: ServerMessage = { type: "event", event };
+    const payload = JSON.stringify(msg);
     for (const bunWS of channel.sockets) {
       if (bunWS.readyState === 1) bunWS.send(payload);
     }
@@ -57,7 +60,8 @@ export const closeSessionSockets = (sessionId: string) => {
 };
 
 const sendError = (ws: BunWS, error: string) => {
-  if (ws.readyState === 1) ws.send(JSON.stringify({ type: "error", error }));
+  const msg: ServerMessage = { type: "error", error };
+  if (ws.readyState === 1) ws.send(JSON.stringify(msg));
 };
 
 export const sessionWsHandler: WsHandler = {
@@ -82,7 +86,8 @@ export const sessionWsHandler: WsHandler = {
     const channel = attachListener(sessionId, session);
     channel.sockets.add(bunWS);
     bunWS.data.attached = true;
-    bunWS.send(JSON.stringify({ type: "ready", sessionId }));
+    const msg: ServerMessage = { type: "ready", sessionId };
+    bunWS.send(JSON.stringify(msg));
   },
   async message(ws, message) {
     const bunWS = ws as BunWS;

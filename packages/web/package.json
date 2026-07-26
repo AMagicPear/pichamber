@@ -8,9 +8,10 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
-    "type-check": "vue-tsc --build --force"
+    "type-check": "node ../../scripts/vue-tsc.mjs --build --force"
   },
   "dependencies": {
+    "@pichamber/shared": "workspace:*",
     "ghostty-web": "^0.4.0",
     "katex": "^0.18.1",
     "markstream-vue": "^1.0.7",

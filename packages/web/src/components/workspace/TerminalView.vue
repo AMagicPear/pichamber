@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { FitAddon, Terminal, type Ghostty, type IDisposable } from "ghostty-web";
-import { ptyWs } from "@/api/ws";
+import { connectPtyWs, type WsHandle } from "@/api/ws";
 import { toMessage } from "@/api/client";
 import { useGhosttyInit } from "@/composables/useGhostty";
 import { releaseTerminalCleanup, replaceTerminalCleanup } from "@/composables/terminalRegistry";
@@ -15,7 +15,7 @@ const errorMessage = ref<string | null>(null);
 
 const disposers: IDisposable[] = [];
 let terminal: Terminal | undefined;
-let socket: WebSocket | undefined;
+let ws: WsHandle | null = null;
 let registeredHost: HTMLElement | undefined;
 let disposed = false;
 let pendingOutput = "";
@@ -53,16 +53,8 @@ const enqueueOutput = (data: string) => {
 };
 
 const closeSocket = () => {
-  const current = socket;
-  socket = undefined;
-  if (!current) return;
-  current.onopen = null;
-  current.onmessage = null;
-  current.onerror = null;
-  current.onclose = null;
-  if (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING) {
-    current.close();
-  }
+  ws?.close();
+  ws = null;
 };
 
 const teardown = () => {
@@ -115,14 +107,8 @@ const createTerminal = async (): Promise<Terminal | null> => {
   fit.observeResize();
 
   disposers.push(
-    term.onData((data) => {
-      if (socket?.readyState === WebSocket.OPEN) socket.send(data);
-    }),
-    term.onResize(({ cols, rows }) => {
-      if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "resize", cols, rows }));
-      }
-    }),
+    term.onData((data) => ws?.send(data)),
+    term.onResize(({ cols, rows }) => ws?.send({ type: "resize", cols, rows })),
   );
 
   terminal = term;
@@ -133,29 +119,20 @@ const createTerminal = async (): Promise<Terminal | null> => {
 
 const connect = () => {
   closeSocket();
-  const current = ptyWs(props.ptyId);
-  socket = current;
-
-  current.onopen = () => {
-    if (terminal) {
-      current.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
+  ws = connectPtyWs(props.ptyId, enqueueOutput, (st) => {
+    if (disposed) return;
+    if (st.type === "ready") {
+      if (terminal) ws?.send({ type: "resize", cols: terminal.cols, rows: terminal.rows });
+      status.value = "ready";
+    } else if (st.type === "error") {
+      status.value = "error";
+      errorMessage.value = st.error;
+    } else if (st.type === "closed") {
+      status.value = "closed";
+      emit("exited", { reason: st.reason || `closed (${st.code})` });
     }
-    status.value = "ready";
-  };
-  current.onmessage = (event) => {
-    if (typeof event.data === "string") enqueueOutput(event.data);
-  };
-  current.onerror = () => {
-    if (disposed) return;
-    status.value = "error";
-    errorMessage.value = "WebSocket connection failed";
-  };
-  current.onclose = (event) => {
-    if (disposed) return;
-    status.value = "closed";
-    emit("exited", { reason: event.reason || `closed (${event.code})` });
-  };
-};
+  });
+}
 
 onMounted(async () => {
   status.value = "connecting";
