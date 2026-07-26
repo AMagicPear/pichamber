@@ -6,9 +6,7 @@ import LayoutRightIcon from "@/assets/icons/LayoutRight.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalBoxIcon from "@/assets/icons/TerminalBox.svg";
 import IconButton from "@/components/IconButton.vue";
-import { useUiStore } from "@/stores/ui";
-
-const ui = useUiStore();
+import { ui } from "@/stores/ui";
 </script>
 
 <template>

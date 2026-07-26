@@ -1,11 +1,6 @@
-import { defineStore } from "pinia";
+import { reactive } from "vue";
 
-export const useWorkspaceStore = defineStore("workspace", {
-  state: () => ({
-    cwd: null as string | null,
-    sessionId: null as string | null,
-  }),
-  actions: {
-    
-  },
+export const workspace = reactive({
+  cwd: null as string | null,
+  sessionId: null as string | null,
 });

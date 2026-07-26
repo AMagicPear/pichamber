@@ -15,9 +15,8 @@ import { listSessions, toMessage } from "@/api/client";
 import type { SessionInfo } from "@pichamber/shared";
 import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { useUiStore } from "@/stores/ui";
+import { ui } from "@/stores/ui";
 
-const ui = useUiStore();
 const sessions = ref<SessionInfo[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);

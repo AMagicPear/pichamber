@@ -31,7 +31,7 @@ import TerminalIcon from "@/assets/icons/Terminal.svg";
 import IconButton from "@/components/IconButton.vue";
 import TerminalView from "@/components/workspace/TerminalView.vue";
 import { startPty, stopPty, toMessage } from "@/api/client";
-import { useUiStore } from "@/stores/ui";
+import { ui } from "@/stores/ui";
 
 type TabStatus = "creating" | "ready" | "closed" | "error";
 
@@ -49,7 +49,6 @@ interface Tab {
   errorMessage: string;
 }
 
-const ui = useUiStore();
 const bottomOpen = computed(() => ui.panels.bottom.open);
 
 const tabs = ref<Tab[]>([]);

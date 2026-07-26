@@ -1,4 +1,4 @@
-import { defineStore } from "pinia";
+import { reactive, watch } from "vue";
 
 export type SplitMode = "bottom" | "left" | "right";
 
@@ -98,25 +98,21 @@ const saveUiState = (panels: PanelsState, maximized: Record<SplitMode, boolean>)
   }
 };
 
-export const useUiStore = defineStore("ui", {
-  state: () => ({
-    panels: loadPanels() ?? createDefaultPanels(),
-    maximized: loadMaximized(),
-    settingsOpen: false,
-  }),
-  actions: {
-    toggle(mode: SplitMode) {
-      this.panels[mode].open = !this.panels[mode].open;
-    },
-    setSize(mode: SplitMode, size: number) {
-      this.panels[mode].size = clampSize(mode, size);
-    },
-    toggleMaximized(mode: SplitMode) {
-      this.maximized[mode] = !this.maximized[mode];
-    },
-    setMaximized(mode: SplitMode, value: boolean) {
-      this.maximized[mode] = value;
-    },
+export const ui = reactive({
+  panels: loadPanels() ?? createDefaultPanels(),
+  maximized: loadMaximized(),
+  settingsOpen: false,
+  toggle(mode: SplitMode) {
+    ui.panels[mode].open = !ui.panels[mode].open;
+  },
+  setSize(mode: SplitMode, size: number) {
+    ui.panels[mode].size = clampSize(mode, size);
+  },
+  toggleMaximized(mode: SplitMode) {
+    ui.maximized[mode] = !ui.maximized[mode];
+  },
+  setMaximized(mode: SplitMode, value: boolean) {
+    ui.maximized[mode] = value;
   },
 });
 
@@ -129,8 +125,7 @@ let persistenceStarted = false;
 export const startUiStorePersistence = () => {
   if (persistenceStarted) return;
   persistenceStarted = true;
-  const ui = useUiStore();
-  ui.$subscribe((_mutation, state) => {
-    saveUiState(state.panels as PanelsState, state.maximized as Record<SplitMode, boolean>);
-  });
+  watch(ui, () => {
+    saveUiState(ui.panels, ui.maximized);
+  }, { deep: true });
 };
