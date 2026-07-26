@@ -4,7 +4,7 @@ import IconButton from "@/components/IconButton.vue";
 import SplitPane from "@/components/layout/SplitPane.vue";
 import SettingsModal from "@/components/layout/SettingsModal.vue";
 import SettingsView from "@/components/modals/SettingsView.vue";
-import { startUiStorePersistence, ui } from "@/stores/ui";
+import { saveUiState, ui } from "@/stores/ui";
 import ContextPanel from "@/components/panels/ContextPanel.vue";
 import SessionHeader from "@/components/panels/SessionHeader.vue";
 import SessionSidebar from "@/components/panels/SessionSidebar.vue";
@@ -14,9 +14,11 @@ import ConversationPanel from "./components/panels/ConversationPanel.vue";
 import { useRoute } from "vue-router";
 import { watch } from "vue";
 
-startUiStorePersistence();
-
 const route = useRoute();
+
+watch(ui, () => {
+  saveUiState(ui.panels, ui.maximized);
+}, { deep: true });
 
 watch(
   () => route.params.sessionId,
@@ -29,21 +31,13 @@ watch(
 
 <template>
   <div class="app-shell">
-    <IconButton
-      class="app-shell__sidebar-toggle"
-      label="Toggle left sidebar"
-      :pressed="ui.panels.left.open"
-      @click="ui.toggle('left')"
-    >
+    <IconButton class="app-shell__sidebar-toggle" label="Toggle left sidebar" :pressed="ui.panels.left.open"
+      @click="ui.toggle('left')">
       <LayoutLeftIcon />
     </IconButton>
 
-    <SplitPane
-      mode="left"
-      :open="ui.panels.left.open"
-      :size="ui.panels.left.size"
-      @update:size="ui.setSize('left', $event)"
-    >
+    <SplitPane mode="left" :open="ui.panels.left.open" :size="ui.panels.left.size"
+      @update:size="ui.setSize('left', $event)">
       <template #sidebar>
         <SessionSidebar />
       </template>
@@ -53,28 +47,24 @@ watch(
           <SessionHeader />
 
           <div class="workspace__body">
-            <SplitPane
-              mode="right"
-              :open="ui.panels.right.open"
-              :size="ui.panels.right.size"
-              :min-size="300"
-              @update:size="ui.setSize('right', $event)"
-            >
+            <SplitPane mode="right" :open="ui.panels.right.open" :size="ui.panels.right.size" :min-size="300"
+              @update:size="ui.setSize('right', $event)">
               <template #default>
-                <SplitPane
-                  mode="bottom"
-                  :open="ui.panels.bottom.open"
-                  :size="ui.panels.bottom.size"
-                  :maximized="ui.maximized.bottom"
-                  @update:size="ui.setSize('bottom', $event)"
-                  @update:maximized="ui.setMaximized('bottom', $event)"
-                >
-                  <template #default><ConversationPanel /> </template>
-                  <template #sidebar><TerminalPanel /></template>
+                <SplitPane mode="bottom" :open="ui.panels.bottom.open" :size="ui.panels.bottom.size"
+                  :maximized="ui.maximized.bottom" @update:size="ui.setSize('bottom', $event)"
+                  @update:maximized="ui.setMaximized('bottom', $event)">
+                  <template #default>
+                    <ConversationPanel />
+                  </template>
+                  <template #sidebar>
+                    <TerminalPanel />
+                  </template>
                 </SplitPane>
               </template>
 
-              <template #sidebar><ContextPanel /></template>
+              <template #sidebar>
+                <ContextPanel />
+              </template>
             </SplitPane>
           </div>
         </section>
@@ -96,6 +86,7 @@ body,
   height: 100%;
   margin: 0;
 }
+
 body {
   color: #171717;
   font-family:
@@ -109,6 +100,7 @@ body {
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
 }
+
 *,
 *::before,
 *::after {
@@ -116,24 +108,29 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
   background: transparent;
 }
+
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
 *::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 5px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
+
 *::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.35);
   background-clip: padding-box;
 }
+
 button {
   padding: 0;
   border: 0;
@@ -142,17 +139,20 @@ button {
   font: inherit;
   cursor: pointer;
 }
+
 .app-shell {
   position: relative;
   width: 100%;
   height: 100%;
 }
+
 .app-shell__sidebar-toggle {
   position: absolute;
   top: 11px;
   left: 11px;
   z-index: 10;
 }
+
 .workspace {
   display: flex;
   flex-direction: column;
@@ -161,6 +161,7 @@ button {
   min-width: 0;
   min-height: 0;
 }
+
 .workspace__body {
   display: flex;
   flex: 1 1 0;

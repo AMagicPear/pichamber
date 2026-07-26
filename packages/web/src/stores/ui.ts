@@ -1,4 +1,4 @@
-import { reactive, watch } from "vue";
+import { reactive } from "vue";
 
 export type SplitMode = "bottom" | "left" | "right";
 
@@ -89,7 +89,7 @@ const loadPanels = (): PanelsState | null => {
   }
 };
 
-const saveUiState = (panels: PanelsState, maximized: Record<SplitMode, boolean>) => {
+export const saveUiState = (panels: PanelsState, maximized: Record<SplitMode, boolean>) => {
   if (!hasStorage()) return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ panels, maximized }));
@@ -115,17 +115,3 @@ export const ui = reactive({
     ui.maximized[mode] = value;
   },
 });
-
-/**
- * Subscribe to the store once per app lifetime so the latest panel sizes
- * and open-states are flushed to localStorage.
- */
-let persistenceStarted = false;
-
-export const startUiStorePersistence = () => {
-  if (persistenceStarted) return;
-  persistenceStarted = true;
-  watch(ui, () => {
-    saveUiState(ui.panels, ui.maximized);
-  }, { deep: true });
-};
