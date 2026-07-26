@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import AddIcon from "@/assets/icons/Add.svg";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
@@ -22,7 +22,6 @@ interface Message {
   id: string;
   role: "user" | "assistant" | "error";
   content: string;
-  streaming?: boolean;
 }
 
 const presets = [
@@ -38,16 +37,11 @@ const presets = [
 const messages = ref<Message[]>([]);
 const draft = ref("");
 const connected = ref(false);
-const connecting = ref(false);
-const sessionId = ref<string | null>(null);
 
 let ws: WsHandle | null = null;
 let streamId: string | null = null;
 
-const hasMessages = computed(() => messages.value.length > 0);
-const canSend = computed(
-  () => connected.value && !connecting.value && draft.value.trim().length > 0,
-);
+const canSend = computed(() => connected.value && draft.value.trim().length > 0);
 
 // ── Pi AgentSession event stream ──────────────────────────────────────
 // Event shapes come from @earendil-works/pi-coding-agent (AgentEvent) and
@@ -57,9 +51,7 @@ const canSend = computed(
 function onEvent(event: SessionEvent): void {
   const type = event.type;
   if (type === "message_update") {
-    const ae = event.assistantMessageEvent as
-      | { type?: string; delta?: string }
-      | undefined;
+    const ae = event.assistantMessageEvent as { type?: string; delta?: string } | undefined;
     if (ae?.type === "text_delta" && typeof ae.delta === "string") {
       appendDelta(ae.delta);
     }
@@ -75,8 +67,7 @@ function onEvent(event: SessionEvent): void {
 
 function beginAssistant(): void {
   streamId = crypto.randomUUID();
-  messages.value.push({ id: streamId, role: "assistant", content: "", streaming: true });
-  scrollDown();
+  messages.value.push({ id: streamId, role: "assistant", content: "" });
 }
 
 function appendDelta(delta: string): void {
@@ -84,25 +75,19 @@ function appendDelta(delta: string): void {
   const target = streamId ? messages.value.find((m) => m.id === streamId) : undefined;
   if (target) {
     target.content += delta;
-    scrollDown();
   }
 }
 
 function endAssistant(): void {
   if (!streamId) return;
-  const target = messages.value.find((m) => m.id === streamId);
-  if (target) target.streaming = false;
   streamId = null;
 }
 
 function onStatus(status: SessionStatus): void {
   if (status.type === "ready") {
     connected.value = true;
-    connecting.value = false;
   } else if (status.type === "error") {
-    connecting.value = false;
     messages.value.push({ id: crypto.randomUUID(), role: "error", content: status.error });
-    scrollDown();
   } else if (status.type === "closed") {
     connected.value = false;
     endAssistant();
@@ -117,7 +102,6 @@ function send(): void {
   messages.value.push({ id: crypto.randomUUID(), role: "user", content: text });
   ws.send({ type: "prompt", message: text });
   draft.value = "";
-  scrollDown();
 }
 
 function usePreset(label: string): void {
@@ -132,13 +116,6 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
-function scrollDown(): void {
-  void nextTick(() => {
-    const el = document.querySelector(".conversation__messages");
-    if (el) el.scrollTop = el.scrollHeight;
-  });
-}
-
 // ── Session + connection lifecycle ────────────────────────────────────
 
 async function ensureSession(): Promise<string> {
@@ -151,13 +128,11 @@ async function ensureSession(): Promise<string> {
 
 async function connect(): Promise<void> {
   try {
-    connecting.value = true;
-    sessionId.value = await ensureSession();
+    const id = await ensureSession();
+    ws = connectWs(id, onEvent, onStatus);
   } catch (err) {
     onStatus({ type: "error", error: err instanceof Error ? err.message : String(err) });
-    return;
   }
-  ws = connectWs(sessionId.value, onEvent, onStatus);
 }
 
 onMounted(() => {
@@ -171,15 +146,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="conversation">
-    <div v-if="hasMessages" class="conversation__messages">
+  <main class="conversation" :class="{ 'conversation--active': messages.length > 0 }">
+    <div v-if="messages.length > 0" class="conversation__messages">
       <div
         v-for="message in messages"
         :key="message.id"
         class="message"
         :class="`message--${message.role}`"
       >
-        <span class="message__role">{{ message.role }}</span>
         <p class="message__content">{{ message.content }}</p>
       </div>
     </div>
@@ -189,27 +163,31 @@ onBeforeUnmount(() => {
       <textarea
         v-model="draft"
         class="composer__input"
-        placeholder="Use @ / ! # for helpers"
-        rows="2"
-        :disabled="connecting"
+        placeholder="@ for files/agents; / for commands and skills; ! for shell; # for snippets"
+        rows="1"
         @keydown="onKeydown"
       />
       <div class="composer__footer">
-        <IconButton size="compact" label="Add attachment"><AddCircleIcon /></IconButton>
-        <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
-        <IconButton size="compact" label="Permissions"><ShieldUserIcon /></IconButton>
-        <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
-        <IconButton size="compact" label="Model options"
-          ><AiAgentIcon class="model-icon"
-        /></IconButton>
-        <IconButton size="compact" label="Dictation"><MicIcon /></IconButton>
-        <IconButton size="compact" label="Send" :disabled="!canSend" @click="send">
-          <SendIcon />
-        </IconButton>
+        <div class="composer__footer-leading">
+          <IconButton size="compact" label="Add attachment"><AddCircleIcon /></IconButton>
+          <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
+          <IconButton size="compact" label="Permissions"><ShieldUserIcon /></IconButton>
+          <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
+        </div>
+        <div class="composer__footer-trailing">
+          <div class="composer__models">
+            <strong class="model-control"><span class="model-mark">Ƶ</span> Big Pickle</strong>
+            <span class="model-control model-mode"><AiAgentIcon class="model-icon" />Build</span>
+          </div>
+          <IconButton size="compact" label="Dictation"><MicIcon /></IconButton>
+          <IconButton size="compact" label="Send" :disabled="!canSend" @click="send">
+            <SendIcon />
+          </IconButton>
+        </div>
       </div>
     </div>
 
-    <div v-if="!hasMessages" class="presets" aria-label="Prompt starters">
+    <div v-if="messages.length === 0" class="presets" aria-label="Prompt starters">
       <button
         v-for="preset in presets"
         :key="preset.label"
@@ -233,17 +211,22 @@ onBeforeUnmount(() => {
   gap: 24px;
   width: 100%;
   height: 100%;
+  min-height: 0;
   padding: 24px 24px 16px;
   overflow: hidden;
 }
+.conversation--active {
+  justify-content: flex-start;
+}
 .conversation__messages {
-  flex: 1 1 auto;
-  width: min(100%, 768px);
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 10px;
+  width: min(100%, 1280px);
+  min-height: 0;
+  padding: 24px 0 8px;
   overflow-y: auto;
-  padding: 4px 0;
   scrollbar-width: none;
 }
 .conversation__messages::-webkit-scrollbar {
@@ -267,6 +250,7 @@ onBeforeUnmount(() => {
 }
 .message--user {
   align-self: flex-end;
+  max-width: 72%;
   background: #f0eee8;
 }
 .message--assistant {
@@ -277,12 +261,6 @@ onBeforeUnmount(() => {
   background: #fdecec;
   color: #b3261e;
 }
-.message__role {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #9a9a9a;
-}
 .message__content {
   margin: 0;
   white-space: pre-wrap;
@@ -291,20 +269,33 @@ onBeforeUnmount(() => {
   line-height: 20px;
 }
 .composer {
+  display: flex;
+  flex-direction: column;
   width: min(100%, 464px);
-  padding: 18px 12px 12px;
+  overflow: hidden;
   border: 1px solid #dedbd2;
   border-radius: 13px;
-  margin: 0;
+}
+.conversation--active .composer {
+  width: min(100%, 1280px);
 }
 .composer__input {
+  display: block;
+  flex: 0 0 auto;
   width: 100%;
+  min-height: 52px;
+  max-height: 204px;
+  field-sizing: content;
+  box-sizing: border-box;
+  padding: 16px 12px 8px;
   border: 0;
+  border-radius: 13px 13px 0 0;
   outline: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   resize: none;
-  margin: 0 0 12px;
   color: inherit;
-  font-family: inherit;
+  font: inherit;
   font-size: 14px;
   line-height: 20px;
   background: transparent;
@@ -312,22 +303,51 @@ onBeforeUnmount(() => {
 .composer__input::placeholder {
   color: #747474;
 }
-.composer__input:disabled {
-  opacity: 0.6;
-}
 .composer__footer {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 3px;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
 }
-.composer__footer strong {
+.composer__footer-leading,
+.composer__footer-trailing,
+.composer__models {
+  display: flex;
+  align-items: center;
+}
+.composer__footer-leading {
+  flex: 0 0 auto;
+  gap: 6px;
+}
+.composer__footer-trailing {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.composer__models {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.model-control {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
+  min-width: 0;
+  height: 32px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 20px;
   white-space: nowrap;
+}
+.model-mode {
+  color: #718d28;
 }
 .model-mark {
   font-size: 18px;
@@ -337,13 +357,18 @@ onBeforeUnmount(() => {
 .model-icon {
   color: #718d28;
 }
+.model-mode :deep(.model-icon) {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
 .presets {
   display: flex;
-  width: min(100%, 500px);
+  flex-wrap: wrap;
   justify-content: center;
   gap: 7px;
-  flex-wrap: wrap;
-  margin: 0;
+  width: min(100%, 500px);
 }
 .presets > button:not(.presets__add) {
   display: inline-flex;
@@ -369,5 +394,8 @@ onBeforeUnmount(() => {
   border: 1px solid #d9d7cf;
   border-radius: 999px;
   color: #666;
+}
+.conversation--active .presets {
+  display: none;
 }
 </style>
