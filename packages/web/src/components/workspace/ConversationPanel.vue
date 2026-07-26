@@ -15,7 +15,7 @@ import SurveyIcon from "@/assets/icons/Survey.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
 import { createSession, listSessions, toMessage } from "@/api/client";
-import { connectSessionWs, type SessionEvent, type WsStatus, type WsHandle } from "@/api/ws";
+import { connectSessionWs, type SessionEvent, type WsHandle, type WsStatus } from "@/api/ws";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 interface Message {
@@ -33,6 +33,7 @@ const presets = [
   { label: "Debug an issue", icon: BugIcon },
   { label: "Review my changes", icon: SearchEyeIcon },
 ];
+
 const messages = ref<Message[]>([]);
 const draft = ref("");
 const connected = ref(false);
@@ -145,25 +146,54 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="conversation">
-    <h2>What are we working<br />on in amagicpear?</h2>
+  <main class="conversation" :class="{ 'conversation--active': messages.length > 0 }">
+    <div v-if="messages.length > 0" class="conversation__messages">
+      <div
+        v-for="message in messages"
+        :key="message.id"
+        class="message"
+        :class="`message--${message.role}`"
+      >
+        <p class="message__content">{{ message.content }}</p>
+      </div>
+    </div>
+    <h2 v-else>What are we working<br />on in amagicpear?</h2>
 
     <div class="composer">
-      <p>@ for files/agents; / for commands and skills; ! for shell; # for snippets</p>
+      <textarea
+        v-model="draft"
+        class="composer__input"
+        placeholder="@ for files/agents; / for commands and skills; ! for shell; # for snippets"
+        rows="1"
+        @keydown="onKeydown"
+      />
       <div class="composer__footer">
-        <IconButton size="compact" label="Add attachment"><AddCircleIcon /></IconButton>
-        <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
-        <IconButton size="compact" label="Permissions"><ShieldUserIcon /></IconButton>
-        <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
-        <strong><span class="model-mark">Ƶ</span> Big Pickle</strong>
-        <span class="model-mode"><AiAgentIcon class="model-icon" />Build</span>
-        <IconButton size="compact" label="Dictation"><MicIcon /></IconButton>
-        <IconButton size="compact" label="Send" disabled><SendIcon /></IconButton>
+        <div class="composer__footer-leading">
+          <IconButton size="compact" label="Add attachment"><AddCircleIcon /></IconButton>
+          <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
+          <IconButton size="compact" label="Permissions"><ShieldUserIcon /></IconButton>
+          <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
+        </div>
+        <div class="composer__footer-trailing">
+          <div class="composer__models">
+            <strong class="model-control"><span class="model-mark">Ƶ</span> Big Pickle</strong>
+            <span class="model-control model-mode"><AiAgentIcon class="model-icon" />Build</span>
+          </div>
+          <IconButton size="compact" label="Dictation"><MicIcon /></IconButton>
+          <IconButton size="compact" label="Send" :disabled="!canSend" @click="send">
+            <SendIcon />
+          </IconButton>
+        </div>
       </div>
     </div>
 
-    <div class="presets" aria-label="Prompt starters">
-      <button v-for="preset in presets" :key="preset.label" type="button">
+    <div v-if="messages.length === 0" class="presets" aria-label="Prompt starters">
+      <button
+        v-for="preset in presets"
+        :key="preset.label"
+        type="button"
+        @click="usePreset(preset.label)"
+      >
         <component :is="preset.icon" />
         <span>{{ preset.label }}</span>
       </button>
@@ -181,11 +211,25 @@ onBeforeUnmount(() => {
   gap: 24px;
   width: 100%;
   height: 100%;
+  min-height: 0;
   padding: 24px 24px 16px;
-  overflow: auto;
+  overflow: hidden;
+}
+.conversation--active {
+  justify-content: flex-start;
+}
+.conversation__messages {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100%, 1280px);
+  min-height: 0;
+  padding: 24px 0 8px;
+  overflow-y: auto;
   scrollbar-width: none;
 }
-.conversation::-webkit-scrollbar {
+.conversation__messages::-webkit-scrollbar {
   display: none;
 }
 .conversation h2 {
@@ -196,32 +240,114 @@ onBeforeUnmount(() => {
   letter-spacing: -0.02em;
   text-align: center;
 }
-.composer {
-  width: min(100%, 464px);
-  padding: 18px 12px 12px;
-  border: 1px solid #dedbd2;
-  border-radius: 13px;
-  margin: 0;
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
 }
-.composer p {
-  margin: 0 0 28px;
-  color: #747474;
+.message--user {
+  align-self: flex-end;
+  max-width: 72%;
+  background: #f0eee8;
+}
+.message--assistant {
+  align-self: flex-start;
+}
+.message--error {
+  align-self: stretch;
+  background: #fdecec;
+  color: #b3261e;
+}
+.message__content {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
   font-size: 14px;
   line-height: 20px;
 }
+.composer {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 464px);
+  overflow: hidden;
+  border: 1px solid #dedbd2;
+  border-radius: 13px;
+}
+.conversation--active .composer {
+  width: min(100%, 1280px);
+}
+.composer__input {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 52px;
+  max-height: 204px;
+  field-sizing: content;
+  box-sizing: border-box;
+  padding: 16px 12px 8px;
+  border: 0;
+  border-radius: 13px 13px 0 0;
+  outline: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  resize: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  background: transparent;
+}
+.composer__input::placeholder {
+  color: #747474;
+}
 .composer__footer {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 3px;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
 }
-.composer__footer strong {
+.composer__footer-leading,
+.composer__footer-trailing,
+.composer__models {
+  display: flex;
+  align-items: center;
+}
+.composer__footer-leading {
+  flex: 0 0 auto;
+  gap: 6px;
+}
+.composer__footer-trailing {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.composer__models {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.model-control {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto;
+  min-width: 0;
+  height: 32px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 20px;
   white-space: nowrap;
+}
+.model-mode {
+  color: #718d28;
 }
 .model-mark {
   font-size: 18px;
@@ -229,26 +355,20 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 .model-icon {
-  width: 16px;
-  height: 16px;
   color: #718d28;
 }
-.model-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: #718d28;
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
+.model-mode :deep(.model-icon) {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
 .presets {
   display: flex;
-  width: min(100%, 500px);
+  flex-wrap: wrap;
   justify-content: center;
   gap: 7px;
-  flex-wrap: wrap;
-  margin: 0;
+  width: min(100%, 500px);
 }
 .presets > button:not(.presets__add) {
   display: inline-flex;
@@ -274,5 +394,8 @@ onBeforeUnmount(() => {
   border: 1px solid #d9d7cf;
   border-radius: 999px;
   color: #666;
+}
+.conversation--active .presets {
+  display: none;
 }
 </style>

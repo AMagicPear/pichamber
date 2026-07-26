@@ -51,6 +51,9 @@ export const connectSessionWs = (
   };
 };
 
+export type SessionStatus = WsStatus;
+export const connectWs = connectSessionWs;
+
 /** Connect to a PTY terminal WebSocket. Output is raw text; input accepts
  *  strings (stdin keystrokes) or objects (JSON control frames like resize). */
 export const connectPtyWs = (
