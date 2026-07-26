@@ -40,12 +40,6 @@ const load = async () => {
     if (version === loadVersion) loading.value = false;
   }
 };
-
-watch(
-  () => props.sessionId,
-  load,
-  { immediate: true },
-);
 </script>
 
 <template>

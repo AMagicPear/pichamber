@@ -1,23 +1,26 @@
+import ConversationPanel from "@/components/panels/ConversationPanel.vue";
 import { createRouter, createWebHistory } from "vue-router";
-import SessionRouteView from "@/components/workspace/SessionRouteView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: "/sessions/new",
+      path: "/new",
       name: "new-session",
-      component: SessionRouteView,
-      props: { sessionId: null },
+      component: ConversationPanel,
     },
     {
-      path: "/sessions/:sessionId",
+      path: "/:sessionId",
       name: "session",
-      component: SessionRouteView,
-      props: true,
+      component: ConversationPanel,
     },
-    { path: "/:pathMatch(.*)*", redirect: "/sessions/new" },
+    {
+      path: "/debug",
+      name: "debug",
+      component: () => import("@/components/TestDebug.vue"),
+    },
+    { path: "/:pathMatch(.*)*", redirect: "/new" },
   ],
 });
 
-export default router
+export default router;

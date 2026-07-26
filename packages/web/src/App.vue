@@ -2,14 +2,14 @@
 import { ref } from "vue";
 import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
 import IconButton from "@/components/IconButton.vue";
-import SplitPane from "@/components/SplitPane.vue";
-import SettingsModal from "@/components/SettingsModal.vue";
-import SettingsView from "@/components/settings/SettingsView.vue";
+import SplitPane from "@/components/layout/SplitPane.vue";
+import SettingsModal from "@/components/layout/SettingsModal.vue";
+import SettingsView from "@/components/modals/SettingsView.vue";
 import { startUiStorePersistence } from "@/stores/ui";
-import ContextPanel from "@/components/workspace/ContextPanel.vue";
-import SessionHeader from "@/components/workspace/SessionHeader.vue";
-import SessionSidebar from "@/components/workspace/SessionSidebar.vue";
-import TerminalPanel from "@/components/workspace/TerminalPanel.vue";
+import ContextPanel from "@/components/panels/ContextPanel.vue";
+import SessionHeader from "@/components/panels/SessionHeader.vue";
+import SessionSidebar from "@/components/panels/SessionSidebar.vue";
+import TerminalPanel from "@/components/panels/TerminalPanel.vue";
 import { useUiStore } from "@/stores/ui";
 
 startUiStorePersistence();

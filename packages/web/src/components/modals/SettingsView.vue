@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import SplitPane from "@/components/SplitPane.vue";
+import SplitPane from "@/components/layout/SplitPane.vue";
 import IconButton from "@/components/IconButton.vue";
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
 import AiGenerate2Icon from "@/assets/icons/AiGenerate2.svg";
@@ -24,7 +24,7 @@ import SearchIcon from "@/assets/icons/Search.svg";
 import ServerIcon from "@/assets/icons/Server.svg";
 import SlashCommands2Icon from "@/assets/icons/SlashCommands2.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
-import { McpIcon } from "@/components/settings/McpIcon";
+import { McpIcon } from "@/components/McpIcon";
 
 defineOptions({ name: "SettingsView" });
 
@@ -63,7 +63,9 @@ const searchQuery = ref("");
 const settingsSize = ref(216);
 
 const visibleNavItems = computed(() =>
-  navItems.filter((item) => item.label.toLowerCase().includes(searchQuery.value.trim().toLowerCase())),
+  navItems.filter((item) =>
+    item.label.toLowerCase().includes(searchQuery.value.trim().toLowerCase()),
+  ),
 );
 
 interface HomeCard {
