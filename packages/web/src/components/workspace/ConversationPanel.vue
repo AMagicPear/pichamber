@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import AddIcon from "@/assets/icons/Add.svg";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
@@ -15,8 +14,9 @@ import ShieldUserIcon from "@/assets/icons/ShieldUser.svg";
 import SurveyIcon from "@/assets/icons/Survey.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
-import { createSession, listSessions } from "@/api/client";
-import { connectWs, type SessionEvent, type SessionStatus, type WsHandle } from "@/api/ws";
+import { createSession, listSessions, toMessage } from "@/api/client";
+import { connectSessionWs, type SessionEvent, type WsHandle, type WsStatus } from "@/api/ws";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 interface Message {
   id: string;
@@ -48,7 +48,7 @@ const canSend = computed(() => connected.value && draft.value.trim().length > 0)
 // @earendil-works/pi-ai (AssistantMessageEvent). Only the text channel is
 // rendered in this stage; tool/thinking events are tolerated but ignored.
 
-function onEvent(event: SessionEvent): void {
+const onEvent = (event: SessionEvent) => {
   const type = event.type;
   if (type === "message_update") {
     const ae = event.assistantMessageEvent as { type?: string; delta?: string } | undefined;
@@ -63,27 +63,27 @@ function onEvent(event: SessionEvent): void {
   } else if (type === "message_end" || type === "turn_end") {
     endAssistant();
   }
-}
+};
 
-function beginAssistant(): void {
+const beginAssistant = () => {
   streamId = crypto.randomUUID();
   messages.value.push({ id: streamId, role: "assistant", content: "" });
-}
+};
 
-function appendDelta(delta: string): void {
+const appendDelta = (delta: string) => {
   if (!streamId) beginAssistant();
   const target = streamId ? messages.value.find((m) => m.id === streamId) : undefined;
   if (target) {
     target.content += delta;
   }
-}
+};
 
-function endAssistant(): void {
+const endAssistant = () => {
   if (!streamId) return;
   streamId = null;
-}
+};
 
-function onStatus(status: SessionStatus): void {
+const onStatus = (status: WsStatus) => {
   if (status.type === "ready") {
     connected.value = true;
   } else if (status.type === "error") {
@@ -92,51 +92,51 @@ function onStatus(status: SessionStatus): void {
     connected.value = false;
     endAssistant();
   }
-}
+};
 
 // ── Send ──────────────────────────────────────────────────────────────
 
-function send(): void {
+const send = () => {
   const text = draft.value.trim();
   if (!canSend.value || !ws) return;
   messages.value.push({ id: crypto.randomUUID(), role: "user", content: text });
   ws.send({ type: "prompt", message: text });
   draft.value = "";
-}
+};
 
-function usePreset(label: string): void {
+const usePreset = (label: string) => {
   draft.value = label;
-}
+};
 
-function onKeydown(event: KeyboardEvent): void {
+const onKeydown = (event: KeyboardEvent) => {
   // Enter sends; Shift+Enter inserts a newline.
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
     send();
   }
-}
+};
 
 // ── Session + connection lifecycle ────────────────────────────────────
 
-async function ensureSession(): Promise<string> {
+const ensureSession = async () => {
   const sessions = (await listSessions()) as Array<{ id?: string }>;
   const existing = sessions.find((s) => s.id);
   if (existing?.id) return existing.id;
   const created = await createSession(".");
   return created.sessionId;
-}
+};
 
-async function connect(): Promise<void> {
+const connect = async () => {
   try {
     const id = await ensureSession();
-    ws = connectWs(id, onEvent, onStatus);
+    ws = connectSessionWs(id, onEvent, onStatus);
   } catch (err) {
-    onStatus({ type: "error", error: err instanceof Error ? err.message : String(err) });
+    onStatus({ type: "error", error: toMessage(err) });
   }
-}
+};
 
 onMounted(() => {
-  void connect();
+  connect();
 });
 
 onBeforeUnmount(() => {

@@ -1,4 +1,5 @@
 import type { ServerWebSocket } from "bun";
+import { listDirectory, WorkspaceError } from "./fs";
 import { createSessionWithCwd, deleteSession, getSession, listAllSessions } from "./session";
 import {
   hasPty,
@@ -11,6 +12,7 @@ import {
   writePty,
 } from "./pty";
 import { closeSessionSockets, sessionWsHandler } from "./ws";
+import { toMessage } from "./error";
 
 // ─── WebSocket protocol multiplexing ───────────────────────────────────
 //
@@ -44,6 +46,19 @@ export type SessionWsData = {
 };
 
 export type WsData = PtyWsData | SessionWsData;
+
+/** Map a filesystem error to an HTTP response. */
+const fsErrorResponse = (err: unknown): Response => {
+  if (err instanceof WorkspaceError) {
+    return Response.json({ error: err.message }, { status: err.status });
+  }
+  const code = (err as { code?: string } | null)?.code;
+  if (code === "ENOENT") return Response.json({ error: "Not found" }, { status: 404 });
+  if (code === "EACCES") return Response.json({ error: "Permission denied" }, { status: 403 });
+  const message = toMessage(err);
+  console.error("Filesystem operation failed:", err);
+  return Response.json({ error: message }, { status: 500 });
+};
 
 const ptyWsHandler: WsHandler = {
   open(ws) {
@@ -79,7 +94,7 @@ const ptyWsHandler: WsHandler = {
       }
       writePty(data.ptyId, text);
     } catch (err) {
-      ws.close(1011, err instanceof Error ? err.message : String(err));
+      ws.close(1011, toMessage(err));
     }
   },
   close(ws) {
@@ -143,7 +158,7 @@ Bun.serve({
             }),
           );
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toMessage(err);
           return Response.json({ error: message }, { status: 500 });
         }
       },
@@ -152,6 +167,21 @@ Bun.serve({
       DELETE: (req) => {
         stopPty(req.params.id);
         return Response.json({ ok: true });
+      },
+    },
+
+    // ── Filesystem (files panel) ─────────────────────────────────
+    // Paths are absolute, or relative to the active workspace.
+    // Anything outside the workspace returns 400 — outside-workspace
+    // grants are intentionally deferred until workspace switching lands.
+    "/api/fs/list": {
+      GET: async (req) => {
+        const path = new URL(req.url).searchParams.get("path") ?? undefined;
+        try {
+          return Response.json(await listDirectory(path));
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
       },
     },
   },

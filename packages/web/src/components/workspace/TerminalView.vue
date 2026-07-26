@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { FitAddon, Terminal, type Ghostty, type IDisposable } from "ghostty-web";
-import { ptyWs } from "@/api/ws";
+import { connectPtyWs, type WsHandle } from "@/api/ws";
+import { toMessage } from "@/api/client";
 import { useGhosttyInit } from "@/composables/useGhostty";
 import { releaseTerminalCleanup, replaceTerminalCleanup } from "@/composables/terminalRegistry";
 
@@ -10,11 +11,11 @@ const emit = defineEmits<{ exited: [{ reason: string }] }>();
 
 const hostRef = useTemplateRef<HTMLDivElement>("hostRef");
 const status = ref<"loading" | "connecting" | "ready" | "closed" | "error">("loading");
-const errorMessage = ref("");
+const errorMessage = ref<string | null>(null);
 
 const disposers: IDisposable[] = [];
 let terminal: Terminal | undefined;
-let socket: WebSocket | undefined;
+let ws: WsHandle | null = null;
 let registeredHost: HTMLElement | undefined;
 let disposed = false;
 let pendingOutput = "";
@@ -29,7 +30,7 @@ const terminalTheme = {
   selectionBackground: "#d9d9d9",
 };
 
-function flushOutput(): void {
+const flushOutput = () => {
   outputFrame = undefined;
   if (outputWriting || !terminal || !pendingOutput) return;
 
@@ -40,31 +41,23 @@ function flushOutput(): void {
     outputWriting = false;
     if (pendingOutput) scheduleOutput();
   });
-}
+};
 
-function scheduleOutput(): void {
+const scheduleOutput = () => {
   if (outputFrame === undefined) outputFrame = window.requestAnimationFrame(flushOutput);
-}
+};
 
-function enqueueOutput(data: string): void {
+const enqueueOutput = (data: string) => {
   pendingOutput += data;
   scheduleOutput();
-}
+};
 
-function closeSocket(): void {
-  const current = socket;
-  socket = undefined;
-  if (!current) return;
-  current.onopen = null;
-  current.onmessage = null;
-  current.onerror = null;
-  current.onclose = null;
-  if (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING) {
-    current.close();
-  }
-}
+const closeSocket = () => {
+  ws?.close();
+  ws = null;
+};
 
-function teardown(): void {
+const teardown = () => {
   disposed = true;
   pendingOutput = "";
   outputWriting = false;
@@ -81,9 +74,9 @@ function teardown(): void {
     releaseTerminalCleanup(registeredHost, teardown);
     registeredHost = undefined;
   }
-}
+};
 
-async function createTerminal(): Promise<Terminal | null> {
+const createTerminal = async (): Promise<Terminal | null> => {
   const host = hostRef.value;
   if (!host || disposed || terminal) return terminal ?? null;
 
@@ -92,7 +85,7 @@ async function createTerminal(): Promise<Terminal | null> {
     ghostty = await useGhosttyInit();
   } catch (error) {
     status.value = "error";
-    errorMessage.value = error instanceof Error ? error.message : String(error);
+    errorMessage.value = toMessage(error);
     return null;
   }
   if (disposed || hostRef.value !== host) return null;
@@ -114,46 +107,31 @@ async function createTerminal(): Promise<Terminal | null> {
   fit.observeResize();
 
   disposers.push(
-    term.onData((data) => {
-      if (socket?.readyState === WebSocket.OPEN) socket.send(data);
-    }),
-    term.onResize(({ cols, rows }) => {
-      if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "resize", cols, rows }));
-      }
-    }),
+    term.onData((data) => ws?.send(data)),
+    term.onResize(({ cols, rows }) => ws?.send({ type: "resize", cols, rows })),
   );
 
   terminal = term;
   registeredHost = host;
   replaceTerminalCleanup(host, teardown);
   return term;
-}
+};
 
-function connect(): void {
+const connect = () => {
   closeSocket();
-  const current = ptyWs(props.ptyId);
-  socket = current;
-
-  current.onopen = () => {
-    if (terminal) {
-      current.send(JSON.stringify({ type: "resize", cols: terminal.cols, rows: terminal.rows }));
+  ws = connectPtyWs(props.ptyId, enqueueOutput, (st) => {
+    if (disposed) return;
+    if (st.type === "ready") {
+      if (terminal) ws?.send({ type: "resize", cols: terminal.cols, rows: terminal.rows });
+      status.value = "ready";
+    } else if (st.type === "error") {
+      status.value = "error";
+      errorMessage.value = st.error;
+    } else if (st.type === "closed") {
+      status.value = "closed";
+      emit("exited", { reason: st.reason || `closed (${st.code})` });
     }
-    status.value = "ready";
-  };
-  current.onmessage = (event) => {
-    if (typeof event.data === "string") enqueueOutput(event.data);
-  };
-  current.onerror = () => {
-    if (disposed) return;
-    status.value = "error";
-    errorMessage.value = "WebSocket connection failed";
-  };
-  current.onclose = (event) => {
-    if (disposed) return;
-    status.value = "closed";
-    emit("exited", { reason: event.reason || `closed (${event.code})` });
-  };
+  });
 }
 
 onMounted(async () => {

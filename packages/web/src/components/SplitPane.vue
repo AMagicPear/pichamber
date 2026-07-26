@@ -69,14 +69,14 @@ const { dragging, clamped, onPointerDown, onPointerMove, onPointerUp, setSize } 
   onCommit: (size) => emit("update:size", size),
 });
 
-function onSplitPointerDown(event: PointerEvent): void {
+const onSplitPointerDown = (event: PointerEvent) => {
   if (props.maximized && panelRef.value) {
     const rect = panelRef.value.getBoundingClientRect();
     setSize(horizontal ? rect.width : rect.height);
     emit("update:maximized", false);
   }
   onPointerDown(event);
-}
+};
 
 watch(
   () => props.open,

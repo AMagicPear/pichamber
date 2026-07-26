@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
+import { toMessage } from "./error";
 import {
   type AgentSession,
   createAgentSession,
@@ -109,14 +110,14 @@ export const deleteSession = async (
     sessionFileLookup.delete(id);
     return { ok: true, method: "unlink" };
   } catch (err) {
-    const unlinkError = err instanceof Error ? err.message : String(err);
+    const unlinkError = toMessage(err);
     const trashErrorHint = getTrashErrorHint();
     const error = trashErrorHint ? `${unlinkError} (${trashErrorHint})` : unlinkError;
     return { ok: false, method: "unlink", error };
   }
 };
 
-export async function createSessionWithCwd(cwd: string): Promise<AgentSession> {
+export const createSessionWithCwd = async (cwd: string): Promise<AgentSession> => {
   const sessionManager = SessionManager.create(cwd);
   const { session } = await createAgentSession({
     cwd,
@@ -125,4 +126,4 @@ export async function createSessionWithCwd(cwd: string): Promise<AgentSession> {
   });
   activeSessions.set(session.sessionId, session);
   return session;
-}
+};

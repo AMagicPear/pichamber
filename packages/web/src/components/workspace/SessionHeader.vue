@@ -5,7 +5,6 @@ import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
 import LayoutRightIcon from "@/assets/icons/LayoutRight.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalBoxIcon from "@/assets/icons/TerminalBox.svg";
-import PanelToggleButton from "@/components/PanelToggleButton.vue";
 import IconButton from "@/components/IconButton.vue";
 import { useUiStore } from "@/stores/ui";
 
@@ -27,13 +26,21 @@ const ui = useUiStore();
     <nav class="session-header__tools" aria-label="Session tools">
       <IconButton label="Appearance"><LayoutLeftIcon /></IconButton>
       <IconButton label="Projects"><StackIcon /></IconButton>
-      <PanelToggleButton panel="bottom" label="Toggle terminal panel">
+      <IconButton
+        label="Toggle terminal panel"
+        :pressed="ui.panels.bottom.open"
+        @click="ui.toggle('bottom')"
+      >
         <TerminalBoxIcon />
-      </PanelToggleButton>
+      </IconButton>
       <IconButton label="Web"><GlobalIcon /></IconButton>
-      <PanelToggleButton panel="right" label="Toggle right sidebar">
+      <IconButton
+        label="Toggle right sidebar"
+        :pressed="ui.panels.right.open"
+        @click="ui.toggle('right')"
+      >
         <LayoutRightIcon />
-      </PanelToggleButton>
+      </IconButton>
       <IconButton label="Account"><AiAgentIcon class="account-icon" /></IconButton>
     </nav>
   </header>

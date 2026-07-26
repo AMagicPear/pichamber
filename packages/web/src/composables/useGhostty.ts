@@ -26,7 +26,7 @@ import ghosttyWasmUrl from "ghostty-web/ghostty-vt.wasm?url";
 
 let loadPromise: Promise<Ghostty> | null = null;
 
-export function useGhosttyInit(): Promise<Ghostty> {
+export const useGhosttyInit = (): Promise<Ghostty> => {
   if (!loadPromise) {
     loadPromise = Ghostty.load(ghosttyWasmUrl).catch((err) => {
       // Reset so a later caller can retry after a transient network failure.
@@ -35,4 +35,4 @@ export function useGhosttyInit(): Promise<Ghostty> {
     });
   }
   return loadPromise;
-}
+};

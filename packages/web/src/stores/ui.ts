@@ -22,22 +22,26 @@ const SPLIT_MODES: readonly SplitMode[] = ["top", "bottom", "left", "right"];
 
 const SIZE_LIMITS: Record<SplitMode, readonly [number, number]> = {
   left: [160, 600],
-  right: [160, 600],
+  right: [300, 600],
   top: [160, 600],
   bottom: [160, 600],
 };
 
-function createDefaultPanels(): PanelsState {
+const createDefaultPanels = (): PanelsState => {
   return Object.fromEntries(
     SPLIT_MODES.map((mode) => [mode, { ...DEFAULT_PANELS[mode] }]),
   ) as PanelsState;
-}
+};
 
-function createDefaultMaximized(): Record<SplitMode, boolean> {
+const createDefaultMaximized = (): Record<SplitMode, boolean> => {
   return Object.fromEntries(SPLIT_MODES.map((mode) => [mode, false])) as Record<SplitMode, boolean>;
-}
+};
 
-function loadMaximized(): Record<SplitMode, boolean> {
+const hasStorage = (): boolean => {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+};
+
+const loadMaximized = (): Record<SplitMode, boolean> => {
   if (!hasStorage()) return createDefaultMaximized();
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "{}");
@@ -45,22 +49,18 @@ function loadMaximized(): Record<SplitMode, boolean> {
   } catch {
     return createDefaultMaximized();
   }
-}
+};
 
-function clampSize(mode: SplitMode, size: number): number {
+const clampSize = (mode: SplitMode, size: number): number => {
   const [min, configuredMax] = SIZE_LIMITS[mode];
   const max =
     typeof window !== "undefined"
       ? Math.max(configuredMax, mode === "left" || mode === "right" ? window.innerWidth : window.innerHeight)
       : configuredMax;
   return Math.min(max, Math.max(min, size));
-}
+};
 
-function hasStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-}
-
-function loadPanels(): PanelsState | null {
+const loadPanels = (): PanelsState | null => {
   if (!hasStorage()) return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -86,16 +86,16 @@ function loadPanels(): PanelsState | null {
   } catch {
     return null;
   }
-}
+};
 
-function saveUiState(panels: PanelsState, maximized: Record<SplitMode, boolean>): void {
+const saveUiState = (panels: PanelsState, maximized: Record<SplitMode, boolean>) => {
   if (!hasStorage()) return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ panels, maximized }));
   } catch {
     /* ignore quota / privacy-mode errors */
   }
-}
+};
 
 export const useUiStore = defineStore("ui", {
   state: () => ({
@@ -124,11 +124,11 @@ export const useUiStore = defineStore("ui", {
  */
 let persistenceStarted = false;
 
-export function startUiStorePersistence(): void {
+export const startUiStorePersistence = () => {
   if (persistenceStarted) return;
   persistenceStarted = true;
   const ui = useUiStore();
   ui.$subscribe((_mutation, state) => {
     saveUiState(state.panels as PanelsState, state.maximized as Record<SplitMode, boolean>);
   });
-}
+};

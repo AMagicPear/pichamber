@@ -11,11 +11,12 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.81.1",
-    "bun-pty": "^0.4.5"
+    "@earendil-works/pi-coding-agent": "^0.82.1",
+    "@pichamber/shared": "workspace:*",
+    "bun-pty": "^0.4.10"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
-    "typescript": "~6.0.0"
+    "typescript": "~7.0.2"
   }
 }

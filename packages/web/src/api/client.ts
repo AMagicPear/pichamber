@@ -4,7 +4,7 @@
 
 const BASE = "/api";
 
-async function jsonOrThrow<T>(res: Response): Promise<T> {
+const jsonOrThrow = async <T>(res: Response): Promise<T> => {
   const data = (await res.json().catch(() => ({}))) as { error?: unknown };
   if (!res.ok) {
     const message =
@@ -12,12 +12,15 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
     throw new Error(message);
   }
   return data as T;
-}
+};
+
+// `catch` variables are `unknown` since TS 4.0. Every throw in this codebase
+// is an `Error`, so this narrowing is the single conversion site.
+export const toMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // ─── AI sessions ──────────────────────────────────────────────────────
 
-export const listSessions = () =>
-  fetch(`${BASE}/sessions`).then((r) => jsonOrThrow<unknown[]>(r));
+export const listSessions = () => fetch(`${BASE}/sessions`).then((r) => jsonOrThrow<unknown[]>(r));
 
 export const createSession = (cwd: string) =>
   fetch(`${BASE}/sessions`, {
@@ -67,3 +70,27 @@ export const stopPty = (ptyId: string) =>
   fetch(`${BASE}/pty/${encodeURIComponent(ptyId)}`, { method: "DELETE" }).then((r) =>
     jsonOrThrow<{ ok: true }>(r),
   );
+
+// ─── Filesystem (files panel) ────────────────────────────────────────
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  /** Path relative to the active workspace root, or "" if outside. */
+  relativePath: string;
+  isDirectory: boolean;
+  isFile: boolean;
+  isSymbolicLink: boolean;
+}
+
+export interface ListResult {
+  path: string;
+  displayPath: string;
+  entries: DirEntry[];
+}
+
+export const listDirectory = async (path?: string) => {
+  const url = path ? `${BASE}/fs/list?path=${encodeURIComponent(path)}` : `${BASE}/fs/list`;
+  const r = await fetch(url);
+  return await jsonOrThrow<ListResult>(r);
+};
