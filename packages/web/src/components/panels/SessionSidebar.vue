@@ -13,27 +13,19 @@ import { ArrowsMerge } from "@/components/ArrowsMerge";
 import IconButton from "@/components/IconButton.vue";
 import { listSessions, toMessage } from "@/api/client";
 import type { SessionInfo } from "@pichamber/shared";
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
+import { useUiStore } from "@/stores/ui";
 
-const emit = defineEmits<{ openSettings: [] }>();
-
+const ui = useUiStore();
 const sessions = ref<SessionInfo[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 
-const sortedSessions = computed(() =>
-  [...sessions.value].sort((a, b) => toTime(b.modified) - toTime(a.modified)),
-);
-
-const toTime = (value: Date | string) =>
-  typeof value === "string" ? Date.parse(value) : value.getTime();
-
-const sessionTitle = (session: SessionInfo) =>
-  session.name?.trim() || session.firstMessage.trim() || "New session";
+const sessionTitle = (session: SessionInfo) => session.name?.trim() || session.firstMessage.trim();
 
 const sessionAge = (session: SessionInfo) => {
-  const elapsed = Math.max(0, Date.now() - toTime(session.modified));
+  const elapsed = Math.max(0, Date.now() - session.modified.getTime());
   const minutes = Math.floor(elapsed / 60000);
   if (minutes < 60) return `${Math.max(1, minutes)}m`;
   const hours = Math.floor(minutes / 60);
@@ -68,7 +60,7 @@ onMounted(async () => {
     <div class="sidebar__actions" aria-label="Workspace actions">
       <div>
         <IconButton label="Add project"><FolderAddIcon /></IconButton>
-        <RouterLink to="/sessions/new" custom v-slot="{ navigate }">
+        <RouterLink to="/new" custom v-slot="{ navigate }">
           <IconButton label="New session" @click="navigate"><ChatNewIcon /></IconButton>
         </RouterLink>
         <IconButton label="New multi-run"><ArrowsMerge /></IconButton>
@@ -86,9 +78,9 @@ onMounted(async () => {
       <h2><ArrowDownSIcon /> <span>Recent</span></h2>
       <p v-if="loading" class="session-list__state">Loading sessions...</p>
       <p v-else-if="error" class="session-list__state session-list__state--error">{{ error }}</p>
-      <p v-else-if="sortedSessions.length === 0" class="session-list__state">No sessions yet.</p>
+      <p v-else-if="sessions.length === 0" class="session-list__state">No sessions yet.</p>
       <RouterLink
-        v-for="session in sortedSessions"
+        v-for="session in sessions"
         v-else
         :key="session.id"
         :to="{ name: 'session', params: { sessionId: session.id } }"
@@ -101,7 +93,7 @@ onMounted(async () => {
     </section>
 
     <footer class="sidebar__footer">
-      <IconButton size="large" label="Settings" @click="emit('openSettings')">
+      <IconButton size="large" label="Settings" @click="ui.settingsOpen = true">
         <SettingsIcon />
       </IconButton>
       <IconButton size="large" label="Keyboard shortcuts"><QuestionIcon /></IconButton>

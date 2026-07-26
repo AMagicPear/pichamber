@@ -102,6 +102,7 @@ export const useUiStore = defineStore("ui", {
   state: () => ({
     panels: loadPanels() ?? createDefaultPanels(),
     maximized: loadMaximized(),
+    settingsOpen: false,
   }),
   actions: {
     toggle(mode: SplitMode) {

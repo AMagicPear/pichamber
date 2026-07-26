@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from "vue";
 import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
 import IconButton from "@/components/IconButton.vue";
 import SplitPane from "@/components/layout/SplitPane.vue";
@@ -11,11 +10,13 @@ import SessionHeader from "@/components/panels/SessionHeader.vue";
 import SessionSidebar from "@/components/panels/SessionSidebar.vue";
 import TerminalPanel from "@/components/panels/TerminalPanel.vue";
 import { useUiStore } from "@/stores/ui";
+import { useWorkspaceStore } from "./stores/workspace";
+import ConversationPanel from "./components/panels/ConversationPanel.vue";
 
 startUiStorePersistence();
 
-const settingsOpen = ref(false);
 const ui = useUiStore();
+const workspace = useWorkspaceStore();
 </script>
 
 <template>
@@ -36,7 +37,7 @@ const ui = useUiStore();
       @update:size="ui.setSize('left', $event)"
     >
       <template #sidebar>
-        <SessionSidebar @open-settings="settingsOpen = true" />
+        <SessionSidebar />
       </template>
 
       <template #default>
@@ -60,7 +61,7 @@ const ui = useUiStore();
                   @update:size="ui.setSize('bottom', $event)"
                   @update:maximized="ui.setMaximized('bottom', $event)"
                 >
-                  <template #default><RouterView /></template>
+                  <template #default><ConversationPanel /> </template>
                   <template #sidebar><TerminalPanel /></template>
                 </SplitPane>
               </template>
@@ -72,9 +73,9 @@ const ui = useUiStore();
       </template>
     </SplitPane>
 
-    <SettingsModal :show="settingsOpen" @close="settingsOpen = false">
+    <SettingsModal :show="ui.settingsOpen" @close="ui.settingsOpen = false">
       <template #body>
-        <SettingsView @close="settingsOpen = false" />
+        <SettingsView @close="ui.settingsOpen = false" />
       </template>
     </SettingsModal>
   </div>
