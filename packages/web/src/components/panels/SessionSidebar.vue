@@ -11,17 +11,23 @@ import SettingsIcon from "@/assets/icons/Settings3.svg";
 import SortDescIcon from "@/assets/icons/SortDesc.svg";
 import { ArrowsMerge } from "@/components/ArrowsMerge";
 import IconButton from "@/components/IconButton.vue";
-import { listSessions, toMessage } from "@/api/client";
 import type { SessionInfo } from "@pichamber/shared";
-import { onMounted, ref } from "vue";
+import { onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import { ui } from "@/stores/ui";
+import { loadSessions, sessionTitle, sessions, sessionsError, sessionsLoading } from "@/stores/workspace";
+import { settings } from "@/stores/settings";
+import { computed } from "vue";
 
-const sessions = ref<SessionInfo[]>([]);
-const loading = ref(true);
-const error = ref<string | null>(null);
+const visibleSessions = computed(() => {
+  if (!settings.hideTemporarySessions) return sessions.value;
+  return sessions.value.filter((session) => !isTemporarySessionPath(session.cwd));
+});
 
-const sessionTitle = (session: SessionInfo) => session.name?.trim() || session.firstMessage.trim();
+const isTemporarySessionPath = (cwd: string) =>
+  cwd.startsWith("/private/tmp") ||
+  cwd.startsWith("/tmp") ||
+  /^\/(?:private\/)?var\/folders\/[^/]+\/[^/]+\/T(?:\/|$)/.test(cwd);
 
 const toTime = (value: unknown) => {
   if (value instanceof Date) return value.getTime();
@@ -44,13 +50,7 @@ const sessionAge = (session: SessionInfo) => {
 };
 
 onMounted(async () => {
-  try {
-    sessions.value = await listSessions();
-  } catch (err) {
-    error.value = toMessage(err);
-  } finally {
-    loading.value = false;
-  }
+  await loadSessions();
 });
 </script>
 
@@ -82,11 +82,11 @@ onMounted(async () => {
 
     <section class="session-list">
       <h2><ArrowDownSIcon /> <span>Recent</span></h2>
-      <p v-if="loading" class="session-list__state">Loading sessions...</p>
-      <p v-else-if="error" class="session-list__state session-list__state--error">{{ error }}</p>
-      <p v-else-if="sessions.length === 0" class="session-list__state">No sessions yet.</p>
+      <p v-if="sessionsLoading" class="session-list__state">Loading sessions...</p>
+      <p v-else-if="sessionsError" class="session-list__state session-list__state--error">{{ sessionsError }}</p>
+      <p v-else-if="visibleSessions.length === 0" class="session-list__state">No sessions yet.</p>
       <RouterLink
-        v-for="session in sessions"
+        v-for="session in visibleSessions"
         v-else
         :key="session.id"
         :to="{ name: 'session', params: { sessionId: session.id } }"

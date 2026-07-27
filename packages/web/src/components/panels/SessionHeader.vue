@@ -7,6 +7,8 @@ import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalBoxIcon from "@/assets/icons/TerminalBox.svg";
 import IconButton from "@/components/IconButton.vue";
 import { ui } from "@/stores/ui";
+import { workspace } from "@/stores/workspace";
+
 </script>
 
 <template>
@@ -16,8 +18,8 @@ import { ui } from "@/stores/ui";
   >
     <div class="session-header__leading">
       <div class="session-header__title">
-        <h1>New session</h1>
-        <p>amagicpear</p>
+        <h1>{{ workspace.sessionName }}</h1>
+        <p>{{ workspace.cwd }}</p>
       </div>
     </div>
 
@@ -62,22 +64,32 @@ import { ui } from "@/stores/ui";
   align-items: center;
 }
 .session-header__leading {
+  flex: 1 1 auto;
   min-width: 0;
   gap: 8px;
+}
+.session-header__title {
+  min-width: 0;
 }
 .session-header h1,
 .session-header p {
   margin: 0;
 }
 .session-header h1 {
+  overflow: hidden;
   font-size: 14px;
   font-weight: 500;
   line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .session-header p {
+  overflow: hidden;
   color: #888;
   font-size: 11px;
   line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .session-header__tools {
   gap: 8px;

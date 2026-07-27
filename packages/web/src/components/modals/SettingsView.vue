@@ -25,6 +25,7 @@ import ServerIcon from "@/assets/icons/Server.svg";
 import SlashCommands2Icon from "@/assets/icons/SlashCommands2.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 import { McpIcon } from "@/components/McpIcon";
+import { settings } from "@/stores/settings";
 
 defineOptions({ name: "SettingsView" });
 
@@ -138,6 +139,21 @@ const openHomeCard = (key: string) => {
         </div>
 
         <div class="settings-page__body">
+          <template v-if="activeKey === 'sessions'">
+            <header class="settings-page__heading">
+              <h1>Sessions</h1>
+              <p>Control which sessions appear in the sidebar.</p>
+            </header>
+
+            <label class="settings-option">
+              <input v-model="settings.hideTemporarySessions" type="checkbox" />
+              <span>
+                <strong>Hide temporary sessions</strong>
+                <small>Hide sessions under /tmp and macOS temporary folders.</small>
+              </span>
+            </label>
+          </template>
+          <template v-else>
           <header class="settings-page__heading">
             <h1>Settings</h1>
             <p>Jump to common pages.</p>
@@ -155,6 +171,7 @@ const openHomeCard = (key: string) => {
               <span class="settings-card__description">{{ card.description }}</span>
             </button>
           </div>
+          </template>
         </div>
       </section>
     </template>
@@ -268,6 +285,32 @@ const openHomeCard = (key: string) => {
   min-height: 0;
   padding: 24px 32px;
   overflow-y: auto;
+}
+.settings-option {
+  display: flex;
+  max-width: 560px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 0;
+  color: #222;
+  cursor: pointer;
+}
+.settings-option input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: #222;
+}
+.settings-option span {
+  display: grid;
+  gap: 4px;
+}
+.settings-option strong {
+  font-weight: 500;
+}
+.settings-option small {
+  color: #888;
+  font-size: 12px;
 }
 .settings-page__heading {
   display: flex;

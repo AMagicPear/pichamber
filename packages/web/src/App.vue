@@ -13,6 +13,7 @@ import { workspace } from "./stores/workspace";
 import ConversationPanel from "./components/panels/ConversationPanel.vue";
 import { useRoute } from "vue-router";
 import { watch } from "vue";
+import { updateWorkspace } from "./stores/workspace";
 
 const route = useRoute();
 
@@ -23,7 +24,7 @@ watch(ui, () => {
 watch(
   () => route.params.sessionId,
   (sessionId) => {
-    workspace.sessionId = typeof sessionId === "string" ? sessionId : null;
+    if (typeof sessionId === "string") updateWorkspace(sessionId);
   },
   { immediate: true },
 );
