@@ -3,18 +3,21 @@ import { folderNames } from "catppuccin-vsc-icons/src/defaults/folderIcons";
 
 const iconUrl = (name: string) =>
   `https://raw.githubusercontent.com/catppuccin/vscode-icons/b6915da9f6889b683a110aa747de96c2820a537d/icons/mocha/${name}.svg`;
-const officialFileNames = fileNames as Record<string, string>;
-const officialFileExtensions = fileExtensions as Record<string, string>;
-const officialFolderNames = folderNames as Record<string, string>;
 
 const fileNamesByLowerCase = Object.fromEntries(
-  Object.entries(officialFileNames).map(([name, icon]) => [name.toLowerCase(), icon]),
+  Object.entries(fileNames as Record<string, string>).map(([name, icon]) => [
+    name.toLowerCase(),
+    icon,
+  ]),
 );
-const fileExtensionsByLength = Object.entries(officialFileExtensions).sort(
+const fileExtensionsByLength = Object.entries(fileExtensions as Record<string, string>).sort(
   ([a], [b]) => b.length - a.length,
 );
 const folderNamesByLowerCase = Object.fromEntries(
-  Object.entries(officialFolderNames).map(([name, icon]) => [name.toLowerCase(), icon]),
+  Object.entries(folderNames as Record<string, string>).map(([name, icon]) => [
+    name.toLowerCase(),
+    icon,
+  ]),
 );
 
 const getFileIcon = (name: string) => {
