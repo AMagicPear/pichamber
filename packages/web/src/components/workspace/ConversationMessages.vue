@@ -1,9 +1,48 @@
 <script setup lang="ts">
+import { computed, watch } from "vue";
+import MarkdownRender from "markstream-vue";
 import type { SessionEntry } from "@pichamber/shared";
+import BrainIcon from "@/assets/icons/Brain.svg";
+import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 
-defineProps<{
+const props = defineProps<{
   entries: SessionEntry[];
 }>();
+
+const visibleEntries = computed(() =>
+  props.entries.filter(
+    (entry) =>
+      entry.type !== "model_change" &&
+      entry.type !== "thinking_level_change" &&
+      entry.type !== "session_info" &&
+      entry.type !== "label",
+  ),
+);
+
+const turns = computed(() => {
+  const result: SessionEntry[][] = [];
+  let turn: SessionEntry[] = [];
+
+  for (const entry of visibleEntries.value) {
+    if (isUserMessage(entry) && turn.length > 0) {
+      result.push(turn);
+      turn = [];
+    }
+    turn.push(entry);
+  }
+  if (turn.length > 0) result.push(turn);
+  return result;
+});
+
+watch(
+  () => props.entries,
+  (entries) => {
+    if (entries.length > 0) {
+      console.log("[conversation] loaded SessionEntry[]", JSON.parse(JSON.stringify(entries)));
+    }
+  },
+  { immediate: true },
+);
 
 const textFromContent = (content: unknown) => {
   if (typeof content === "string") return content;
@@ -12,14 +51,9 @@ const textFromContent = (content: unknown) => {
   return content
     .map((part) => {
       if (!part || typeof part !== "object") return String(part ?? "");
-      const value = part as { type?: unknown; text?: unknown; thinking?: unknown; name?: unknown; arguments?: unknown };
+      const value = part as { type?: unknown; text?: unknown };
       if (value.type === "text" && typeof value.text === "string") return value.text;
-      if (value.type === "thinking" && typeof value.thinking === "string") return value.thinking;
-      if (value.type === "toolCall") {
-        const argumentsText = value.arguments ? ` ${JSON.stringify(value.arguments)}` : "";
-        return `${String(value.name ?? "tool")}${argumentsText}`;
-      }
-      return `[${String(value.type ?? "content")}]`;
+      return "";
     })
     .filter(Boolean)
     .join("\n\n");
@@ -28,8 +62,56 @@ const textFromContent = (content: unknown) => {
 const messageRole = (entry: SessionEntry) =>
   entry.type === "message" ? entry.message.role : undefined;
 
+const messageValue = (entry: SessionEntry) =>
+  entry.type === "message"
+    ? (entry.message as { content?: unknown; output?: unknown; command?: unknown; summary?: unknown })
+    : undefined;
+
+const isUserMessage = (entry: SessionEntry) => messageRole(entry) === "user";
+const isAssistantMessage = (entry: SessionEntry) => messageRole(entry) === "assistant";
+const isToolMessage = (entry: SessionEntry) => {
+  const role = messageRole(entry);
+  return role === "toolResult" || role === "bashExecution";
+};
+
+const userEntry = (turn: SessionEntry[]) => turn.find(isUserMessage);
+const agentEntries = (turn: SessionEntry[]) => turn.filter((entry) => !isUserMessage(entry));
+const firstAssistantEntry = (turn: SessionEntry[]) => turn.find(isAssistantMessage);
+
+const thinkingText = (entry: SessionEntry) => {
+  const content = messageValue(entry)?.content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const value = part as { type?: unknown; thinking?: unknown };
+      return value.type === "thinking" && typeof value.thinking === "string" ? value.thinking : "";
+    })
+    .filter(Boolean)
+    .join("\n\n");
+};
+
+const toolCallText = (entry: SessionEntry) => {
+  const content = messageValue(entry)?.content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) => {
+      if (!part || typeof part !== "object") return "";
+      const value = part as { type?: unknown; name?: unknown; arguments?: unknown };
+      if (value.type !== "toolCall") return "";
+      const argumentsText = value.arguments === undefined ? "" : ` ${JSON.stringify(value.arguments)}`;
+      return `${String(value.name ?? "tool")}${argumentsText}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+};
+
 const entryLabel = (entry: SessionEntry) => {
-  if (entry.type === "message") return messageRole(entry) ?? "message";
+  if (isUserMessage(entry)) return "You";
+  if (isAssistantMessage(entry)) return "Assistant";
+  if (messageRole(entry) === "bashExecution") return "Terminal";
+  if (messageRole(entry) === "toolResult") return "Tool result";
+  if (entry.type === "message") return "Message";
   if (entry.type === "thinking_level_change") return "thinking level";
   if (entry.type === "model_change") return "model changed";
   if (entry.type === "session_info") return "session info";
@@ -38,17 +120,46 @@ const entryLabel = (entry: SessionEntry) => {
 
 const entryText = (entry: SessionEntry) => {
   if (entry.type === "message") {
-    const message = entry.message as { content?: unknown; output?: unknown; command?: unknown };
-    return textFromContent(message.content) || String(message.output ?? message.command ?? "");
+    const message = messageValue(entry);
+    return textFromContent(message?.content) || String(message?.output ?? message?.summary ?? "");
   }
-  if (entry.type === "thinking_level_change") return entry.thinkingLevel;
-  if (entry.type === "model_change") return `${entry.provider} / ${entry.modelId}`;
   if (entry.type === "compaction" || entry.type === "branch_summary") return entry.summary;
   if (entry.type === "custom_message") return textFromContent(entry.content);
-  if (entry.type === "session_info") return entry.name ?? "";
-  if (entry.type === "label") return entry.label ?? "Label removed";
-  if (entry.type === "custom") return entry.customType;
   return "";
+};
+
+const activitySummary = (entry: SessionEntry) => {
+  if (entry.type === "thinking_level_change") return `Thinking: ${entry.thinkingLevel}`;
+  if (entry.type === "model_change") return `Model: ${entry.provider} / ${entry.modelId}`;
+  if (entry.type === "compaction") return "Conversation compacted";
+  if (entry.type === "branch_summary") return "Branch summary";
+  if (entry.type === "session_info") return entry.name ? `Session renamed: ${entry.name}` : "Session info updated";
+  if (entry.type === "label") return entry.label ?? "Label removed";
+  if (entry.type === "custom_message") return entry.customType;
+  if (entry.type === "custom") return entry.customType;
+  return entryLabel(entry);
+};
+
+const previewText = (text: string, limit = 112) => {
+  const singleLine = text
+    .replaceAll(/```[\s\S]*?```/g, "")
+    .replaceAll(/[`*_#]/g, "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  return singleLine.length > limit ? `${singleLine.slice(0, limit).trimEnd()}...` : singleLine;
+};
+
+const toolPreview = (entry: SessionEntry) => {
+  const message = messageValue(entry);
+  return typeof message?.command === "string" ? message.command : entryText(entry);
+};
+
+const modelForEntry = (entry: SessionEntry) => {
+  for (let index = props.entries.indexOf(entry); index >= 0; index -= 1) {
+    const candidate = props.entries[index];
+    if (candidate?.type === "model_change") return candidate.modelId;
+  }
+  return "Assistant";
 };
 
 const entryClass = (entry: SessionEntry) => [
@@ -65,17 +176,54 @@ const formatTimestamp = (timestamp: string) =>
 
 <template>
   <div class="conversation__messages">
-    <article v-for="entry in entries" :key="entry.id" :class="entryClass(entry)">
-      <header class="conversation-entry__header">
-        <span class="conversation-entry__type">{{ entryLabel(entry) }}</span>
-        <time :datetime="entry.timestamp">{{ formatTimestamp(entry.timestamp) }}</time>
-      </header>
-      <pre v-if="entryText(entry)" class="conversation-entry__content">{{ entryText(entry) }}</pre>
-      <details class="conversation-entry__details">
-        <summary>Details</summary>
-        <pre>{{ JSON.stringify(entry, null, 2) }}</pre>
-      </details>
-    </article>
+    <template v-for="(turn, index) in turns" :key="turn.at(-1)?.id ?? index">
+      <article v-if="userEntry(turn)" class="conversation-entry conversation-entry--user">
+        <MarkdownRender class="conversation-entry__content" mode="chat" :content="entryText(userEntry(turn)!)" :final="true" :fade="false" />
+      </article>
+
+      <section v-if="agentEntries(turn).length > 0" class="conversation-turn">
+        <header v-if="firstAssistantEntry(turn)" class="conversation-entry__header">
+        <span class="conversation-entry__author">
+          <BrainIcon />
+          <span class="conversation-entry__type">{{ modelForEntry(firstAssistantEntry(turn)!) }}</span>
+        </span>
+        </header>
+        <template v-for="entry in agentEntries(turn)" :key="entry.id">
+          <details v-if="isAssistantMessage(entry) && thinkingText(entry)" class="conversation-entry__reasoning">
+            <summary>
+              <BrainIcon />
+              <strong>Thinking</strong>
+              <span>{{ previewText(thinkingText(entry)) }}</span>
+            </summary>
+            <pre>{{ thinkingText(entry) }}</pre>
+          </details>
+          <MarkdownRender v-if="isAssistantMessage(entry) && entryText(entry)" class="conversation-entry__content" mode="chat" :content="entryText(entry)" :final="true" :fade="false" />
+          <details v-if="isAssistantMessage(entry) && toolCallText(entry)" class="conversation-entry__tool">
+            <summary>
+              <TerminalIcon />
+              <strong>Tool call</strong>
+              <span>{{ previewText(toolCallText(entry)) }}</span>
+            </summary>
+            <pre>{{ toolCallText(entry) }}</pre>
+          </details>
+          <details v-else-if="isToolMessage(entry)" class="conversation-entry__tool">
+            <summary>
+              <TerminalIcon />
+              <strong>{{ entryLabel(entry) }}</strong>
+              <span>{{ previewText(toolPreview(entry)) }}</span>
+            </summary>
+            <pre v-if="entryText(entry)">{{ entryText(entry) }}</pre>
+          </details>
+          <details v-else-if="!isAssistantMessage(entry)" class="conversation-activity">
+            <summary>
+              <span>{{ activitySummary(entry) }}</span>
+              <time :datetime="entry.timestamp">{{ formatTimestamp(entry.timestamp) }}</time>
+            </summary>
+            <pre v-if="entryText(entry)" class="conversation-activity__content">{{ entryText(entry) }}</pre>
+          </details>
+        </template>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -84,64 +232,178 @@ const formatTimestamp = (timestamp: string) =>
   flex: 1;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 0 24px 16px 24px;
+  padding: 0 0 16px;
 }
 .conversation-entry {
-  margin: 0 0 8px;
-  padding: 12px 14px;
-  border: 1px solid #dfddd5;
-  border-radius: 6px;
-  background: #fff;
+  width: min(100%, 48rem);
+  margin: 0 auto;
+  padding: 24px clamp(12px, 2.5vw, 16px) 0;
+  color: #292827;
 }
 .conversation-entry--user {
-  border-color: #b9d4ca;
-  background: #f3faf6;
+  width: fit-content;
+  max-width: 85%;
+  margin-right: max(12px, calc((100% - 48rem) / 2 + clamp(12px, 2.5vw, 16px)));
+  margin-left: auto;
+  padding: 12px 20px;
+  border: 1px solid #ece9e0;
+  border-radius: 12px 12px 4px;
+  background: #f7f6f2;
 }
-.conversation-entry--assistant {
-  background: #fcfcfb;
+.conversation-turn {
+  width: min(100%, 48rem);
+  margin: 0 auto;
+  padding: 24px clamp(12px, 2.5vw, 16px) 32px;
+  color: #292827;
 }
 .conversation-entry__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: #76746d;
-  font-size: 11px;
-  line-height: 16px;
-  text-transform: uppercase;
+  margin-bottom: 8px;
+  color: #45433e;
+  font-size: 14px;
+  line-height: 18px;
+}
+.conversation-entry--user .conversation-entry__header {
+  display: none;
 }
 .conversation-entry__type {
-  color: #45433e;
-  font-weight: 600;
+  font-weight: 700;
+}
+.conversation-entry__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.conversation-entry__author svg {
+  width: 18px;
+  height: 18px;
 }
 .conversation-entry__header time {
   flex: none;
+  color: #76746d;
+  font-size: 12px;
+  font-weight: 400;
 }
-.conversation-entry__content,
-.conversation-entry__details pre {
-  margin: 8px 0 0;
+.conversation-entry__content {
+  margin: 0;
   color: #292827;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.conversation-entry__content :deep(.markstream-vue > :first-child) {
+  margin-top: 0;
+}
+.conversation-entry__content :deep(.markstream-vue > :last-child) {
+  margin-bottom: 0;
+}
+.conversation-entry__content :deep(.markstream-vue p) {
+  margin-block: 0 12px;
+}
+.conversation-entry__content :deep(.markstream-vue ul),
+.conversation-entry__content :deep(.markstream-vue ol) {
+  margin-block: 8px 12px;
+}
+.conversation-entry__reasoning,
+.conversation-entry__tool {
+  margin: 0 0 10px;
+  padding: 0;
+  color: #76746d;
+  font-size: 13px;
+}
+.conversation-entry__reasoning summary,
+.conversation-entry__tool > summary {
+  display: grid;
+  grid-template-columns: 16px max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  list-style: none;
+  cursor: pointer;
+  line-height: 20px;
+}
+.conversation-entry__reasoning summary::-webkit-details-marker,
+.conversation-entry__tool > summary::-webkit-details-marker {
+  display: none;
+}
+.conversation-entry__reasoning summary svg,
+.conversation-entry__tool > summary svg {
+  width: 16px;
+  height: 16px;
+}
+.conversation-entry__reasoning summary strong,
+.conversation-entry__tool > summary strong {
+  color: #292827;
+  font-weight: 650;
+}
+.conversation-entry__reasoning summary span,
+.conversation-entry__tool > summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conversation-entry__reasoning pre,
+.conversation-entry__tool > pre {
+  margin: 6px 0 0 23px;
+  color: #4d4b45;
   font-family: inherit;
   font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.conversation-entry__details {
-  margin-top: 8px;
-  color: #76746d;
-  font-size: 12px;
+.conversation-entry__tool > summary {
+  grid-template-columns: 16px max-content minmax(0, 1fr);
 }
-.conversation-entry__details summary {
+.conversation-entry__tool time,
+.conversation-activity time {
+  flex: none;
+  color: #8a8881;
+  font-size: 12px;
+  font-weight: 400;
+}
+.conversation-activity {
+  display: block;
+  margin: 10px 0 0;
+  padding: 0;
+  color: #76746d;
+  font-size: 13px;
+}
+.conversation-activity > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   cursor: pointer;
 }
-.conversation-entry__details pre {
-  padding: 10px;
-  overflow-x: auto;
-  border-radius: 4px;
-  background: #f5f4f0;
+.conversation-activity__content {
+  margin: 10px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid #dfddd5;
   color: #4d4b45;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 11px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 1024px) {
+  .conversation-entry {
+    padding-right: clamp(16px, 2.5vw, 24px);
+    padding-left: clamp(16px, 2.5vw, 24px);
+  }
+  .conversation-turn {
+    padding-right: clamp(16px, 2.5vw, 24px);
+    padding-left: clamp(16px, 2.5vw, 24px);
+  }
+  .conversation-activity {
+    padding: 0;
+  }
 }
 </style>
