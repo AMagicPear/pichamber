@@ -1,5 +1,6 @@
 <script lang="tsx">
 import { computed, defineComponent, onMounted, ref, watch, type PropType } from "vue";
+import CloseIcon from "@/assets/icons/Close.svg";
 import FileAddIcon from "@/assets/icons/FileAdd.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
@@ -119,6 +120,19 @@ export default defineComponent({
                 search.value = (event.target as HTMLInputElement).value;
               }}
             />
+            {search.value && (
+              <button
+                type="button"
+                class="file-tree__search-clear"
+                aria-label="Clear search"
+                title="Clear search"
+                onClick={() => {
+                  search.value = "";
+                }}
+              >
+                <CloseIcon />
+              </button>
+            )}
           </div>
           <div class="file-tree__actions">
             <IconButton size="standard" label="New file">
@@ -205,8 +219,34 @@ export default defineComponent({
   font: inherit;
   font-size: 14px;
 }
+.file-tree__search input::-webkit-search-cancel-button {
+  display: none;
+  appearance: none;
+}
 .file-tree__search input::placeholder {
   color: #6d6d6d;
+}
+.file-tree__search-clear {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: #777;
+}
+.file-tree__search-clear:hover {
+  background: #ededed;
+  color: #333;
+}
+.file-tree__search-clear:focus-visible {
+  outline: 2px solid #3978d4;
+  outline-offset: 1px;
+}
+.file-tree__search-clear svg {
+  width: 12px;
+  height: 12px;
 }
 .file-tree__actions {
   display: flex;
