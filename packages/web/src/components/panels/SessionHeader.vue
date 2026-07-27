@@ -18,8 +18,8 @@ import { workspace } from "@/stores/workspace";
   >
     <div class="session-header__leading">
       <div class="session-header__title">
-        <h1>{{ workspace.sessionName }}</h1>
-        <p>{{ workspace.cwd }}</p>
+          <h1 :title="workspace.sessionName ?? undefined">{{ workspace.sessionName }}</h1>
+          <p :title="workspace.cwd ?? undefined">{{ workspace.cwd }}</p>
       </div>
     </div>
 
