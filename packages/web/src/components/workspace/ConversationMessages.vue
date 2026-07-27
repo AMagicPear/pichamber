@@ -228,16 +228,14 @@ const formatTimestamp = (timestamp: string) =>
   flex: 1;
   align-self: stretch;
   width: 100%;
-  max-width: 56rem;
   min-width: 0;
-  margin-inline: auto;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 0 0 16px;
+  padding: 0 max(16px, calc((100% - 48rem) / 2)) 16px;
 }
 .conversation-entry {
   width: 100%;
-  max-width: 48rem;
+  max-width: 44rem;
   min-width: 0;
   margin: 0 auto;
   padding: 24px clamp(12px, 2.5vw, 16px) 0;
@@ -256,7 +254,7 @@ const formatTimestamp = (timestamp: string) =>
 }
 .conversation-turn {
   width: 100%;
-  max-width: 48rem;
+  max-width: 44rem;
   min-width: 0;
   margin: 0 auto;
   padding: 24px clamp(12px, 2.5vw, 16px) 32px;
