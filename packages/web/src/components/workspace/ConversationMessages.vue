@@ -141,11 +141,7 @@ const activitySummary = (entry: SessionEntry) => {
 };
 
 const previewText = (text: string, limit = 112) => {
-  const singleLine = text
-    .replaceAll(/```[\s\S]*?```/g, "")
-    .replaceAll(/[`*_#]/g, "")
-    .replaceAll(/\s+/g, " ")
-    .trim();
+  const singleLine = text.replaceAll(/\s+/g, " ").trim();
   return singleLine.length > limit ? `${singleLine.slice(0, limit).trimEnd()}...` : singleLine;
 };
 
@@ -178,7 +174,7 @@ const formatTimestamp = (timestamp: string) =>
   <div class="conversation__messages">
     <template v-for="(turn, index) in turns" :key="turn.at(-1)?.id ?? index">
       <article v-if="userEntry(turn)" class="conversation-entry conversation-entry--user">
-        <MarkdownRender class="conversation-entry__content" mode="chat" :content="entryText(userEntry(turn)!)" :final="true" :fade="false" />
+        <pre class="conversation-entry__content">{{ entryText(userEntry(turn)!) }}</pre>
       </article>
 
       <section v-if="agentEntries(turn).length > 0" class="conversation-turn">
@@ -230,12 +226,19 @@ const formatTimestamp = (timestamp: string) =>
 <style scoped>
 .conversation__messages {
   flex: 1;
+  align-self: stretch;
+  width: 100%;
+  max-width: 56rem;
+  min-width: 0;
+  margin-inline: auto;
   overflow-y: auto;
   scrollbar-gutter: stable;
   padding: 0 0 16px;
 }
 .conversation-entry {
-  width: min(100%, 48rem);
+  width: 100%;
+  max-width: 48rem;
+  min-width: 0;
   margin: 0 auto;
   padding: 24px clamp(12px, 2.5vw, 16px) 0;
   color: #292827;
@@ -243,15 +246,18 @@ const formatTimestamp = (timestamp: string) =>
 .conversation-entry--user {
   width: fit-content;
   max-width: 85%;
-  margin-right: max(12px, calc((100% - 48rem) / 2 + clamp(12px, 2.5vw, 16px)));
+  min-width: 0;
   margin-left: auto;
+  margin-right: 0;
   padding: 12px 20px;
   border: 1px solid #ece9e0;
   border-radius: 12px 12px 4px;
   background: #f7f6f2;
 }
 .conversation-turn {
-  width: min(100%, 48rem);
+  width: 100%;
+  max-width: 48rem;
+  min-width: 0;
   margin: 0 auto;
   padding: 24px clamp(12px, 2.5vw, 16px) 32px;
   color: #292827;
@@ -296,22 +302,42 @@ const formatTimestamp = (timestamp: string) =>
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.conversation-entry__content :deep(.markstream-vue > :first-child) {
+.conversation-entry__content:deep(.node-slot:first-child .paragraph-node) {
   margin-top: 0;
 }
-.conversation-entry__content :deep(.markstream-vue > :last-child) {
+.conversation-entry__content:deep(.node-slot:last-child .paragraph-node) {
   margin-bottom: 0;
 }
-.conversation-entry__content :deep(.markstream-vue p) {
-  margin-block: 0 12px;
+.conversation-entry__content:deep(.paragraph-node) {
+  margin-block: 0 8px;
 }
-.conversation-entry__content :deep(.markstream-vue ul),
-.conversation-entry__content :deep(.markstream-vue ol) {
-  margin-block: 8px 12px;
+.conversation-entry__content:deep(ul),
+.conversation-entry__content:deep(ol) {
+  margin-block: 6px 8px;
 }
-.conversation-entry__reasoning,
+.conversation-entry__content:deep(p + p),
+.conversation-entry__content:deep(p + ul),
+.conversation-entry__content:deep(p + ol),
+.conversation-entry__content:deep(ul + p),
+.conversation-entry__content:deep(ol + p) {
+  margin-top: 0;
+}
+.conversation-entry__content:deep(.node-slot:last-child .paragraph-node),
+.conversation-entry__content:deep(.node-slot:last-child ul),
+.conversation-entry__content:deep(.node-slot:last-child ol) {
+  margin-bottom: 0;
+}
+.conversation-turn > .conversation-entry__content {
+  margin-bottom: 14px;
+}
+.conversation-entry__reasoning {
+  margin: 0 0 12px;
+  padding: 0;
+  color: #76746d;
+  font-size: 13px;
+}
 .conversation-entry__tool {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
   padding: 0;
   color: #76746d;
   font-size: 13px;
