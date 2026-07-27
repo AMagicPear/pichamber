@@ -1,4 +1,4 @@
-import { reactive } from "vue";
+import { reactive, watch } from "vue";
 
 export type SplitMode = "bottom" | "left" | "right";
 
@@ -115,3 +115,11 @@ export const ui = reactive({
     ui.maximized[mode] = value;
   },
 });
+
+watch(
+  ui,
+  () => {
+    saveUiState(ui.panels, ui.maximized);
+  },
+  { deep: true },
+);

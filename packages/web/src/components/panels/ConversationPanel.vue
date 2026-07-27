@@ -8,8 +8,10 @@ import SearchEyeIcon from "@/assets/icons/SearchEye.svg";
 import SurveyIcon from "@/assets/icons/Survey.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
+import ConversationMessages from "@/components/workspace/ConversationMessages.vue";
 import UserInputBlock from "@/components/workspace/UserInputBlock.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
+import { entries, workspace } from "@/stores/workspace";
 
 const presets = [
   { label: "Explore the codebase", icon: CompassIcon },
@@ -21,31 +23,22 @@ const presets = [
   { label: "Review my changes", icon: SearchEyeIcon },
 ];
 
-const { messages, draft, canSend, send, usePreset } = useConversationSession();
+const { draft, canSend, send } = useConversationSession();
 </script>
 
 <template>
-  <main class="conversation" :class="{ 'conversation--active': messages.length > 0 }">
-    <div v-if="messages.length > 0" class="conversation__messages">
-      <div
-        v-for="message in messages"
-        :key="message.id"
-        class="message"
-        :class="`message--${message.role}`"
-      >
-        <p class="message__content">{{ message.content }}</p>
-      </div>
-    </div>
-    <h2 v-else>What are we working<br />on in amagicpear?</h2>
+  <main class="conversation" :class="{ 'conversation--active': entries.length > 0 }">
+    <ConversationMessages v-if="entries.length > 0" :entries="entries" />
+    <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <UserInputBlock v-model="draft" :can-send="canSend" @send="send" />
 
-    <div v-if="messages.length === 0" class="presets" aria-label="Prompt starters">
+    <div v-if="entries.length === 0" class="presets" aria-label="Prompt starters">
       <button
         v-for="preset in presets"
         :key="preset.label"
         type="button"
-        @click="usePreset(preset.label)"
+        @click="draft = preset.label"
       >
         <component :is="preset.icon" />
         <span>{{ preset.label }}</span>
@@ -61,29 +54,15 @@ const { messages, draft, canSend, send, usePreset } = useConversationSession();
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
   width: 100%;
   height: 100%;
-  min-height: 0;
-  padding: 24px 24px 16px;
   overflow: hidden;
+  padding-block: 16px;
+  gap: 24px;
 }
 .conversation--active {
   justify-content: flex-start;
-}
-.conversation__messages {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 10px;
-  width: min(100%, 1280px);
-  min-height: 0;
-  padding: 24px 0 8px;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.conversation__messages::-webkit-scrollbar {
-  display: none;
+  gap: 0;
 }
 .conversation h2 {
   margin: 0;
@@ -92,34 +71,6 @@ const { messages, draft, canSend, send, usePreset } = useConversationSession();
   line-height: 1.12;
   letter-spacing: -0.02em;
   text-align: center;
-}
-.message {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-width: 100%;
-  padding: 8px 12px;
-  border-radius: 10px;
-}
-.message--user {
-  align-self: flex-end;
-  max-width: 72%;
-  background: #f0eee8;
-}
-.message--assistant {
-  align-self: flex-start;
-}
-.message--error {
-  align-self: stretch;
-  background: #fdecec;
-  color: #b3261e;
-}
-.message__content {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 14px;
-  line-height: 20px;
 }
 .presets {
   display: flex;

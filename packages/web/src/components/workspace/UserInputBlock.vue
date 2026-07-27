@@ -8,7 +8,7 @@ import ShieldUserIcon from "@/assets/icons/ShieldUser.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
 
-const draft = defineModel<string>({ required: true });
+const draft = defineModel<string | undefined>({ required: true });
 
 defineProps<{
   canSend: boolean;

@@ -1,6 +1,5 @@
 import type { AgentSessionEvent, ServerMessage, SessionEntry } from "@pichamber/shared";
-
-export type SessionEvent = AgentSessionEvent;
+export type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
 export type WsHandle = {
   send: (message: unknown) => void;
@@ -22,7 +21,7 @@ export const wsUrl = (path: string) => {
 /** Connect to the Pi AgentSession JSON protocol. */
 export const connectSessionWs = (
   sessionId: string,
-  onEvent: (event: SessionEvent) => void,
+  onEvent: (event: AgentSessionEvent) => void,
   onStatus?: (status: WsStatus) => void,
 ): WsHandle => {
   const socket = new WebSocket(wsUrl(`/ws/${sessionId}`));

@@ -1,5 +1,5 @@
 <script lang="tsx">
-import { computed, defineComponent, onMounted, ref, type PropType } from "vue";
+import { computed, defineComponent, onMounted, ref, watch, type PropType } from "vue";
 import FileAddIcon from "@/assets/icons/FileAdd.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
@@ -81,10 +81,11 @@ export default defineComponent({
     const load = async () => {
       const currentRequest = ++requestVersion;
       error.value = null;
+      entries.value = [];
       try {
-        const result = await listDirectory();
+        const cwd = workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : undefined;
+        const result = await listDirectory(cwd);
         if (currentRequest !== requestVersion) return;
-        workspace.cwd = result.path;
         entries.value = result.entries;
       } catch (err) {
         if (currentRequest !== requestVersion) return;
@@ -100,6 +101,7 @@ export default defineComponent({
     });
 
     onMounted(load);
+    watch(() => workspace.cwd, load);
 
     return () => (
       <div class="file-tree file-tree--root">

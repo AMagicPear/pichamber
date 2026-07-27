@@ -9,25 +9,32 @@ import ContextPanel from "@/components/panels/ContextPanel.vue";
 import SessionHeader from "@/components/panels/SessionHeader.vue";
 import SessionSidebar from "@/components/panels/SessionSidebar.vue";
 import TerminalPanel from "@/components/panels/TerminalPanel.vue";
-import { workspace } from "./stores/workspace";
 import ConversationPanel from "./components/panels/ConversationPanel.vue";
-import { useRoute } from "vue-router";
-import { watch } from "vue";
+import { useRouter } from "vue-router";
 import { updateWorkspace } from "./stores/workspace";
+import { watch } from "vue";
+import { workspace } from "./stores/workspace";
+import { createSession } from "./api/client.ts";
 
-const route = useRoute();
+const router = useRouter();
 
 watch(ui, () => {
   saveUiState(ui.panels, ui.maximized);
 }, { deep: true });
 
-watch(
-  () => route.params.sessionId,
-  (sessionId) => {
+router.afterEach(async (to, from) => {
+  if (to.name == "new-session") {
+    if (!workspace.cwd) console.warn("[route] switching to new session but workspace.cwd is null");
+    console.info(`[route] switching to new session at ${workspace.cwd}`)
+    const session = await createSession(workspace.cwd ?? "~")
+    console.info(`created new session ${session.sessionId}`)
+    workspace.sessionId = session.sessionId;
+  } else if (to.name == "session") {
+    const sessionId = to.params.sessionId;
     if (typeof sessionId === "string") updateWorkspace(sessionId);
-  },
-  { immediate: true },
-);
+  }
+});
+
 </script>
 
 <template>

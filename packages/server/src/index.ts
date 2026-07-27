@@ -1,5 +1,4 @@
 import type { ServerWebSocket } from "bun";
-import type { SessionSnapshot } from "@pichamber/shared";
 import { listDirectory, WorkspaceError } from "./fs";
 import { createSessionWithCwd, deleteSession, getSession, listAllSessions } from "./session";
 import {
@@ -128,16 +127,7 @@ Bun.serve({
       GET: async (req) => {
         const session = await getSession(req.params.id);
         if (!session) return Response.json({ error: "session not found" }, { status: 404 });
-        const manager = session.sessionManager;
-        const snapshot: SessionSnapshot = {
-          header: manager.getHeader() as SessionSnapshot["header"],
-          entries: manager.getEntries() as unknown as SessionSnapshot["entries"],
-          branch: manager.getBranch() as unknown as SessionSnapshot["branch"],
-          tree: manager.getTree() as unknown as SessionSnapshot["tree"],
-          leafId: manager.getLeafId(),
-          name: manager.getSessionName(),
-        };
-        return Response.json(snapshot);
+        return Response.json(session.sessionManager.getEntries());
       },
       DELETE: async (req) => {
         closeSessionSockets(req.params.id);

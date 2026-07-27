@@ -1,14 +1,16 @@
 import { reactive, ref } from "vue";
-import { listSessions, toMessage } from "@/api/client";
-import type { SessionInfo } from "@pichamber/shared";
+import { getEntries, listSessions, toMessage } from "@/api/client";
+import type { SessionEntry, SessionInfo } from "@pichamber/shared";
 
 export const workspace = reactive({
-  cwd: null as string | null,
+  cwd: "~" as string | null,
+  folderName: null as string | null,
   sessionId: null as string | null,
-  sessionName: null as string | null,
+  sessionName: "New Session" as string | null,
 });
 
 export const sessions = ref<SessionInfo[]>([]);
+export const entries = ref<SessionEntry[]>([]);
 export const sessionsLoading = ref(false);
 export const sessionsError = ref<string | null>(null);
 // sessionsLoadPromise 用于防止重复加载会话列表
@@ -35,7 +37,7 @@ export const loadSessions = () => {
     try {
       sessions.value = await listSessions();
       sessionsError.value = null;
-      console.log("[workspace] loaded sessions", sessions.value);
+      console.log("[workspace] loaded sessions of num:", sessions.value.length);
     } catch (error) {
       sessionsError.value = toMessage(error);
       // 失败后清空缓存，允许后续调用重新加载
@@ -50,9 +52,13 @@ export const loadSessions = () => {
 
 export const updateWorkspace = async (sessionId: string) => {
   workspace.sessionId = sessionId;
-  await loadSessions();
+  const [, sessionEntries] = await Promise.all([loadSessions(), getEntries(sessionId)]);
+  if (workspace.sessionId !== sessionId) return;
+
   const session = sessions.value.find(({ id }) => id === sessionId);
   workspace.sessionName = sessionTitle(session ?? sessionId);
-  workspace.cwd = session?.cwd ?? "~";
+  workspace.folderName = session?.cwd?.split("/")?.pop() ?? null;
+  workspace.cwd = session?.cwd ?? null;
+  entries.value = sessionEntries;
   console.log("[workspace] updated", workspace);
 };
