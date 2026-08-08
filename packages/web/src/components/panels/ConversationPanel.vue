@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AddIcon from "@/assets/icons/Add.svg";
+import CloseIcon from "@/assets/icons/Close.svg";
 import BugIcon from "@/assets/icons/Bug.svg";
 import CompassIcon from "@/assets/icons/Compass3.svg";
 import HistoryIcon from "@/assets/icons/History.svg";
@@ -29,6 +30,8 @@ const {
   canSend,
   connect,
   disconnect,
+  dismissError,
+  lastError,
   live,
   send,
   model,
@@ -56,6 +59,14 @@ watch(
       :live="live"
     />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
+
+    <div v-if="lastError" class="conversation__error" role="alert">
+      <BugIcon class="conversation__error-icon" />
+      <span class="conversation__error-text">{{ lastError }}</span>
+      <button type="button" class="conversation__error-close" aria-label="Dismiss error" @click="dismissError">
+        <CloseIcon />
+      </button>
+    </div>
 
     <UserInputBlock
       v-model="draft"
@@ -111,6 +122,50 @@ watch(
   line-height: 1.12;
   letter-spacing: -0.02em;
   text-align: center;
+}
+.conversation__error {
+  display: flex;
+  width: min(100%, var(--conversation-shell-width));
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #f4c2c2;
+  border-radius: 10px;
+  background: rgb(255 240 240 / 80%);
+  color: #6f2828;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.conversation__error-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: #a83838;
+}
+.conversation__error-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.conversation__error-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6f2828;
+  cursor: pointer;
+}
+.conversation__error-close:hover {
+  background: rgb(168 56 56 / 12%);
+}
+.conversation__error-close svg {
+  width: 14px;
+  height: 14px;
 }
 .presets {
   display: flex;

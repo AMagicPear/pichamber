@@ -17,6 +17,10 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
   const availableModels = ref<ModelDescriptor[]>([]);
   const model = ref<ModelDescriptor | undefined>();
   const thinking = ref<ThinkingState>({ level: "off", availableLevels: ["off"] });
+  /** Most recent server-pushed error message (transport / invalid model /
+   *  invalid thinking level / catastrophic prompt failure). Cleared when
+   *  the user dismisses it, the next prompt sends, or the session drops. */
+  const lastError = ref<string | null>(null);
 
   let ws: WsHandle | null = null;
   let activeSessionId: string | null = null;
@@ -40,6 +44,7 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
       connected.value = true;
       entries.value = status.messages ?? [];
       live.value = status.live ?? { pendingUserMessages: [], toolExecutions: [] };
+      lastError.value = null;
       if (status.thinking) {
         applyModelState({
           model: status.model,
@@ -51,27 +56,41 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
       applyModelState(status);
     } else if (status.type === "closed") {
       connected.value = false;
+    } else if (status.type === "error") {
+      lastError.value = status.error;
     }
   };
 
   const send = () => {
     const text = draft.value?.trim();
     if (!canSend.value || !ws || !text) return;
+    // Clear any previous error so the toast doesn't linger into the next turn.
+    lastError.value = null;
     ws.send({ type: "prompt", message: text });
     draft.value = undefined;
   };
 
-  /** Optimistically swap the current model on the client. The server's
-   *  `model_state` broadcast either confirms the change or surfaces the
-   *  error — in both cases we reconcile on the next push. */
+  /** Optimistically swap the current model on the client. We also clamp
+   *  `thinking` locally for the common case (target model is non-reasoning
+   *  → only "off" is valid) so the ThinkingLevelSelector doesn't flash the
+   *  previous model's options during the few ms it takes the server to
+   *  broadcast the authoritative snapshot. The server push reconciles any
+   *  edge case (e.g. a reasoning model that drops some levels). */
   const setModel = (next: ModelDescriptor) => {
     model.value = next;
+    if (!next.reasoning) {
+      thinking.value = { level: "off", availableLevels: ["off"] };
+    }
     ws?.send({ type: "set_model", provider: next.provider, modelId: next.id });
   };
 
   const setThinkingLevel = (level: ThinkingLevel) => {
     thinking.value = { ...thinking.value, level };
     ws?.send({ type: "set_thinking_level", level });
+  };
+
+  const dismissError = () => {
+    lastError.value = null;
   };
 
   const disconnect = () => {
@@ -82,6 +101,7 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
     model.value = undefined;
     availableModels.value = [];
     thinking.value = { level: "off", availableLevels: ["off"] };
+    lastError.value = null;
   };
 
   const connect = (sessionId: string) => {
@@ -117,8 +137,10 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
     canSend,
     connect,
     disconnect,
+    dismissError,
     draft,
     entries,
+    lastError,
     live,
     model,
     send,

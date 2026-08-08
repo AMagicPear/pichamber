@@ -6,12 +6,14 @@ export type ConversationToolDetail = {
   previewTail?: string;
   content: string;
   iconUrl?: string;
+  isError: boolean;
 };
 
 type ToolDetailInput = {
   toolName: string;
   args?: unknown;
   output: string;
+  isError?: boolean;
   fallbackPreview: string;
 };
 
@@ -37,18 +39,25 @@ const splitFilePath = (path: string) => {
 const fileLabel = (toolName: string) =>
   `${toolName.charAt(0).toUpperCase()}${toolName.slice(1)} File`;
 
+const errorLabel = (toolName: string) => {
+  const base = toolName || "Tool";
+  return `${base.charAt(0).toUpperCase()}${base.slice(1)} failed`;
+};
+
 export const conversationToolDetail = ({
   toolName,
   args,
   output,
+  isError,
   fallbackPreview,
 }: ToolDetailInput): ConversationToolDetail => {
   const command = recordValue(args, "command");
   if (toolName === "bash") {
     return {
-      label: "Shell Command",
+      label: isError ? errorLabel("Shell Command") : "Shell Command",
       preview: command ?? inline(fallbackPreview),
       content: command ? `${command}\n\n${output}` : output,
+      isError: isError === true,
     };
   }
 
@@ -56,25 +65,28 @@ export const conversationToolDetail = ({
   if (isFileTool(toolName) && path) {
     const { prefix, tail } = splitFilePath(path);
     return {
-      label: fileLabel(toolName),
+      label: isError ? errorLabel(toolName) : fileLabel(toolName),
       preview: prefix,
       previewTail: tail,
       content: `${path}\n\n${output}`,
       iconUrl: getEntryIcon(tail, false, false),
+      isError: isError === true,
     };
   }
 
   if (toolName === "ls") {
     return {
-      label: path ? "List Directory" : "List Files",
+      label: isError ? errorLabel("ls") : path ? "List Directory" : "List Files",
       preview: path ?? inline(fallbackPreview),
       content: path ? `${path}\n\n${output}` : output,
+      isError: isError === true,
     };
   }
 
   return {
-    label: toolName || "Tool",
+    label: isError ? errorLabel(toolName) : toolName || "Tool",
     preview: inline(fallbackPreview),
     content: output,
+    isError: isError === true,
   };
 };
