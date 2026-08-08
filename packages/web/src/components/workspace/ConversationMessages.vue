@@ -7,14 +7,19 @@ import type {
   LiveConversationState,
   LiveToolExecution,
 } from "@pichamber/shared";
-import BrainIcon from "@/assets/icons/Brain.svg";
+import BrainAi3Icon from "@/assets/icons/BrainAi3.svg";
 import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import ConversationDetail from "./ConversationDetail.vue";
+import ProviderLogo from "./ProviderLogo";
 import { conversationToolDetail } from "./conversationToolDetail";
 
 /** Structural peeks at AssistantMessage / ToolResultMessage so we don't
  *  pull @earendil-works/pi-ai into the workspace just for two fields. */
-type AssistantLike = { stopReason?: "stop" | "toolUse" | "error" | "aborted"; errorMessage?: string };
+type AssistantLike = {
+  provider?: string;
+  stopReason?: "stop" | "toolUse" | "error" | "aborted";
+  errorMessage?: string;
+};
 type ToolResultLike = { isError?: boolean };
 
 const props = defineProps<{
@@ -26,6 +31,8 @@ const messageFor = (entry: ConversationTranscriptMessage) => entry.message;
 const contentFor = (message?: AgentMessage) => message as { content?: unknown } | undefined;
 const assistantLabel = (message?: AgentMessage) =>
   message?.role === "assistant" ? message.model : "Assistant";
+const assistantProvider = (message?: AgentMessage) =>
+  message?.role === "assistant" ? (message as AssistantLike).provider ?? "" : "";
 
 const textFromContent = (content: unknown) =>
   Array.isArray(content)
@@ -134,14 +141,15 @@ const liveToolDetails = computed(() =>
       <template v-else-if="messageFor(entry)?.role === 'assistant'">
         <template v-if="assistantError(messageFor(entry)) as AssistantError">
           <header class="conversation-message__author conversation-message__author--error">
-            <BrainIcon /> {{ assistantLabel(messageFor(entry)) }}
+            <ProviderLogo :provider-id="assistantProvider(messageFor(entry))" :size="16" />
+            {{ assistantLabel(messageFor(entry)) }}
             <span class="conversation-message__error-tag">{{ assistantError(messageFor(entry))!.reason }}</span>
           </header>
           <p class="conversation-message__error-text">{{ assistantError(messageFor(entry))!.message }}</p>
         </template>
         <template v-else>
-          <header class="conversation-message__author"><BrainIcon /> {{ assistantLabel(messageFor(entry)) }}</header>
-          <ConversationDetail v-if="thinkingText(messageFor(entry))" class="conversation-message__details" :icon="BrainIcon" label="Thinking" :preview="inlinePreview(thinkingText(messageFor(entry)))" :content="thinkingText(messageFor(entry))" />
+          <header class="conversation-message__author"><ProviderLogo :provider-id="assistantProvider(messageFor(entry))" :size="16" /> {{ assistantLabel(messageFor(entry)) }}</header>
+          <ConversationDetail v-if="thinkingText(messageFor(entry))" class="conversation-message__details" :icon="BrainAi3Icon" label="Thinking" :preview="inlinePreview(thinkingText(messageFor(entry)))" :content="thinkingText(messageFor(entry))" />
           <MarkdownRender v-if="messageText(messageFor(entry))" class="conversation-message__content" mode="chat" :content="messageText(messageFor(entry))" :final="true" :fade="false" />
         </template>
       </template>
@@ -152,8 +160,8 @@ const liveToolDetails = computed(() =>
       <pre class="conversation-message__user">{{ messageText(message) }}</pre>
     </article>
     <article v-if="live.streamingMessage" class="conversation-message conversation-message--assistant">
-      <header class="conversation-message__author"><BrainIcon /> {{ assistantLabel(live.streamingMessage) }}</header>
-      <ConversationDetail v-if="thinkingText(live.streamingMessage)" class="conversation-message__details" :icon="BrainIcon" label="Thinking" :preview="inlinePreview(thinkingText(live.streamingMessage))" :content="thinkingText(live.streamingMessage)" />
+      <header class="conversation-message__author"><ProviderLogo :provider-id="assistantProvider(live.streamingMessage)" :size="16" /> {{ assistantLabel(live.streamingMessage) }}</header>
+      <ConversationDetail v-if="thinkingText(live.streamingMessage)" class="conversation-message__details" :icon="BrainAi3Icon" label="Thinking" :preview="inlinePreview(thinkingText(live.streamingMessage))" :content="thinkingText(live.streamingMessage)" />
       <MarkdownRender v-if="messageText(live.streamingMessage)" class="conversation-message__content" mode="chat" :content="messageText(live.streamingMessage)" :final="false" :fade="false" />
     </article>
     <ConversationDetail v-for="tool in liveToolDetails" :key="tool.toolCallId" class="conversation-message conversation-message__details conversation-message__tool-result" :class="{ 'conversation-message--tool-error': tool.detail.isError }" :icon="TerminalIcon" :icon-url="tool.detail.iconUrl" :label="tool.detail.label" :preview="tool.detail.preview" :preview-tail="tool.detail.previewTail" :content="tool.detail.content" />

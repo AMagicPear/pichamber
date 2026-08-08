@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
-import BrainIcon from "@/assets/icons/Brain.svg";
 import type { ModelDescriptor } from "@pichamber/shared";
+import ProviderLogo from "./ProviderLogo";
 
 const props = defineProps<{
   model: ModelDescriptor | undefined;
@@ -130,7 +130,7 @@ const placeholder = computed(() => {
       aria-haspopup="listbox"
       @click="open = !open"
     >
-      <span class="model-selector__mark" aria-hidden="true">Ƶ</span>
+      <ProviderLogo class="model-selector__icon" :provider-id="model?.provider ?? ''" :size="16" />
       <span class="model-selector__name">{{ placeholder }}</span>
       <ArrowDownSIcon class="model-selector__chevron" />
     </button>
@@ -160,13 +160,8 @@ const placeholder = computed(() => {
               :class="{ 'is-active': model?.provider === candidate.provider && model?.id === candidate.id }"
               @click="onSelect(candidate)"
             >
+              <ProviderLogo class="model-selector__item-icon" :provider-id="candidate.provider" :size="16" />
               <span class="model-selector__item-name">{{ candidate.name }}</span>
-              <BrainIcon
-                v-if="candidate.reasoning"
-                class="model-selector__item-icon"
-                aria-label="Reasoning model"
-                title="Reasoning model"
-              />
             </button>
           </div>
           <div v-if="grouped.length === 0" class="model-selector__empty">No matches.</div>
@@ -207,10 +202,8 @@ const placeholder = computed(() => {
   cursor: default;
   opacity: 0.55;
 }
-.model-selector__mark {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
+.model-selector__icon {
+  flex: 0 0 16px;
 }
 .model-selector__name {
   overflow: hidden;
@@ -310,10 +303,9 @@ const placeholder = computed(() => {
   white-space: nowrap;
 }
 .model-selector__item-icon {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-  opacity: 0.7;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
 }
 .model-selector__empty {
   padding: 14px 8px;
