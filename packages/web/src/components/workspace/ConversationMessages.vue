@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import MarkdownRender from "markstream-vue";
+import { computed } from "vue";
 import type { AgentMessage, ConversationTranscriptMessage, LiveConversationState, LiveToolExecution } from "@pichamber/shared";
 import BrainIcon from "@/assets/icons/Brain.svg";
 import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import ConversationDetail from "./ConversationDetail.vue";
-import { getEntryIcon } from "./fileIcon";
+import { conversationToolDetail } from "./conversationToolDetail";
 
 const props = defineProps<{
   entries: ConversationTranscriptMessage[];
@@ -45,91 +46,47 @@ const thinkingText = (message?: AgentMessage) => {
     .join("\n\n");
 };
 
-const toolName = (message?: AgentMessage) => {
-  const value = message as { toolName?: unknown } | undefined;
-  return typeof value?.toolName === "string" ? value.toolName : undefined;
-};
-const toolCallFor = (entry: ConversationTranscriptMessage) => {
-  const result = messageFor(entry) as { toolCallId?: unknown } | undefined;
-  if (typeof result?.toolCallId !== "string") return undefined;
-  for (let index = props.entries.indexOf(entry) - 1; index >= 0; index -= 1) {
-    const content = contentFor(messageFor(props.entries[index]!))?.content;
+type ToolCall = { id: string; name: string; arguments: unknown };
+
+const toolCallsById = computed(() => {
+  const calls = new Map<string, ToolCall>();
+  for (const entry of props.entries) {
+    const content = contentFor(messageFor(entry))?.content;
     if (!Array.isArray(content)) continue;
-    const call = content.find(
-      (part) => part && typeof part === "object" && "type" in part && part.type === "toolCall" && "id" in part && part.id === result.toolCallId,
-    );
-    if (call) return call as { arguments?: unknown };
+    for (const part of content) {
+      if (!part || typeof part !== "object" || !("type" in part) || part.type !== "toolCall") continue;
+      if (typeof part.id !== "string" || typeof part.name !== "string") continue;
+      calls.set(part.id, { id: part.id, name: part.name, arguments: part.arguments });
+    }
   }
+  return calls;
+});
+
+const historyToolDetail = (entry: ConversationTranscriptMessage) => {
+  const message = messageFor(entry) as { toolCallId?: unknown; toolName?: unknown } | undefined;
+  const toolCallId = typeof message?.toolCallId === "string" ? message.toolCallId : undefined;
+  const call = toolCallId ? toolCallsById.value.get(toolCallId) : undefined;
+  const toolName = typeof message?.toolName === "string" ? message.toolName : "";
+  const output = messageText(messageFor(entry)) || JSON.stringify(messageFor(entry), null, 2);
+  return conversationToolDetail({
+    toolName,
+    args: call?.arguments,
+    output,
+    fallbackPreview: messageText(messageFor(entry)),
+  });
 };
-const toolTarget = (entry: ConversationTranscriptMessage, key: "path" | "command") => {
-  const args = toolCallFor(entry)?.arguments;
-  if (!args || typeof args !== "object") return undefined;
-  const record = args as Record<string, unknown>;
-  const value = record[key] ?? (key === "path" ? record.file_path : undefined);
-  return typeof value === "string" ? value : undefined;
-};
-const commandFromArgs = (args: unknown) => {
-  if (!args || typeof args !== "object") return undefined;
-  const command = (args as Record<string, unknown>).command;
-  return typeof command === "string" ? command : undefined;
-};
-const pathFromArgs = (args: unknown) => {
-  if (!args || typeof args !== "object") return undefined;
-  const record = args as Record<string, unknown>;
-  const path = record.path ?? record.file_path;
-  return typeof path === "string" ? path : undefined;
-};
-const toolCommand = (entry: ConversationTranscriptMessage) => toolTarget(entry, "command");
-const toolResultLabel = (entry: ConversationTranscriptMessage) => {
-  const name = toolName(messageFor(entry));
-  const path = toolTarget(entry, "path");
-  if (name === "read") return "Read File";
-  if (name === "write") return path ? `Wrote ${path}` : "Wrote file";
-  if (name === "edit") return path ? `Edited ${path}` : "Edited file";
-  if (name === "ls") return path ? `Listed ${path}` : "Listed directory";
-  if (name === "bash") return "Shell Command";
-  return name ? `${name} result` : "Tool result";
-};
-const toolResultText = (entry: ConversationTranscriptMessage) => {
-  const result = messageText(messageFor(entry)) || JSON.stringify(messageFor(entry), null, 2);
-  const command = toolCommand(entry);
-  const path = toolTarget(entry, "path");
-  return command ? `${command}\n\n${result}` : path ? `${path}\n\n${result}` : result;
-};
-const toolResultPreview = (entry: ConversationTranscriptMessage) =>
-  toolCommand(entry) ?? toolTarget(entry, "path") ?? inlinePreview(messageText(messageFor(entry)));
-const splitFilePath = (path?: string) => {
-  if (!path) return {};
-  const separator = path.lastIndexOf("/");
-  return separator < 0 ? { tail: path } : { prefix: path.slice(0, separator + 1), tail: path.slice(separator + 1) };
-};
-const toolResultPreviewTail = (entry: ConversationTranscriptMessage) =>
-  toolName(messageFor(entry)) === "read" ? splitFilePath(toolTarget(entry, "path")).tail : undefined;
-const toolResultPreviewPrefix = (entry: ConversationTranscriptMessage) =>
-  toolName(messageFor(entry)) === "read"
-    ? splitFilePath(toolTarget(entry, "path")).prefix
-    : toolResultPreview(entry);
-const readFileIcon = (toolName: string, path?: string) =>
-  toolName === "read" && path ? getEntryIcon(splitFilePath(path).tail ?? path, false, false) : undefined;
-const toolResultIcon = (entry: ConversationTranscriptMessage) =>
-  readFileIcon(toolName(messageFor(entry)) ?? "", toolTarget(entry, "path"));
-const liveToolLabel = (tool: LiveToolExecution) =>
-  tool.toolName === "bash" ? "Shell Command" : tool.toolName === "read" ? "Read File" : tool.running ? `${tool.toolName} running` : `${tool.toolName} result`;
-const liveToolPreview = (tool: LiveToolExecution) =>
-  tool.toolName === "bash" ? commandFromArgs(tool.args) : tool.toolName === "read" ? splitFilePath(pathFromArgs(tool.args)).prefix : inlinePreview(JSON.stringify(tool.args));
-const liveToolPreviewTail = (tool: LiveToolExecution) =>
-  tool.toolName === "read" ? splitFilePath(pathFromArgs(tool.args)).tail : undefined;
-const liveToolIcon = (tool: LiveToolExecution) => readFileIcon(tool.toolName, pathFromArgs(tool.args));
-const liveToolText = (tool: LiveToolExecution) => {
-  const output = JSON.stringify(tool.result === undefined ? tool.args : tool.result, null, 2);
-  const command = liveToolPreview(tool);
-  const path = pathFromArgs(tool.args);
-  return command && tool.result !== undefined
-    ? `${command}\n\n${output}`
-    : path && tool.result !== undefined
-      ? `${path}\n\n${output}`
-      : output;
-};
+
+const liveToolDetails = computed(() =>
+  props.live.toolExecutions.map((tool) => ({
+    toolCallId: tool.toolCallId,
+    detail: conversationToolDetail({
+      toolName: tool.toolName,
+      args: tool.args,
+      output: JSON.stringify(tool.result === undefined ? tool.args : tool.result, null, 2),
+      fallbackPreview: JSON.stringify(tool.args),
+    }),
+  })),
+);
 </script>
 
 <template>
@@ -150,7 +107,7 @@ const liveToolText = (tool: LiveToolExecution) => {
         <ConversationDetail v-if="thinkingText(messageFor(entry))" class="conversation-message__details" :icon="BrainIcon" label="Thinking" :preview="inlinePreview(thinkingText(messageFor(entry)))" :content="thinkingText(messageFor(entry))" />
         <MarkdownRender v-if="messageText(messageFor(entry))" class="conversation-message__content" mode="chat" :content="messageText(messageFor(entry))" :final="true" :fade="false" />
       </template>
-      <ConversationDetail v-else-if="messageFor(entry)?.role === 'toolResult'" class="conversation-message__details conversation-message__tool-result" :icon="TerminalIcon" :icon-url="toolResultIcon(entry)" :label="toolResultLabel(entry)" :preview="toolResultPreviewPrefix(entry)" :preview-tail="toolResultPreviewTail(entry)" :content="toolResultText(entry)" />
+      <ConversationDetail v-else-if="messageFor(entry)?.role === 'toolResult'" class="conversation-message__details conversation-message__tool-result" :icon="TerminalIcon" :icon-url="historyToolDetail(entry).iconUrl" :label="historyToolDetail(entry).label" :preview="historyToolDetail(entry).preview" :preview-tail="historyToolDetail(entry).previewTail" :content="historyToolDetail(entry).content" />
     </article>
 
     <article v-for="(message, index) in live.pendingUserMessages" :key="`live-user:${index}`" class="conversation-message conversation-message--user">
@@ -161,7 +118,7 @@ const liveToolText = (tool: LiveToolExecution) => {
       <ConversationDetail v-if="thinkingText(live.streamingMessage)" class="conversation-message__details" :icon="BrainIcon" label="Thinking" :preview="inlinePreview(thinkingText(live.streamingMessage))" :content="thinkingText(live.streamingMessage)" />
       <MarkdownRender v-if="messageText(live.streamingMessage)" class="conversation-message__content" mode="chat" :content="messageText(live.streamingMessage)" :final="false" :fade="false" />
     </article>
-    <ConversationDetail v-for="tool in live.toolExecutions" :key="tool.toolCallId" class="conversation-message conversation-message__details conversation-message__tool-result" :icon="TerminalIcon" :icon-url="liveToolIcon(tool)" :label="liveToolLabel(tool)" :preview="liveToolPreview(tool)" :preview-tail="liveToolPreviewTail(tool)" :content="liveToolText(tool)" />
+    <ConversationDetail v-for="tool in liveToolDetails" :key="tool.toolCallId" class="conversation-message conversation-message__details conversation-message__tool-result" :icon="TerminalIcon" :icon-url="tool.detail.iconUrl" :label="tool.detail.label" :preview="tool.detail.preview" :preview-tail="tool.detail.previewTail" :content="tool.detail.content" />
   </div>
 </template>
 

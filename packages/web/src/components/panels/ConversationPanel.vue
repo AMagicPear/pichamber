@@ -37,7 +37,7 @@ watch(
 </script>
 
 <template>
-  <main class="conversation" :class="{ 'conversation--active': entries.length > 0 || live.pendingUserMessages.length > 0 || live.streamingMessage }">
+  <section class="conversation" :class="{ 'conversation--active': entries.length > 0 || live.pendingUserMessages.length > 0 || live.streamingMessage }">
     <ConversationMessages
       v-if="entries.length > 0 || live.pendingUserMessages.length > 0 || live.streamingMessage || live.toolExecutions.length > 0"
       :entries="entries"
@@ -59,7 +59,7 @@ watch(
       </button>
       <IconButton class="presets__add" label="Add prompt starter"><AddIcon /></IconButton>
     </div>
-  </main>
+  </section>
 </template>
 
 <style scoped>
@@ -75,7 +75,7 @@ watch(
   width: 100%;
   height: 100%;
   overflow: hidden;
-  padding-block: 16px;
+  padding-block: 0 16px;
   gap: 24px;
 }
 .conversation--active {
