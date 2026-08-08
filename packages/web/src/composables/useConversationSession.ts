@@ -70,17 +70,10 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
     draft.value = undefined;
   };
 
-  /** Optimistically swap the current model on the client. We also clamp
-   *  `thinking` locally for the common case (target model is non-reasoning
-   *  → only "off" is valid) so the ThinkingLevelSelector doesn't flash the
-   *  previous model's options during the few ms it takes the server to
-   *  broadcast the authoritative snapshot. The server push reconciles any
-   *  edge case (e.g. a reasoning model that drops some levels). */
+  /** Pi owns the model and thinking state. Wait for its model_state broadcast
+   *  instead of guessing locally: setModel can fail after the user selects a
+   *  model (for example when auth has just expired). */
   const setModel = (next: ModelDescriptor) => {
-    model.value = next;
-    if (!next.reasoning) {
-      thinking.value = { level: "off", availableLevels: ["off"] };
-    }
     ws?.send({ type: "set_model", provider: next.provider, modelId: next.id });
   };
 

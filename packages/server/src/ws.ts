@@ -64,6 +64,15 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       if (bunWS.readyState === 1) bunWS.send(payload);
     }
   };
+  let modelStateBroadcastQueued = false;
+  const queueModelStateBroadcast = () => {
+    if (modelStateBroadcastQueued) return;
+    modelStateBroadcastQueued = true;
+    queueMicrotask(() => {
+      modelStateBroadcastQueued = false;
+      broadcastModelState(session, broadcast, sessionId);
+    });
+  };
   channel.unsubscribe = session.subscribe((event) => {
     if (event.type === "message_start" && event.message.role === "user") {
       channel.live.pendingUserMessages.push(event.message);
@@ -104,12 +113,14 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         event.entry.type === "model_change" ||
         event.entry.type === "thinking_level_change"
       ) {
-        // The AgentSession SDK exposes model + thinking-level changes as
-        // dedicated entries; push a fresh snapshot so connected clients
-        // don't have to poll. Other entry types only need a re-render.
-        broadcastModelState(session, broadcast, sessionId);
+        // Pi emits several synchronous events for one model switch. Queue
+        // one snapshot for the whole mutation instead of broadcasting the
+        // same model inventory once per entry.
+        queueModelStateBroadcast();
       }
-      broadcast({ type: "messages", messages: getConversationMessages(session) });
+      if (event.entry.type !== "model_change" && event.entry.type !== "thinking_level_change") {
+        broadcast({ type: "messages", messages: getConversationMessages(session) });
+      }
     } else if (event.type === "agent_settled") {
       channel.live.pendingUserMessages = [];
       channel.live.streamingMessage = undefined;
@@ -117,10 +128,9 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       broadcast({ type: "messages", messages: getConversationMessages(session) });
       broadcast({ type: "live", live: liveState(channel) });
     } else if (event.type === "thinking_level_changed") {
-      // Thinking level can shift without an entry (e.g. clamping after a
-      // failed setThinkingLevel). _emit + extend getEffectiveModelDescriptor
-      // gives us the snapshot here as well.
-      broadcastModelState(session, broadcast, sessionId);
+      // Keep the client in sync when Pi clamps a requested level without a
+      // separate entry visible to the transcript.
+      queueModelStateBroadcast();
     }
   });
   channelsBySession.set(sessionId, channel);

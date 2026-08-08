@@ -43,7 +43,6 @@ export const connectSessionWs = (
 
   socket.onmessage = (event) => {
     const msg = JSON.parse(event.data) as ServerMessage;
-    console.log(`[session-ws] received ${new Date().toISOString()}`, msg);
     if (msg.type === "messages") {
       onMessage({ type: "messages", messages: msg.messages });
     } else if (msg.type === "live") {
@@ -80,8 +79,7 @@ export const connectSessionWs = (
   };
 };
 
-export type SessionStatus = WsStatus;
-export const connectWs = connectSessionWs;
+
 
 /** Connect to a PTY terminal WebSocket. Output is raw text; input accepts
  *  strings (stdin keystrokes) or objects (JSON control frames like resize). */
