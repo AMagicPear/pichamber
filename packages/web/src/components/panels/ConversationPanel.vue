@@ -50,6 +50,10 @@ const { draft, canSend, send } = useConversationSession();
 
 <style scoped>
 .conversation {
+  --conversation-content-width: 44rem;
+  --conversation-shell-width: 48rem;
+  --conversation-inline-gutter: 16px;
+
   display: flex;
   flex-direction: column;
   align-items: center;

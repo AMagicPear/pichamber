@@ -61,7 +61,10 @@ const onKeydown = (event: KeyboardEvent) => {
 .composer {
   display: flex;
   flex-direction: column;
-  width: min(100%, 464px);
+  width: min(
+    calc(100% - var(--conversation-inline-gutter) - var(--conversation-inline-gutter)),
+    var(--conversation-content-width)
+  );
   overflow: hidden;
   border: 1px solid #dedbd2;
   border-radius: 13px;
