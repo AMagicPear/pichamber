@@ -45,28 +45,6 @@ const thinkingText = (message?: AgentMessage) => {
     .join("\n\n");
 };
 
-const toolCalls = (message?: AgentMessage) => {
-  const content = contentFor(message)?.content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((part) =>
-      part && typeof part === "object" && "type" in part && part.type === "toolCall"
-        ? `${"name" in part ? String(part.name) : "tool"}${"arguments" in part ? ` ${JSON.stringify(part.arguments)}` : ""}`
-        : "",
-    )
-    .filter(Boolean)
-    .join("\n");
-};
-
-const toolCallParts = (message?: AgentMessage) => {
-  const content = contentFor(message)?.content;
-  if (!Array.isArray(content)) return [];
-  return content.filter(
-    (part): part is { type: "toolCall"; name?: unknown; arguments?: unknown } =>
-      Boolean(part) && typeof part === "object" && "type" in part && part.type === "toolCall",
-  );
-};
-
 const toolName = (message?: AgentMessage) => {
   const value = message as { toolName?: unknown } | undefined;
   return typeof value?.toolName === "string" ? value.toolName : undefined;
@@ -100,16 +78,6 @@ const pathFromArgs = (args: unknown) => {
   const record = args as Record<string, unknown>;
   const path = record.path ?? record.file_path;
   return typeof path === "string" ? path : undefined;
-};
-const toolCallLabel = (message?: AgentMessage) => {
-  const calls = toolCallParts(message);
-  return calls.length === 1 && calls[0]?.name === "bash" ? "Shell Command" : "Tool call";
-};
-const toolCallPreview = (message?: AgentMessage) => {
-  const [call] = toolCallParts(message);
-  return toolCallLabel(message) === "Shell Command"
-    ? commandFromArgs(call?.arguments) ?? ""
-    : inlinePreview(toolCalls(message));
 };
 const toolCommand = (entry: ConversationTranscriptMessage) => toolTarget(entry, "command");
 const toolResultLabel = (entry: ConversationTranscriptMessage) => {
@@ -181,7 +149,6 @@ const liveToolText = (tool: LiveToolExecution) => {
         <header class="conversation-message__author"><BrainIcon /> {{ assistantLabel(messageFor(entry)) }}</header>
         <ConversationDetail v-if="thinkingText(messageFor(entry))" class="conversation-message__details" :icon="BrainIcon" label="Thinking" :preview="inlinePreview(thinkingText(messageFor(entry)))" :content="thinkingText(messageFor(entry))" />
         <MarkdownRender v-if="messageText(messageFor(entry))" class="conversation-message__content" mode="chat" :content="messageText(messageFor(entry))" :final="true" :fade="false" />
-        <ConversationDetail v-if="toolCalls(messageFor(entry))" class="conversation-message__details" :icon="TerminalIcon" :label="toolCallLabel(messageFor(entry))" :preview="toolCallPreview(messageFor(entry))" :content="toolCalls(messageFor(entry))" />
       </template>
       <ConversationDetail v-else-if="messageFor(entry)?.role === 'toolResult'" class="conversation-message__details conversation-message__tool-result" :icon="TerminalIcon" :icon-url="toolResultIcon(entry)" :label="toolResultLabel(entry)" :preview="toolResultPreviewPrefix(entry)" :preview-tail="toolResultPreviewTail(entry)" :content="toolResultText(entry)" />
     </article>
@@ -202,16 +169,16 @@ const liveToolText = (tool: LiveToolExecution) => {
 .conversation__messages { flex: 1; align-self: stretch; width: 100%; min-width: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 24px max(var(--conversation-inline-gutter), calc((100% - var(--conversation-shell-width)) / 2)) 32px; }
 .conversation-message { width: 100%; max-width: var(--conversation-content-width); min-width: 0; margin: 0 auto; padding: 0 clamp(12px, 2.5vw, var(--conversation-inline-gutter)); color: #292827; }
 .conversation-message + .conversation-message { margin-top: 28px; }
-.conversation-message--assistant + .conversation-message--tool-result { margin-top: 8px; }
-.conversation-message--tool-result + .conversation-message--tool-result { margin-top: 6px; }
+.conversation-message--assistant + .conversation-message--tool-result { margin-top: 12px; }
+.conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
 .conversation-message__user { width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 12px 20px; border: 1px solid #ece9e0; border-radius: 12px 12px 4px; white-space: pre-wrap; overflow-wrap: anywhere; background: #f7f6f2; }
 .conversation-message__author { display: flex; align-items: center; gap: 8px; }
 .conversation-message__author { margin: 0; color: #292827; font-size: 15px; font-weight: 700; }
 .conversation-message__author svg { flex: 0 0 16px; width: 16px; height: 16px; }
-.conversation-message__author + .conversation-message__content, .conversation-message__author + .conversation-message__details { margin-top: 8px; }
+.conversation-message__author + .conversation-message__content, .conversation-message__author + .conversation-message__details { margin-top: 12px; }
 .conversation-message__details + .conversation-message__content { margin-top: 12px; }
-.conversation-message__content + .conversation-message__details { margin-top: 10px; }
+.conversation-message__content + .conversation-message__details { margin-top: 12px; }
 .conversation-message__content, .conversation-message__content :deep(.markdown-renderer) { --ms-text-body: 14px; --ms-leading-body: 1.5; --ms-text-h1: 20px; --ms-leading-h1: 1.25; --ms-text-h2: 17px; --ms-leading-h2: 1.3; --ms-text-h3: 15px; --ms-leading-h3: 1.35; --ms-text-h4: 14px; --ms-text-h5: 14px; --ms-text-h6: 14px; --ms-flow-paragraph-y: 8px; --ms-flow-list-y: 8px; --ms-flow-list-item-y: 2px; --ms-flow-codeblock-y: 12px; --ms-flow-blockquote-y: 10px; --ms-flow-table-y: 12px; --ms-flow-hr-y: 16px; --ms-flow-heading-1-mb: 10px; --ms-flow-heading-2-mt: 18px; --ms-flow-heading-2-mb: 8px; --ms-flow-heading-3-mt: 16px; --ms-flow-heading-3-mb: 8px; --ms-flow-heading-4-mt: 14px; --ms-flow-heading-4-mb: 6px; --ms-flow-heading-5-mt: 12px; --ms-flow-heading-5-mb: 6px; --ms-flow-heading-6-mt: 12px; --ms-flow-heading-6-mb: 6px; color: #292827; overflow-wrap: anywhere; }
 .conversation-message__content :deep(.conversation-code-block) { margin-block: 12px; }
 </style>
