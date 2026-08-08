@@ -1,4 +1,10 @@
-import type { ConversationTranscriptMessage, LiveConversationState, ServerMessage } from "@pichamber/shared";
+import type {
+  ConversationTranscriptMessage,
+  LiveConversationState,
+  ModelDescriptor,
+  ServerMessage,
+  ThinkingState,
+} from "@pichamber/shared";
 
 export type WsHandle = {
   send: (message: unknown) => void;
@@ -7,9 +13,17 @@ export type WsHandle = {
 
 /** Connection lifecycle status — distilled from server messages + transport events. */
 export type WsStatus =
-  | { type: "ready"; messages?: ConversationTranscriptMessage[]; live?: LiveConversationState }
+  | {
+      type: "ready";
+      messages?: ConversationTranscriptMessage[];
+      live?: LiveConversationState;
+      model?: ModelDescriptor;
+      availableModels?: ModelDescriptor[];
+      thinking?: ThinkingState;
+    }
   | { type: "messages"; messages: ConversationTranscriptMessage[] }
   | { type: "live"; live: LiveConversationState }
+  | { type: "model_state"; model?: ModelDescriptor; availableModels: ModelDescriptor[]; thinking: ThinkingState }
   | { type: "error"; error: string }
   | { type: "closed"; code?: number; reason?: string };
 
@@ -34,8 +48,22 @@ export const connectSessionWs = (
       onMessage({ type: "messages", messages: msg.messages });
     } else if (msg.type === "live") {
       onMessage({ type: "live", live: msg.live });
+    } else if (msg.type === "model_state") {
+      onStatus?.({
+        type: "model_state",
+        model: msg.model,
+        availableModels: msg.availableModels,
+        thinking: msg.thinking,
+      });
     } else if (msg.type === "ready") {
-      onStatus?.({ type: "ready", messages: msg.messages, live: msg.live });
+      onStatus?.({
+        type: "ready",
+        messages: msg.messages,
+        live: msg.live,
+        model: msg.model,
+        availableModels: msg.availableModels,
+        thinking: msg.thinking,
+      });
     } else if (msg.type === "error")
       onStatus?.({ type: "error", error: String(msg.error ?? "unknown error") });
   };

@@ -24,7 +24,19 @@ const presets = [
   { label: "Review my changes", icon: SearchEyeIcon },
 ];
 
-const { draft, canSend, connect, disconnect, live, send } = useConversationSession(entries);
+const {
+  draft,
+  canSend,
+  connect,
+  disconnect,
+  live,
+  send,
+  model,
+  availableModels,
+  thinking,
+  setModel,
+  setThinkingLevel,
+} = useConversationSession(entries);
 
 watch(
   () => workspace.sessionId,
@@ -45,7 +57,17 @@ watch(
     />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
-    <UserInputBlock v-model="draft" :can-send="canSend" @send="send" />
+    <UserInputBlock
+      v-model="draft"
+      :can-send="canSend"
+      :model="model"
+      :available-models="availableModels"
+      :thinking-level="thinking.level"
+      :available-thinking-levels="thinking.availableLevels"
+      @send="send"
+      @select-model="setModel"
+      @select-thinking-level="setThinkingLevel"
+    />
 
     <div v-if="entries.length === 0 && live.pendingUserMessages.length === 0 && !live.streamingMessage" class="presets" aria-label="Prompt starters">
       <button

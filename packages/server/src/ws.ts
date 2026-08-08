@@ -2,6 +2,7 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { LiveConversationState, LiveToolExecution, ServerMessage } from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "./error";
+import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { deactivateSession, getConversationMessages, getSession } from "./session";
 import type { SessionWsData, WsHandler } from "./index";
 
@@ -25,6 +26,28 @@ const liveState = (channel: SessionChannel): LiveConversationState => ({
   streamingMessage: channel.live.streamingMessage,
   toolExecutions: [...channel.live.toolExecutions.values()],
 });
+
+/** Re-snapshot the active model + available models + thinking state and
+ *  push it to every client watching this session. Errors are logged so a
+ *  single transient provider hiccup can't kill the channel. */
+const broadcastModelState = (
+  session: AgentSession,
+  broadcast: (msg: ServerMessage) => void,
+  sessionIdForLog: string,
+) => {
+  getEffectiveModelDescriptor(session)
+    .then(({ model, availableModels }) => {
+      broadcast({
+        type: "model_state",
+        model,
+        availableModels,
+        thinking: getThinkingState(session),
+      });
+    })
+    .catch((error) => {
+      console.error("Failed to snapshot model state", sessionIdForLog, error);
+    });
+};
 
 const attachListener = (sessionId: string, session: AgentSession): SessionChannel => {
   const existing = channelsBySession.get(sessionId);
@@ -77,6 +100,15 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         broadcast({ type: "live", live: liveState(channel) });
       }
     } else if (event.type === "entry_appended") {
+      if (
+        event.entry.type === "model_change" ||
+        event.entry.type === "thinking_level_change"
+      ) {
+        // The AgentSession SDK exposes model + thinking-level changes as
+        // dedicated entries; push a fresh snapshot so connected clients
+        // don't have to poll. Other entry types only need a re-render.
+        broadcastModelState(session, broadcast, sessionId);
+      }
       broadcast({ type: "messages", messages: getConversationMessages(session) });
     } else if (event.type === "agent_settled") {
       channel.live.pendingUserMessages = [];
@@ -84,6 +116,11 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       channel.live.toolExecutions.clear();
       broadcast({ type: "messages", messages: getConversationMessages(session) });
       broadcast({ type: "live", live: liveState(channel) });
+    } else if (event.type === "thinking_level_changed") {
+      // Thinking level can shift without an entry (e.g. clamping after a
+      // failed setThinkingLevel). _emit + extend getEffectiveModelDescriptor
+      // gives us the snapshot here as well.
+      broadcastModelState(session, broadcast, sessionId);
     }
   });
   channelsBySession.set(sessionId, channel);
@@ -142,11 +179,21 @@ export const sessionWsHandler: WsHandler = {
     const channel = attachListener(sessionId, session);
     channel.sockets.add(bunWS);
     bunWS.data.attached = true;
+    let snapshot: Awaited<ReturnType<typeof getEffectiveModelDescriptor>>;
+    try {
+      snapshot = await getEffectiveModelDescriptor(session);
+    } catch (error) {
+      console.error("Failed to load model snapshot", sessionId, error);
+      snapshot = { model: undefined, availableModels: [] };
+    }
     const msg: ServerMessage = {
       type: "ready",
       sessionId,
       messages: getConversationMessages(session),
       live: liveState(channel),
+      model: snapshot.model,
+      availableModels: snapshot.availableModels,
+      thinking: getThinkingState(session),
     };
     bunWS.send(JSON.stringify(msg));
   },
@@ -165,12 +212,7 @@ export const sessionWsHandler: WsHandler = {
       sendError(bunWS, "message must be an object");
       return;
     }
-    const input = msg as { type?: unknown; message?: unknown };
-    if (input.type !== "prompt") return;
-    if (typeof input.message !== "string") {
-      sendError(bunWS, "prompt message must be a string");
-      return;
-    }
+    const input = msg as { type?: unknown; [k: string]: unknown };
     const { sessionId } = bunWS.data;
     const session = await getSession(sessionId);
     if (bunWS.data.closed) return;
@@ -178,13 +220,58 @@ export const sessionWsHandler: WsHandler = {
       sendError(bunWS, "session not found");
       return;
     }
-    // Fire-and-forget: prompt() runs until the retry/queue drains; events
-    // flow back via subscribe().
-    session
-      .prompt(input.message)
-      .catch((err: unknown) =>
-        sendError(bunWS, toMessage(err)),
-      );
+    switch (input.type) {
+      case "prompt": {
+        if (typeof input.message !== "string") {
+          sendError(bunWS, "prompt message must be a string");
+          return;
+        }
+        // Fire-and-forget: prompt() runs until the retry/queue drains; events
+        // flow back via subscribe().
+        session
+          .prompt(input.message)
+          .catch((err: unknown) =>
+            sendError(bunWS, toMessage(err)),
+          );
+        return;
+      }
+      case "set_model": {
+        if (typeof input.provider !== "string" || typeof input.modelId !== "string") {
+          sendError(bunWS, "set_model requires provider+modelId strings");
+          return;
+        }
+        const target = session.modelRuntime.getModel(input.provider, input.modelId);
+        if (!target) {
+          sendError(bunWS, `Unknown model: ${input.provider}/${input.modelId}`);
+          return;
+        }
+        try {
+          await session.setModel(target);
+        } catch (err) {
+          sendError(bunWS, toMessage(err));
+        }
+        return;
+      }
+      case "set_thinking_level": {
+        if (typeof input.level !== "string") {
+          sendError(bunWS, "set_thinking_level requires a level string");
+          return;
+        }
+        // setThinkingLevel is a synchronous clamp; it just throws
+        // (TypeError) for unsupported levels — which we surface as an
+        // error frame.
+        try {
+          session.setThinkingLevel(input.level as Parameters<typeof session.setThinkingLevel>[0]);
+        } catch (err) {
+          sendError(bunWS, toMessage(err));
+        }
+        return;
+      }
+      default:
+        // Unknown message types are ignored so clients can probe
+        // forward-compat features without the server crashing them.
+        return;
+    }
   },
   close(ws) {
     const bunWS = ws as BunWS;

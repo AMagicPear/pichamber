@@ -1,21 +1,30 @@
 <script setup lang="ts">
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { ModelDescriptor } from "@pichamber/shared";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
-import AiAgentIcon from "@/assets/icons/AiAgent.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
 import MicIcon from "@/assets/icons/Mic.svg";
 import SendIcon from "@/assets/icons/SendPlane2.svg";
 import ShieldUserIcon from "@/assets/icons/ShieldUser.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
+import ModelSelector from "@/components/workspace/ModelSelector.vue";
+import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
 
 const draft = defineModel<string | undefined>({ required: true });
 
 defineProps<{
   canSend: boolean;
+  model: ModelDescriptor | undefined;
+  availableModels: ModelDescriptor[];
+  thinkingLevel: ThinkingLevel;
+  availableThinkingLevels: ThinkingLevel[];
 }>();
 
 const emit = defineEmits<{
   send: [];
+  selectModel: [model: ModelDescriptor];
+  selectThinkingLevel: [level: ThinkingLevel];
 }>();
 
 const onKeydown = (event: KeyboardEvent) => {
@@ -45,8 +54,16 @@ const onKeydown = (event: KeyboardEvent) => {
       </div>
       <div class="composer__footer-trailing">
         <div class="composer__models">
-          <strong class="model-control"><span class="model-mark">Ƶ</span> Big Pickle</strong>
-          <span class="model-control model-mode"><AiAgentIcon class="model-icon" />Build</span>
+          <ModelSelector
+            :model="model"
+            :available-models="availableModels"
+            @select="emit('selectModel', $event)"
+          />
+          <ThinkingLevelSelector
+            :level="thinkingLevel"
+            :available-levels="availableThinkingLevels"
+            @select="emit('selectThinkingLevel', $event)"
+          />
         </div>
         <IconButton size="compact" label="Dictation"><MicIcon /></IconButton>
         <IconButton size="compact" label="Send" :disabled="!canSend" @click="emit('send')">
@@ -65,7 +82,7 @@ const onKeydown = (event: KeyboardEvent) => {
     calc(100% - var(--conversation-inline-gutter) - var(--conversation-inline-gutter)),
     var(--conversation-content-width)
   );
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid #dedbd2;
   border-radius: 13px;
 }
@@ -123,34 +140,6 @@ const onKeydown = (event: KeyboardEvent) => {
   flex: 1 1 auto;
   min-width: 0;
   justify-content: flex-end;
-  gap: 12px;
-}
-.model-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  height: 32px;
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 20px;
-  white-space: nowrap;
-}
-.model-mode {
-  color: #718d28;
-}
-.model-mark {
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1;
-}
-.model-icon {
-  color: #718d28;
-}
-.model-mode :deep(.model-icon) {
-  display: block;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  gap: 4px;
 }
 </style>
