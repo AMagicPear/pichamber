@@ -1,4 +1,4 @@
-import type { ConversationMessage, ServerMessage } from "@pichamber/shared";
+import type { ConversationTranscriptMessage, LiveConversationState, ServerMessage } from "@pichamber/shared";
 
 export type WsHandle = {
   send: (message: unknown) => void;
@@ -7,7 +7,9 @@ export type WsHandle = {
 
 /** Connection lifecycle status — distilled from server messages + transport events. */
 export type WsStatus =
-  | { type: "ready"; messages?: ConversationMessage[] }
+  | { type: "ready"; messages?: ConversationTranscriptMessage[]; live?: LiveConversationState }
+  | { type: "messages"; messages: ConversationTranscriptMessage[] }
+  | { type: "live"; live: LiveConversationState }
   | { type: "error"; error: string }
   | { type: "closed"; code?: number; reason?: string };
 
@@ -20,22 +22,29 @@ export const wsUrl = (path: string) => {
 /** Connect to the Pi AgentSession JSON protocol. */
 export const connectSessionWs = (
   sessionId: string,
-  onMessage: (message: ConversationMessage) => void,
+  onMessage: (status: Extract<WsStatus, { type: "messages" | "live" }>) => void,
   onStatus?: (status: WsStatus) => void,
 ): WsHandle => {
   const socket = new WebSocket(wsUrl(`/ws/${sessionId}`));
 
   socket.onmessage = (event) => {
     const msg = JSON.parse(event.data) as ServerMessage;
-    if (msg.type === "message") onMessage(msg.message);
-    else if (msg.type === "ready") onStatus?.({ type: "ready", messages: msg.messages });
-    else if (msg.type === "error")
+    console.log(`[session-ws] received ${new Date().toISOString()}`, msg);
+    if (msg.type === "messages") {
+      onMessage({ type: "messages", messages: msg.messages });
+    } else if (msg.type === "live") {
+      onMessage({ type: "live", live: msg.live });
+    } else if (msg.type === "ready") {
+      onStatus?.({ type: "ready", messages: msg.messages, live: msg.live });
+    } else if (msg.type === "error")
       onStatus?.({ type: "error", error: String(msg.error ?? "unknown error") });
   };
   socket.onclose = (event) => {
     onStatus?.({ type: "closed", code: event.code, reason: event.reason });
   };
-  socket.onerror = () => onStatus?.({ type: "error", error: "Transport error" });
+  socket.onerror = () => {
+    onStatus?.({ type: "error", error: "Transport error" });
+  };
 
   return {
     send: (message) => socket.send(JSON.stringify(message)),

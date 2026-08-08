@@ -1,6 +1,6 @@
 import { reactive, ref } from "vue";
-import { getEntries, listSessions, toMessage } from "@/api/client";
-import type { ConversationMessage, SessionInfo } from "@pichamber/shared";
+import { listSessions, toMessage } from "@/api/client";
+import type { ConversationTranscriptMessage, SessionInfo } from "@pichamber/shared";
 
 export const workspace = reactive({
   cwd: "~" as string | null,
@@ -10,7 +10,7 @@ export const workspace = reactive({
 });
 
 export const sessions = ref<SessionInfo[]>([]);
-export const entries = ref<ConversationMessage[]>([]);
+export const entries = ref<ConversationTranscriptMessage[]>([]);
 export const sessionsLoading = ref(false);
 export const sessionsError = ref<string | null>(null);
 // sessionsLoadPromise 用于防止重复加载会话列表
@@ -52,13 +52,12 @@ export const loadSessions = () => {
 
 export const updateWorkspace = async (sessionId: string) => {
   workspace.sessionId = sessionId;
-  const [, sessionEntries] = await Promise.all([loadSessions(), getEntries(sessionId)]);
+  await loadSessions();
   if (workspace.sessionId !== sessionId) return;
 
   const session = sessions.value.find(({ id }) => id === sessionId);
   workspace.sessionName = sessionTitle(session ?? sessionId);
   workspace.folderName = session?.cwd?.split("/")?.pop() ?? null;
   workspace.cwd = session?.cwd ?? null;
-  entries.value = sessionEntries;
   console.log("[workspace] updated", workspace);
 };

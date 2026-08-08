@@ -20,7 +20,7 @@ export const toMessage = (e: unknown) => (e instanceof Error ? e.message : Strin
 
 // ─── AI sessions ──────────────────────────────────────────────────────
 
-import type { ConversationMessage, SessionInfo } from "@pichamber/shared";
+import type { SessionEntry, SessionInfo } from "@pichamber/shared";
 
 export const listSessions = () =>
   fetch(`${BASE}/sessions`).then((r) => jsonOrThrow<SessionInfo[]>(r));
@@ -33,7 +33,7 @@ export const createSession = (cwd: string) =>
   }).then((r) => jsonOrThrow<{ sessionId: string }>(r));
 
 export const getEntries = (sessionId: string) =>
-  fetch(`${BASE}/sessions/${sessionId}`).then((r) => jsonOrThrow<ConversationMessage[]>(r));
+  fetch(`${BASE}/sessions/${sessionId}`).then((r) => jsonOrThrow<SessionEntry[]>(r));
 
 export const deleteSession = (sessionId: string) =>
   fetch(`${BASE}/sessions/${sessionId}`, { method: "DELETE" }).then((r) =>

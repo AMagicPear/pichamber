@@ -24,7 +24,7 @@ const presets = [
   { label: "Review my changes", icon: SearchEyeIcon },
 ];
 
-const { draft, canSend, connect, disconnect, messages, send } = useConversationSession(entries);
+const { draft, canSend, connect, disconnect, live, send } = useConversationSession(entries);
 
 watch(
   () => workspace.sessionId,
@@ -37,13 +37,17 @@ watch(
 </script>
 
 <template>
-  <main class="conversation" :class="{ 'conversation--active': messages.length > 0 }">
-    <ConversationMessages v-if="messages.length > 0" :messages="messages" />
+  <main class="conversation" :class="{ 'conversation--active': entries.length > 0 || live.pendingUserMessages.length > 0 || live.streamingMessage }">
+    <ConversationMessages
+      v-if="entries.length > 0 || live.pendingUserMessages.length > 0 || live.streamingMessage || live.toolExecutions.length > 0"
+      :entries="entries"
+      :live="live"
+    />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <UserInputBlock v-model="draft" :can-send="canSend" @send="send" />
 
-    <div v-if="messages.length === 0" class="presets" aria-label="Prompt starters">
+    <div v-if="entries.length === 0 && live.pendingUserMessages.length === 0 && !live.streamingMessage" class="presets" aria-label="Prompt starters">
       <button
         v-for="preset in presets"
         :key="preset.label"

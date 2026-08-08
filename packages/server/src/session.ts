@@ -6,9 +6,11 @@ import {
   type AgentSession,
   createAgentSession,
   getAgentDir,
+  sessionEntryToContextMessages,
   type SessionInfo,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import type { ConversationTranscriptMessage } from "@pichamber/shared";
 
 // 用于快速根据ID查找会话文件位置
 const sessionFileLookup = new Map<string, string>();
@@ -57,9 +59,14 @@ export const getSession = async (id: string): Promise<AgentSession | null> => {
   return session;
 };
 
-// Conversation transport intentionally exposes every persisted entry.
+// Match Pi's interactive transcript: render the active context path, not its full journal.
 export const getConversationEntries = (session: AgentSession) =>
-  session.sessionManager.getEntries();
+  session.sessionManager.buildContextEntries();
+
+export const getConversationMessages = (session: AgentSession): ConversationTranscriptMessage[] =>
+  getConversationEntries(session).flatMap((entry) =>
+    sessionEntryToContextMessages(entry).map((message) => ({ id: entry.id, message })),
+  );
 
 // 将某个会话移出活跃会话，下次就要重新加载
 export const deactivateSession = async (id: string) => {

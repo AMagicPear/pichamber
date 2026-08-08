@@ -19,7 +19,6 @@ import {
 } from "./pty";
 import { closeSessionSockets, sessionWsHandler } from "./ws";
 import { toMessage } from "./error";
-import { toConversationMessage } from "./conversation";
 
 // ─── WebSocket protocol multiplexing ───────────────────────────────────
 //
@@ -134,9 +133,7 @@ Bun.serve({
       GET: async (req) => {
         const session = await getSession(req.params.id);
         if (!session) return Response.json({ error: "session not found" }, { status: 404 });
-        return Response.json(
-          getConversationEntries(session).map((entry) => toConversationMessage(entry.id, entry)),
-        );
+        return Response.json(getConversationEntries(session));
       },
       DELETE: async (req) => {
         closeSessionSockets(req.params.id);

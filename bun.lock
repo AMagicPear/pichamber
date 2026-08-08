@@ -5,13 +5,13 @@
     "": {
       "name": "pichamber",
       "devDependencies": {
-        "@types/bun": "latest",
-        "@types/node": "latest",
-        "concurrently": "latest",
-        "oxlint": "latest",
-        "typescript": "latest",
-        "typescript6": "npm:@typescript/typescript6@latest",
-        "vue-tsc": "latest",
+        "@types/bun": "^1.3.14",
+        "@types/node": "^26.2.0",
+        "concurrently": "^10.0.4",
+        "oxlint": "~1.77.0",
+        "typescript": "~7.0.2",
+        "typescript6": "npm:@typescript/typescript6@^6.0.2",
+        "vue-tsc": "^3.3.9",
       },
     },
     "packages/server": {
