@@ -1,8 +1,9 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import type { AgentSessionEvent, ServerMessage, SessionEntry } from "@pichamber/shared";
+import type { ServerMessage } from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
+import { toConversationMessage } from "./conversation";
 import { toMessage } from "./error";
-import { deactivateSession, getSession } from "./session";
+import { deactivateSession, getConversationEntries, getSession } from "./session";
 import type { SessionWsData, WsHandler } from "./index";
 
 type BunWS = ServerWebSocket<SessionWsData>;
@@ -23,12 +24,19 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     sockets: new Set(),
     unsubscribe: () => undefined,
   };
-  channel.unsubscribe = session.subscribe((event: AgentSessionEvent) => {
-    const msg: ServerMessage = { type: "event", event };
+  let eventSequence = 0;
+  const broadcast = (msg: ServerMessage) => {
     const payload = JSON.stringify(msg);
     for (const bunWS of channel.sockets) {
       if (bunWS.readyState === 1) bunWS.send(payload);
     }
+  };
+  channel.unsubscribe = session.subscribe((event) => {
+    eventSequence += 1;
+    broadcast({
+      type: "message",
+      message: toConversationMessage(`event:${sessionId}:${eventSequence}`, event),
+    });
   });
   channelsBySession.set(sessionId, channel);
   return channel;
@@ -89,7 +97,7 @@ export const sessionWsHandler: WsHandler = {
     const msg: ServerMessage = {
       type: "ready",
       sessionId,
-      entries: session.sessionManager.getEntries() as unknown as SessionEntry[],
+      messages: getConversationEntries(session).map((entry) => toConversationMessage(entry.id, entry)),
     };
     bunWS.send(JSON.stringify(msg));
   },

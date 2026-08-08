@@ -1,6 +1,6 @@
 import { reactive, ref } from "vue";
 import { getEntries, listSessions, toMessage } from "@/api/client";
-import type { SessionEntry, SessionInfo } from "@pichamber/shared";
+import type { ConversationMessage, SessionInfo } from "@pichamber/shared";
 
 export const workspace = reactive({
   cwd: "~" as string | null,
@@ -10,7 +10,7 @@ export const workspace = reactive({
 });
 
 export const sessions = ref<SessionInfo[]>([]);
-export const entries = ref<SessionEntry[]>([]);
+export const entries = ref<ConversationMessage[]>([]);
 export const sessionsLoading = ref(false);
 export const sessionsError = ref<string | null>(null);
 // sessionsLoadPromise 用于防止重复加载会话列表

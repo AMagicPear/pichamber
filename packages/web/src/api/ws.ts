@@ -1,5 +1,4 @@
-import type { AgentSessionEvent, ServerMessage, SessionEntry } from "@pichamber/shared";
-export type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import type { ConversationMessage, ServerMessage } from "@pichamber/shared";
 
 export type WsHandle = {
   send: (message: unknown) => void;
@@ -8,7 +7,7 @@ export type WsHandle = {
 
 /** Connection lifecycle status — distilled from server messages + transport events. */
 export type WsStatus =
-  | { type: "ready"; entries?: SessionEntry[] }
+  | { type: "ready"; messages?: ConversationMessage[] }
   | { type: "error"; error: string }
   | { type: "closed"; code?: number; reason?: string };
 
@@ -21,15 +20,15 @@ export const wsUrl = (path: string) => {
 /** Connect to the Pi AgentSession JSON protocol. */
 export const connectSessionWs = (
   sessionId: string,
-  onEvent: (event: AgentSessionEvent) => void,
+  onMessage: (message: ConversationMessage) => void,
   onStatus?: (status: WsStatus) => void,
 ): WsHandle => {
   const socket = new WebSocket(wsUrl(`/ws/${sessionId}`));
 
   socket.onmessage = (event) => {
     const msg = JSON.parse(event.data) as ServerMessage;
-    if (msg.type === "event") onEvent(msg.event);
-    else if (msg.type === "ready") onStatus?.({ type: "ready", entries: msg.entries });
+    if (msg.type === "message") onMessage(msg.message);
+    else if (msg.type === "ready") onStatus?.({ type: "ready", messages: msg.messages });
     else if (msg.type === "error")
       onStatus?.({ type: "error", error: String(msg.error ?? "unknown error") });
   };

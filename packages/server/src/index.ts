@@ -1,6 +1,12 @@
 import type { ServerWebSocket } from "bun";
 import { listDirectory, WorkspaceError } from "./fs";
-import { createSessionWithCwd, deleteSession, getSession, listAllSessions } from "./session";
+import {
+  createSessionWithCwd,
+  deleteSession,
+  getConversationEntries,
+  getSession,
+  listAllSessions,
+} from "./session";
 import {
   hasPty,
   resizePty,
@@ -13,6 +19,7 @@ import {
 } from "./pty";
 import { closeSessionSockets, sessionWsHandler } from "./ws";
 import { toMessage } from "./error";
+import { toConversationMessage } from "./conversation";
 
 // ─── WebSocket protocol multiplexing ───────────────────────────────────
 //
@@ -127,7 +134,9 @@ Bun.serve({
       GET: async (req) => {
         const session = await getSession(req.params.id);
         if (!session) return Response.json({ error: "session not found" }, { status: 404 });
-        return Response.json(session.sessionManager.getEntries());
+        return Response.json(
+          getConversationEntries(session).map((entry) => toConversationMessage(entry.id, entry)),
+        );
       },
       DELETE: async (req) => {
         closeSessionSockets(req.params.id);

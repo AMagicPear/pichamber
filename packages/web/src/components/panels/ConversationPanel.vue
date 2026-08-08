@@ -12,6 +12,7 @@ import ConversationMessages from "@/components/workspace/ConversationMessages.vu
 import UserInputBlock from "@/components/workspace/UserInputBlock.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { entries, workspace } from "@/stores/workspace";
+import { watch } from "vue";
 
 const presets = [
   { label: "Explore the codebase", icon: CompassIcon },
@@ -23,17 +24,26 @@ const presets = [
   { label: "Review my changes", icon: SearchEyeIcon },
 ];
 
-const { draft, canSend, send } = useConversationSession();
+const { draft, canSend, connect, disconnect, messages, send } = useConversationSession(entries);
+
+watch(
+  () => workspace.sessionId,
+  (sessionId) => {
+    if (sessionId) connect(sessionId);
+    else disconnect();
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
-  <main class="conversation" :class="{ 'conversation--active': entries.length > 0 }">
-    <ConversationMessages v-if="entries.length > 0" :entries="entries" />
+  <main class="conversation" :class="{ 'conversation--active': messages.length > 0 }">
+    <ConversationMessages v-if="messages.length > 0" :messages="messages" />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <UserInputBlock v-model="draft" :can-send="canSend" @send="send" />
 
-    <div v-if="entries.length === 0" class="presets" aria-label="Prompt starters">
+    <div v-if="messages.length === 0" class="presets" aria-label="Prompt starters">
       <button
         v-for="preset in presets"
         :key="preset.label"

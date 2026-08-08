@@ -57,6 +57,10 @@ export const getSession = async (id: string): Promise<AgentSession | null> => {
   return session;
 };
 
+// Conversation transport intentionally exposes every persisted entry.
+export const getConversationEntries = (session: AgentSession) =>
+  session.sessionManager.getEntries();
+
 // 将某个会话移出活跃会话，下次就要重新加载
 export const deactivateSession = async (id: string) => {
   const session = activeSessions.get(id);
