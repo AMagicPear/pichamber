@@ -2,7 +2,7 @@
 import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
 import IconButton from "@/components/IconButton.vue";
 import SplitPane from "@/components/layout/SplitPane.vue";
-import SettingsModal from "@/components/layout/SettingsModal.vue";
+import Modal from "@/components/layout/Modal.vue";
 import SettingsView from "@/components/modals/SettingsView.vue";
 import { ui } from "@/stores/ui";
 import ContextPanel from "@/components/panels/ContextPanel.vue";
@@ -69,11 +69,11 @@ router.afterEach(async (to) => {
       </template>
     </SplitPane>
 
-    <SettingsModal :show="ui.settingsOpen" @close="ui.settingsOpen = false">
+    <Modal :show="ui.settingsOpen" @close="ui.settingsOpen = false">
       <template #body>
         <SettingsView @close="ui.settingsOpen = false" />
       </template>
-    </SettingsModal>
+    </Modal>
   </div>
 </template>
 

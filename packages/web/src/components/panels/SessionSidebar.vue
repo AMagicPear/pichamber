@@ -11,8 +11,9 @@ import SettingsIcon from "@/assets/icons/Settings3.svg";
 import SortDescIcon from "@/assets/icons/SortDesc.svg";
 import { ArrowsMerge } from "@/components/ArrowsMerge";
 import IconButton from "@/components/IconButton.vue";
+import AboutModal from "@/components/modals/AboutModal.vue";
 import type { SessionInfo } from "@pichamber/shared";
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
 import { ui } from "@/stores/ui";
 import { loadSessions, sessionTitle, sessions, sessionsError, sessionsLoading } from "@/stores/workspace";
@@ -48,6 +49,8 @@ const sessionAge = (session: SessionInfo) => {
   if (months < 12) return `${months}mo`;
   return `${Math.floor(months / 12)}y`;
 };
+
+const aboutOpen = ref(false);
 
 onMounted(async () => {
   await loadSessions();
@@ -103,9 +106,11 @@ onMounted(async () => {
         <SettingsIcon />
       </IconButton>
       <IconButton size="large" label="Keyboard shortcuts"><QuestionIcon /></IconButton>
-      <IconButton size="large" label="About"><InformationIcon /></IconButton>
+      <IconButton size="large" label="About" @click="aboutOpen = true"><InformationIcon /></IconButton>
       <button type="button" class="sidebar__update">update</button>
     </footer>
+
+    <AboutModal :show="aboutOpen" @close="aboutOpen = false" />
   </aside>
 </template>
 

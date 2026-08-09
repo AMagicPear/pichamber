@@ -1,4 +1,5 @@
 import type { ServerWebSocket } from "bun";
+import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
 import { listDirectory, WorkspaceError } from "./fs";
 import {
   createSessionWithCwd,
@@ -116,6 +117,9 @@ Bun.serve({
   routes: {
     "/api/health": {
       GET: () => Response.json({ ok: true }),
+    },
+    "/api/version": {
+      GET: () => Response.json({ pi: PI_VERSION }),
     },
     "/api/sessions": {
       GET: async () => Response.json(await listAllSessions()),

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import AiGenerate2Icon from "@/assets/icons/AiGenerate2.svg";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
+import { usePopover } from "@/composables/usePopover";
 
 const props = defineProps<{
   level: ThinkingLevel;
@@ -13,13 +14,16 @@ const emit = defineEmits<{
   select: [level: ThinkingLevel];
 }>();
 
-const open = ref(false);
 const root = ref<HTMLElement | null>(null);
-/** Same teleport trick as ModelSelector — the panel is rendered into
- *  <body> with `position: fixed` so it escapes the conversation's
- *  `overflow: hidden` when the composer is centered. Coordinates are
- *  measured from the trigger on every open/scroll/resize. */
-const popoverStyle = ref<Record<string, string>>({});
+
+const { open, style, close, toggle } = usePopover({
+  root,
+  trigger: ".thinking-selector__trigger",
+  panel: ".thinking-selector__panel",
+  width: 156,
+  // 12px padding + one 32px row per level.
+  height: () => 12 + visibleLevels.value.length * 32,
+});
 
 const labels: Record<ThinkingLevel, string> = {
   off: "Build",
@@ -39,69 +43,12 @@ const visibleLevels = computed<ThinkingLevel[]>(() =>
   Array.from(new Set<ThinkingLevel>([...props.availableLevels, "off"])),
 );
 
-const PANEL_HEIGHT = computed(() => 12 + visibleLevels.value.length * 32);
-const PANEL_WIDTH = 156;
-const GAP = 6;
-
-const updatePopoverPosition = () => {
-  const trigger = root.value?.querySelector<HTMLElement>(".thinking-selector__trigger");
-  if (!trigger) return;
-  const rect = trigger.getBoundingClientRect();
-  const desiredTop = rect.top - PANEL_HEIGHT.value - GAP;
-  const top = desiredTop >= 8 ? desiredTop : rect.bottom + GAP;
-  popoverStyle.value = {
-    position: "fixed",
-    top: `${Math.max(8, top)}px`,
-    left: `${Math.max(8, Math.min(window.innerWidth - PANEL_WIDTH - 8, rect.right - PANEL_WIDTH))}px`,
-  };
-};
-
 const currentLabel = computed(() => labels[props.level] ?? props.level);
 
 const onSelect = (next: ThinkingLevel) => {
   emit("select", next);
-  open.value = false;
-};
-
-const close = () => {
-  open.value = false;
-};
-
-const onDocPointerDown = (event: PointerEvent) => {
-  if (!open.value) return;
-  const target = event.target as Node;
-  if (root.value?.contains(target)) return;
-  if (target instanceof Element && target.closest(".thinking-selector__panel")) return;
   close();
 };
-
-const onKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") close();
-};
-
-watch(open, async (next) => {
-  if (next) {
-    document.addEventListener("pointerdown", onDocPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", updatePopoverPosition);
-    window.addEventListener("scroll", updatePopoverPosition, true);
-    await nextTick();
-    updatePopoverPosition();
-  } else {
-    document.removeEventListener("pointerdown", onDocPointerDown);
-    document.removeEventListener("keydown", onKeyDown);
-    window.removeEventListener("resize", updatePopoverPosition);
-    window.removeEventListener("scroll", updatePopoverPosition, true);
-    popoverStyle.value = {};
-  }
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener("pointerdown", onDocPointerDown);
-  document.removeEventListener("keydown", onKeyDown);
-  window.removeEventListener("resize", updatePopoverPosition);
-  window.removeEventListener("scroll", updatePopoverPosition, true);
-});
 </script>
 
 <template>
@@ -111,14 +58,14 @@ onBeforeUnmount(() => {
       class="thinking-selector__trigger"
       :aria-expanded="open"
       aria-haspopup="listbox"
-      @click="open = !open"
+      @click="toggle"
     >
       <AiGenerate2Icon class="thinking-selector__icon" />
       <span class="thinking-selector__label">{{ currentLabel }}</span>
       <ArrowDownSIcon class="thinking-selector__chevron" />
     </button>
     <Teleport v-if="open" to="body">
-      <div class="thinking-selector__panel" role="listbox" :style="popoverStyle">
+      <div class="thinking-selector__panel" role="listbox" :style="style">
         <button
           v-for="level in visibleLevels"
           :key="level"

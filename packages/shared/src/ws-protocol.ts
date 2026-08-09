@@ -115,3 +115,9 @@ export type ListResult = {
   displayPath: string;
   entries: DirEntry[];
 };
+
+/** Response body for GET /api/version. */
+export type VersionInfo = {
+  /** The pi coding-agent version the server embeds. */
+  pi: string;
+};

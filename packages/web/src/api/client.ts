@@ -2,7 +2,7 @@
 // Bun server on :3000. The single `jsonOrThrow` helper centralises error
 // handling so each call site is a one-liner.
 
-import type { ListResult, PtyStartOptions, PtyStartResult, SessionEntry, SessionInfo } from "@pichamber/shared";
+import type { ListResult, PtyStartOptions, PtyStartResult, SessionEntry, SessionInfo, VersionInfo } from "@pichamber/shared";
 
 const BASE = "/api";
 
@@ -24,6 +24,8 @@ export const toMessage = (e: unknown) => (e instanceof Error ? e.message : Strin
 
 export const listSessions = () =>
   fetch(`${BASE}/sessions`).then((r) => jsonOrThrow<SessionInfo[]>(r));
+
+export const getVersion = () => fetch(`${BASE}/version`).then((r) => jsonOrThrow<VersionInfo>(r));
 
 export const createSession = (cwd: string) =>
   fetch(`${BASE}/sessions`, {

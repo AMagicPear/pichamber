@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
 import type { ModelDescriptor } from "@pichamber/shared";
 import ProviderLogo from "./ProviderLogo";
+import { usePopover } from "@/composables/usePopover";
 
 const props = defineProps<{
   model: ModelDescriptor | undefined;
@@ -14,16 +15,24 @@ const emit = defineEmits<{
   select: [model: ModelDescriptor];
 }>();
 
-const open = ref(false);
 const root = ref<HTMLElement | null>(null);
 const search = ref("");
 const searchInput = ref<HTMLInputElement | null>(null);
 
-/** Popover coords are written here when open, so the panel can be teleported
- *  to <body> with `position: fixed` and float above any overflow:hidden
- *  ancestor (the conversation panel centers the composer vertically and
- *  would otherwise swallow a popover that opens upward). */
-const popoverStyle = ref<Record<string, string>>({});
+const { open, style, close: closePopover, toggle } = usePopover({
+  root,
+  trigger: ".model-selector__trigger",
+  panel: ".model-selector__panel",
+  width: 360,
+  height: 360,
+  onOpen: () => searchInput.value?.focus(),
+});
+
+/** Closing also resets the filter so the next open starts fresh. */
+const close = () => {
+  search.value = "";
+  closePopover();
+};
 
 /** Group available models by provider, keeping the current selection
  *  pinned at the top of its bucket so it stays visible after a search. */
@@ -47,72 +56,10 @@ const grouped = computed(() => {
   return result;
 });
 
-const PANEL_HEIGHT = 360;
-const PANEL_WIDTH = 360;
-const GAP = 6;
-
-const updatePopoverPosition = () => {
-  const trigger = root.value?.querySelector<HTMLElement>(".model-selector__trigger");
-  if (!trigger) return;
-  const rect = trigger.getBoundingClientRect();
-  const desiredTop = rect.top - PANEL_HEIGHT - GAP;
-  // Flip below the trigger when there isn't enough headroom above.
-  const top = desiredTop >= 8 ? desiredTop : rect.bottom + GAP;
-  popoverStyle.value = {
-    position: "fixed",
-    top: `${Math.max(8, top)}px`,
-    left: `${Math.max(8, Math.min(window.innerWidth - PANEL_WIDTH - 8, rect.right - PANEL_WIDTH))}px`,
-    width: `${PANEL_WIDTH}px`,
-    height: `${PANEL_HEIGHT}px`,
-  };
-};
-
-const close = () => {
-  open.value = false;
-  search.value = "";
-  popoverStyle.value = {};
-};
-
 const onSelect = (next: ModelDescriptor) => {
   emit("select", next);
   close();
 };
-
-const onDocPointerDown = (event: PointerEvent) => {
-  if (!open.value) return;
-  const target = event.target as Node;
-  if (root.value?.contains(target)) return;
-  if (target instanceof Element && target.closest(".model-selector__panel")) return;
-  close();
-};
-
-const onKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") close();
-};
-
-watch(open, async (next) => {
-  if (next) {
-    document.addEventListener("pointerdown", onDocPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", updatePopoverPosition);
-    window.addEventListener("scroll", updatePopoverPosition, true);
-    await nextTick();
-    updatePopoverPosition();
-    searchInput.value?.focus();
-  } else {
-    document.removeEventListener("pointerdown", onDocPointerDown);
-    document.removeEventListener("keydown", onKeyDown);
-    window.removeEventListener("resize", updatePopoverPosition);
-    window.removeEventListener("scroll", updatePopoverPosition, true);
-  }
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener("pointerdown", onDocPointerDown);
-  document.removeEventListener("keydown", onKeyDown);
-  window.removeEventListener("resize", updatePopoverPosition);
-  window.removeEventListener("scroll", updatePopoverPosition, true);
-});
 
 const placeholder = computed(() => {
   if (props.availableModels.length === 0) return "No models available";
@@ -128,7 +75,7 @@ const placeholder = computed(() => {
       :disabled="disabled || availableModels.length === 0"
       :aria-expanded="open"
       aria-haspopup="listbox"
-      @click="open = !open"
+      @click="toggle"
     >
       <ProviderLogo class="model-selector__icon" :provider-id="model?.provider ?? ''" :size="16" />
       <span class="model-selector__name">{{ placeholder }}</span>
@@ -136,7 +83,7 @@ const placeholder = computed(() => {
     </button>
 
     <Teleport v-if="open" to="body">
-      <div class="model-selector__panel" role="listbox" :style="popoverStyle">
+      <div class="model-selector__panel" role="listbox" :style="style">
         <div class="model-selector__search">
           <input
             ref="searchInput"
