@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import MarkdownRender from "markstream-vue";
 import type {
   ConversationTranscriptMessage,
@@ -9,11 +9,96 @@ import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import { conversationToolDetail } from "./conversationToolDetail";
 import { messageText } from "./messageContent";
+import { workspace } from "@/stores/workspace";
 
 const props = defineProps<{
   entries: ConversationTranscriptMessage[];
   live: LiveConversationState;
 }>();
+
+/* ── Scroll anchoring (event-driven, following the StackBlitz
+ * `use-stick-to-bottom` pattern used by chat apps) ─────────────
+ *
+ * - `scrollElement` + `contentElement`: a ResizeObserver watches the
+ *   inner content wrapper; whenever content grows (streaming, async
+ *   markdown) we scroll — but only while the user is still pinned.
+ * - Escape lock: any upward user scroll (wheel or drag) immediately
+ *   un-pins (`escapedFromLock`). It re-pins only after the user scrolls
+ *   back down to within 70px of the bottom. This is what prevents the
+ *   "magnet" pull when the user reads history.
+ * - `ignoreScrollTop` distinguishes programmatic scrolls (set by us)
+ *   from user scrolls so our own scrollTop writes don't un-pin.
+ */
+const scroller = ref<HTMLElement | null>(null);
+const content = ref<HTMLElement | null>(null);
+const stickToBottom = ref(true);
+const escapedFromLock = ref(false);
+let lastScrollTop = 0;
+let ignoreScrollTop: number | undefined;
+let contentObserver: ResizeObserver | null = null;
+
+const scrollToBottom = () => {
+  const el = scroller.value;
+  if (!el) return;
+  ignoreScrollTop = el.scrollHeight;
+  el.scrollTop = el.scrollHeight;
+};
+
+const onScroll = () => {
+  const el = scroller.value;
+  if (!el) return;
+  // Our own programmatic scroll — do not treat it as a user gesture.
+  if (ignoreScrollTop !== undefined) {
+    ignoreScrollTop = undefined;
+    return;
+  }
+  const scrollTop = el.scrollTop;
+  const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 70;
+  if (scrollTop < lastScrollTop) {
+    escapedFromLock.value = true;
+    stickToBottom.value = false;
+  } else if (scrollTop > lastScrollTop) {
+    escapedFromLock.value = false;
+  }
+  if (!escapedFromLock.value && nearBottom) stickToBottom.value = true;
+  lastScrollTop = scrollTop;
+};
+
+const onWheel = (e: WheelEvent) => {
+  // Wheel up always escapes, even when the browser cancels the scroll.
+  if (e.deltaY < 0) {
+    escapedFromLock.value = true;
+    stickToBottom.value = false;
+  }
+};
+
+onMounted(() => {
+  const target = content.value;
+  if (!target) return;
+  contentObserver = new ResizeObserver(() => {
+    const el = scroller.value;
+    if (!el) return;
+    // The browser can overscroll past the target; snap it back.
+    if (el.scrollTop > el.scrollHeight - el.clientHeight) {
+      el.scrollTop = el.scrollHeight - el.clientHeight;
+    }
+    if (stickToBottom.value) scrollToBottom();
+  });
+  // Fires once immediately with the initial size, covering the first paint.
+  contentObserver.observe(target);
+});
+
+onBeforeUnmount(() => contentObserver?.disconnect());
+
+watch(
+  () => workspace.sessionId,
+  () => {
+    stickToBottom.value = true;
+    escapedFromLock.value = false;
+    scrollToBottom();
+  },
+  { immediate: true },
+);
 
 const messageFor = (entry: ConversationTranscriptMessage) => entry.message;
 
@@ -64,8 +149,9 @@ const liveToolDetails = computed(() =>
 </script>
 
 <template>
-  <div class="conversation__messages">
-    <template v-for="entry in entries" :key="entry.id">
+  <div ref="scroller" class="conversation__messages" @scroll="onScroll" @wheel="onWheel">
+    <div ref="content" class="conversation__content">
+      <template v-for="entry in entries" :key="entry.id">
       <article v-if="messageFor(entry)?.role === 'user'" class="conversation-message conversation-message--user">
         <MarkdownRender
           class="conversation-message__user markdown-chat"
@@ -91,14 +177,20 @@ const liveToolDetails = computed(() =>
         :fade="false"
       />
     </article>
-    <AssistantMessage v-if="live.streamingMessage" :message="live.streamingMessage" :final="false" />
-    <ToolResultMessage v-for="tool in liveToolDetails" :key="tool.toolCallId" :detail="tool.detail" />
+      <AssistantMessage v-if="live.streamingMessage" :message="live.streamingMessage" :final="false" />
+      <ToolResultMessage v-for="tool in liveToolDetails" :key="tool.toolCallId" :detail="tool.detail" />
+    </div>
   </div>
 </template>
 
 <style scoped>
 .conversation__messages { flex: 1; align-self: stretch; width: 100%; min-width: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 24px max(var(--conversation-inline-gutter), calc((100% - var(--conversation-shell-width)) / 2)) 32px; }
-.conversation-message { width: 100%; max-width: var(--conversation-content-width); min-width: 0; margin: 0 auto; padding: 0 clamp(12px, 2.5vw, var(--conversation-inline-gutter)); color: #292827; }
+/* Virtual rendering via the browser: out-of-view messages skip layout &
+   paint but keep their size (contain-intrinsic-size is the estimate until
+   first paint), so very long histories scroll smoothly and resizing the
+   pane doesn't relayout everything. Cheap, native, no height bookkeeping;
+   expanded tool details survive remounts, which is a free bonus. */
+.conversation-message { width: 100%; max-width: var(--conversation-content-width); min-width: 0; margin: 0 auto; padding: 0 clamp(12px, 2.5vw, var(--conversation-inline-gutter)); color: #292827; content-visibility: auto; contain-intrinsic-size: auto 96px; }
 .conversation-message + .conversation-message { margin-top: 28px; }
 .conversation-message--assistant + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }

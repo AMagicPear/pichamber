@@ -16,6 +16,8 @@ type SessionChannel = {
     streamingMessage?: LiveConversationState["streamingMessage"];
     toolExecutions: Map<string, LiveToolExecution>;
   };
+  /** Re-snapshot model + thinking state and broadcast to all sockets. */
+  queueModelStateBroadcast: () => void;
 };
 
 // sessionId → one shared SDK listener plus all subscribed sockets.
@@ -53,17 +55,6 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
   const existing = channelsBySession.get(sessionId);
   if (existing) return existing;
 
-  const channel: SessionChannel = {
-    sockets: new Set(),
-    unsubscribe: () => undefined,
-    live: { pendingUserMessages: [], toolExecutions: new Map() },
-  };
-  const broadcast = (msg: ServerMessage) => {
-    const payload = JSON.stringify(msg);
-    for (const bunWS of channel.sockets) {
-      if (bunWS.readyState === 1) bunWS.send(payload);
-    }
-  };
   let modelStateBroadcastQueued = false;
   const queueModelStateBroadcast = () => {
     if (modelStateBroadcastQueued) return;
@@ -72,6 +63,19 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       modelStateBroadcastQueued = false;
       broadcastModelState(session, broadcast, sessionId);
     });
+  };
+
+  const channel: SessionChannel = {
+    sockets: new Set(),
+    unsubscribe: () => undefined,
+    live: { pendingUserMessages: [], toolExecutions: new Map() },
+    queueModelStateBroadcast,
+  };
+  const broadcast = (msg: ServerMessage) => {
+    const payload = JSON.stringify(msg);
+    for (const bunWS of channel.sockets) {
+      if (bunWS.readyState === 1) bunWS.send(payload);
+    }
   };
   channel.unsubscribe = session.subscribe((event) => {
     if (event.type === "message_start" && event.message.role === "user") {
@@ -255,6 +259,9 @@ export const sessionWsHandler: WsHandler = {
         }
         try {
           await session.setModel(target);
+          // setModel only emits events when the thinking level also changes;
+          // broadcast unconditionally so the selector UI updates either way.
+          channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
         }
@@ -270,6 +277,9 @@ export const sessionWsHandler: WsHandler = {
         // error frame.
         try {
           session.setThinkingLevel(input.level as Parameters<typeof session.setThinkingLevel>[0]);
+          // Same reasoning as set_model: clamped-to-same-value calls emit
+          // nothing, so broadcast explicitly.
+          channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
         }
