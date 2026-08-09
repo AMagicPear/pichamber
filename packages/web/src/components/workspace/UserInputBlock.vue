@@ -187,9 +187,16 @@ const confirmLink = () => {
   <Modal size="sm" :show="linkDialogOpen" @close="linkDialogOpen = false">
     <template #body>
       <div class="link-dialog">
-        <h3 class="link-dialog__title">
-          Link GitHub {{ linkKind === "issue" ? "Issue" : "Pull Request" }}
-        </h3>
+        <!-- Modal size=sm already left-aligns body content. Header +
+             helper copy follow openchamber's Link GitHub Issue dialog. -->
+        <header class="link-dialog__header">
+          <h3 class="link-dialog__title">
+            Link GitHub {{ linkKind === "issue" ? "Issue" : "Pull Request" }}
+          </h3>
+          <p class="link-dialog__subtitle">
+            Paste the URL — we'll derive the label from the issue or PR number.
+          </p>
+        </header>
         <input
           v-model="linkUrl"
           class="link-dialog__input"
@@ -293,30 +300,46 @@ const confirmLink = () => {
 }
 
 /* GitHub link dialog (rendered through Modal; scoped classes match since
- * Modal's body slot is inlined in this component's template). */
+ * Modal's body slot is inlined in this component's template). The
+ * dialog is a quiet form: the primary action uses the same warm-amber
+ * tint we apply to the git panel's Commit button so the two "commit
+ * intent" surfaces feel related without inventing a separate palette. */
 .link-dialog {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+}
+.link-dialog__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .link-dialog__title {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
+  color: #171717;
+}
+.link-dialog__subtitle {
+  margin: 0;
+  color: #888;
+  font-size: 13px;
+  line-height: 1.45;
 }
 .link-dialog__input {
   width: 100%;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid #dfddd4;
-  border-radius: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #e7e4dc;
+  border-radius: 10px;
   outline: 0;
   color: inherit;
   font: inherit;
   font-size: 13px;
   background: #fff;
+  transition: border-color 120ms ease;
 }
 .link-dialog__input:focus {
-  border-color: #3978d4;
+  border-color: #bcbcbc;
 }
 .link-dialog__input::placeholder {
   color: #999;
@@ -327,30 +350,30 @@ const confirmLink = () => {
   gap: 8px;
 }
 .link-dialog__btn {
-  height: 30px;
+  height: 32px;
   padding: 0 14px;
-  border: 1px solid #d9d7cf;
+  border: 0;
   border-radius: 8px;
-  background: #fff;
+  background: transparent;
   color: inherit;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .link-dialog__btn:hover:not(:disabled) {
-  background: rgb(0 0 0 / 4%);
+  background: rgb(0 0 0 / 5%);
 }
 .link-dialog__btn--primary {
-  border-color: #3978d4;
-  color: #3978d4;
+  background: #f3ece4;
+  color: #6b4a2e;
   font-weight: 500;
 }
 .link-dialog__btn--primary:hover:not(:disabled) {
-  background: rgb(57 120 212 / 8%);
+  background: #ebe2d6;
 }
 .link-dialog__btn:disabled {
   cursor: default;
-  opacity: 0.45;
+  opacity: 0.5;
 }
 </style>

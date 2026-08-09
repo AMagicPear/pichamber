@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import type { DirEntry } from "@pichamber/shared";
 import { listDirectory, toMessage } from "@/api/client";
-import FolderOpenIcon from "@/assets/icons/FolderOpen.svg";
+import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
 import IconButton from "@/components/IconButton.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import { getEntryIcon } from "@/components/workspace/fileIcon";
@@ -100,11 +100,20 @@ const pick = (entry: DirEntry) => {
     aria-label="Attach files"
   >
     <div class="file-picker">
+      <!-- Path bar: same rhythm as FileTree's toolbar (8px gutter,
+           bottom 1px divider). The up button reuses ArrowDownS rotated
+           180° so we don't ship a new icon. -->
       <div class="file-picker__path">
-        <IconButton size="compact" label="Up one level" :disabled="atRoot" @click="goUp">
-          <FolderOpenIcon />
+        <IconButton
+          size="compact"
+          class="file-picker__up"
+          label="Up one level"
+          :disabled="atRoot"
+          @click="goUp"
+        >
+          <ArrowDownSIcon />
         </IconButton>
-        <span class="file-picker__cwd">{{ displayPath }}</span>
+        <span class="file-picker__cwd" :title="displayPath">{{ displayPath }}</span>
       </div>
       <ul class="file-picker__list">
         <li v-for="entry in entries" :key="entry.path">
@@ -134,23 +143,31 @@ const pick = (entry: DirEntry) => {
   flex-direction: column;
   min-height: 0;
 }
+/* Mirror FileTree's toolbar so the picker reads as part of the same
+   family when it opens next to the files panel. */
 .file-picker__path {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 4px;
   padding: 6px 6px 6px 4px;
   border-bottom: 1px solid #ededed;
+}
+.file-picker__up :deep(svg) {
+  /* Up = the down chevron flipped; keeps us inside the existing icon
+     set without inventing a new glyph. */
+  transform: rotate(180deg);
 }
 .file-picker__cwd {
   flex: 1;
   min-width: 0;
+  padding: 0 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #666;
-  font-size: 12px;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .file-picker__list {
   flex: 1 1 0;
@@ -177,20 +194,27 @@ const pick = (entry: DirEntry) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 14px;
+}
+/* `.menu-item` already sets 13px; raise it so rows feel as open as
+   FileTree's 14px rows. */
+.file-picker__row {
+  font-size: 14px;
 }
 .file-picker__ref {
   flex: 0 0 auto;
   margin-left: 8px;
   color: #999;
-  font-size: 11px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .file-picker__state {
   padding: 16px;
   color: #888;
-  font-size: 12px;
+  font-size: 13px;
   text-align: center;
 }
 .file-picker__state--error {
-  color: #a33;
+  color: #b04848;
 }
 </style>

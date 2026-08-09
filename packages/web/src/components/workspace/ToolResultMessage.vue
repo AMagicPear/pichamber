@@ -15,11 +15,10 @@ defineProps<{
   >
     <ConversationDetail
       class="conversation-message__details"
-      :icon="TerminalIcon"
-      :icon-url="detail.iconUrl"
+      :icon="detail.icon ?? TerminalIcon"
       :label="detail.label"
       :preview="detail.preview"
-      :preview-tail="detail.previewTail"
+      :path="detail.path"
       :content="detail.content"
     />
   </article>

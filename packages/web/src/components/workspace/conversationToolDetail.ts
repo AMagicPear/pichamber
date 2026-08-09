@@ -1,12 +1,18 @@
-import { getEntryIcon } from "./fileIcon";
+import type { Component } from "vue";
+import FileAddIcon from "@/assets/icons/FileAdd.svg";
+import FileEditIcon from "@/assets/icons/FileEdit.svg";
+import FileTextIcon from "@/assets/icons/FileText.svg";
+import { workspace } from "@/stores/workspace";
 import { inline } from "./messageContent";
-
 export type ConversationToolDetail = {
   label: string;
-  preview: string;
-  previewTail?: string;
+  /** Collapsed single-line preview (plain text for bash/ls/thinking). */
+  preview?: string;
   content: string;
-  iconUrl?: string;
+  /** Fixed icon for file tools — read/edit/write each have their own. */
+  icon?: Component | string;
+  /** Full file path — rendered with filename-first styling. */
+  path?: string;
   isError: boolean;
 };
 
@@ -28,11 +34,13 @@ const recordValue = (args: unknown, key: "command" | "path") => {
   return typeof value === "string" ? value : undefined;
 };
 
-const splitFilePath = (path: string) => {
-  const separator = path.lastIndexOf("/");
-  return separator < 0
-    ? { prefix: "", tail: path }
-    : { prefix: path.slice(0, separator + 1), tail: path.slice(separator + 1) };
+const fileToolIcon = (toolName: string): Component | string =>
+  toolName === "edit" ? FileEditIcon : toolName === "write" ? FileAddIcon : FileTextIcon;
+
+/** Strip the workspace prefix so in-workspace files read as relative paths. */
+const displayPath = (path: string): string => {
+  const cwd = workspace.cwd;
+  return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
 };
 
 const fileLabel = (toolName: string) =>
@@ -50,42 +58,43 @@ export const conversationToolDetail = ({
   isError,
   fallbackPreview,
 }: ToolDetailInput): ConversationToolDetail => {
+  const failed = isError === true;
   const command = recordValue(args, "command");
   if (toolName === "bash") {
     return {
-      label: isError ? errorLabel("Shell Command") : "Shell Command",
+      label: failed ? errorLabel("Shell Command") : "Shell Command",
       preview: command ?? inline(fallbackPreview),
-      content: command ? `${command}\n\n${output}` : output,
-      isError: isError === true,
+      content: output,
+      isError: failed,
     };
   }
 
   const path = recordValue(args, "path");
   if (isFileTool(toolName) && path) {
-    const { prefix, tail } = splitFilePath(path);
+    const relative = displayPath(path);
     return {
-      label: isError ? errorLabel(toolName) : fileLabel(toolName),
-      preview: prefix,
-      previewTail: tail,
-      content: `${path}\n\n${output}`,
-      iconUrl: getEntryIcon(tail, false, false),
-      isError: isError === true,
+      label: failed ? errorLabel(toolName) : fileLabel(toolName),
+      path: relative,
+      content: output,
+      icon: fileToolIcon(toolName),
+      isError: failed,
     };
   }
 
   if (toolName === "ls") {
+    const relative = path ? displayPath(path) : undefined;
     return {
-      label: isError ? errorLabel("ls") : path ? "List Directory" : "List Files",
-      preview: path ?? inline(fallbackPreview),
-      content: path ? `${path}\n\n${output}` : output,
-      isError: isError === true,
+      label: failed ? errorLabel("ls") : path ? "List Directory" : "List Files",
+      preview: relative ?? inline(fallbackPreview),
+      content: output,
+      isError: failed,
     };
   }
 
   return {
-    label: isError ? errorLabel(toolName) : toolName || "Tool",
+    label: failed ? errorLabel(toolName) : toolName || "Tool",
     preview: inline(fallbackPreview),
     content: output,
-    isError: isError === true,
+    isError: failed,
   };
 };

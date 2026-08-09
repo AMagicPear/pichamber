@@ -34,18 +34,18 @@ const toolCallsById = computed(() => {
 });
 
 const historyToolDetail = (entry: ConversationTranscriptMessage) => {
-  const message = messageFor(entry) as { toolCallId?: unknown; toolName?: unknown } | undefined;
-  const toolCallId = typeof message?.toolCallId === "string" ? message.toolCallId : undefined;
+  const message = messageFor(entry);
+  const meta = message as { toolCallId?: unknown; toolName?: unknown; isError?: boolean } | undefined;
+  const toolCallId = typeof meta?.toolCallId === "string" ? meta.toolCallId : undefined;
   const call = toolCallId ? toolCallsById.value.get(toolCallId) : undefined;
-  const toolName = typeof message?.toolName === "string" ? message.toolName : "";
-  const output =
-    messageText(messageFor(entry)) || JSON.stringify(messageFor(entry), null, 2);
+  const toolName = typeof meta?.toolName === "string" ? meta.toolName : "";
+  const output = messageText(message) || JSON.stringify(message, null, 2);
   return conversationToolDetail({
     toolName,
     args: call?.arguments,
     output,
-    isError: (messageFor(entry) as { isError?: boolean }).isError === true,
-    fallbackPreview: messageText(messageFor(entry)),
+    isError: meta?.isError === true,
+    fallbackPreview: messageText(message),
   });
 };
 

@@ -2,14 +2,15 @@
 import MarkdownRender from "markstream-vue";
 import { ref, type Component } from "vue";
 import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
+import FilePathLabel from "@/components/FilePathLabel.vue";
 
 defineProps<{
   icon?: Component | string;
-  iconUrl?: string;
   label: string;
   preview?: string;
-  previewTail?: string;
   content: string;
+  /** Full file path — rendered filename-first via FilePathLabel. */
+  path?: string;
   /** Render `content` as markdown instead of verbatim (tool output stays raw). */
   renderMarkdown?: boolean;
 }>();
@@ -21,15 +22,17 @@ const expanded = ref(false);
   <section class="conversation-detail" :class="{ 'is-expanded': expanded }">
     <button type="button" class="conversation-detail__summary" :aria-expanded="expanded" @click="expanded = !expanded">
       <span class="conversation-detail__icon-slot" aria-hidden="true">
-        <img v-if="iconUrl" :src="iconUrl" class="conversation-detail__icon" alt="" />
-        <component v-else :is="icon" class="conversation-detail__icon" />
+        <component :is="icon" class="conversation-detail__icon" />
         <ArrowDownIcon class="conversation-detail__arrow" />
       </span>
       <span class="conversation-detail__label">{{ label }}</span>
-      <span v-if="(!expanded || previewTail) && (preview || previewTail)" class="conversation-detail__preview">
-        <span v-if="preview" class="conversation-detail__preview-prefix">{{ preview }}</span>
-        <span v-if="previewTail" class="conversation-detail__preview-tail">{{ previewTail }}</span>
-      </span>
+      <FilePathLabel
+        v-if="path"
+        class="conversation-detail__preview"
+        :path="path"
+        :show-prefix="!expanded"
+      />
+      <span v-else-if="preview" class="conversation-detail__preview conversation-detail__preview--plain">{{ preview }}</span>
     </button>
     <div class="conversation-detail__body">
       <div class="conversation-detail__body-inner">
@@ -109,23 +112,19 @@ const expanded = ref(false);
   flex: none;
   font-weight: 400;
 }
+/* Both the path label and plain previews share this muted, ellipsizing slot.
+   Note: must stay a block-level flex item (not `display: flex` itself) so
+   `text-overflow: ellipsis` applies to the text. FilePathLabel brings its
+   own inline-flex layout for icon + prefix + basename. */
 .conversation-detail__preview {
-  display: flex;
+  flex: 1 1 auto;
   min-width: 0;
-  flex: 1;
   overflow: hidden;
   white-space: nowrap;
-}
-.conversation-detail__preview-prefix {
-  min-width: 0;
-  overflow: hidden;
-  color: #76746d;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.conversation-detail__preview-tail {
-  flex: none;
-  color: #292827;
+.conversation-detail__preview--plain {
+  color: #76746d;
 }
 .conversation-detail__content,
 .conversation-detail__markdown {
