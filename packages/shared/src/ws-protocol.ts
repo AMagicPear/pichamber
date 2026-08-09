@@ -121,3 +121,38 @@ export type VersionInfo = {
   /** The pi coding-agent version the server embeds. */
   pi: string;
 };
+
+// ─── Git (Git pane) wire types ────────────────────────────────────────
+
+/** One changed file from `git status --porcelain`. */
+export type GitChange = {
+  /** Workspace-relative path (renames carry the destination). */
+  path: string;
+  status: "modified" | "added" | "deleted" | "renamed" | "untracked";
+  /** True when the change is staged (present in the index). */
+  staged: boolean;
+};
+
+/** Response body for GET /api/git/status. */
+export type GitStatus = {
+  /** Current branch name, or null on a detached HEAD. */
+  branch: string | null;
+  changes: GitChange[];
+};
+
+/** Response body for GET /api/git/diff. */
+export type GitDiffResult = {
+  /** Unified diff text; empty for files git can't diff (untracked). */
+  diff: string;
+};
+
+/** Request body for POST /api/git/stage and /api/git/unstage. */
+export type GitStageRequest = {
+  /** Paths to stage/unstage. Omit for stage to add everything. */
+  paths?: string[];
+};
+
+/** Request body for POST /api/git/commit. */
+export type GitCommitRequest = {
+  message: string;
+};

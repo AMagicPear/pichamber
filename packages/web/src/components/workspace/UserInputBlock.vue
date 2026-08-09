@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ModelDescriptor } from "@pichamber/shared";
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
 import Attachment2Icon from "@/assets/icons/Attachment2.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
@@ -12,6 +12,8 @@ import SendIcon from "@/assets/icons/SendPlane2.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
+import Modal from "@/components/layout/Modal.vue";
+import FilePicker from "@/components/workspace/FilePicker.vue";
 import ModelSelector from "@/components/workspace/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
 import { usePopover } from "@/composables/usePopover";
@@ -40,10 +42,29 @@ const onKeydown = (event: KeyboardEvent) => {
   }
 };
 
-// The attachment menu is UI-only for now — selecting an item closes the
-// menu; actions (file picker, GitHub issue/PR link) land later.
+const inputEl = ref<HTMLTextAreaElement | null>(null);
+
+/** Insert text at the caret, restoring focus and caret position. */
+const insertAtCursor = (text: string) => {
+  const el = inputEl.value;
+  const current = draft.value ?? "";
+  if (el) {
+    const start = el.selectionStart ?? current.length;
+    const end = el.selectionEnd ?? start;
+    draft.value = current.slice(0, start) + text + current.slice(end);
+    nextTick(() => {
+      el.focus();
+      const pos = start + text.length;
+      el.setSelectionRange(pos, pos);
+    });
+  } else {
+    draft.value = current + text;
+  }
+};
+
+// Attachment action menu, anchored to the add button.
 const attachRoot = ref<HTMLElement | null>(null);
-const { open: attachOpen, style: attachStyle, close: closeAttach, toggle: toggleAttach } = usePopover({
+const { open: menuOpen, style: menuStyle, close: closeMenu, toggle: toggleMenu } = usePopover({
   root: attachRoot,
   trigger: ".composer__attach-trigger",
   panel: ".menu-panel",
@@ -51,11 +72,60 @@ const { open: attachOpen, style: attachStyle, close: closeAttach, toggle: toggle
   // 4px panel padding + three 28px menu rows.
   height: () => 4 + 3 * 28,
 });
+
+// File picker, anchored to the same button; only one popover is open at a
+// time, so both listen for outside clicks via the shared .menu-panel class.
+const { open: pickerOpen, style: pickerStyle, close: closePicker } = usePopover({
+  root: attachRoot,
+  trigger: ".composer__attach-trigger",
+  panel: ".menu-panel",
+  width: 340,
+  height: 380,
+});
+
+const onToggleAttach = () => {
+  closePicker();
+  toggleMenu();
+};
+
+const onAttachFiles = () => {
+  closeMenu();
+  pickerOpen.value = true;
+};
+
+const onPickFile = (relativePath: string) => {
+  closePicker();
+  insertAtCursor(`@${relativePath}`);
+};
+
+// GitHub issue / PR link dialog — simplified to pasting a URL.
+const linkDialogOpen = ref(false);
+const linkKind = ref<"issue" | "pr">("issue");
+const linkUrl = ref("");
+
+const openLinkDialog = (kind: "issue" | "pr") => {
+  closeMenu();
+  linkKind.value = kind;
+  linkUrl.value = "";
+  linkDialogOpen.value = true;
+};
+
+const confirmLink = () => {
+  const url = linkUrl.value.trim();
+  if (!url) return;
+  const number = url.match(/#(\d+)/)?.[1];
+  const label = number
+    ? `${linkKind.value === "issue" ? "Issue" : "PR"} #${number}`
+    : `GitHub ${linkKind.value === "issue" ? "issue" : "PR"}`;
+  insertAtCursor(`[${label}](${url})`);
+  linkDialogOpen.value = false;
+};
 </script>
 
 <template>
   <div class="composer">
     <textarea
+      ref="inputEl"
       v-model="draft"
       class="composer__input"
       placeholder="@ for files/agents; / for commands and skills; ! for shell; # for snippets"
@@ -69,25 +139,26 @@ const { open: attachOpen, style: attachStyle, close: closeAttach, toggle: toggle
             class="composer__attach-trigger"
             size="compact"
             label="Add attachment"
-            :aria-expanded="attachOpen"
-            @click="toggleAttach"
+            :aria-expanded="menuOpen || pickerOpen"
+            @click="onToggleAttach"
           >
             <AddCircleIcon />
           </IconButton>
-          <MenuPanel :open="attachOpen" :style="attachStyle" role="menu" aria-label="Composer actions">
-            <button type="button" class="menu-item" role="menuitem" @click="closeAttach">
+          <MenuPanel :open="menuOpen" :style="menuStyle" role="menu" aria-label="Composer actions">
+            <button type="button" class="menu-item" role="menuitem" @click="onAttachFiles">
               <Attachment2Icon />
               Attach files
             </button>
-            <button type="button" class="menu-item" role="menuitem" @click="closeAttach">
+            <button type="button" class="menu-item" role="menuitem" @click="openLinkDialog('issue')">
               <GithubIcon />
               Link GitHub Issue
             </button>
-            <button type="button" class="menu-item" role="menuitem" @click="closeAttach">
+            <button type="button" class="menu-item" role="menuitem" @click="openLinkDialog('pr')">
               <GitPullRequestIcon />
               Link GitHub PR
             </button>
           </MenuPanel>
+          <FilePicker :open="pickerOpen" :style="pickerStyle" @select="onPickFile" />
         </div>
         <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
         <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
@@ -112,6 +183,40 @@ const { open: attachOpen, style: attachStyle, close: closeAttach, toggle: toggle
       </div>
     </div>
   </div>
+
+  <Modal size="sm" :show="linkDialogOpen" @close="linkDialogOpen = false">
+    <template #body>
+      <div class="link-dialog">
+        <h3 class="link-dialog__title">
+          Link GitHub {{ linkKind === "issue" ? "Issue" : "Pull Request" }}
+        </h3>
+        <input
+          v-model="linkUrl"
+          class="link-dialog__input"
+          type="url"
+          autofocus
+          :placeholder="
+            linkKind === 'issue'
+              ? 'https://github.com/owner/repo/issues/123'
+              : 'https://github.com/owner/repo/pull/123'
+          "
+          aria-label="GitHub URL"
+          @keydown.enter="confirmLink"
+        />
+        <div class="link-dialog__actions">
+          <button type="button" class="link-dialog__btn" @click="linkDialogOpen = false">Cancel</button>
+          <button
+            type="button"
+            class="link-dialog__btn link-dialog__btn--primary"
+            :disabled="!linkUrl.trim()"
+            @click="confirmLink"
+          >
+            Insert link
+          </button>
+        </div>
+      </div>
+    </template>
+  </Modal>
 </template>
 
 <style scoped>
@@ -185,5 +290,63 @@ const { open: attachOpen, style: attachStyle, close: closeAttach, toggle: toggle
   min-width: 0;
   justify-content: flex-end;
   gap: 4px;
+}
+
+/* GitHub link dialog (rendered through Modal; scoped classes match since
+ * Modal's body slot is inlined in this component's template). */
+.link-dialog {
+  display: grid;
+  gap: 12px;
+}
+.link-dialog__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.link-dialog__input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #e2dfd5;
+  border-radius: 7px;
+  outline: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  background: #fff;
+}
+.link-dialog__input:focus {
+  border-color: #3978d4;
+}
+.link-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.link-dialog__btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #e2dfd5;
+  border-radius: 7px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.link-dialog__btn:hover:not(:disabled) {
+  background: rgb(0 0 0 / 4%);
+}
+.link-dialog__btn--primary {
+  border-color: #3978d4;
+  background: #3978d4;
+  color: #fff;
+}
+.link-dialog__btn--primary:hover:not(:disabled) {
+  background: #2f66bd;
+}
+.link-dialog__btn:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 </style>

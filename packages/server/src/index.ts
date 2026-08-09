@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
 import { listDirectory, WorkspaceError } from "./fs";
+import { commit, getDiff, getStatus, stagePaths, unstagePaths } from "./git";
 import {
   createSessionWithCwd,
   deleteSession,
@@ -179,6 +180,64 @@ Bun.serve({
       DELETE: (req) => {
         stopPty(req.params.id);
         return Response.json({ ok: true });
+      },
+    },
+
+    // ── Git (Git pane) ──────────────────────────────────────────
+    // All commands run inside the active workspace; paths are
+    // workspace-relative. Not a git repository → 400 with git's message.
+    "/api/git/status": {
+      GET: async () => {
+        try {
+          return Response.json(await getStatus());
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/diff": {
+      GET: async (req) => {
+        const url = new URL(req.url);
+        const path = url.searchParams.get("path") ?? "";
+        const staged = url.searchParams.get("staged") === "1";
+        try {
+          return Response.json({ diff: await getDiff(path, staged) });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/stage": {
+      POST: async (req) => {
+        const { paths } = (await req.json().catch(() => ({}))) as { paths?: string[] };
+        try {
+          await stagePaths(paths);
+          return Response.json({ ok: true });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/unstage": {
+      POST: async (req) => {
+        const { paths } = (await req.json().catch(() => ({}))) as { paths?: string[] };
+        try {
+          await unstagePaths(paths ?? []);
+          return Response.json({ ok: true });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/commit": {
+      POST: async (req) => {
+        const { message } = (await req.json().catch(() => ({}))) as { message?: string };
+        try {
+          await commit(message ?? "");
+          return Response.json({ ok: true });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
       },
     },
 

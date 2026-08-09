@@ -2,7 +2,18 @@
 // Bun server on :3000. The single `jsonOrThrow` helper centralises error
 // handling so each call site is a one-liner.
 
-import type { ListResult, PtyStartOptions, PtyStartResult, SessionEntry, SessionInfo, VersionInfo } from "@pichamber/shared";
+import type {
+  GitCommitRequest,
+  GitDiffResult,
+  GitStageRequest,
+  GitStatus,
+  ListResult,
+  PtyStartOptions,
+  PtyStartResult,
+  SessionEntry,
+  SessionInfo,
+  VersionInfo,
+} from "@pichamber/shared";
 
 const BASE = "/api";
 
@@ -63,3 +74,34 @@ export const listDirectory = async (path?: string) => {
   const r = await fetch(url);
   return await jsonOrThrow<ListResult>(r);
 };
+
+// ─── Git (Git pane) ───────────────────────────────────────────────────
+
+export const getGitStatus = () =>
+  fetch(`${BASE}/git/status`).then((r) => jsonOrThrow<GitStatus>(r));
+
+export const getGitDiff = (path: string, staged: boolean) =>
+  fetch(`${BASE}/git/diff?path=${encodeURIComponent(path)}&staged=${staged ? 1 : 0}`).then((r) =>
+    jsonOrThrow<GitDiffResult>(r),
+  );
+
+export const stageGitPaths = (paths?: string[]) =>
+  fetch(`${BASE}/git/stage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths } satisfies GitStageRequest),
+  }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+
+export const unstageGitPaths = (paths: string[]) =>
+  fetch(`${BASE}/git/unstage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths } satisfies GitStageRequest),
+  }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+
+export const commitGit = (message: string) =>
+  fetch(`${BASE}/git/commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message } satisfies GitCommitRequest),
+  }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
