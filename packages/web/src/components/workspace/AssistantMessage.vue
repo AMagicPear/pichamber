@@ -65,10 +65,11 @@ const thinking = computed(() => thinkingText(props.message));
         label="Thinking"
         :preview="inline(thinking)"
         :content="thinking"
+        render-markdown
       />
       <MarkdownRender
         v-if="text"
-        class="conversation-message__content"
+        class="conversation-message__content markdown-chat"
         mode="chat"
         :content="text"
         :final="final"
@@ -103,40 +104,6 @@ const thinking = computed(() => thinkingText(props.message));
 }
 .conversation-message__content + .conversation-message__details {
   margin-top: 12px;
-}
-.conversation-message__content,
-.conversation-message__content :deep(.markdown-renderer) {
-  --ms-text-body: 14px;
-  --ms-leading-body: 1.5;
-  --ms-text-h1: 20px;
-  --ms-leading-h1: 1.25;
-  --ms-text-h2: 17px;
-  --ms-leading-h2: 1.3;
-  --ms-text-h3: 15px;
-  --ms-leading-h3: 1.35;
-  --ms-text-h4: 14px;
-  --ms-text-h5: 14px;
-  --ms-text-h6: 14px;
-  --ms-flow-paragraph-y: 8px;
-  --ms-flow-list-y: 8px;
-  --ms-flow-list-item-y: 2px;
-  --ms-flow-codeblock-y: 12px;
-  --ms-flow-blockquote-y: 10px;
-  --ms-flow-table-y: 12px;
-  --ms-flow-hr-y: 16px;
-  --ms-flow-heading-1-mb: 10px;
-  --ms-flow-heading-2-mt: 18px;
-  --ms-flow-heading-2-mb: 8px;
-  --ms-flow-heading-3-mt: 16px;
-  --ms-flow-heading-3-mb: 8px;
-  --ms-flow-heading-4-mt: 14px;
-  --ms-flow-heading-4-mb: 6px;
-  --ms-flow-heading-5-mt: 14px;
-  --ms-flow-heading-5-mb: 6px;
-  --ms-flow-heading-6-mt: 14px;
-  --ms-flow-heading-6-mb: 6px;
-  color: #292827;
-  overflow-wrap: anywhere;
 }
 .conversation-message__content :deep(.conversation-code-block) {
   margin-block: 12px;

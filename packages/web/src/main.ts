@@ -4,6 +4,7 @@ import { setCustomComponents } from "markstream-vue";
 import "markstream-vue/index.css";
 
 import App from "./App.vue";
+import "@/assets/markdown.css";
 import ConversationCodeBlock from "./components/workspace/ConversationCodeBlock.vue";
 import router from "./router";
 

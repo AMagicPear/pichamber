@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import MarkdownRender from "markstream-vue";
 import type {
   ConversationTranscriptMessage,
   LiveConversationState,
@@ -66,7 +67,13 @@ const liveToolDetails = computed(() =>
   <div class="conversation__messages">
     <template v-for="entry in entries" :key="entry.id">
       <article v-if="messageFor(entry)?.role === 'user'" class="conversation-message conversation-message--user">
-        <pre class="conversation-message__user">{{ messageText(messageFor(entry)) }}</pre>
+        <MarkdownRender
+          class="conversation-message__user markdown-chat"
+          mode="chat"
+          :content="messageText(messageFor(entry))"
+          :final="true"
+          :fade="false"
+        />
       </article>
       <AssistantMessage v-else-if="messageFor(entry)?.role === 'assistant'" :message="messageFor(entry)" :final="true" />
       <ToolResultMessage v-else-if="messageFor(entry)?.role === 'toolResult'" :detail="historyToolDetail(entry)" />
@@ -76,7 +83,13 @@ const liveToolDetails = computed(() =>
     </template>
 
     <article v-for="(message, index) in live.pendingUserMessages" :key="`live-user:${index}`" class="conversation-message conversation-message--user">
-      <pre class="conversation-message__user">{{ messageText(message) }}</pre>
+      <MarkdownRender
+        class="conversation-message__user markdown-chat"
+        mode="chat"
+        :content="messageText(message)"
+        :final="true"
+        :fade="false"
+      />
     </article>
     <AssistantMessage v-if="live.streamingMessage" :message="live.streamingMessage" :final="false" />
     <ToolResultMessage v-for="tool in liveToolDetails" :key="tool.toolCallId" :detail="tool.detail" />
@@ -91,7 +104,7 @@ const liveToolDetails = computed(() =>
 .conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
-.conversation-message__user { width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 12px 20px; border: 1px solid #ece9e0; border-radius: 12px 12px 4px; white-space: pre-wrap; overflow-wrap: anywhere; background: #f7f6f2; }
+.conversation-message__user { width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 12px 20px; border: 1px solid #ece9e0; border-radius: 12px 12px 4px; background: #f7f6f2; }
 
 /* Error variants: red accent on the message block so failed turns read at
  * a glance instead of looking like an empty successful bubble. The author

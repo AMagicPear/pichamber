@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MarkdownRender from "markstream-vue";
 import { ref, type Component } from "vue";
 import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
 
@@ -9,6 +10,8 @@ defineProps<{
   preview?: string;
   previewTail?: string;
   content: string;
+  /** Render `content` as markdown instead of verbatim (tool output stays raw). */
+  renderMarkdown?: boolean;
 }>();
 
 const expanded = ref(false);
@@ -30,7 +33,15 @@ const expanded = ref(false);
     </button>
     <div class="conversation-detail__body">
       <div class="conversation-detail__body-inner">
-        <pre class="conversation-detail__content">{{ content }}</pre>
+        <MarkdownRender
+          v-if="renderMarkdown"
+          class="conversation-detail__markdown markdown-chat"
+          mode="chat"
+          :content="content"
+          :final="true"
+          :fade="false"
+        />
+        <pre v-else class="conversation-detail__content">{{ content }}</pre>
       </div>
     </div>
   </section>
@@ -116,9 +127,12 @@ const expanded = ref(false);
   flex: none;
   color: #292827;
 }
-.conversation-detail__content {
+.conversation-detail__content,
+.conversation-detail__markdown {
   margin: 0;
   color: #76746d;
+}
+.conversation-detail__content {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
