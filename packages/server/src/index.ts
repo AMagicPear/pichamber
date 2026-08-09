@@ -1,4 +1,6 @@
 import type { ServerWebSocket } from "bun";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
 import { listDirectory, WorkspaceError } from "./fs";
 import {
@@ -195,7 +197,7 @@ Bun.serve({
       },
     },
   },
-  fetch(req, server) {
+  async fetch(req, server) {
     const url = new URL(req.url);
 
     // PTY WebSocket — /ws/pty/:ptyId. Checked first so it doesn't get
@@ -223,6 +225,30 @@ Bun.serve({
       const success = server.upgrade(req, { data });
       if (success) return undefined;
       return new Response("WebSocket upgrade failed", { status: 400 });
+    }
+
+    // ── Static web app (production) ─────────────────────────────
+    // Serve the built SPA when it exists: `dist-web/` in the npm package,
+    // `packages/web/dist` in the source repo. Dev uses Vite instead.
+    const webDist = [
+      join(import.meta.dir, "..", "dist-web"),
+      join(import.meta.dir, "..", "web", "dist"),
+    ].find((dir) => existsSync(join(dir, "index.html")));
+
+    const serveWeb = async (url: URL): Promise<Response | null> => {
+      if (!webDist) return null;
+      const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
+      const file = Bun.file(join(webDist, pathname));
+      if (await file.exists()) return new Response(file);
+      // SPA fallback: any unknown path serves the app shell.
+      const index = Bun.file(join(webDist, "index.html"));
+      if (await index.exists()) return new Response(index, { headers: { "Content-Type": "text/html" } });
+      return null;
+    };
+
+    if (req.method === "GET" || req.method === "HEAD") {
+      const web = await serveWeb(url);
+      if (web) return web;
     }
 
     return new Response("Not found", { status: 404 });

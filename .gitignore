@@ -12,6 +12,7 @@ node_modules
 # Build outputs (any package)
 **/dist
 **/dist-ssr
+**/dist-web
 coverage
 *.local
 

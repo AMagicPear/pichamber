@@ -1,6 +1,19 @@
 # pichamber
 
-A monorepo workspace for the **pichamber** project, using [Bun](https://bun.sh) workspaces.
+A browser-based workspace for the Pi Coding Agent. Vue 3 + Bun thin shell wrapping `pi` with a real shell terminal.
+
+## Install from npm
+
+Requires [Bun](https://bun.sh) (the backend runs on it).
+
+```sh
+npm i -g @amagicpear/pichamber
+pichamber   # starts the server on http://localhost:3000
+```
+
+## Develop
+
+A monorepo workspace using [Bun](https://bun.sh) workspaces.
 
 ## Acknowledgements
 
