@@ -32,6 +32,7 @@ import IconButton from "@/components/IconButton.vue";
 import TerminalView from "@/components/workspace/TerminalView.vue";
 import { startPty, stopPty, toMessage } from "@/api/client";
 import { ui } from "@/stores/ui";
+import { workspace } from "@/stores/workspace";
 
 type TabStatus = "creating" | "ready" | "closed" | "error";
 
@@ -76,7 +77,14 @@ const createTab = async () => {
   activeId.value = localId;
 
   try {
-    const result = await startPty({ cols: 80, rows: 24 });
+    // Start the shell in the session's workspace so the terminal tracks
+    // the same cwd as the files/git panels (falls back to the server
+    // workspace while no session is open).
+    const result = await startPty({
+      cols: 80,
+      rows: 24,
+      cwd: workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : undefined,
+    });
     const existing = tabs.value.find((t) => t.id === localId);
     if (!existing) {
       // The request can finish after the user closes the optimistic tab.
