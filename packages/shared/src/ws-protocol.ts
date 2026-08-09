@@ -148,11 +148,15 @@ export type GitDiffResult = {
 
 /** Request body for POST /api/git/stage and /api/git/unstage. */
 export type GitStageRequest = {
+  /** Session workspace root; omit to use the server default. */
+  cwd?: string;
   /** Paths to stage/unstage. Omit for stage to add everything. */
   paths?: string[];
 };
 
 /** Request body for POST /api/git/commit. */
 export type GitCommitRequest = {
+  /** Session workspace root; omit to use the server default. */
+  cwd?: string;
   message: string;
 };

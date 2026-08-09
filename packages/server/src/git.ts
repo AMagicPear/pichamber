@@ -1,10 +1,9 @@
 /**
  * Git operations for the Git pane.
  *
- * All commands run inside the active workspace (`git -C <workspace>`), so
- * paths are always workspace-relative and git itself scopes them — no
- * extra containment check needed (unlike fs.ts, which must guard raw
- * filesystem access).
+ * Every command runs in the caller-supplied cwd (the session's workspace,
+ * mirroring the files panel) — `git -C <cwd>` scopes paths, so they stay
+ * workspace-relative and git itself handles containment.
  *
  * The client never has to parse porcelain output: the server turns
  * `git status` into a structured GitChange list and hands diffs back as
@@ -16,8 +15,12 @@ import { WorkspaceError } from "./fs";
 
 type GitResult = { stdout: string; stderr: string; code: number };
 
-const runGit = async (args: string[]): Promise<GitResult> => {
-  const proc = Bun.spawn(["git", "-C", getWorkspace(), ...args], {
+/** Normalise a client-supplied cwd ("~" means the default workspace). */
+const resolveCwd = (cwd: string | undefined): string =>
+  cwd && cwd !== "~" ? cwd : getWorkspace();
+
+const runGit = async (cwd: string | undefined, args: string[]): Promise<GitResult> => {
+  const proc = Bun.spawn(["git", "-C", resolveCwd(cwd), ...args], {
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -90,37 +93,37 @@ export const parseStatus = (stdout: string): GitStatus => {
   return { branch, changes };
 };
 
-export const getStatus = async (): Promise<GitStatus> => {
-  const result = await runGit(["status", "--porcelain=v1", "-b"]);
+export const getStatus = async (cwd?: string): Promise<GitStatus> => {
+  const result = await runGit(cwd, ["status", "--porcelain=v1", "-b"]);
   assertOk(result);
   return parseStatus(result.stdout);
 };
 
-export const getDiff = async (path: string, staged: boolean): Promise<string> => {
+export const getDiff = async (cwd: string | undefined, path: string, staged: boolean): Promise<string> => {
   const args = ["diff", ...(staged ? ["--cached"] : []), "--", path];
-  const result = await runGit(args);
+  const result = await runGit(cwd, args);
   assertOk(result);
   return result.stdout;
 };
 
-export const stagePaths = async (paths?: string[]): Promise<void> => {
+export const stagePaths = async (cwd: string | undefined, paths?: string[]): Promise<void> => {
   const args = paths && paths.length > 0 ? ["add", "--", ...paths] : ["add", "-A"];
-  const result = await runGit(args);
+  const result = await runGit(cwd, args);
   assertOk(result);
 };
 
-export const unstagePaths = async (paths: string[]): Promise<void> => {
+export const unstagePaths = async (cwd: string | undefined, paths: string[]): Promise<void> => {
   if (paths.length === 0) return;
-  const result = await runGit(["restore", "--staged", "--", ...paths]);
+  const result = await runGit(cwd, ["restore", "--staged", "--", ...paths]);
   assertOk(result);
 };
 
-export const commit = async (message: string): Promise<void> => {
+export const commit = async (cwd: string | undefined, message: string): Promise<void> => {
   if (!message.trim()) {
     throw new WorkspaceError("Commit message is required", 400);
   }
   // `git commit -m` treats the arg as a single message regardless of
   // newlines; passing it as one argv element keeps multi-line messages safe.
-  const result = await runGit(["commit", "-m", message]);
+  const result = await runGit(cwd, ["commit", "-m", message]);
   assertOk(result);
 };

@@ -26,7 +26,7 @@ export const sessionTitle = (session: SessionInfo | string): string => {
     typeof session === "string" ? sessions.value.find(({ id }) => id === session) : session;
   const sessionId = typeof session === "string" ? session : session.id;
 
-  return sessionInfo?.name?.trim() || sessionInfo?.firstMessage.trim() || `Session ${sessionId}`;
+  return sessionInfo?.name?.trim() || sessionInfo?.firstMessage?.trim() || `Session ${sessionId}`;
 };
 
 export const loadSessions = () => {

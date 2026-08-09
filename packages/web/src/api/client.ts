@@ -14,6 +14,7 @@ import type {
   SessionInfo,
   VersionInfo,
 } from "@pichamber/shared";
+import { workspace } from "@/stores/workspace";
 
 const BASE = "/api";
 
@@ -77,31 +78,36 @@ export const listDirectory = async (path?: string) => {
 
 // ─── Git (Git pane) ───────────────────────────────────────────────────
 
+/** Session workspace root, like FileTree: "~" means the server default. */
+export const gitCwd = () => (workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : undefined);
+
 export const getGitStatus = () =>
-  fetch(`${BASE}/git/status`).then((r) => jsonOrThrow<GitStatus>(r));
+  fetch(`${BASE}/git/status?cwd=${encodeURIComponent(gitCwd() ?? "")}`).then((r) =>
+    jsonOrThrow<GitStatus>(r),
+  );
 
 export const getGitDiff = (path: string, staged: boolean) =>
-  fetch(`${BASE}/git/diff?path=${encodeURIComponent(path)}&staged=${staged ? 1 : 0}`).then((r) =>
-    jsonOrThrow<GitDiffResult>(r),
-  );
+  fetch(
+    `${BASE}/git/diff?cwd=${encodeURIComponent(gitCwd() ?? "")}&path=${encodeURIComponent(path)}&staged=${staged ? 1 : 0}`,
+  ).then((r) => jsonOrThrow<GitDiffResult>(r));
 
 export const stageGitPaths = (paths?: string[]) =>
   fetch(`${BASE}/git/stage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paths } satisfies GitStageRequest),
+    body: JSON.stringify({ cwd: gitCwd(), paths } satisfies GitStageRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
 
 export const unstageGitPaths = (paths: string[]) =>
   fetch(`${BASE}/git/unstage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paths } satisfies GitStageRequest),
+    body: JSON.stringify({ cwd: gitCwd(), paths } satisfies GitStageRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
 
 export const commitGit = (message: string) =>
   fetch(`${BASE}/git/commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message } satisfies GitCommitRequest),
+    body: JSON.stringify({ cwd: gitCwd(), message } satisfies GitCommitRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));

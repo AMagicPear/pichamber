@@ -187,9 +187,10 @@ Bun.serve({
     // All commands run inside the active workspace; paths are
     // workspace-relative. Not a git repository → 400 with git's message.
     "/api/git/status": {
-      GET: async () => {
+      GET: async (req) => {
+        const cwd = new URL(req.url).searchParams.get("cwd") ?? undefined;
         try {
-          return Response.json(await getStatus());
+          return Response.json(await getStatus(cwd));
         } catch (err) {
           return fsErrorResponse(err);
         }
@@ -198,10 +199,11 @@ Bun.serve({
     "/api/git/diff": {
       GET: async (req) => {
         const url = new URL(req.url);
+        const cwd = url.searchParams.get("cwd") ?? undefined;
         const path = url.searchParams.get("path") ?? "";
         const staged = url.searchParams.get("staged") === "1";
         try {
-          return Response.json({ diff: await getDiff(path, staged) });
+          return Response.json({ diff: await getDiff(cwd, path, staged) });
         } catch (err) {
           return fsErrorResponse(err);
         }
@@ -209,9 +211,9 @@ Bun.serve({
     },
     "/api/git/stage": {
       POST: async (req) => {
-        const { paths } = (await req.json().catch(() => ({}))) as { paths?: string[] };
+        const { cwd, paths } = (await req.json().catch(() => ({}))) as { cwd?: string; paths?: string[] };
         try {
-          await stagePaths(paths);
+          await stagePaths(cwd, paths);
           return Response.json({ ok: true });
         } catch (err) {
           return fsErrorResponse(err);
@@ -220,9 +222,9 @@ Bun.serve({
     },
     "/api/git/unstage": {
       POST: async (req) => {
-        const { paths } = (await req.json().catch(() => ({}))) as { paths?: string[] };
+        const { cwd, paths } = (await req.json().catch(() => ({}))) as { cwd?: string; paths?: string[] };
         try {
-          await unstagePaths(paths ?? []);
+          await unstagePaths(cwd, paths ?? []);
           return Response.json({ ok: true });
         } catch (err) {
           return fsErrorResponse(err);
@@ -231,9 +233,9 @@ Bun.serve({
     },
     "/api/git/commit": {
       POST: async (req) => {
-        const { message } = (await req.json().catch(() => ({}))) as { message?: string };
+        const { cwd, message } = (await req.json().catch(() => ({}))) as { cwd?: string; message?: string };
         try {
-          await commit(message ?? "");
+          await commit(cwd, message ?? "");
           return Response.json({ ok: true });
         } catch (err) {
           return fsErrorResponse(err);

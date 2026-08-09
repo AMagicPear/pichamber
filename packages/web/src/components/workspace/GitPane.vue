@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import type { GitChange, GitStatus } from "@pichamber/shared";
 import {
   commitGit,
@@ -12,7 +12,7 @@ import {
 import GitBranchIcon from "@/assets/icons/GitBranch.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
 import IconButton from "@/components/IconButton.vue";
-
+import { workspace } from "@/stores/workspace";
 const status = ref<GitStatus | null>(null);
 const error = ref<string | null>(null);
 const loading = ref(false);
@@ -118,7 +118,10 @@ const hasChanges = computed(() => (status.value?.changes.length ?? 0) > 0);
 const badge = (change: GitChange): string =>
   ({ modified: "M", added: "A", deleted: "D", renamed: "R", untracked: "?" })[change.status];
 
+// Reload whenever the session workspace changes, so the pane tracks the
+// same cwd the files panel and terminal use.
 onMounted(load);
+watch(() => workspace.cwd, load);
 </script>
 
 <template>

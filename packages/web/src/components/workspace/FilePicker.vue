@@ -6,6 +6,7 @@ import FolderOpenIcon from "@/assets/icons/FolderOpen.svg";
 import IconButton from "@/components/IconButton.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import { getEntryIcon } from "@/components/workspace/fileIcon";
+import { workspace } from "@/stores/workspace";
 
 const props = defineProps<{
   open: boolean;
@@ -18,8 +19,12 @@ const emit = defineEmits<{
   select: [relativePath: string];
 }>();
 
-/** Current directory as workspace-relative segments; "" = workspace root. */
-const cwd = ref("");
+/** Workspace root the picker browses from (the session cwd, like the
+ *  files panel); null falls back to the server's default workspace. */
+const root = computed(() => (workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : null));
+
+/** Current directory as an absolute path; null = the workspace root. */
+const cwd = ref<string | null>(null);
 const entries = ref<DirEntry[]>([]);
 const error = ref<string | null>(null);
 let requestVersion = 0;
@@ -29,7 +34,7 @@ const load = async () => {
   error.value = null;
   entries.value = [];
   try {
-    const result = await listDirectory(cwd.value || undefined);
+    const result = await listDirectory(cwd.value ?? root.value ?? undefined);
     if (current !== requestVersion) return;
     entries.value = result.entries;
   } catch (err) {
@@ -44,27 +49,44 @@ watch(
   () => props.open,
   (open) => {
     if (open) {
-      cwd.value = "";
+      cwd.value = null;
       load();
     }
   },
 );
 
-const displayPath = computed(() => (cwd.value ? `~/${cwd.value}` : "~"));
+const atRoot = computed(
+  () => cwd.value === null || (root.value !== null && cwd.value === root.value),
+);
+
+/** Display path relative to the workspace root; `~` for the root itself. */
+const displayPath = computed(() => {
+  if (cwd.value === null) return "~";
+  if (root.value && cwd.value.startsWith(`${root.value}/`)) {
+    return `~/${cwd.value.slice(root.value.length + 1)}`;
+  }
+  return cwd.value;
+});
+
+/** Workspace-relative form of an entry, so `@` resolves against the cwd. */
+const relFor = (entry: DirEntry): string =>
+  root.value && entry.path.startsWith(`${root.value}/`)
+    ? entry.path.slice(root.value.length + 1)
+    : entry.relativePath;
 
 const enter = (entry: DirEntry) => {
-  cwd.value = entry.relativePath;
+  cwd.value = entry.path;
   load();
 };
 
 const goUp = () => {
-  if (!cwd.value) return;
-  cwd.value = cwd.value.split("/").slice(0, -1).join("/");
+  if (atRoot.value) return;
+  cwd.value = cwd.value!.split("/").slice(0, -1).join("/") || "/";
   load();
 };
 
 const pick = (entry: DirEntry) => {
-  emit("select", entry.relativePath);
+  emit("select", relFor(entry));
 };
 </script>
 
@@ -79,7 +101,7 @@ const pick = (entry: DirEntry) => {
   >
     <div class="file-picker">
       <div class="file-picker__path">
-        <IconButton size="compact" label="Up one level" :disabled="!cwd" @click="goUp">
+        <IconButton size="compact" label="Up one level" :disabled="atRoot" @click="goUp">
           <FolderOpenIcon />
         </IconButton>
         <span class="file-picker__cwd">{{ displayPath }}</span>
@@ -96,7 +118,7 @@ const pick = (entry: DirEntry) => {
               <img class="file-picker__icon" :src="getEntryIcon(entry.name, entry.isDirectory, false)" alt="" />
               <span class="file-picker__name">{{ entry.name }}</span>
             </span>
-            <span v-if="!entry.isDirectory" class="file-picker__ref">@{{ entry.relativePath }}</span>
+            <span v-if="!entry.isDirectory" class="file-picker__ref">@{{ relFor(entry) }}</span>
           </button>
         </li>
         <li v-if="error" class="file-picker__state file-picker__state--error">{{ error }}</li>
