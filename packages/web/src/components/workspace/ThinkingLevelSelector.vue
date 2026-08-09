@@ -21,8 +21,9 @@ const { open, style, close, toggle } = usePopover({
   trigger: ".thinking-selector__trigger",
   panel: ".thinking-selector__panel",
   width: 156,
-  // 12px padding + one 32px row per level.
-  height: () => 12 + visibleLevels.value.length * 32,
+  // 8px panel padding + one 28px row per level (used only for flip math;
+  // the panel sizes itself).
+  height: () => 8 + visibleLevels.value.length * 28,
 });
 
 const labels: Record<ThinkingLevel, string> = {

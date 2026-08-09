@@ -17,7 +17,8 @@ type PopoverOptions = {
   trigger: string;
   /** Class on the teleported panel; used for outside-click containment. */
   panel: string;
-  /** Panel size for flip/clamp math (omitted values fall back to 0). */
+  /** Panel size for flip/clamp math. The panel's own CSS controls its
+   *  rendered size — these values are never written to the style. */
   width?: Size;
   height?: Size;
   /** Gap between trigger and panel. */
@@ -55,8 +56,6 @@ export const usePopover = ({
       position: "fixed",
       top: `${Math.max(8, top)}px`,
       left: `${Math.max(8, Math.min(window.innerWidth - panelWidth - 8, rect.right - panelWidth))}px`,
-      ...(width !== undefined ? { width: `${panelWidth}px` } : {}),
-      ...(height !== undefined ? { height: `${panelHeight}px` } : {}),
     };
   };
 

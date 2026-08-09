@@ -166,10 +166,7 @@ const placeholder = computed(() => {
 
 /* The panel is teleported to <body>. Scoped CSS still rewrites class
  * attribute selectors, so the rule below keeps matching after teleport.
- *
- * height is set both here (as the floor) and inline by `popoverStyle`
- * (as the live value) — the inline value wins. Keeping `max-height` so
- * tiny viewports don't push it off-screen. */
+ * Keeping `max-height` so tiny viewports don't push it off-screen. */
 .model-selector__panel {
   z-index: 1000;
   display: flex;
