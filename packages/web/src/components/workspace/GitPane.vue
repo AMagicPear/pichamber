@@ -245,7 +245,7 @@ onMounted(load);
 .git-pane__btn {
   height: 26px;
   padding: 0 10px;
-  border: 1px solid #dedede;
+  border: 1px solid #d9d7cf;
   border-radius: 6px;
   background: #fff;
   color: inherit;
@@ -258,11 +258,11 @@ onMounted(load);
 }
 .git-pane__btn--primary {
   border-color: #3978d4;
-  background: #3978d4;
-  color: #fff;
+  color: #3978d4;
+  font-weight: 500;
 }
 .git-pane__btn--primary:hover:not(:disabled) {
-  background: #2f66bd;
+  background: rgb(57 120 212 / 8%);
 }
 .git-pane__btn:disabled {
   cursor: default;
@@ -284,7 +284,7 @@ onMounted(load);
 }
 .git-pane__checkbox {
   flex: 0 0 auto;
-  accent-color: #3978d4;
+  accent-color: #222;
 }
 .git-pane__row {
   display: flex;
@@ -311,30 +311,34 @@ onMounted(load);
 }
 .git-pane__badge {
   display: inline-flex;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 5px;
   font-size: 10px;
   font-weight: 700;
-  color: #fff;
 }
 .git-pane__badge--modified {
-  background: #d9936c;
+  background: rgb(217 147 108 / 18%);
+  color: #8a5a33;
 }
 .git-pane__badge--added {
-  background: #7aa05b;
+  background: rgb(122 160 91 / 18%);
+  color: #4f6d38;
 }
 .git-pane__badge--deleted {
-  background: #c96f6f;
+  background: rgb(201 111 111 / 18%);
+  color: #8c4444;
 }
 .git-pane__badge--renamed {
-  background: #7a9bc9;
+  background: rgb(122 155 201 / 18%);
+  color: #3f5f8c;
 }
 .git-pane__badge--untracked {
-  background: #9a9a9a;
+  background: rgb(0 0 0 / 8%);
+  color: #666;
 }
 .git-pane__path {
   flex: 1 1 auto;
@@ -358,7 +362,7 @@ onMounted(load);
   margin: 0 8px;
   border: 1px solid #ededed;
   border-radius: 8px;
-  background: #faf9f7;
+  background: #f7f7f5;
   overflow: auto;
 }
 .git-pane__diff-text {
@@ -388,7 +392,7 @@ onMounted(load);
   width: 100%;
   box-sizing: border-box;
   padding: 6px 8px;
-  border: 1px solid #dedede;
+  border: 1px solid #dfddd4;
   border-radius: 6px;
   outline: 0;
   resize: none;
@@ -399,5 +403,8 @@ onMounted(load);
 }
 .git-pane__commit-input:focus {
   border-color: #3978d4;
+}
+.git-pane__commit-input::placeholder {
+  color: #999;
 }
 </style>

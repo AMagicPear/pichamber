@@ -307,8 +307,8 @@ const confirmLink = () => {
   width: 100%;
   height: 32px;
   padding: 0 10px;
-  border: 1px solid #e2dfd5;
-  border-radius: 7px;
+  border: 1px solid #dfddd4;
+  border-radius: 8px;
   outline: 0;
   color: inherit;
   font: inherit;
@@ -318,6 +318,9 @@ const confirmLink = () => {
 .link-dialog__input:focus {
   border-color: #3978d4;
 }
+.link-dialog__input::placeholder {
+  color: #999;
+}
 .link-dialog__actions {
   display: flex;
   justify-content: flex-end;
@@ -326,24 +329,25 @@ const confirmLink = () => {
 .link-dialog__btn {
   height: 30px;
   padding: 0 14px;
-  border: 1px solid #e2dfd5;
-  border-radius: 7px;
+  border: 1px solid #d9d7cf;
+  border-radius: 8px;
   background: #fff;
   color: inherit;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition: background-color 120ms ease;
 }
 .link-dialog__btn:hover:not(:disabled) {
   background: rgb(0 0 0 / 4%);
 }
 .link-dialog__btn--primary {
   border-color: #3978d4;
-  background: #3978d4;
-  color: #fff;
+  color: #3978d4;
+  font-weight: 500;
 }
 .link-dialog__btn--primary:hover:not(:disabled) {
-  background: #2f66bd;
+  background: rgb(57 120 212 / 8%);
 }
 .link-dialog__btn:disabled {
   cursor: default;

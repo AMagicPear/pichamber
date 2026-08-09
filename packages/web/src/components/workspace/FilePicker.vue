@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import type { DirEntry } from "@pichamber/shared";
 import { listDirectory, toMessage } from "@/api/client";
 import FolderOpenIcon from "@/assets/icons/FolderOpen.svg";
+import IconButton from "@/components/IconButton.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import { getEntryIcon } from "@/components/workspace/fileIcon";
 
@@ -78,16 +79,9 @@ const pick = (entry: DirEntry) => {
   >
     <div class="file-picker">
       <div class="file-picker__path">
-        <button
-          type="button"
-          class="file-picker__up"
-          :disabled="!cwd"
-          aria-label="Up one level"
-          title="Up one level"
-          @click="goUp"
-        >
+        <IconButton size="compact" label="Up one level" :disabled="!cwd" @click="goUp">
           <FolderOpenIcon />
-        </button>
+        </IconButton>
         <span class="file-picker__cwd">{{ displayPath }}</span>
       </div>
       <ul class="file-picker__list">
@@ -125,32 +119,7 @@ const pick = (entry: DirEntry) => {
   gap: 8px;
   margin-bottom: 4px;
   padding: 6px 6px 6px 4px;
-  border-bottom: 1px solid #efece4;
-}
-.file-picker__up {
-  display: inline-flex;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #888;
-  cursor: pointer;
-}
-.file-picker__up:hover:not(:disabled) {
-  background: rgb(0 0 0 / 5%);
-  color: #171717;
-}
-.file-picker__up:disabled {
-  cursor: default;
-  opacity: 0.35;
-}
-.file-picker__up svg {
-  width: 15px;
-  height: 15px;
+  border-bottom: 1px solid #ededed;
 }
 .file-picker__cwd {
   flex: 1;
@@ -194,9 +163,9 @@ const pick = (entry: DirEntry) => {
   font-size: 11px;
 }
 .file-picker__state {
-  padding: 14px 8px;
+  padding: 16px;
   color: #888;
-  font-size: 13px;
+  font-size: 12px;
   text-align: center;
 }
 .file-picker__state--error {

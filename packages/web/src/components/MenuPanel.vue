@@ -55,15 +55,10 @@ defineProps<{
   max-height: calc(100vh - 80px);
   overflow: hidden;
   padding: 4px;
+  border: 1px solid #e2dfd5;
   border-radius: 10px;
   background: #fff;
-  box-shadow:
-    inset 0 1px 0 0 rgb(255 255 255 / 80%),
-    inset 0 0 0 1px rgb(0 0 0 / 4%),
-    0 0 0 1px rgb(0 0 0 / 10%),
-    0 1px 2px -0.5px rgb(0 0 0 / 8%),
-    0 4px 8px -2px rgb(0 0 0 / 8%),
-    0 12px 20px -4px rgb(0 0 0 / 8%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
 }
 .menu-panel :deep(.menu-item) {
   display: flex;
@@ -82,7 +77,7 @@ defineProps<{
   cursor: pointer;
 }
 .menu-panel :deep(.menu-item:hover) {
-  background: rgb(0 0 0 / 5%);
+  background: rgb(0 0 0 / 4%);
 }
 .menu-panel :deep(.menu-item.is-active) {
   background: var(--menu-item-active-bg, rgb(57 120 212 / 12%));
