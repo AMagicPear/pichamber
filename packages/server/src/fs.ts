@@ -15,27 +15,9 @@
  */
 import { readdir, realpath, stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import type { DirEntry, ListResult } from "@pichamber/shared";
 
 import { getWorkspace, isWithinWorkspace, resolveInWorkspace, shortPath } from "./workspace";
-
-export { shortPath };
-
-export interface DirEntry {
-  name: string;
-  path: string;
-  /** Path relative to the workspace root, or empty if outside. */
-  relativePath: string;
-  isDirectory: boolean;
-  isFile: boolean;
-  isSymbolicLink: boolean;
-}
-
-export interface ListResult {
-  path: string;
-  /** Display form of `path` (`~` for the workspace root). */
-  displayPath: string;
-  entries: DirEntry[];
-}
 
 export class WorkspaceError extends Error {
   readonly status: number;

@@ -74,3 +74,44 @@ export type ClientMessage =
   | { type: "prompt"; message: string }
   | { type: "set_model"; provider: string; modelId: string }
   | { type: "set_thinking_level"; level: ThinkingLevel };
+
+// ─── REST wire types ───────────────────────────────────────────────────
+
+/** Request body for POST /api/pty/start. */
+export type PtyStartOptions = {
+  /** Working directory for the spawned shell. Defaults to the user's home. */
+  cwd?: string;
+  cols: number;
+  rows: number;
+  /** Override the shell binary. Defaults to $SHELL or platform default. */
+  shell?: string;
+};
+
+/** Response body for POST /api/pty/start. */
+export type PtyStartResult = {
+  ptyId: string;
+  shell: string;
+  cwd: string;
+  /** Display title (`~`, `~/projects/foo`, or full path). Server computes
+   *  this from the cwd so the client never duplicates the `~/` collapsing. */
+  title: string;
+};
+
+/** One entry in GET /api/fs/list. */
+export type DirEntry = {
+  name: string;
+  path: string;
+  /** Path relative to the active workspace root, or "" if outside. */
+  relativePath: string;
+  isDirectory: boolean;
+  isFile: boolean;
+  isSymbolicLink: boolean;
+};
+
+/** Response body for GET /api/fs/list. */
+export type ListResult = {
+  path: string;
+  /** Display form of `path` (`~` for the workspace root). */
+  displayPath: string;
+  entries: DirEntry[];
+};

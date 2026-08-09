@@ -13,7 +13,7 @@ import ConversationMessages from "@/components/workspace/ConversationMessages.vu
 import UserInputBlock from "@/components/workspace/UserInputBlock.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { entries, workspace } from "@/stores/workspace";
-import { watch } from "vue";
+import { computed, watch } from "vue";
 
 const presets = [
   { label: "Explore the codebase", icon: CompassIcon },
@@ -41,6 +41,14 @@ const {
   setThinkingLevel,
 } = useConversationSession(entries);
 
+const hasConversation = computed(
+  () =>
+    entries.value.length > 0 ||
+    live.value.pendingUserMessages.length > 0 ||
+    live.value.streamingMessage !== undefined ||
+    live.value.toolExecutions.length > 0,
+);
+
 watch(
   () => workspace.sessionId,
   (sessionId) => {
@@ -52,12 +60,8 @@ watch(
 </script>
 
 <template>
-  <section class="conversation" :class="{ 'conversation--active': entries.length > 0 || live.pendingUserMessages.length > 0 || live.streamingMessage }">
-    <ConversationMessages
-      v-if="entries.length > 0 || live.pendingUserMessages.length > 0 || live.streamingMessage || live.toolExecutions.length > 0"
-      :entries="entries"
-      :live="live"
-    />
+  <section class="conversation" :class="{ 'conversation--active': hasConversation }">
+    <ConversationMessages v-if="hasConversation" :entries="entries" :live="live" />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <div v-if="lastError" class="conversation__error" role="alert">

@@ -109,16 +109,14 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         broadcast({ type: "live", live: liveState(channel) });
       }
     } else if (event.type === "entry_appended") {
-      if (
-        event.entry.type === "model_change" ||
-        event.entry.type === "thinking_level_change"
-      ) {
-        // Pi emits several synchronous events for one model switch. Queue
-        // one snapshot for the whole mutation instead of broadcasting the
-        // same model inventory once per entry.
+      const isModelEntry =
+        event.entry.type === "model_change" || event.entry.type === "thinking_level_change";
+      // Pi emits several synchronous events for one model switch. Queue
+      // one snapshot for the whole mutation instead of broadcasting the
+      // same model inventory once per entry.
+      if (isModelEntry) {
         queueModelStateBroadcast();
-      }
-      if (event.entry.type !== "model_change" && event.entry.type !== "thinking_level_change") {
+      } else {
         broadcast({ type: "messages", messages: getConversationMessages(session) });
       }
     } else if (event.type === "agent_settled") {

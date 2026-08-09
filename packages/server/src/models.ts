@@ -30,9 +30,6 @@ const toDescriptor = (model: AvailableModel): ModelDescriptor => ({
   reasoning: Boolean(model.reasoning),
 });
 
-export const getModelDescriptor = (model: AvailableModel | undefined): ModelDescriptor | undefined =>
-  model ? toDescriptor(model) : undefined;
-
 /** Returns every model whose provider has auth configured. The runtime
  *  filters out unconfigured providers internally — no need to filter
  *  again here. */
@@ -52,7 +49,7 @@ export const getEffectiveModelDescriptor = async (
   const current = session.model;
   if (!current) return { model: undefined, availableModels };
   const match = availableModels.find((m) => m.provider === current.provider && m.id === current.id);
-  return { model: match ?? getModelDescriptor(current), availableModels };
+  return { model: match ?? toDescriptor(current), availableModels };
 };
 
 export const getThinkingState = (session: AgentSession): ThinkingState => ({

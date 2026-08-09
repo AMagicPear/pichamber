@@ -7,26 +7,11 @@
  * resolves the active workspace; both `pty.ts` and `fs.ts` read from here
  * so they stay aligned automatically.
  */
+import { homedir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 
-/**
- * Resolve the current user's home directory, working across
- * macOS, Linux and Windows without depending on runtime-specific
- * `os.homedir()` semantics.
- */
-export const getHomeDir = (): string => {
-  if (process.env.HOME) return process.env.HOME;
-  if (process.env.USERPROFILE) return process.env.USERPROFILE;
-  if (process.platform === "win32") {
-    const drive = process.env.HOMEDRIVE ?? "C:";
-    const path = process.env.HOMEPATH ?? "\\Users\\Default";
-    return `${drive}${path}`;
-  }
-  return "/";
-};
-
 /** Return the absolute path of the active workspace root. */
-export const getWorkspace = (): string => getHomeDir();
+export const getWorkspace = (): string => homedir();
 
 /**
  * Collapse a workspace-rooted path to its display form. Used for tab

@@ -2,8 +2,6 @@
 import { computed, useTemplateRef, watch } from "vue";
 import { useSplitPaneDrag } from "@/composables/layout/useSplitPaneDrag";
 
-defineOptions({ name: "SplitPane" });
-
 type SplitPaneMode = "top" | "bottom" | "left" | "right";
 
 const props = withDefaults(

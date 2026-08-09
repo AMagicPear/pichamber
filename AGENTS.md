@@ -24,7 +24,6 @@ Vue 3 + Bun 薄壳，wrap `pi` coding agent + 真实 shell 终端。
 
 ## 约定
 
-- **Pinia**：只放 UI 状态（主题/面板/布局），不放 server 数据
 - **Vue `:key`**：必须用稳定 id，异步 server id 单独存字段 —— 改 key 会触发 unmount/remount，副作用很贵（PTY 那个 bug 就是这个）
 - **图标**：`vite-svg-loader` 把 SVG 当 Vue 组件 import
 - **函数风格**：实现代码优先 `const foo = (...) => {}`；`void` / `Promise<void>` 返回类型通常交给 TypeScript 推断，非 `void` 返回类型只有在 API 表达更清楚或推断不直观时再显式标注

@@ -3,10 +3,9 @@
 import { statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { spawn, type IDisposable, type IPty } from "bun-pty";
+import type { PtyStartOptions, PtyStartResult } from "@pichamber/shared";
 
 import { getWorkspace, shortPath } from "./workspace";
-
-export { shortPath };
 
 export interface PtyHandle {
   id: string;
@@ -18,23 +17,6 @@ export interface PtyHandle {
   orphanTimer?: ReturnType<typeof setTimeout>;
   shell: string;
   cwd: string;
-  title: string;
-}
-
-export interface PtyStartOptions {
-  /** Working directory for the spawned shell. Defaults to the user's home. */
-  cwd?: string;
-  cols: number;
-  rows: number;
-  /** Override the shell binary. Defaults to $SHELL or platform default. */
-  shell?: string;
-}
-
-export interface PtyStartResult {
-  ptyId: string;
-  shell: string;
-  cwd: string;
-  /** Display title (`~`, `~/projects/foo`, or full path). */
   title: string;
 }
 

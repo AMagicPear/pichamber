@@ -1,4 +1,5 @@
 import { getEntryIcon } from "./fileIcon";
+import { inline } from "./messageContent";
 
 export type ConversationToolDetail = {
   label: string;
@@ -26,8 +27,6 @@ const recordValue = (args: unknown, key: "command" | "path") => {
   const value = key === "path" ? record.path ?? record.file_path : record.command;
   return typeof value === "string" ? value : undefined;
 };
-
-const inline = (value: string) => value.replace(/\s+/g, " ").trim();
 
 const splitFilePath = (path: string) => {
   const separator = path.lastIndexOf("/");

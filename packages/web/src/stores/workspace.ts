@@ -37,7 +37,6 @@ export const loadSessions = () => {
     try {
       sessions.value = await listSessions();
       sessionsError.value = null;
-      console.log("[workspace] loaded sessions of num:", sessions.value.length);
     } catch (error) {
       sessionsError.value = toMessage(error);
       // 失败后清空缓存，允许后续调用重新加载
@@ -59,5 +58,4 @@ export const updateWorkspace = async (sessionId: string) => {
   workspace.sessionName = sessionTitle(session ?? sessionId);
   workspace.folderName = session?.cwd?.split("/")?.pop() ?? null;
   workspace.cwd = session?.cwd ?? null;
-  console.log("[workspace] updated", workspace);
 };

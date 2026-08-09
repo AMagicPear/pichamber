@@ -4,37 +4,27 @@ import IconButton from "@/components/IconButton.vue";
 import SplitPane from "@/components/layout/SplitPane.vue";
 import SettingsModal from "@/components/layout/SettingsModal.vue";
 import SettingsView from "@/components/modals/SettingsView.vue";
-import { saveUiState, ui } from "@/stores/ui";
+import { ui } from "@/stores/ui";
 import ContextPanel from "@/components/panels/ContextPanel.vue";
 import SessionHeader from "@/components/panels/SessionHeader.vue";
 import SessionSidebar from "@/components/panels/SessionSidebar.vue";
 import TerminalPanel from "@/components/panels/TerminalPanel.vue";
 import ConversationPanel from "./components/panels/ConversationPanel.vue";
 import { useRouter } from "vue-router";
-import { updateWorkspace } from "./stores/workspace";
-import { watch } from "vue";
-import { workspace } from "./stores/workspace";
-import { createSession } from "./api/client.ts";
+import { updateWorkspace, workspace } from "./stores/workspace";
+import { createSession } from "./api/client";
 
 const router = useRouter();
 
-watch(ui, () => {
-  saveUiState(ui.panels, ui.maximized);
-}, { deep: true });
-
-router.afterEach(async (to, from) => {
+router.afterEach(async (to) => {
   if (to.name == "new-session") {
-    if (!workspace.cwd) console.warn("[route] switching to new session but workspace.cwd is null");
-    console.info(`[route] switching to new session at ${workspace.cwd}`)
-    const session = await createSession(workspace.cwd ?? "~")
-    console.info(`created new session ${session.sessionId}`)
+    const session = await createSession(workspace.cwd ?? "~");
     workspace.sessionId = session.sessionId;
   } else if (to.name == "session") {
     const sessionId = to.params.sessionId;
     if (typeof sessionId === "string") updateWorkspace(sessionId);
   }
 });
-
 </script>
 
 <template>
