@@ -166,4 +166,18 @@ button {
   min-width: 0;
   min-height: 0;
 }
+
+/* Shared popover panel transition (model selector, thinking selector).
+ * Panels are teleported to <body>, so these classes are global. */
+.popover-enter-active,
+.popover-leave-active {
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
+}
+.popover-enter-from,
+.popover-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
 </style>

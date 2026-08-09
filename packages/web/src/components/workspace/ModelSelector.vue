@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
 import type { ModelDescriptor } from "@pichamber/shared";
+import MenuPanel from "@/components/MenuPanel.vue";
 import ProviderLogo from "./ProviderLogo";
 import { usePopover } from "@/composables/usePopover";
 
@@ -22,7 +23,7 @@ const searchInput = ref<HTMLInputElement | null>(null);
 const { open, style, close: closePopover, toggle } = usePopover({
   root,
   trigger: ".model-selector__trigger",
-  panel: ".model-selector__panel",
+  panel: ".menu-panel",
   width: 360,
   height: 360,
   onOpen: () => searchInput.value?.focus(),
@@ -68,7 +69,7 @@ const placeholder = computed(() => {
 </script>
 
 <template>
-  <div ref="root" class="model-selector" :class="{ 'is-open': open }">
+  <div ref="root" class="model-selector">
     <button
       type="button"
       class="model-selector__trigger"
@@ -82,39 +83,43 @@ const placeholder = computed(() => {
       <ArrowDownSIcon class="model-selector__chevron" />
     </button>
 
-    <Teleport v-if="open" to="body">
-      <div class="model-selector__panel" role="listbox" :style="style">
-        <div class="model-selector__search">
-          <input
-            ref="searchInput"
-            v-model="search"
-            type="text"
-            placeholder="Filter models…"
-            aria-label="Filter models"
-            @keydown.esc="close"
-          />
-        </div>
-        <div class="model-selector__list">
-          <div v-for="[provider, models] in grouped" :key="provider" class="model-selector__group">
-            <div class="model-selector__group-title">{{ provider }}</div>
-            <button
-              v-for="candidate in models"
-              :key="`${candidate.provider}/${candidate.id}`"
-              type="button"
-              class="model-selector__item"
-              role="option"
-              :aria-selected="model?.provider === candidate.provider && model?.id === candidate.id"
-              :class="{ 'is-active': model?.provider === candidate.provider && model?.id === candidate.id }"
-              @click="onSelect(candidate)"
-            >
-              <ProviderLogo class="model-selector__item-icon" :provider-id="candidate.provider" :size="16" />
-              <span class="model-selector__item-name">{{ candidate.name }}</span>
-            </button>
-          </div>
-          <div v-if="grouped.length === 0" class="model-selector__empty">No matches.</div>
-        </div>
+    <MenuPanel
+      :open="open"
+      :style="style"
+      :width="360"
+      :height="360"
+      role="listbox"
+    >
+      <div class="model-selector__search">
+        <input
+          ref="searchInput"
+          v-model="search"
+          type="text"
+          placeholder="Filter models…"
+          aria-label="Filter models"
+          @keydown.esc="close"
+        />
       </div>
-    </Teleport>
+      <div class="model-selector__list">
+        <div v-for="[provider, models] in grouped" :key="provider" class="model-selector__group">
+          <div class="model-selector__group-title">{{ provider }}</div>
+          <button
+            v-for="candidate in models"
+            :key="`${candidate.provider}/${candidate.id}`"
+            type="button"
+            class="menu-item"
+            role="option"
+            :aria-selected="model?.provider === candidate.provider && model?.id === candidate.id"
+            :class="{ 'is-active': model?.provider === candidate.provider && model?.id === candidate.id }"
+            @click="onSelect(candidate)"
+          >
+            <ProviderLogo class="model-selector__item-icon" :provider-id="candidate.provider" :size="16" />
+            <span class="model-selector__item-name">{{ candidate.name }}</span>
+          </button>
+        </div>
+        <div v-if="grouped.length === 0" class="model-selector__empty">No matches.</div>
+      </div>
+    </MenuPanel>
   </div>
 </template>
 
@@ -164,22 +169,7 @@ const placeholder = computed(() => {
   opacity: 0.55;
 }
 
-/* The panel is teleported to <body>. Scoped CSS still rewrites class
- * attribute selectors, so the rule below keeps matching after teleport.
- * Keeping `max-height` so tiny viewports don't push it off-screen. */
-.model-selector__panel {
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  width: 360px;
-  height: 360px;
-  max-height: calc(100vh - 80px);
-  overflow: hidden;
-  border: 1px solid #e2dfd5;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
-}
+/* The shared MenuPanel sizes the 360×360 box via the width/height props. */
 .model-selector__search {
   flex: 0 0 auto;
   padding: 8px;
@@ -215,29 +205,6 @@ const placeholder = computed(() => {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-.model-selector__item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-.model-selector__item:hover {
-  background: rgb(0 0 0 / 5%);
-}
-.model-selector__item.is-active {
-  background: rgb(57 120 212 / 12%);
-  color: #1f3a6b;
 }
 .model-selector__item-name {
   flex: 1 1 auto;

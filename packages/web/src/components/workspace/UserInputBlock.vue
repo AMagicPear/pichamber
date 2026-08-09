@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ModelDescriptor } from "@pichamber/shared";
+import { ref } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
+import Attachment2Icon from "@/assets/icons/Attachment2.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
+import GithubIcon from "@/assets/icons/Github.svg";
+import GitPullRequestIcon from "@/assets/icons/GitPullRequest.svg";
 import MicIcon from "@/assets/icons/Mic.svg";
 import SendIcon from "@/assets/icons/SendPlane2.svg";
-import ShieldUserIcon from "@/assets/icons/ShieldUser.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
+import MenuPanel from "@/components/MenuPanel.vue";
 import ModelSelector from "@/components/workspace/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
+import { usePopover } from "@/composables/usePopover";
 
 const draft = defineModel<string | undefined>({ required: true });
 
@@ -34,6 +39,18 @@ const onKeydown = (event: KeyboardEvent) => {
     emit("send");
   }
 };
+
+// The attachment menu is UI-only for now — selecting an item closes the
+// menu; actions (file picker, GitHub issue/PR link) land later.
+const attachRoot = ref<HTMLElement | null>(null);
+const { open: attachOpen, style: attachStyle, close: closeAttach, toggle: toggleAttach } = usePopover({
+  root: attachRoot,
+  trigger: ".composer__attach-trigger",
+  panel: ".menu-panel",
+  width: 190,
+  // 4px panel padding + three 28px menu rows.
+  height: () => 4 + 3 * 28,
+});
 </script>
 
 <template>
@@ -47,9 +64,32 @@ const onKeydown = (event: KeyboardEvent) => {
     />
     <div class="composer__footer">
       <div class="composer__footer-leading">
-        <IconButton size="compact" label="Add attachment"><AddCircleIcon /></IconButton>
+        <div ref="attachRoot" class="composer__attach">
+          <IconButton
+            class="composer__attach-trigger"
+            size="compact"
+            label="Add attachment"
+            :aria-expanded="attachOpen"
+            @click="toggleAttach"
+          >
+            <AddCircleIcon />
+          </IconButton>
+          <MenuPanel :open="attachOpen" :style="attachStyle" role="menu" aria-label="Composer actions">
+            <button type="button" class="menu-item" role="menuitem" @click="closeAttach">
+              <Attachment2Icon />
+              Attach files
+            </button>
+            <button type="button" class="menu-item" role="menuitem" @click="closeAttach">
+              <GithubIcon />
+              Link GitHub Issue
+            </button>
+            <button type="button" class="menu-item" role="menuitem" @click="closeAttach">
+              <GitPullRequestIcon />
+              Link GitHub PR
+            </button>
+          </MenuPanel>
+        </div>
         <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
-        <IconButton size="compact" label="Permissions"><ShieldUserIcon /></IconButton>
         <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
       </div>
       <div class="composer__footer-trailing">
@@ -123,6 +163,10 @@ const onKeydown = (event: KeyboardEvent) => {
 .composer__models {
   display: flex;
   align-items: center;
+}
+.composer__attach {
+  position: relative;
+  display: inline-flex;
 }
 .composer__footer-leading {
   flex: 0 0 auto;

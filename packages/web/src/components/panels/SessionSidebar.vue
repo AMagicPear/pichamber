@@ -79,7 +79,6 @@ onMounted(async () => {
         <IconButton label="Search sessions"><SearchIcon /></IconButton>
         <IconButton label="Select sessions"><CheckboxMultipleIcon /></IconButton>
         <IconButton label="Sort projects"><SortDescIcon /></IconButton>
-        <IconButton label="Display options"><SettingsIcon /></IconButton>
       </div>
     </div>
 

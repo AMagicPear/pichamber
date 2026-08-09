@@ -1,6 +1,7 @@
 /**
  * Shared popover logic for teleported panels (model selector, thinking
- * selector, …).
+ * selector, composer attach menu, …). The panels themselves share the
+ * container/item styling via `MenuPanel`.
  *
  * Owns the open state, the fixed-position math (flip above the trigger,
  * clamp to the viewport), and the global listeners that close the panel:

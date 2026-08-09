@@ -81,7 +81,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
 }
 .modal-container--sm {
   width: calc(100vw - 32px);
-  max-width: 320px;
+  max-width: 300px;
   padding: 24px;
 }
 .modal-container--sm .modal__body {

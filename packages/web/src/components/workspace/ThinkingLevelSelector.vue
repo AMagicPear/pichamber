@@ -3,6 +3,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { computed, ref } from "vue";
 import AiGenerate2Icon from "@/assets/icons/AiGenerate2.svg";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
+import MenuPanel from "@/components/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 
 const props = defineProps<{
@@ -19,7 +20,7 @@ const root = ref<HTMLElement | null>(null);
 const { open, style, close, toggle } = usePopover({
   root,
   trigger: ".thinking-selector__trigger",
-  panel: ".thinking-selector__panel",
+  panel: ".menu-panel",
   width: 156,
   // 8px panel padding + one 28px row per level (used only for flip math;
   // the panel sizes itself).
@@ -53,7 +54,7 @@ const onSelect = (next: ThinkingLevel) => {
 </script>
 
 <template>
-  <div ref="root" class="thinking-selector" :class="{ 'is-open': open }">
+  <div ref="root" class="thinking-selector">
     <button
       type="button"
       class="thinking-selector__trigger"
@@ -65,23 +66,29 @@ const onSelect = (next: ThinkingLevel) => {
       <span class="thinking-selector__label">{{ currentLabel }}</span>
       <ArrowDownSIcon class="thinking-selector__chevron" />
     </button>
-    <Teleport v-if="open" to="body">
-      <div class="thinking-selector__panel" role="listbox" :style="style">
-        <button
-          v-for="level in visibleLevels"
-          :key="level"
-          type="button"
-          class="thinking-selector__item"
-          role="option"
-          :aria-selected="level === props.level"
-          :class="{ 'is-active': level === props.level }"
-          @click="onSelect(level)"
-        >
-          <span>{{ labels[level] }}</span>
-          <span class="thinking-selector__hint">{{ level }}</span>
-        </button>
-      </div>
-    </Teleport>
+    <MenuPanel
+      :open="open"
+      :style="{
+        ...style,
+        '--menu-item-active-bg': 'rgb(113 141 40 / 14%)',
+        '--menu-item-active-color': '#4f631c',
+      }"
+      role="listbox"
+    >
+      <button
+        v-for="level in visibleLevels"
+        :key="level"
+        type="button"
+        class="menu-item menu-item--split"
+        role="option"
+        :aria-selected="level === props.level"
+        :class="{ 'is-active': level === props.level }"
+        @click="onSelect(level)"
+      >
+        <span>{{ labels[level] }}</span>
+        <span class="menu-item__hint">{{ level }}</span>
+      </button>
+    </MenuPanel>
   </div>
 </template>
 
@@ -127,51 +134,5 @@ const onSelect = (next: ThinkingLevel) => {
   height: 14px;
   flex: 0 0 14px;
   opacity: 0.55;
-}
-
-/* Teleported to <body>; the scoped attribute rewrite keeps the matching
- * working. */
-.thinking-selector__panel {
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  min-width: 156px;
-  max-height: calc(100vh - 80px);
-  overflow: hidden;
-  border: 1px solid #e2dfd5;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
-  padding: 4px;
-}
-.thinking-selector__item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 28px;
-  padding: 4px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-.thinking-selector__item:hover {
-  background: rgb(0 0 0 / 5%);
-}
-.thinking-selector__item.is-active {
-  background: rgb(113 141 40 / 14%);
-  color: #4f631c;
-}
-.thinking-selector__hint {
-  color: #999;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 </style>
