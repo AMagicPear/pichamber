@@ -34,3 +34,15 @@
   color: #292827;
   overflow-wrap: anywhere;
 }
+
+/* Links keep markstream's muted tone (the default LinkNode style) instead
+ * of the browser's deep blue. `--link-color` is defined on the
+ * .markstream-vue theme root and inherits down here. */
+.markdown-chat a {
+  color: var(--link-color, hsl(215 55% 62%));
+  text-decoration: none;
+}
+.markdown-chat a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
