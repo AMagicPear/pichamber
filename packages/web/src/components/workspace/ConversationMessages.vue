@@ -1,19 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import MarkdownRender from "markstream-vue";
-import type {
-  ConversationTranscriptMessage,
-  LiveConversationState,
-} from "@pichamber/shared";
+import type { LiveItem } from "@pichamber/shared";
 import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
-import { conversationToolDetail } from "./conversationToolDetail";
+import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
 import { messageText } from "./messageContent";
 import { workspace } from "@/stores/workspace";
 
 const props = defineProps<{
-  entries: ConversationTranscriptMessage[];
-  live: LiveConversationState;
+  items: LiveItem[];
 }>();
 
 /* ── Scroll anchoring (event-driven, following the StackBlitz
@@ -100,85 +96,39 @@ watch(
   { immediate: true },
 );
 
-const messageFor = (entry: ConversationTranscriptMessage) => entry.message;
-
-type ToolCall = { id: string; name: string; arguments: unknown };
-
-const toolCallsById = computed(() => {
-  const calls = new Map<string, ToolCall>();
-  for (const entry of props.entries) {
-    const content = (messageFor(entry) as { content?: unknown }).content;
-    if (!Array.isArray(content)) continue;
-    for (const part of content) {
-      if (!part || typeof part !== "object" || !("type" in part) || part.type !== "toolCall") continue;
-      if (typeof part.id !== "string" || typeof part.name !== "string") continue;
-      calls.set(part.id, { id: part.id, name: part.name, arguments: part.arguments });
-    }
-  }
-  return calls;
-});
-
-const historyToolDetail = (entry: ConversationTranscriptMessage) => {
-  const message = messageFor(entry);
-  const meta = message as { toolCallId?: unknown; toolName?: unknown; isError?: boolean } | undefined;
-  const toolCallId = typeof meta?.toolCallId === "string" ? meta.toolCallId : undefined;
-  const call = toolCallId ? toolCallsById.value.get(toolCallId) : undefined;
-  const toolName = typeof meta?.toolName === "string" ? meta.toolName : "";
-  const output = messageText(message) || JSON.stringify(message, null, 2);
+/** 工具条目渲染详情：提交后优先用权威 toolResult 消息内容，live 阶段用执行进度。 */
+const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationToolDetail => {
+  const { tool, message } = item;
+  const messageMeta = message as { toolName?: unknown; isError?: unknown } | undefined;
+  const output = message
+    ? messageText(message) || JSON.stringify(message, null, 2)
+    : JSON.stringify(tool.result === undefined ? tool.args : tool.result, null, 2);
   return conversationToolDetail({
-    toolName,
-    args: call?.arguments,
+    toolName: tool.toolName || (typeof messageMeta?.toolName === "string" ? messageMeta.toolName : ""),
+    args: tool.args,
     output,
-    isError: meta?.isError === true,
-    fallbackPreview: messageText(message),
+    isError: messageMeta?.isError === true || tool.isError === true,
+    fallbackPreview: messageText(message) || JSON.stringify(tool.args),
   });
 };
-
-const liveToolDetails = computed(() =>
-  props.live.toolExecutions.map((tool) => ({
-    toolCallId: tool.toolCallId,
-    detail: conversationToolDetail({
-      toolName: tool.toolName,
-      args: tool.args,
-      output: JSON.stringify(tool.result === undefined ? tool.args : tool.result, null, 2),
-      isError: tool.isError === true,
-      fallbackPreview: JSON.stringify(tool.args),
-    }),
-  })),
-);
 </script>
 
 <template>
   <div ref="scroller" class="conversation__messages scroll-fade-bottom" @scroll="onScroll" @wheel="onWheel">
     <div ref="content" class="conversation__content">
-      <template v-for="entry in entries" :key="entry.id">
-      <article v-if="messageFor(entry)?.role === 'user'" class="conversation-message conversation-message--user">
-        <MarkdownRender
-          class="conversation-message__user markdown-chat"
-          mode="chat"
-          :content="messageText(messageFor(entry))"
-          :final="true"
-          :fade="false"
-        />
-      </article>
-      <AssistantMessage v-else-if="messageFor(entry)?.role === 'assistant'" :message="messageFor(entry)" :final="true" />
-      <ToolResultMessage v-else-if="messageFor(entry)?.role === 'toolResult'" :detail="historyToolDetail(entry)" />
-      <!-- Other roles (custom, compaction/branch summaries) render as a plain
-           spacer so the transcript keeps its rhythm. -->
-      <article v-else class="conversation-message" />
-    </template>
-
-    <article v-for="(message, index) in live.pendingUserMessages" :key="`live-user:${index}`" class="conversation-message conversation-message--user">
-      <MarkdownRender
-        class="conversation-message__user markdown-chat"
-        mode="chat"
-        :content="messageText(message)"
-        :final="true"
-        :fade="false"
-      />
-    </article>
-      <AssistantMessage v-if="live.streamingMessage" :message="live.streamingMessage" :final="false" />
-      <ToolResultMessage v-for="tool in liveToolDetails" :key="tool.toolCallId" :detail="tool.detail" />
+      <template v-for="item in items" :key="item.id">
+        <article v-if="item.kind === 'user'" class="conversation-message conversation-message--user">
+          <MarkdownRender
+            class="conversation-message__user markdown-chat"
+            mode="chat"
+            :content="messageText(item.message)"
+            :final="true"
+            :fade="false"
+          />
+        </article>
+        <AssistantMessage v-else-if="item.kind === 'assistant'" :message="item.message" :final="item.phase === 'committed'" />
+        <ToolResultMessage v-else-if="item.kind === 'tool'" :detail="toolDetail(item)" />
+      </template>
     </div>
   </div>
 </template>

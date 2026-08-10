@@ -18,22 +18,32 @@ export type LiveToolExecution = Pick<ToolExecutionStartEvent, "toolCallId" | "to
   running: boolean;
 };
 
-/** Pi's `sessionEntryToContextMessages()` projection with the source entry identity retained for Vue. */
-export type ConversationTranscriptMessage = {
-  id: string;
-  message: AgentMessage;
-};
-
-export type LiveConversationState = {
-  pendingUserMessages: AgentMessage[];
-  streamingMessage?: AgentMessage;
-  toolExecutions: LiveToolExecution[];
-  /** True while an agent run is in progress (first message_start of the
-   *  run … agent_settled). Lets the client distinguish "mid-run lulls"
-   *  (e.g. between committing a reply and the next tool event) from the
-   *  run actually finishing. */
-  busy: boolean;
-};
+/** 一条统一的消息条目：回复、工具执行都按实际发生顺序排在同一个列表里。
+ *  id 由服务器铸造并终生不变（user/assistant 为 u-N/a-N，工具为 pi 的
+ *  toolCallId），流式/运行中为 live 阶段，落定后翻转为 committed ——
+ *  客户端按 id 原地更新即可，不需要任何搬运/去重逻辑。 */
+export type LiveItem =
+  | {
+      id: string;
+      kind: "user";
+      phase: "live" | "committed";
+      message: AgentMessage;
+    }
+  | {
+      id: string;
+      kind: "assistant";
+      phase: "live" | "committed";
+      message: AgentMessage;
+    }
+  | {
+      id: string;
+      kind: "tool";
+      phase: "live" | "committed";
+      /** 执行信息（参数/进度/结果），提交后仍保留以支撑标签渲染。 */
+      tool: LiveToolExecution;
+      /** 权威的 toolResult 消息，提交（message_end）后填充。 */
+      message?: AgentMessage;
+    };
 
 /** Slim model reference the server emits and accepts on the wire.
  *  We don't ship the full Model<Api> because the pi-ai type erases to
@@ -53,24 +63,26 @@ export type ThinkingState = {
   availableLevels: ThinkingLevel[];
 };
 
-/** JSON messages the server sends to session WebSocket clients. */
+/** JSON messages the server sends to session WebSocket clients.
+ *  每个消息都携带单调递增的 seq；客户端发现 seq 不连续即请求 resync。 */
 export type ServerMessage =
   | {
-      type: "ready";
-      sessionId: string;
-      messages: ConversationTranscriptMessage[];
-      live: LiveConversationState;
-      model: ModelDescriptor | undefined;
-      availableModels: ModelDescriptor[];
-      thinking: ThinkingState;
+      type: "snapshot";
+      seq: number;
+      busy: boolean;
+      items: LiveItem[];
+      model?: ModelDescriptor;
+      availableModels?: ModelDescriptor[];
+      thinking?: ThinkingState;
     }
-  | { type: "messages"; messages: ConversationTranscriptMessage[] }
-  | { type: "live"; live: LiveConversationState }
+  | { type: "item"; seq: number; item: LiveItem }
   | {
-      type: "model_state";
-      model: ModelDescriptor | undefined;
-      availableModels: ModelDescriptor[];
-      thinking: ThinkingState;
+      type: "state";
+      seq: number;
+      busy?: boolean;
+      model?: ModelDescriptor;
+      availableModels?: ModelDescriptor[];
+      thinking?: ThinkingState;
     }
   | { type: "error"; error: string };
 
@@ -78,7 +90,8 @@ export type ServerMessage =
 export type ClientMessage =
   | { type: "prompt"; message: string }
   | { type: "set_model"; provider: string; modelId: string }
-  | { type: "set_thinking_level"; level: ThinkingLevel };
+  | { type: "set_thinking_level"; level: ThinkingLevel }
+  | { type: "resync" };
 
 // ─── REST wire types ───────────────────────────────────────────────────
 

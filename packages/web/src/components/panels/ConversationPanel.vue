@@ -12,7 +12,7 @@ import IconButton from "@/components/IconButton.vue";
 import ConversationMessages from "@/components/workspace/ConversationMessages.vue";
 import UserInputBlock from "@/components/workspace/UserInputBlock.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
-import { entries, workspace } from "@/stores/workspace";
+import { workspace } from "@/stores/workspace";
 import { computed, watch } from "vue";
 
 const presets = [
@@ -32,22 +32,16 @@ const {
   disconnect,
   dismissError,
   lastError,
-  live,
+  items,
   send,
   model,
   availableModels,
   thinking,
   setModel,
   setThinkingLevel,
-} = useConversationSession(entries);
+} = useConversationSession();
 
-const hasConversation = computed(
-  () =>
-    entries.value.length > 0 ||
-    live.value.pendingUserMessages.length > 0 ||
-    live.value.streamingMessage !== undefined ||
-    live.value.toolExecutions.length > 0,
-);
+const hasConversation = computed(() => items.value.length > 0);
 
 watch(
   () => workspace.sessionId,
@@ -61,7 +55,7 @@ watch(
 
 <template>
   <section class="conversation" :class="{ 'conversation--active': hasConversation }">
-    <ConversationMessages v-if="hasConversation" :entries="entries" :live="live" />
+    <ConversationMessages v-if="hasConversation" :items="items" />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <div v-if="lastError" class="conversation__error" role="alert">
@@ -84,7 +78,7 @@ watch(
       @select-thinking-level="setThinkingLevel"
     />
 
-    <div v-if="entries.length === 0 && live.pendingUserMessages.length === 0 && !live.streamingMessage" class="presets" aria-label="Prompt starters">
+    <div v-if="items.length === 0" class="presets" aria-label="Prompt starters">
       <button
         v-for="preset in presets"
         :key="preset.label"

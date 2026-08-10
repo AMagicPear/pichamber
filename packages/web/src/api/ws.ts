@@ -1,29 +1,14 @@
-import type {
-  ConversationTranscriptMessage,
-  LiveConversationState,
-  ModelDescriptor,
-  ServerMessage,
-  ThinkingState,
-} from "@pichamber/shared";
+import type { ServerMessage } from "@pichamber/shared";
 
 export type WsHandle = {
   send: (message: unknown) => void;
   close: () => void;
 };
 
-/** Connection lifecycle status — distilled from server messages + transport events. */
+/** Connection lifecycle status — distilled from transport events only.
+ *  Protocol messages (snapshot/item/state/error) go straight to onMessage. */
 export type WsStatus =
-  | {
-      type: "ready";
-      messages?: ConversationTranscriptMessage[];
-      live?: LiveConversationState;
-      model?: ModelDescriptor;
-      availableModels?: ModelDescriptor[];
-      thinking?: ThinkingState;
-    }
-  | { type: "messages"; messages: ConversationTranscriptMessage[] }
-  | { type: "live"; live: LiveConversationState }
-  | { type: "model_state"; model?: ModelDescriptor; availableModels: ModelDescriptor[]; thinking: ThinkingState }
+  | { type: "ready" }
   | { type: "error"; error: string }
   | { type: "closed"; code?: number; reason?: string };
 
@@ -56,37 +41,15 @@ const createSocket = (
   };
 };
 
-/** Connect to the Pi AgentSession JSON protocol. */
+/** Connect to the session WebSocket. The server's first frame is a snapshot
+ *  carrying the full item list; every later frame is item/state/error. */
 export const connectSessionWs = (
   sessionId: string,
-  onMessage: (status: Extract<WsStatus, { type: "messages" | "live" }>) => void,
+  onMessage: (message: ServerMessage) => void,
   onStatus?: (status: WsStatus) => void,
 ): WsHandle =>
   createSocket(wsUrl(`/ws/${sessionId}`), (data) => {
-    const msg = JSON.parse(data) as ServerMessage;
-    if (msg.type === "messages") {
-      onMessage({ type: "messages", messages: msg.messages });
-    } else if (msg.type === "live") {
-      onMessage({ type: "live", live: msg.live });
-    } else if (msg.type === "model_state") {
-      onStatus?.({
-        type: "model_state",
-        model: msg.model,
-        availableModels: msg.availableModels,
-        thinking: msg.thinking,
-      });
-    } else if (msg.type === "ready") {
-      onStatus?.({
-        type: "ready",
-        messages: msg.messages,
-        live: msg.live,
-        model: msg.model,
-        availableModels: msg.availableModels,
-        thinking: msg.thinking,
-      });
-    } else if (msg.type === "error") {
-      onStatus?.({ type: "error", error: String(msg.error ?? "unknown error") });
-    }
+    onMessage(JSON.parse(data) as ServerMessage);
   }, onStatus);
 
 /** Connect to a PTY terminal WebSocket. Output is raw text; input accepts

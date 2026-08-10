@@ -1,20 +1,17 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { computed, onBeforeUnmount, ref, type Ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
 import { refreshSessions } from "@/stores/workspace";
-import type {
-  ConversationTranscriptMessage,
-  LiveConversationState,
-  ModelDescriptor,
-  ThinkingState,
-} from "@pichamber/shared";
+import type { LiveItem, ModelDescriptor, ServerMessage, ThinkingState } from "@pichamber/shared";
 
-export const useConversationSession = (entries: Ref<ConversationTranscriptMessage[]>) => {
+export const useConversationSession = () => {
   const draft = ref<string>();
   const connected = ref(false);
-  const live = ref<LiveConversationState>({ pendingUserMessages: [], toolExecutions: [], busy: false });
-  /** Empty until the server confirms available models in `ready`/`model_state`. */
+  /** 统一 item 流：服务器铸造的稳定 id 终生不变，live→committed 只翻字段。 */
+  const items = ref<LiveItem[]>([]);
+  const busy = ref(false);
+  /** Empty until the server confirms available models in `snapshot`/`state`. */
   const availableModels = ref<ModelDescriptor[]>([]);
   const model = ref<ModelDescriptor | undefined>();
   const thinking = ref<ThinkingState>({ level: "off", availableLevels: ["off"] });
@@ -25,42 +22,74 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
 
   let ws: WsHandle | null = null;
   let activeSessionId: string | null = null;
+  /** 已应用的广播序号；发现间隙就请求 resync（快照会重置）。 */
+  let lastSeq = 0;
+  let resyncPending = false;
 
   const applyModelState = (snapshot: {
     model?: ModelDescriptor;
-    availableModels: ModelDescriptor[];
-    thinking: ThinkingState;
+    availableModels?: ModelDescriptor[];
+    thinking?: ThinkingState;
   }) => {
-    model.value = snapshot.model;
-    availableModels.value = snapshot.availableModels;
-    thinking.value = snapshot.thinking;
+    if ("model" in snapshot) model.value = snapshot.model;
+    if (snapshot.availableModels) availableModels.value = snapshot.availableModels;
+    if (snapshot.thinking) thinking.value = snapshot.thinking;
   };
 
-  const canSend = computed(
-    () => connected.value && draft.value != undefined && draft.value.trim().length > 0,
-  );
+  /** 按 id 原地 upsert：顺序即服务器推送顺序，流式增长/阶段翻转都只改内容。 */
+  const applyItem = (item: LiveItem) => {
+    const index = items.value.findIndex((i) => i.id === item.id);
+    if (index === -1) items.value.push(item);
+    else items.value[index] = item;
+  };
+
+  const requestResync = () => {
+    if (resyncPending) return;
+    resyncPending = true;
+    ws?.send({ type: "resync" });
+  };
+
+  const onMessage = (message: ServerMessage) => {
+    if (message.type === "snapshot") {
+      resyncPending = false;
+      connected.value = true;
+      items.value = message.items;
+      busy.value = message.busy;
+      lastSeq = message.seq;
+      applyModelState(message);
+    } else if (message.type === "item") {
+      if (message.seq !== lastSeq + 1) {
+        requestResync();
+        return;
+      }
+      lastSeq = message.seq;
+      applyItem(message.item);
+    } else if (message.type === "state") {
+      if (message.seq !== lastSeq + 1) {
+        requestResync();
+        return;
+      }
+      lastSeq = message.seq;
+      if (message.busy !== undefined) busy.value = message.busy;
+      applyModelState(message);
+      // 服务器只在 agent_settled 发一次 busy=false —— 会话文件变了，刷新侧栏。
+      if (message.busy === false) void refreshSessions();
+    } else if (message.type === "error") {
+      lastError.value = message.error;
+    }
+  };
 
   const onStatus = (status: WsStatus) => {
-    if (status.type === "ready") {
-      connected.value = true;
-      entries.value = status.messages ?? [];
-      live.value = status.live ?? { pendingUserMessages: [], toolExecutions: [], busy: false };
-      lastError.value = null;
-      if (status.thinking) {
-        applyModelState({
-          model: status.model,
-          availableModels: status.availableModels ?? [],
-          thinking: status.thinking,
-        });
-      }
-    } else if (status.type === "model_state") {
-      applyModelState(status);
-    } else if (status.type === "closed") {
+    if (status.type === "closed") {
       connected.value = false;
     } else if (status.type === "error") {
       lastError.value = status.error;
     }
   };
+
+  const canSend = computed(
+    () => connected.value && draft.value != undefined && draft.value.trim().length > 0,
+  );
 
   const send = () => {
     const text = draft.value?.trim();
@@ -71,7 +100,7 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
     draft.value = undefined;
   };
 
-  /** Pi owns the model and thinking state. Wait for its model_state broadcast
+  /** Pi owns the model and thinking state. Wait for its state broadcast
    *  instead of guessing locally: setModel can fail after the user selects a
    *  model (for example when auth has just expired). */
   const setModel = (next: ModelDescriptor) => {
@@ -92,42 +121,24 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
     ws = null;
     activeSessionId = null;
     connected.value = false;
+    items.value = [];
+    busy.value = false;
     model.value = undefined;
     availableModels.value = [];
     thinking.value = { level: "off", availableLevels: ["off"] };
     lastError.value = null;
+    lastSeq = 0;
+    resyncPending = false;
   };
 
   const connect = (sessionId: string) => {
     if (activeSessionId === sessionId) return;
     disconnect();
     activeSessionId = sessionId;
-    entries.value = [];
-    live.value = { pendingUserMessages: [], toolExecutions: [], busy: false };
     try {
-      ws = connectSessionWs(
-        sessionId,
-        (message) => {
-          if (activeSessionId !== sessionId) return;
-          if (message.type === "messages") {
-            entries.value = message.messages;
-          } else {
-            live.value = message.live;
-            // The server marks the run idle only once, on agent_settled —
-            // that's the signal that the session file changed and the
-            // sidebar needs a refresh. (Mid-run lulls are busy, so this
-            // can't fire spuriously between tool events.)
-            if (!message.live.busy) {
-              void refreshSessions();
-            }
-          }
-        },
-        (status) => {
-          if (activeSessionId === sessionId) onStatus(status);
-        },
-      );
+      ws = connectSessionWs(sessionId, onMessage, onStatus);
     } catch (error) {
-      onStatus({ type: "error", error: toMessage(error) });
+      lastError.value = toMessage(error);
     }
   };
 
@@ -135,14 +146,15 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
 
   return {
     availableModels,
+    busy,
     canSend,
     connect,
+    connected,
     disconnect,
     dismissError,
     draft,
-    entries,
+    items,
     lastError,
-    live,
     model,
     send,
     setModel,

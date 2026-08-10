@@ -1,60 +1,75 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import type { LiveConversationState, LiveToolExecution, ServerMessage } from "@pichamber/shared";
+import type { LiveItem, ModelDescriptor, ServerMessage, ThinkingState } from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "./error";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
-import { deactivateSession, getConversationMessages, getSession } from "./session";
+import { conversationItems, deactivateSession, getSession } from "./session";
 import type { SessionWsData, WsHandler } from "./index";
 
 type BunWS = ServerWebSocket<SessionWsData>;
 
+type AssistantItem = Extract<LiveItem, { kind: "assistant" }>;
+
+/**
+ * 统一 item 流状态：所有会话内容（回复/工具执行）按实际发生顺序排在同一个
+ * 列表里，id 铸造后终生不变；权威状态（session manager）只在 agent_settled
+ * 时对齐一次（compaction/分支导航/重试后重建，按对象身份保持 id）。
+ */
+type ChannelState = {
+  items: LiveItem[];
+  /** 正在流式的 assistant item（message_start 到 message_end）。 */
+  streaming?: AssistantItem;
+  busy: boolean;
+  /** 广播序号：每个 ServerMessage 递增，客户端用它做间隙检测。 */
+  seq: number;
+  userCount: number;
+  assistantCount: number;
+  model: ModelDescriptor | undefined;
+  availableModels: ModelDescriptor[];
+  thinking: ThinkingState;
+};
+
 type SessionChannel = {
   sockets: Set<BunWS>;
   unsubscribe: () => void;
-  live: {
-    pendingUserMessages: LiveConversationState["pendingUserMessages"];
-    streamingMessage?: LiveConversationState["streamingMessage"];
-    toolExecutions: Map<string, LiveToolExecution>;
-    busy: boolean;
-  };
+  state: ChannelState;
   /** Re-snapshot model + thinking state and broadcast to all sockets. */
   queueModelStateBroadcast: () => void;
-  /** Re-snapshot the transcript and broadcast it — followed by the live
-   *  state — on the next microtask. Used to commit a just-finished message
-   *  into the transcript. */
-  queueCommitBroadcast: () => void;
 };
 
 // sessionId → one shared SDK listener plus all subscribed sockets.
 const channelsBySession = new Map<string, SessionChannel>();
 
-const liveState = (channel: SessionChannel): LiveConversationState => ({
-  busy: channel.live.busy,
-  pendingUserMessages: channel.live.pendingUserMessages,
-  streamingMessage: channel.live.streamingMessage,
-  toolExecutions: [...channel.live.toolExecutions.values()],
+const initialModelState = (): Pick<ChannelState, "model" | "availableModels" | "thinking"> => ({
+  model: undefined,
+  availableModels: [],
+  thinking: { level: "off", availableLevels: ["off"] },
 });
 
-/** Re-snapshot the active model + available models + thinking state and
- *  push it to every client watching this session. Errors are logged so a
- *  single transient provider hiccup can't kill the channel. */
-const broadcastModelState = (
-  session: AgentSession,
-  broadcast: (msg: ServerMessage) => void,
-  sessionIdForLog: string,
-) => {
-  getEffectiveModelDescriptor(session)
-    .then(({ model, availableModels }) => {
-      broadcast({
-        type: "model_state",
-        model,
-        availableModels,
-        thinking: getThinkingState(session),
-      });
-    })
-    .catch((error) => {
-      console.error("Failed to snapshot model state", sessionIdForLog, error);
-    });
+/** 把权威条目重建为 item 列表；无变化的场合（settle 时内容一致）跳过快照广播。 */
+const reconcile = (channel: SessionChannel, session: AgentSession, keepLive: boolean) => {
+  const state = channel.state;
+  const rebuilt = conversationItems(
+    session,
+    state.items.filter((item) => item.phase === "committed"),
+  );
+  const live = keepLive ? state.items.filter((item) => item.phase === "live") : [];
+  const next = [...rebuilt, ...live];
+  const changed =
+    next.length !== state.items.length ||
+    next.some(
+      (item, i) =>
+        state.items[i]?.id !== item.id ||
+        state.items[i]?.message !== item.message ||
+        state.items[i]?.phase !== item.phase,
+    );
+  state.items = next;
+  return changed;
+};
+
+const snapshotMessage = (channel: SessionChannel): ServerMessage => {
+  const { seq, busy, items, model, availableModels, thinking } = channel.state;
+  return { type: "snapshot", seq, busy, items, model, availableModels, thinking };
 };
 
 const attachListener = (sessionId: string, session: AgentSession): SessionChannel => {
@@ -67,27 +82,30 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     modelStateBroadcastQueued = true;
     queueMicrotask(() => {
       modelStateBroadcastQueued = false;
-      broadcastModelState(session, broadcast, sessionId);
-    });
-  };
-
-  let commitBroadcastQueued = false;
-  const queueCommitBroadcast = () => {
-    if (commitBroadcastQueued) return;
-    commitBroadcastQueued = true;
-    queueMicrotask(() => {
-      commitBroadcastQueued = false;
-      broadcast({ type: "messages", messages: getConversationMessages(session) });
-      broadcast({ type: "live", live: liveState(channel) });
+      getEffectiveModelDescriptor(session)
+        .then(({ model, availableModels }) => {
+          const channel = channelsBySession.get(sessionId);
+          if (!channel) return;
+          channel.state.model = model;
+          channel.state.availableModels = availableModels;
+          channel.state.thinking = getThinkingState(session);
+          broadcastState(channel, {
+            model,
+            availableModels,
+            thinking: channel.state.thinking,
+          });
+        })
+        .catch((error) => {
+          console.error("Failed to snapshot model state", sessionId, error);
+        });
     });
   };
 
   const channel: SessionChannel = {
     sockets: new Set(),
     unsubscribe: () => undefined,
-    live: { pendingUserMessages: [], toolExecutions: new Map(), busy: false },
+    state: { items: [], busy: false, seq: 0, userCount: 0, assistantCount: 0, ...initialModelState() },
     queueModelStateBroadcast,
-    queueCommitBroadcast,
   };
   const broadcast = (msg: ServerMessage) => {
     const payload = JSON.stringify(msg);
@@ -95,87 +113,159 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       if (bunWS.readyState === 1) bunWS.send(payload);
     }
   };
+  const broadcastItem = (item: LiveItem) => {
+    channel.state.seq += 1;
+    broadcast({ type: "item", seq: channel.state.seq, item });
+  };
+  const broadcastState = (
+    channel: SessionChannel,
+    fields: { busy?: boolean; model?: ModelDescriptor; availableModels?: ModelDescriptor[]; thinking?: ThinkingState },
+  ) => {
+    channel.state.seq += 1;
+    broadcast({ type: "state", seq: channel.state.seq, ...fields });
+  };
+  const broadcastSnapshot = () => {
+    channel.state.seq += 1;
+    broadcast(snapshotMessage(channel));
+  };
+
   channel.unsubscribe = session.subscribe((event) => {
-    if (event.type === "message_start") {
-      channel.live.busy = true;
-      if (event.message.role === "user") {
-        channel.live.pendingUserMessages.push(event.message);
-        broadcast({ type: "live", live: liveState(channel) });
-      } else if (event.message.role === "assistant") {
-        channel.live.streamingMessage = event.message;
-        broadcast({ type: "live", live: liveState(channel) });
+    const state = channel.state;
+    switch (event.type) {
+      case "message_start": {
+        if (!state.busy) {
+          state.busy = true;
+          broadcastState(channel, { busy: true });
+        }
+        const { role } = event.message;
+        if (role === "user") {
+          const item: LiveItem = {
+            id: `u-${++state.userCount}`,
+            kind: "user",
+            phase: "live",
+            message: event.message,
+          };
+          state.items.push(item);
+          broadcastItem(item);
+        } else if (role === "assistant") {
+          const item: AssistantItem = {
+            id: `a-${++state.assistantCount}`,
+            kind: "assistant",
+            phase: "live",
+            message: event.message,
+          };
+          state.items.push(item);
+          state.streaming = item;
+          broadcastItem(item);
+        }
+        break;
       }
-      // toolResult/custom messages are already surfaced via the live tool chips.
-    } else if (event.type === "message_update" && event.message.role === "assistant") {
-      channel.live.streamingMessage = event.message;
-      broadcast({ type: "live", live: liveState(channel) });
-    } else if (event.type === "message_end") {
-      // The session persists the message right after this emit returns, so
-      // the transcript broadcast is queued on a microtask — it then includes
-      // the finished message, and the live slot it occupied is cleared in the
-      // same frame (messages before live, so clients never see a gap).
-      const { role } = event.message;
-      if (role === "user") {
-        channel.live.pendingUserMessages = channel.live.pendingUserMessages.filter(
-          (m) => m !== event.message,
-        );
-      } else if (role === "assistant") {
-        channel.live.streamingMessage = undefined;
-      } else if (role === "toolResult") {
-        // The finished tool is now part of the transcript; drop the live chip
-        // so replies and tool calls interleave in execution order.
-        const toolCallId = (event.message as { toolCallId?: unknown }).toolCallId;
-        if (typeof toolCallId === "string") channel.live.toolExecutions.delete(toolCallId);
+      case "message_update": {
+        if (state.streaming) {
+          state.streaming.message = event.message;
+          broadcastItem(state.streaming);
+        }
+        break;
       }
-      if (role === "user" || role === "assistant" || role === "toolResult") {
-        queueCommitBroadcast();
+      case "message_end": {
+        const message = event.message;
+        const { role } = message;
+        if (role === "user") {
+          // user 消息 message_start/end 紧邻发射，扫描最后一个 live user item 即可
+          for (let i = state.items.length - 1; i >= 0; i--) {
+            const item = state.items[i];
+            if (item.kind === "user" && item.phase === "live") {
+              item.message = message;
+              item.phase = "committed";
+              broadcastItem(item);
+              break;
+            }
+          }
+        } else if (role === "assistant") {
+          // 用 FIFO 匹配而非 streaming 指针：abort 后迟到 message_end 可能
+          // 落在新 run 已开始的时刻，streaming 已被新消息占用。
+          const item = state.items.find((i) => i.kind === "assistant" && i.phase === "live");
+          if (item) {
+            item.message = message;
+            item.phase = "committed";
+            broadcastItem(item);
+            if (state.streaming === item) state.streaming = undefined;
+          }
+        } else if (role === "toolResult") {
+          const toolCallId = (message as { toolCallId?: unknown }).toolCallId;
+          if (typeof toolCallId === "string") {
+            const item = state.items.find((i) => i.id === `tool:${toolCallId}`);
+            if (item?.kind === "tool") {
+              item.message = message;
+              item.phase = "committed";
+              broadcastItem(item);
+            }
+          }
+        }
+        break;
       }
-    } else if (event.type === "tool_execution_start") {
-      channel.live.toolExecutions.set(event.toolCallId, {
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        args: event.args,
-        running: true,
-      });
-      broadcast({ type: "live", live: liveState(channel) });
-    } else if (event.type === "tool_execution_update") {
-      const tool = channel.live.toolExecutions.get(event.toolCallId);
-      if (tool) {
-        tool.result = event.partialResult;
-        broadcast({ type: "live", live: liveState(channel) });
+      case "tool_execution_start": {
+        const item: LiveItem = {
+          id: `tool:${event.toolCallId}`,
+          kind: "tool",
+          phase: "live",
+          tool: {
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            args: event.args,
+            running: true,
+          },
+        };
+        state.items.push(item);
+        broadcastItem(item);
+        break;
       }
-    } else if (event.type === "tool_execution_end") {
-      const tool = channel.live.toolExecutions.get(event.toolCallId);
-      if (tool) {
-        tool.result = event.result;
-        tool.isError = event.isError;
-        tool.running = false;
-        broadcast({ type: "live", live: liveState(channel) });
+      case "tool_execution_update": {
+        const item = state.items.find((i) => i.id === `tool:${event.toolCallId}`);
+        if (item?.kind === "tool") {
+          item.tool.result = event.partialResult;
+          broadcastItem(item);
+        }
+        break;
       }
-    } else if (event.type === "entry_appended") {
-      const isModelEntry =
-        event.entry.type === "model_change" || event.entry.type === "thinking_level_change";
-      // Pi emits several synchronous events for one model switch. Queue
-      // one snapshot for the whole mutation instead of broadcasting the
-      // same model inventory once per entry.
-      if (isModelEntry) {
+      case "tool_execution_end": {
+        const item = state.items.find((i) => i.id === `tool:${event.toolCallId}`);
+        if (item?.kind === "tool") {
+          item.tool.result = event.result;
+          item.tool.isError = event.isError;
+          item.tool.running = false;
+          broadcastItem(item);
+        }
+        break;
+      }
+      case "agent_settled": {
+        state.busy = false;
+        state.streaming = undefined;
+        // 与权威状态对齐：compaction/重试/分支导航会改变条目，内容一致时跳过
+        // 快照广播（id 按对象身份保持，客户端无感）。
+        if (reconcile(channel, session, false)) broadcastSnapshot();
+        broadcastState(channel, { busy: false });
+        break;
+      }
+      case "entry_appended": {
+        const isModelEntry =
+          event.entry.type === "model_change" || event.entry.type === "thinking_level_change";
+        // Pi emits several synchronous events for one model switch. Queue
+        // one snapshot for the whole mutation instead of broadcasting the
+        // same model inventory once per entry.
+        if (isModelEntry) queueModelStateBroadcast();
+        break;
+      }
+      case "thinking_level_changed": {
+        // Keep the client in sync when Pi clamps a requested level without a
+        // separate entry visible to the transcript.
         queueModelStateBroadcast();
-      } else {
-        broadcast({ type: "messages", messages: getConversationMessages(session) });
+        break;
       }
-    } else if (event.type === "agent_settled") {
-      channel.live.pendingUserMessages = [];
-      channel.live.streamingMessage = undefined;
-      channel.live.toolExecutions.clear();
-      channel.live.busy = false;
-      broadcast({ type: "messages", messages: getConversationMessages(session) });
-      broadcast({ type: "live", live: liveState(channel) });
-    } else if (event.type === "thinking_level_changed") {
-      // Keep the client in sync when Pi clamps a requested level without a
-      // separate entry visible to the transcript.
-      queueModelStateBroadcast();
     }
   });
+  // 订阅前先对齐一次，保证首个连接的 snapshot 就带完整历史。
+  reconcile(channel, session, true);
   channelsBySession.set(sessionId, channel);
   return channel;
 };
@@ -232,23 +322,15 @@ export const sessionWsHandler: WsHandler = {
     const channel = attachListener(sessionId, session);
     channel.sockets.add(bunWS);
     bunWS.data.attached = true;
-    let snapshot: Awaited<ReturnType<typeof getEffectiveModelDescriptor>>;
     try {
-      snapshot = await getEffectiveModelDescriptor(session);
+      const { model, availableModels } = await getEffectiveModelDescriptor(session);
+      channel.state.model = model;
+      channel.state.availableModels = availableModels;
+      channel.state.thinking = getThinkingState(session);
     } catch (error) {
       console.error("Failed to load model snapshot", sessionId, error);
-      snapshot = { model: undefined, availableModels: [] };
     }
-    const msg: ServerMessage = {
-      type: "ready",
-      sessionId,
-      messages: getConversationMessages(session),
-      live: liveState(channel),
-      model: snapshot.model,
-      availableModels: snapshot.availableModels,
-      thinking: getThinkingState(session),
-    };
-    bunWS.send(JSON.stringify(msg));
+    bunWS.send(JSON.stringify(snapshotMessage(channel)));
   },
   async message(ws, message) {
     const bunWS = ws as BunWS;
@@ -324,6 +406,12 @@ export const sessionWsHandler: WsHandler = {
         } catch (err) {
           sendError(bunWS, toMessage(err));
         }
+        return;
+      }
+      case "resync": {
+        // 客户端检测到 seq 间隙：给这个 socket 单独补发当前权威快照。
+        const channel = channelsBySession.get(sessionId);
+        if (channel && bunWS.readyState === 1) bunWS.send(JSON.stringify(snapshotMessage(channel)));
         return;
       }
       default:

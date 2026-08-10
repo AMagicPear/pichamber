@@ -10,7 +10,7 @@ import {
   type SessionInfo,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ConversationTranscriptMessage } from "@pichamber/shared";
+import type { AgentMessage, LiveItem } from "@pichamber/shared";
 
 // 用于快速根据ID查找会话文件位置
 const sessionFileLookup = new Map<string, string>();
@@ -63,10 +63,82 @@ export const getSession = async (id: string): Promise<AgentSession | null> => {
 export const getConversationEntries = (session: AgentSession) =>
   session.sessionManager.buildContextEntries();
 
-export const getConversationMessages = (session: AgentSession): ConversationTranscriptMessage[] =>
-  getConversationEntries(session).flatMap((entry) =>
-    sessionEntryToContextMessages(entry).map((message) => ({ id: entry.id, message })),
-  );
+const toolCallIdOf = (message: AgentMessage): string | undefined => {
+  const toolCallId = (message as { toolCallId?: unknown }).toolCallId;
+  return typeof toolCallId === "string" ? toolCallId : undefined;
+};
+
+/**
+ * 把权威条目（session manager）重建为 item 列表。已存在的 item 按消息对象
+ * 身份（user/assistant）或 toolCallId（tool）匹配，从而在 compaction / 分支
+ * 导航等重建场景下保持客户端 key 稳定；匹配不到的条目（重连后首次重建）
+ * 铸造 e:<entryId> 作为 id。工具参数从 assistant 消息的 toolCall 部分交叉
+ * 引用补齐，这样重连后工具标签仍能显示命令/文件路径。
+ */
+export const conversationItems = (session: AgentSession, existing: LiveItem[]): LiveItem[] => {
+  const entries = getConversationEntries(session);
+
+  // 第一遍：收集 assistant 消息里的 toolCall 参数（重建场景没有 tool_execution 事件）
+  const toolCallArgs = new Map<string, unknown>();
+  for (const entry of entries) {
+    for (const message of sessionEntryToContextMessages(entry)) {
+      if (message.role !== "assistant" || !Array.isArray(message.content)) continue;
+      for (const part of message.content) {
+        if (
+          part &&
+          typeof part === "object" &&
+          "type" in part &&
+          part.type === "toolCall" &&
+          typeof part.id === "string"
+        ) {
+          toolCallArgs.set(part.id, part.arguments);
+        }
+      }
+    }
+  }
+
+  const byMessage = new Map<AgentMessage, LiveItem>();
+  const byToolCallId = new Map<string, LiveItem>();
+  for (const item of existing) {
+    if (item.kind === "tool") byToolCallId.set(item.tool.toolCallId, item);
+    else byMessage.set(item.message, item);
+  }
+
+  const items: LiveItem[] = [];
+  for (const entry of entries) {
+    for (const message of sessionEntryToContextMessages(entry)) {
+      if (message.role === "toolResult") {
+        const toolCallId = toolCallIdOf(message);
+        const prev = toolCallId ? byToolCallId.get(toolCallId) : undefined;
+        if (prev) {
+          items.push({ ...prev, message, phase: "committed" });
+        } else if (toolCallId) {
+          const isError = (message as { isError?: unknown }).isError === true;
+          const toolName = (message as { toolName?: unknown }).toolName;
+          items.push({
+            id: `tool:${toolCallId}`,
+            kind: "tool",
+            phase: "committed",
+            tool: {
+              toolCallId,
+              toolName: typeof toolName === "string" ? toolName : "",
+              args: toolCallArgs.get(toolCallId),
+              isError,
+              running: false,
+            },
+            message,
+          });
+        }
+      } else if (message.role === "user" || message.role === "assistant") {
+        const prev = byMessage.get(message);
+        if (prev) items.push({ ...prev, message, phase: "committed" });
+        else items.push({ id: `e:${entry.id}`, kind: message.role, phase: "committed", message });
+      }
+      // 其他角色（custom/compaction/branchSummary）不进会话视图。
+    }
+  }
+  return items;
+};
 
 // 将某个会话移出活跃会话，下次就要重新加载
 export const deactivateSession = async (id: string) => {
