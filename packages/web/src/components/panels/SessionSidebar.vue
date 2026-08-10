@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import AddIcon from "@/assets/icons/Add.svg";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
 import CalendarScheduleIcon from "@/assets/icons/CalendarSchedule.svg";
 import ChatNewIcon from "@/assets/icons/ChatNew.svg";
 import CheckboxMultipleIcon from "@/assets/icons/CheckboxMultiple.svg";
+import DeleteBinIcon from "@/assets/icons/DeleteBin.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
+import FolderIcon from "@/assets/icons/Folder.svg";
+import FolderOpenIcon from "@/assets/icons/FolderOpen.svg";
 import InformationIcon from "@/assets/icons/Information.svg";
+import More2Icon from "@/assets/icons/More2.svg";
 import QuestionIcon from "@/assets/icons/Question.svg";
 import SearchIcon from "@/assets/icons/Search.svg";
 import SettingsIcon from "@/assets/icons/Settings3.svg";
@@ -12,13 +17,22 @@ import SortDescIcon from "@/assets/icons/SortDesc.svg";
 import { ArrowsMerge } from "@/components/ArrowsMerge";
 import IconButton from "@/components/IconButton.vue";
 import AboutModal from "@/components/modals/AboutModal.vue";
+import MenuPanel from "@/components/MenuPanel.vue";
+import { usePopover } from "@/composables/usePopover";
 import type { SessionInfo } from "@pichamber/shared";
-import { onMounted, ref } from "vue";
-import { RouterLink } from "vue-router";
+import { computed, nextTick, onMounted, ref } from "vue";
+import { RouterLink, useRouter } from "vue-router";
 import { ui } from "@/stores/ui";
-import { loadSessions, sessionTitle, sessions, sessionsError, sessionsLoading } from "@/stores/workspace";
+import {
+  loadSessions,
+  sessionTitle,
+  sessions,
+  sessionsError,
+  sessionsLoading,
+  workspace,
+} from "@/stores/workspace";
 import { settings } from "@/stores/settings";
-import { computed } from "vue";
+import { createSession, deleteSession, toMessage } from "@/api/client";
 
 const visibleSessions = computed(() => {
   if (!settings.hideTemporarySessions) return sessions.value;
@@ -48,6 +62,112 @@ const sessionAge = (session: SessionInfo) => {
   const months = Math.floor(days / 30);
   if (months < 12) return `${months}mo`;
   return `${Math.floor(months / 12)}y`;
+};
+
+const projectPath = (cwd: string) => cwd.replace(/\/+$/, "") || "/";
+
+const projectName = (cwd: string) => projectPath(cwd).split("/").pop() || "/";
+
+const projectGroups = computed(() => {
+  const groups = new Map<string, SessionInfo[]>();
+  for (const session of visibleSessions.value) {
+    const cwd = projectPath(session.cwd);
+    const projectSessions = groups.get(cwd) ?? [];
+    projectSessions.push(session);
+    groups.set(cwd, projectSessions);
+  }
+  return [...groups.entries()]
+    .map(([cwd, projectSessions]) => ({
+      cwd,
+      sessions: projectSessions.sort((a, b) => toTime(b.modified) - toTime(a.modified)),
+    }))
+    .sort((a, b) => {
+      const aT = toTime(a.sessions[0]?.modified);
+      const bT = toTime(b.sessions[0]?.modified);
+      if (bT !== aT) return bT - aT;
+      return projectName(a.cwd).localeCompare(projectName(b.cwd));
+    });
+});
+
+const INITIAL_VISIBLE_SESSIONS = 5;
+const SESSION_PAGE_SIZE = 5;
+const collapsedProjects = ref(new Set<string>());
+const visibleSessionCounts = ref(new Map<string, number>());
+
+const toggleProject = (cwd: string) => {
+  const next = new Set(collapsedProjects.value);
+  if (next.has(cwd)) next.delete(cwd);
+  else next.add(cwd);
+  collapsedProjects.value = next;
+};
+
+const visibleProjectSessions = (cwd: string, projectSessions: SessionInfo[]) =>
+  projectSessions.slice(0, visibleSessionCounts.value.get(cwd) ?? INITIAL_VISIBLE_SESSIONS);
+
+const showMoreSessions = (cwd: string) => {
+  const next = new Map(visibleSessionCounts.value);
+  next.set(cwd, (next.get(cwd) ?? INITIAL_VISIBLE_SESSIONS) + SESSION_PAGE_SIZE);
+  visibleSessionCounts.value = next;
+};
+
+const startProjectSession = async (cwd: string) => {
+  closeSessionMenu();
+  workspace.cwd = cwd;
+  workspace.folderName = projectName(cwd);
+  workspace.sessionName = "New Session";
+
+  if (router.currentRoute.value.name === "new-session") {
+    try {
+      const session = await createSession(cwd);
+      workspace.sessionId = session.sessionId;
+    } catch (error) {
+      sessionsError.value = toMessage(error);
+    }
+    return;
+  }
+
+  await router.push({ name: "new-session" });
+};
+
+const router = useRouter();
+const sessionListRoot = ref<HTMLElement | null>(null);
+const selectedSessionId = ref<string | null>(null);
+const {
+  open: sessionMenuOpen,
+  style: sessionMenuStyle,
+  close: closeSessionMenu,
+} = usePopover({
+  root: sessionListRoot,
+  trigger: ".session-list__menu-trigger.is-menu-target",
+  panel: ".menu-panel",
+  width: 180,
+  height: 36,
+});
+
+const openSessionMenu = (sessionId: string) => {
+  if (sessionMenuOpen.value && selectedSessionId.value === sessionId) {
+    closeSessionMenu();
+    return;
+  }
+  closeSessionMenu();
+  selectedSessionId.value = sessionId;
+  nextTick(() => {
+    sessionMenuOpen.value = true;
+  });
+};
+
+const removeSelectedSession = async () => {
+  const sessionId = selectedSessionId.value;
+  if (!sessionId || !window.confirm("Delete this session?")) return;
+
+  closeSessionMenu();
+  try {
+    await deleteSession(sessionId);
+    sessions.value = sessions.value.filter((session) => session.id !== sessionId);
+    if (workspace.sessionId === sessionId) await router.push({ name: "new-session" });
+  } catch (error) {
+    sessionsError.value = toMessage(error);
+  }
 };
 
 const aboutOpen = ref(false);
@@ -82,23 +202,87 @@ onMounted(async () => {
       </div>
     </div>
 
-    <section class="session-list">
-      <h2><ArrowDownSIcon /> <span>Recent</span></h2>
+    <section ref="sessionListRoot" class="session-list scroll-fade-bottom">
       <p v-if="sessionsLoading" class="session-list__state">Loading sessions...</p>
       <p v-else-if="sessionsError" class="session-list__state session-list__state--error">{{ sessionsError }}</p>
       <p v-else-if="visibleSessions.length === 0" class="session-list__state">No sessions yet.</p>
-      <RouterLink
-        v-for="session in visibleSessions"
-        v-else
-        :key="session.id"
-        :to="{ name: 'session', params: { sessionId: session.id } }"
-        class="session-list__item"
-        active-class="is-active"
-      >
-        <span>{{ sessionTitle(session) }}</span>
-        <time>{{ sessionAge(session) }}</time>
-      </RouterLink>
+
+      <template v-else>
+        <section v-for="project in projectGroups" :key="project.cwd" class="session-list__section">
+          <button
+            type="button"
+            class="session-list__project"
+            :aria-expanded="!collapsedProjects.has(project.cwd)"
+            @click="toggleProject(project.cwd)"
+          >
+            <component
+              :is="collapsedProjects.has(project.cwd) ? FolderIcon : FolderOpenIcon"
+              class="session-list__project-folder"
+            />
+            <span class="session-list__project-title">{{ projectName(project.cwd) }}</span>
+          </button>
+          <IconButton
+            class="session-list__project-new"
+            label="New session in project"
+            size="compact"
+            @click.stop="startProjectSession(project.cwd)"
+          >
+            <AddIcon />
+          </IconButton>
+          <template v-if="!collapsedProjects.has(project.cwd)">
+            <RouterLink
+              v-for="session in visibleProjectSessions(project.cwd, project.sessions)"
+              :key="session.id"
+              custom
+              :to="{ name: 'session', params: { sessionId: session.id } }"
+              v-slot="{ navigate, isActive }"
+            >
+              <div
+                class="session-list__item"
+                :class="{
+                  'is-active': isActive,
+                  'is-menu-open': sessionMenuOpen && selectedSessionId === session.id,
+                }"
+                @click="closeSessionMenu(); navigate()"
+              >
+                <span class="session-list__title">{{ sessionTitle(session) }}</span>
+                <span class="session-list__age">{{ sessionAge(session) }}</span>
+                <IconButton
+                  class="session-list__menu-trigger"
+                  :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === session.id }"
+                  label="Session options"
+                  size="compact"
+                  @click.stop="openSessionMenu(session.id)"
+                >
+                  <More2Icon />
+                </IconButton>
+              </div>
+            </RouterLink>
+            <button
+              v-if="project.sessions.length > visibleProjectSessions(project.cwd, project.sessions).length"
+              type="button"
+              class="session-list__more"
+              @click="showMoreSessions(project.cwd)"
+            >
+              Show more sessions
+            </button>
+          </template>
+        </section>
+      </template>
     </section>
+
+    <MenuPanel
+      :open="sessionMenuOpen"
+      :style="sessionMenuStyle"
+      :width="180"
+      :height="36"
+      aria-label="Session options"
+    >
+      <button type="button" class="menu-item" role="menuitem" @click="removeSelectedSession">
+        <DeleteBinIcon />
+        Delete session
+      </button>
+    </MenuPanel>
 
     <footer class="sidebar__footer">
       <IconButton size="large" label="Settings" @click="ui.settingsOpen = true">
@@ -134,11 +318,12 @@ onMounted(async () => {
   flex: 0 0 48px;
   gap: 14px;
   align-items: center;
-  padding: 8px 14px 8px 48px;
+  padding: 7px 14px 7px 48px;
 }
 .sidebar__search-group {
   display: flex;
-  height: 30px;
+  width: 68px;
+  height: 28px;
   overflow: hidden;
   border: 1px solid #dfddd4;
   border-radius: 9px;
@@ -147,41 +332,92 @@ onMounted(async () => {
   border-radius: 0;
 }
 .sidebar__search-group > :deep(.icon-button + .icon-button) {
+  flex: 0 0 28px;
+  width: 28px;
   border-left: 1px solid #dfddd4;
 }
 .sidebar__search-group > :deep(.search-primary) {
-  width: 36px;
+  flex: 0 0 40px;
+  width: 40px;
 }
 .sidebar__actions {
   flex: 0 0 40px;
   justify-content: space-between;
-  padding: 4px 10px;
+  padding: 4px 8px;
 }
 .sidebar__actions > div {
-  gap: 2px;
+  gap: 3px;
+}
+.sidebar__actions > div + div {
+  padding-left: 7px;
 }
 .session-list {
   flex: 1;
   min-height: 0;
-  padding: 8px 10px;
+  padding: 8px 6px 10px 8px;
   overflow: auto;
 }
-.session-list h2 {
+.session-list__section + .session-list__section {
+  margin-top: 8px;
+}
+.session-list__section {
+  position: relative;
+}
+.session-list__project {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin: 0 0 6px;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 4px 8px;
+  border-radius: 6px;
   font-size: 14px;
-  font-weight: 400;
-  line-height: 24px;
+  font-weight: 450;
+  line-height: 22px;
+  padding-right: 34px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
 }
-.session-list h2 svg {
+.session-list__project-new {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+.session-list__project-new:hover:not(:disabled),
+.session-list__section:hover .session-list__project-new {
+  opacity: 1;
+}
+.session-list__project:hover {
+  background: rgb(0 0 0 / 4%);
+}
+.session-list__project-folder {
   width: 14px;
   height: 14px;
   color: #777;
+  flex: 0 0 auto;
+  transition: transform 150ms ease-out;
+}
+.session-list__project-title {
+  transition: transform 150ms ease-out;
+}
+.session-list__project:hover .session-list__project-folder,
+.session-list__project:hover .session-list__project-title {
+  transform: translateX(1px);
 }
 .session-list__item {
   display: flex;
+  position: relative;
+  align-items: center;
   justify-content: space-between;
   width: 100%;
   min-height: 31px;
@@ -192,29 +428,85 @@ onMounted(async () => {
   text-align: left;
   font-size: 14px;
   line-height: 19px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
 }
 .session-list__item.is-active,
 .session-list__item.is-active:hover {
   background: rgb(0 0 0 / 7%);
 }
-.session-list__item span {
+.session-list__title {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition:
+    color 150ms ease-out,
+    transform 150ms ease-out;
   white-space: nowrap;
 }
-.session-list__item time {
+.session-list__item:hover .session-list__title {
+  color: #111;
+  transform: translateX(1px);
+}
+.session-list__age {
   margin-left: 8px;
   color: #888;
   font-size: 12px;
   white-space: nowrap;
+  transition: opacity 120ms ease-out;
+}
+.session-list__menu-trigger {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(3px, -50%);
+  color: #888;
+  transition:
+    transform 150ms ease-out,
+    opacity 150ms ease-out;
+}
+.session-list__menu-trigger :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+.session-list__item:hover .session-list__age,
+.session-list__item.is-menu-open .session-list__age {
+  opacity: 0;
+}
+.session-list__item:hover .session-list__menu-trigger,
+.session-list__item.is-menu-open .session-list__menu-trigger {
+  opacity: 1;
+  pointer-events: auto;
+  color: #222;
+  transform: translate(0, -50%);
+}
+.session-list__menu-trigger:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: none;
 }
 .session-list__more {
-  padding: 5px 7px 5px 28px;
+  display: block;
+  margin-left: 20px;
+  padding: 5px 8px;
+  border-radius: 6px;
   color: #8b8b8b;
   font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.session-list__more:hover {
+  background: rgb(0 0 0 / 4%);
 }
 .session-list__state {
-  margin: 12px 7px 0 28px;
+  margin: 14px 7px 0 28px;
   color: #888;
   font-size: 12px;
 }
@@ -224,7 +516,7 @@ onMounted(async () => {
 .sidebar__footer {
   flex: 0 0 42px;
   gap: 2px;
-  padding: 5px 10px;
+  padding: 5px 8px;
 }
 .sidebar__update {
   margin-left: auto;
@@ -234,8 +526,6 @@ onMounted(async () => {
   color: #315d91;
   font-size: 12px;
 }
-.session-list__item:hover,
-.session-list__more:hover,
 .sidebar__update:hover {
   background: rgb(0 0 0 / 4%);
 }

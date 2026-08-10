@@ -180,4 +180,10 @@ button {
   opacity: 0;
   transform: translateY(4px);
 }
+
+/* Shared edge treatment for scrollable content surfaces. */
+.scroll-fade-bottom {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 26px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 26px), transparent 100%);
+}
 </style>
