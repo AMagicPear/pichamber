@@ -2,8 +2,8 @@ import type { Component } from "vue";
 import FileAddIcon from "@/assets/icons/FileAdd.svg";
 import FileEditIcon from "@/assets/icons/FileEdit.svg";
 import FileTextIcon from "@/assets/icons/FileText.svg";
-import { workspace } from "@/stores/workspace";
 import { inline } from "./messageContent";
+import { displayPath, patchOpsSummary, toolDiff } from "./toolDiff";
 export type ConversationToolDetail = {
   label: string;
   /** Collapsed single-line preview (plain text for bash/ls/thinking). */
@@ -14,6 +14,11 @@ export type ConversationToolDetail = {
   /** Full file path — rendered with filename-first styling. */
   path?: string;
   isError: boolean;
+  /** Unified diff of the actual edits (edit/write/apply_patch) — rendered
+   *  with DiffView instead of the plain summary text. */
+  diff?: string;
+  /** read 工具的结果渲染为文件视图（行号+高亮）。 */
+  codeFileName?: string;
 };
 
 type ToolDetailInput = {
@@ -36,12 +41,6 @@ const recordValue = (args: unknown, key: "command" | "path") => {
 
 const fileToolIcon = (toolName: string): Component | string =>
   toolName === "edit" ? FileEditIcon : toolName === "write" ? FileAddIcon : FileTextIcon;
-
-/** Strip the workspace prefix so in-workspace files read as relative paths. */
-const displayPath = (path: string): string => {
-  const cwd = workspace.cwd;
-  return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
-};
 
 const fileLabel = (toolName: string) =>
   `${toolName.charAt(0).toUpperCase()}${toolName.slice(1)} File`;
@@ -74,10 +73,27 @@ export const conversationToolDetail = ({
     const relative = displayPath(path);
     return {
       label: failed ? errorLabel(toolName) : fileLabel(toolName),
+      // 失败也保留路径：让用户知道是哪个文件操作失败。
       path: relative,
       content: output,
       icon: fileToolIcon(toolName),
       isError: failed,
+      // 成功时把真实编辑渲染成 diff（摘要文本被 DiffView 替代）。
+      diff: failed ? undefined : toolDiff(toolName, args),
+      // read 的结果就是文件内容：渲染成带行号/高亮的文件视图；
+      // 失败时直接显示纯文本错误。
+      codeFileName: !failed && toolName === "read" ? relative : undefined,
+    };
+  }
+
+  if (toolName === "apply_patch") {
+    const summary = typeof args === "object" && args !== null ? patchOpsSummary((args as { input?: unknown }).input as string) : undefined;
+    return {
+      label: failed ? errorLabel(toolName) : "Apply Patch",
+      preview: summary ?? inline(fallbackPreview),
+      content: output,
+      isError: failed,
+      // apply_patch 的 diff 渲染暂时放弃（多文件解析不理想），先恢复摘要文本。
     };
   }
 

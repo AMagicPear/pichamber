@@ -46,7 +46,6 @@ const icon = computed(() => (parts.value ? getEntryIcon(parts.value.tail, false,
   display: inline-flex;
   min-width: 0;
   align-items: center;
-  gap: 6px;
   font-size: inherit;
   line-height: inherit;
 }
@@ -55,6 +54,7 @@ const icon = computed(() => (parts.value ? getEntryIcon(parts.value.tail, false,
   width: 16px;
   height: 16px;
   object-fit: contain;
+  margin-right: 6px;
 }
 .file-path__prefix {
   min-width: 0;

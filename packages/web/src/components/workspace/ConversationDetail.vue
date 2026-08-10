@@ -3,6 +3,8 @@ import MarkdownRender from "markstream-vue";
 import { ref, watch, type Component } from "vue";
 import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
 import FilePathLabel from "@/components/FilePathLabel.vue";
+import CodeView from "./CodeView.vue";
+import DiffView from "./DiffView.vue";
 
 const props = defineProps<{
   icon?: Component | string;
@@ -13,6 +15,13 @@ const props = defineProps<{
   path?: string;
   /** Render `content` as markdown instead of verbatim (tool output stays raw). */
   renderMarkdown?: boolean;
+  /** File name for the code view (read results only) — renders the content
+   *  with line numbers and syntax highlighting instead of plain text. */
+  codeFileName?: string;
+  /** Unified diff of the actual edits — rendered with DiffView instead of
+   *  the plain content text (tool result summaries are redundant next to
+   *  the real diff). */
+  diff?: string;
   /** Auto-expand while true (caller flips it when streaming starts) and
    *  auto-collapse when it flips false (streaming segment ended). Manual
    *  toggles between the flips are respected. */
@@ -61,6 +70,13 @@ watch(
           :content="content"
           :final="true"
           :fade="false"
+        />
+        <DiffView v-else-if="diff" class="conversation-detail__diff" :patch="diff ?? ''" />
+        <CodeView
+          v-else-if="codeFileName"
+          class="conversation-detail__code"
+          :content="content"
+          :fileName="codeFileName"
         />
         <pre v-else class="conversation-detail__content">{{ content }}</pre>
       </div>
@@ -148,6 +164,11 @@ watch(
 .conversation-detail__markdown {
   margin: 0;
   color: #76746d;
+}
+/* DiffView 自带滚动盒，这里只要撑满展开区的宽度。 */
+.conversation-detail__diff {
+  max-width: 100%;
+  min-width: 0;
 }
 .conversation-detail__content {
   white-space: pre-wrap;
