@@ -12,6 +12,7 @@ import {
 import GitBranchIcon from "@/assets/icons/GitBranch.svg";
 import PlusIcon from "@/assets/icons/AddCircle.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
+import DiffView from "@/components/workspace/DiffView.vue";
 import IconButton from "@/components/IconButton.vue";
 import FilePathLabel from "@/components/FilePathLabel.vue";
 import { workspace } from "@/stores/workspace";
@@ -21,6 +22,7 @@ const error = ref<string | null>(null);
 const loading = ref(false);
 const selected = ref<GitChange | null>(null);
 const diff = ref("");
+const diffError = ref<string | null>(null);
 const diffLoading = ref(false);
 const commitMsg = ref("");
 const committing = ref(false);
@@ -54,6 +56,7 @@ const select = async (change: GitChange) => {
   selected.value = change;
   diffLoading.value = true;
   diff.value = "";
+  diffError.value = null;
   try {
     if (change.status === "untracked") {
       diff.value = ""; // git has nothing to diff against.
@@ -61,7 +64,7 @@ const select = async (change: GitChange) => {
       diff.value = (await getGitDiff(change.path, change.staged)).diff;
     }
   } catch (err) {
-    diff.value = `// ${toMessage(err)}`;
+    diffError.value = toMessage(err);
   } finally {
     diffLoading.value = false;
   }
@@ -105,7 +108,7 @@ const badge = (change: GitChange): string =>
 
 const badgeTitle = (change: GitChange): string =>
   ({ modified: "Modified", added: "Added", deleted: "Deleted", renamed: "Renamed", untracked: "Untracked" })[
-    change.status
+  change.status
   ];
 
 // Reload whenever the session workspace changes, so the pane tracks the
@@ -145,28 +148,14 @@ watch(() => workspace.cwd, load);
         </header>
 
         <ul v-if="hasChanges" class="git-pane__list">
-          <li
-            v-for="change in status?.changes"
-            :key="change.path"
-            class="git-pane__row"
-            :class="{ 'is-selected': selected?.path === change.path, 'is-staged': change.staged }"
-          >
-            <button
-              type="button"
-              class="git-pane__stage-toggle"
-              :aria-label="`${change.staged ? 'Unstage' : 'Stage'} ${change.path}`"
-              :aria-pressed="change.staged"
-              :title="change.staged ? 'Unstage' : 'Stage'"
-              @click="toggleStaged(change)"
-            >
+          <li v-for="change in status?.changes" :key="change.path" class="git-pane__row"
+            :class="{ 'is-selected': selected?.path === change.path, 'is-staged': change.staged }">
+            <button type="button" class="git-pane__stage-toggle"
+              :aria-label="`${change.staged ? 'Unstage' : 'Stage'} ${change.path}`" :aria-pressed="change.staged"
+              :title="change.staged ? 'Unstage' : 'Stage'" @click="toggleStaged(change)">
               <PlusIcon />
             </button>
-            <button
-              type="button"
-              class="git-pane__file"
-              :title="change.path"
-              @click="select(change)"
-            >
+            <button type="button" class="git-pane__file" :title="change.path" @click="select(change)">
               <span class="git-pane__badge" :title="badgeTitle(change)">{{ badge(change) }}</span>
               <FilePathLabel class="git-pane__file-label" :path="change.path" />
             </button>
@@ -181,14 +170,15 @@ watch(() => workspace.cwd, load);
         <header class="git-pane__section-header">
           <h3 class="git-pane__section-title">Diff</h3>
         </header>
-        <div class="git-pane__diff">
-          <pre v-if="diff" class="git-pane__diff-text">{{ diff }}</pre>
-          <p v-else-if="diffLoading" class="git-pane__diff-empty">Loading diff…</p>
-          <p v-else-if="selected" class="git-pane__diff-empty">
-            {{ selected.status === "untracked" ? "Untracked file — no diff yet" : "No changes" }}
-          </p>
-          <p v-else class="git-pane__diff-empty">Select a file to view its diff</p>
-        </div>
+        <DiffView v-if="diff" :patch="diff" />
+        <p v-else-if="diffError" class="git-pane__diff-empty git-pane__diff-empty--error">
+          {{ diffError }}
+        </p>
+        <p v-else-if="diffLoading" class="git-pane__diff-empty">Loading diff…</p>
+        <p v-else-if="selected" class="git-pane__diff-empty">
+          {{ selected.status === "untracked" ? "Untracked file — no diff yet" : "No changes" }}
+        </p>
+        <p v-else class="git-pane__diff-empty">Select a file to view its diff</p>
       </section>
 
       <!-- Commit section: title + sub-text + input + primary action,
@@ -200,20 +190,11 @@ watch(() => workspace.cwd, load);
             <span v-if="!hasStaged" class="git-pane__hint">Stage files to enable commit.</span>
           </h3>
         </header>
-        <textarea
-          v-model="commitMsg"
-          class="git-pane__commit-input"
-          placeholder="Commit message"
-          rows="3"
-          @keydown.ctrl.enter="commit"
-        />
+        <textarea v-model="commitMsg" class="git-pane__commit-input" placeholder="Commit message" rows="3"
+          @keydown.ctrl.enter="commit" />
         <div class="git-pane__commit-actions">
-          <button
-            type="button"
-            class="git-pane__btn git-pane__btn--primary"
-            :disabled="!hasStaged || !commitMsg.trim() || committing"
-            @click="commit"
-          >
+          <button type="button" class="git-pane__btn git-pane__btn--primary"
+            :disabled="!hasStaged || !commitMsg.trim() || committing" @click="commit">
             {{ committing ? "Committing…" : "Commit" }}
           </button>
         </div>
@@ -242,6 +223,7 @@ watch(() => workspace.cwd, load);
   gap: 8px;
   padding: 0 4px;
 }
+
 .git-pane__branch-name {
   display: inline-flex;
   align-items: center;
@@ -253,6 +235,7 @@ watch(() => workspace.cwd, load);
   font-size: 14px;
   font-weight: 500;
 }
+
 .git-pane__branch-name svg {
   width: 16px;
   height: 16px;
@@ -266,12 +249,15 @@ watch(() => workspace.cwd, load);
   flex-direction: column;
   min-height: 0;
 }
+
 .git-pane__section--diff {
   flex: 1 1 0;
 }
+
 .git-pane__section--commit {
   flex: 0 0 auto;
 }
+
 .git-pane__section-header {
   display: flex;
   flex: 0 0 auto;
@@ -280,6 +266,7 @@ watch(() => workspace.cwd, load);
   gap: 8px;
   padding: 0 4px 5px;
 }
+
 .git-pane__section-title {
   display: inline-flex;
   align-items: baseline;
@@ -289,11 +276,13 @@ watch(() => workspace.cwd, load);
   font-weight: 500;
   color: #171717;
 }
+
 .git-pane__count {
   color: #888;
   font-size: 12px;
   font-weight: 500;
 }
+
 .git-pane__hint {
   color: #888;
   font-size: 12px;
@@ -309,6 +298,7 @@ watch(() => workspace.cwd, load);
   list-style: none;
   overflow-y: auto;
 }
+
 .git-pane__row {
   display: flex;
   align-items: center;
@@ -316,9 +306,11 @@ watch(() => workspace.cwd, load);
   border-radius: 8px;
   transition: background-color 120ms ease;
 }
+
 .git-pane__row:hover {
   background: rgb(0 0 0 / 4%);
 }
+
 .git-pane__row.is-selected {
   background: rgb(0 0 0 / 6%);
 }
@@ -340,14 +332,17 @@ watch(() => workspace.cwd, load);
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
 }
+
 .git-pane__stage-toggle :deep(svg) {
   width: 14px;
   height: 14px;
 }
+
 .git-pane__stage-toggle:hover {
   background: rgb(0 0 0 / 5%);
   color: #222;
 }
+
 .git-pane__row.is-staged .git-pane__stage-toggle {
   color: #3978d4;
 }
@@ -371,6 +366,7 @@ watch(() => workspace.cwd, load);
   text-align: left;
   cursor: pointer;
 }
+
 .git-pane__file:focus-visible,
 .git-pane__stage-toggle:focus-visible {
   outline: 2px solid #3978d4;
@@ -394,6 +390,7 @@ watch(() => workspace.cwd, load);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+
 .git-pane__file-label {
   flex: 1 1 auto;
   min-width: 0;
@@ -406,33 +403,31 @@ watch(() => workspace.cwd, load);
   color: #888;
   font-size: 13px;
 }
+
 .git-pane__state--error {
   color: #b04848;
 }
 
 /* ── Diff preview ────────────────────────────────────────────────── */
-.git-pane__diff {
+.git-pane__diff-empty {
+  /* Same scroll-box look as DiffView's .diff-view, so the empty state
+     fills the slot the same way the populated diff would. */
   flex: 1 1 0;
   min-height: 120px;
-  overflow: auto;
+  margin: 0;
+  padding: 24px 12px;
   border: 1px solid #e7e4dc;
   border-radius: 8px;
   background: #fafaf7;
-}
-.git-pane__diff-text {
-  margin: 0;
-  padding: 10px 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
-  line-height: 1.55;
-  white-space: pre;
-}
-.git-pane__diff-empty {
-  margin: 0;
-  padding: 24px 12px;
   color: #999;
   font-size: 13px;
   text-align: center;
+  display: grid;
+  place-items: center;
+}
+
+.git-pane__diff-empty--error {
+  color: #b04848;
 }
 
 /* ── Commit ──────────────────────────────────────────────────────── */
@@ -450,12 +445,15 @@ watch(() => workspace.cwd, load);
   background: #fff;
   transition: border-color 120ms ease;
 }
+
 .git-pane__commit-input:focus {
   border-color: #bcbcbc;
 }
+
 .git-pane__commit-input::placeholder {
   color: #999;
 }
+
 .git-pane__commit-actions {
   display: flex;
   justify-content: flex-end;
@@ -475,13 +473,16 @@ watch(() => workspace.cwd, load);
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
 }
+
 .git-pane__btn--primary {
   background: rgb(0 0 0 / 4%);
   color: #222;
 }
+
 .git-pane__btn--primary:hover:not(:disabled) {
   background: rgb(0 0 0 / 8%);
 }
+
 .git-pane__btn:disabled {
   cursor: default;
   opacity: 0.5;

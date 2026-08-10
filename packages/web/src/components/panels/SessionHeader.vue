@@ -24,7 +24,6 @@ import { workspace } from "@/stores/workspace";
     </div>
 
     <nav class="session-header__tools" aria-label="Session tools">
-      <IconButton label="Appearance"><LayoutLeftIcon /></IconButton>
       <IconButton label="Projects"><StackIcon /></IconButton>
       <IconButton
         label="Toggle terminal panel"
