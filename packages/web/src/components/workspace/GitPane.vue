@@ -12,7 +12,6 @@ import {
 import GitBranchIcon from "@/assets/icons/GitBranch.svg";
 import PlusIcon from "@/assets/icons/AddCircle.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
-import UndoIcon from "@/assets/icons/Refresh2.svg";
 import IconButton from "@/components/IconButton.vue";
 import FilePathLabel from "@/components/FilePathLabel.vue";
 import { workspace } from "@/stores/workspace";
@@ -171,15 +170,6 @@ watch(() => workspace.cwd, load);
               <span class="git-pane__badge" :title="badgeTitle(change)">{{ badge(change) }}</span>
               <FilePathLabel class="git-pane__file-label" :path="change.path" />
             </button>
-            <button
-              type="button"
-              class="git-pane__discard"
-              :title="`Discard ${change.path}`"
-              :aria-label="`Discard ${change.path}`"
-              @click="select(change)"
-            >
-              <UndoIcon />
-            </button>
           </li>
         </ul>
         <p v-else class="git-pane__state">Clean working tree</p>
@@ -188,6 +178,9 @@ watch(() => workspace.cwd, load);
 
       <!-- Diff preview -->
       <section class="git-pane__section git-pane__section--diff">
+        <header class="git-pane__section-header">
+          <h3 class="git-pane__section-title">Diff</h3>
+        </header>
         <div class="git-pane__diff">
           <pre v-if="diff" class="git-pane__diff-text">{{ diff }}</pre>
           <p v-else-if="diffLoading" class="git-pane__diff-empty">Loading diff…</p>
@@ -235,10 +228,8 @@ watch(() => workspace.cwd, load);
   flex: 1 1 0;
   flex-direction: column;
   min-height: 0;
-  /* Tighter gutter than FileTree's: git panel lives inside a context
-     panel that already has its own padding. */
-  padding: 10px 12px 12px;
-  gap: 14px;
+  padding: 8px 10px 10px;
+  gap: 10px;
 }
 
 /* ── Branch bar ───────────────────────────────────────────────────── */
@@ -247,7 +238,9 @@ watch(() => workspace.cwd, load);
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
+  min-height: 28px;
   gap: 8px;
+  padding: 0 4px;
 }
 .git-pane__branch-name {
   display: inline-flex;
@@ -264,10 +257,7 @@ watch(() => workspace.cwd, load);
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
-  /* Same warm-orange accent as the file-tree's folder icon: keeps the
-     branch glyph tied to the existing palette without introducing a new
-     color. */
-  color: #d9936c;
+  color: #777;
 }
 
 /* ── Section frames ───────────────────────────────────────────────── */
@@ -288,15 +278,15 @@ watch(() => workspace.cwd, load);
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding-bottom: 6px;
+  padding: 0 4px 5px;
 }
 .git-pane__section-title {
   display: inline-flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: #171717;
 }
 .git-pane__count {
@@ -322,7 +312,7 @@ watch(() => workspace.cwd, load);
 .git-pane__row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   border-radius: 8px;
   transition: background-color 120ms ease;
 }
@@ -338,9 +328,9 @@ watch(() => workspace.cwd, load);
    meaning when we swap the visual. */
 .git-pane__stage-toggle {
   display: inline-flex;
-  width: 24px;
+  width: 22px;
   height: 28px;
-  flex: 0 0 24px;
+  flex: 0 0 22px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -359,8 +349,6 @@ watch(() => workspace.cwd, load);
   color: #222;
 }
 .git-pane__row.is-staged .git-pane__stage-toggle {
-  /* When staged, rotate the plus into a checkmark-like emphasis by
-     tinting the icon — same blue used by openchamber's untracked badge. */
   color: #3978d4;
 }
 
@@ -371,7 +359,7 @@ watch(() => workspace.cwd, load);
   flex: 1 1 auto;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   height: 28px;
   padding: 0 6px;
   border: 0;
@@ -384,15 +372,13 @@ watch(() => workspace.cwd, load);
   cursor: pointer;
 }
 .git-pane__file:focus-visible,
-.git-pane__discard:focus-visible,
 .git-pane__stage-toggle:focus-visible {
   outline: 2px solid #3978d4;
   outline-offset: -2px;
 }
 
-/* Single-color status badge: openchamber uses the same quiet blue for
-   every status, with the letter doing the work. We keep the letters
-   but stay monochrome so we don't import a new palette. */
+/* The letter carries the status meaning without adding a separate color
+   system to the pane. */
 .git-pane__badge {
   display: inline-flex;
   width: 16px;
@@ -400,9 +386,9 @@ watch(() => workspace.cwd, load);
   flex: 0 0 16px;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  background: rgba(57, 120, 212, 0.1);
-  color: #3978d4;
+  border-radius: 3px;
+  background: transparent;
+  color: #777;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 700;
@@ -412,35 +398,6 @@ watch(() => workspace.cwd, load);
   flex: 1 1 auto;
   min-width: 0;
   font-size: 13px;
-}
-
-/* Discard button: hover-only, mirrors openchamber's right-edge undo icon. */
-.git-pane__discard {
-  display: inline-flex;
-  width: 24px;
-  height: 28px;
-  flex: 0 0 24px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #999;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
-}
-.git-pane__discard :deep(svg) {
-  width: 14px;
-  height: 14px;
-}
-.git-pane__row:hover .git-pane__discard,
-.git-pane__discard:focus-visible {
-  opacity: 1;
-}
-.git-pane__discard:hover {
-  background: rgb(0 0 0 / 5%);
-  color: #b04848;
 }
 
 .git-pane__state {
@@ -458,7 +415,8 @@ watch(() => workspace.cwd, load);
   flex: 1 1 0;
   min-height: 120px;
   overflow: auto;
-  border-radius: 10px;
+  border: 1px solid #e7e4dc;
+  border-radius: 8px;
   background: #fafaf7;
 }
 .git-pane__diff-text {
@@ -483,7 +441,7 @@ watch(() => workspace.cwd, load);
   box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid #e7e4dc;
-  border-radius: 10px;
+  border-radius: 8px;
   outline: 0;
   resize: none;
   color: inherit;
@@ -504,17 +462,13 @@ watch(() => workspace.cwd, load);
   margin-top: 8px;
 }
 
-/* Primary action: openchamber's commit button uses a soft amber tint
-   instead of a solid blue. We don't ship a palette token for that
-   shade, so we mix it from the same warm-orange used by the branch
-   icon and the file-tree's folder glyph. */
 .git-pane__btn {
   height: 30px;
   padding: 0 14px;
-  border: 0;
+  border: 1px solid #dedbd4;
   border-radius: 8px;
-  background: #f3ece4;
-  color: #6b4a2e;
+  background: rgb(0 0 0 / 4%);
+  color: #222;
   font: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -522,11 +476,11 @@ watch(() => workspace.cwd, load);
   transition: background-color 120ms ease, color 120ms ease;
 }
 .git-pane__btn--primary {
-  background: #f3ece4;
-  color: #6b4a2e;
+  background: rgb(0 0 0 / 4%);
+  color: #222;
 }
 .git-pane__btn--primary:hover:not(:disabled) {
-  background: #ebe2d6;
+  background: rgb(0 0 0 / 8%);
 }
 .git-pane__btn:disabled {
   cursor: default;
