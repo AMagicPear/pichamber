@@ -5,7 +5,7 @@ import type { AgentMessage } from "@pichamber/shared";
 import BrainAi3Icon from "@/assets/icons/BrainAi3.svg";
 import ConversationDetail from "./ConversationDetail.vue";
 import ProviderLogo from "./ProviderLogo";
-import { inline, messageText, thinkingText } from "./messageContent";
+import { inline, messageText, thinkingStreaming as thinkingStreamingOf, thinkingText } from "./messageContent";
 
 /** Structural peeks at AssistantMessage so we don't pull @earendil-works/pi-ai
  *  into the workspace just for two fields. */
@@ -39,6 +39,9 @@ const provider = computed(() =>
 );
 const text = computed(() => messageText(props.message));
 const thinking = computed(() => thinkingText(props.message));
+/** Auto expand/collapse the Thinking detail: expanded while the model is
+ *  still streaming into a thinking part, collapsed when it ends. */
+const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, props.final));
 </script>
 
 <template>
@@ -65,6 +68,8 @@ const thinking = computed(() => thinkingText(props.message));
         label="Thinking"
         :preview="inline(thinking)"
         :content="thinking"
+        :auto-expand="thinkingStreaming"
+        hide-preview-on-expand
         render-markdown
       />
       <MarkdownRender

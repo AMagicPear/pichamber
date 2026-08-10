@@ -38,5 +38,16 @@ export const thinkingText = (message?: AgentMessage): string =>
     .filter(Boolean)
     .join("\n\n");
 
+/** True while the model is still streaming into a thinking part: the last
+ *  content part is `thinking` (pi appends deltas to the last part in stream
+ *  order). Drives the Thinking detail's auto expand/collapse. */
+export const thinkingStreaming = (message?: AgentMessage, final = false): boolean => {
+  if (final) return false;
+  const parts = partsOf(message);
+  if (parts.length === 0) return false;
+  const last = parts[parts.length - 1];
+  return typeof last === "object" && last !== null && last?.type === "thinking";
+};
+
 /** Collapse whitespace for single-line previews. */
 export const inline = (value: string): string => value.replace(/\s+/g, " ").trim();

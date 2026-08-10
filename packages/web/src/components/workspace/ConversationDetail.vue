@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import MarkdownRender from "markstream-vue";
-import { ref, type Component } from "vue";
+import { ref, watch, type Component } from "vue";
 import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
 import FilePathLabel from "@/components/FilePathLabel.vue";
 
-defineProps<{
+const props = defineProps<{
   icon?: Component | string;
   label: string;
   preview?: string;
@@ -13,9 +13,23 @@ defineProps<{
   path?: string;
   /** Render `content` as markdown instead of verbatim (tool output stays raw). */
   renderMarkdown?: boolean;
+  /** Auto-expand while true (caller flips it when streaming starts) and
+   *  auto-collapse when it flips false (streaming segment ended). Manual
+   *  toggles between the flips are respected. */
+  autoExpand?: boolean;
+  /** Hide the plain preview line while expanded. Summary-type previews
+   *  (Thinking: same text as the body) are redundant when open; header-type
+   *  previews (bash command / ls path) stay visible. */
+  hidePreviewOnExpand?: boolean;
 }>();
 
 const expanded = ref(false);
+// immediate: mounts mid-stream start expanded; flips drive open/close.
+watch(
+  () => props.autoExpand,
+  (now) => { expanded.value = !!now; },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -32,7 +46,11 @@ const expanded = ref(false);
         :path="path"
         :show-prefix="!expanded"
       />
-      <span v-else-if="preview" class="conversation-detail__preview conversation-detail__preview--plain">{{ preview }}</span>
+      <span
+        v-else-if="preview"
+        class="conversation-detail__preview conversation-detail__preview--plain"
+        v-show="!expanded || !hidePreviewOnExpand"
+      >{{ preview }}</span>
     </button>
     <div class="conversation-detail__body">
       <div class="conversation-detail__body-inner">
