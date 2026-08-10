@@ -46,3 +46,8 @@
   text-decoration: underline;
   text-underline-offset: 0.2rem;
 }
+
+/* pichamber 用 setCustomComponents 把 code_block 渲染为 ConversationCodeBlock，
+ * 不再走 markstream 默认的 CodeBlockNode。pierre File surface 默认渲染文件名
+ * header（无语言时默认名 "code.txt"）——ConversationCodeBlock 的 finalize
+ * 传 disableFileHeader: true 在渲染层禁掉，见该组件。 */

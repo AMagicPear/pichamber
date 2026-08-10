@@ -70,6 +70,7 @@ watch(
           :content="content"
           :final="true"
           :fade="false"
+          :viewport-priority="false"
         />
         <DiffView v-else-if="diff" class="conversation-detail__diff" :patch="diff ?? ''" />
         <CodeView

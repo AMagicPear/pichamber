@@ -82,6 +82,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
         :content="text"
         :final="final"
         :fade="false"
+        :viewport-priority="false"
       />
     </template>
   </article>

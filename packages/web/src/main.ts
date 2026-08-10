@@ -1,6 +1,6 @@
 import { createApp } from "vue";
 import "katex/dist/katex.min.css";
-import { setCustomComponents } from "markstream-vue";
+import { preloadCodeBlockRuntime, setCustomComponents } from "markstream-vue";
 import "markstream-vue/index.css";
 
 import App from "./App.vue";
@@ -16,5 +16,8 @@ setCustomComponents({
   link: LocalFileLink,
 });
 app.use(router);
+
+// 预加载代码块运行时（stream-diffs/pierre）：刷新后首帧渲染不用等动态加载。
+void preloadCodeBlockRuntime();
 
 app.mount("#app");

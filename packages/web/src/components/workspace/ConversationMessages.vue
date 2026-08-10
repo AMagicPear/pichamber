@@ -124,6 +124,7 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
             :content="messageText(item.message)"
             :final="true"
             :fade="false"
+            :viewport-priority="false"
           />
         </article>
         <AssistantMessage v-else-if="item.kind === 'assistant'" :message="item.message" :final="item.phase === 'committed'" />
