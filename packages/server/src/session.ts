@@ -99,13 +99,29 @@ export const conversationItems = (session: AgentSession, existing: LiveItem[]): 
 
   const byMessage = new Map<AgentMessage, LiveItem>();
   const byToolCallId = new Map<string, LiveItem>();
+  const byEntryId = new Map<string, LiveItem>();
   for (const item of existing) {
     if (item.kind === "tool") byToolCallId.set(item.tool.toolCallId, item);
+    else if (item.kind === "custom" && item.entryId) byEntryId.set(item.entryId, item);
     else byMessage.set(item.message, item);
   }
 
   const items: LiveItem[] = [];
   for (const entry of entries) {
+    if (entry.type === "custom_message") {
+      // 重建时 createCustomMessage 产生新对象，无法按身份匹配；有 entryId
+      // 的复用现有 item（内容不可变），否则新建并记住 entryId。
+      const prev = byEntryId.get(entry.id);
+      if (prev) {
+        items.push(prev);
+      } else {
+        const message = sessionEntryToContextMessages(entry)[0];
+        if (message) {
+          items.push({ id: `e:${entry.id}`, kind: "custom", phase: "committed", message, entryId: entry.id });
+        }
+      }
+      continue;
+    }
     for (const message of sessionEntryToContextMessages(entry)) {
       if (message.role === "toolResult") {
         const toolCallId = toolCallIdOf(message);

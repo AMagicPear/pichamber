@@ -1,9 +1,11 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import type { RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
 import type { LiveItem, ModelDescriptor, ServerMessage, ThinkingState } from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "./error";
+import { createUiBridge, type UiBridge } from "./extension-ui";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
-import { conversationItems, deactivateSession, getSession } from "./session";
+import { conversationItems, deactivateSession, getConversationEntries, getSession } from "./session";
 import type { SessionWsData, WsHandler } from "./index";
 
 type BunWS = ServerWebSocket<SessionWsData>;
@@ -24,6 +26,7 @@ type ChannelState = {
   seq: number;
   userCount: number;
   assistantCount: number;
+  customCount: number;
   model: ModelDescriptor | undefined;
   availableModels: ModelDescriptor[];
   thinking: ThinkingState;
@@ -33,6 +36,8 @@ type SessionChannel = {
   sockets: Set<BunWS>;
   unsubscribe: () => void;
   state: ChannelState;
+  /** 扩展 UI 桥：插件 ui.* 调用经 WS 转发，等前端应答。 */
+  uiBridge: UiBridge;
   /** Re-snapshot model + thinking state and broadcast to all sockets. */
   queueModelStateBroadcast: () => void;
 };
@@ -72,6 +77,15 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
   return { type: "snapshot", seq, busy, items, model, availableModels, thinking };
 };
 
+/** 扫描最后一个 custom_message 条目（自定义消息在 emit 前已持久化）。 */
+const lastCustomEntry = (session: AgentSession) => {
+  const entries = getConversationEntries(session);
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i]?.type === "custom_message") return entries[i];
+  }
+  return undefined;
+};
+
 const attachListener = (sessionId: string, session: AgentSession): SessionChannel => {
   const existing = channelsBySession.get(sessionId);
   if (existing) return existing;
@@ -104,9 +118,15 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
   const channel: SessionChannel = {
     sockets: new Set(),
     unsubscribe: () => undefined,
-    state: { items: [], busy: false, seq: 0, userCount: 0, assistantCount: 0, ...initialModelState() },
+    state: { items: [], busy: false, seq: 0, userCount: 0, assistantCount: 0, customCount: 0, ...initialModelState() },
     queueModelStateBroadcast,
+    uiBridge: createUiBridge((request) => broadcast({ type: "ui_request", request })),
   };
+  // 官方接入方式：与 TUI/RPC 模式相同的 bindExtensions，扩展的 session_start
+  // 等生命周期正常触发，ui.* 调用经 uiBridge 转发给前端等应答。
+  session
+    .bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" })
+    .catch((error) => console.error("Failed to bind extension UI", sessionId, error));
   const broadcast = (msg: ServerMessage) => {
     const payload = JSON.stringify(msg);
     for (const bunWS of channel.sockets) {
@@ -133,11 +153,13 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     const state = channel.state;
     switch (event.type) {
       case "message_start": {
-        if (!state.busy) {
+        const { role } = event.message;
+        // busy 只在真正的 agent 回合置位（回合必然以 user/assistant 消息开始）；
+        // 纯扩展命令（custom 消息）不经过 agent 回合，也不会收到 agent_settled。
+        if ((role === "user" || role === "assistant") && !state.busy) {
           state.busy = true;
           broadcastState(channel, { busy: true });
         }
-        const { role } = event.message;
         if (role === "user") {
           const item: LiveItem = {
             id: `u-${++state.userCount}`,
@@ -156,6 +178,16 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
           };
           state.items.push(item);
           state.streaming = item;
+          broadcastItem(item);
+        } else if (role === "custom") {
+          // 插件自定义消息（扩展 sendMessage）也进会话流，前端可按需渲染。
+          const item: LiveItem = {
+            id: `c-${++state.customCount}`,
+            kind: "custom",
+            phase: "live",
+            message: event.message,
+          };
+          state.items.push(item);
           broadcastItem(item);
         }
         break;
@@ -200,6 +232,17 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
               item.phase = "committed";
               broadcastItem(item);
             }
+          }
+        } else if (role === "custom") {
+          // 自定义消息在 emit 前已持久化（sendCustomMessage 先
+          // appendCustomMessageEntry），同步扫描即可拿到条目 id。
+          const entry = lastCustomEntry(session);
+          const item = state.items.find((i) => i.kind === "custom" && i.phase === "live");
+          if (item?.kind === "custom") {
+            item.message = message;
+            item.phase = "committed";
+            if (entry) item.entryId = entry.id;
+            broadcastItem(item);
           }
         }
         break;
@@ -275,6 +318,8 @@ const detachListener = (sessionId: string, ws: BunWS) => {
   if (!channel) return;
   channel.sockets.delete(ws);
   if (channel.sockets.size !== 0) return;
+  // 没有客户端在场了：取消挂起的扩展 UI 对话框，避免插件永久等待。
+  channel.uiBridge.cancelPending();
   channel.unsubscribe();
   channelsBySession.delete(sessionId);
   deactivateSession(sessionId).catch((error) => {
@@ -412,6 +457,20 @@ export const sessionWsHandler: WsHandler = {
         // 客户端检测到 seq 间隙：给这个 socket 单独补发当前权威快照。
         const channel = channelsBySession.get(sessionId);
         if (channel && bunWS.readyState === 1) bunWS.send(JSON.stringify(snapshotMessage(channel)));
+        return;
+      }
+      case "ui_response": {
+        // 扩展 UI 应答：派发给挂起的对话框。
+        const response = input.response as unknown;
+        if (
+          !response ||
+          typeof response !== "object" ||
+          typeof (response as { id?: unknown }).id !== "string"
+        ) {
+          sendError(bunWS, "ui_response requires an id");
+          return;
+        }
+        channelsBySession.get(sessionId)?.uiBridge.handleResponse(response as RpcExtensionUIResponse);
         return;
       }
       default:

@@ -1,9 +1,17 @@
 import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AgentSessionEvent, SessionEntry, SessionInfo } from "@earendil-works/pi-coding-agent";
+import type {
+  AgentSessionEvent,
+  RpcExtensionUIRequest,
+  RpcExtensionUIResponse,
+  SessionEntry,
+  SessionInfo,
+} from "@earendil-works/pi-coding-agent";
 
 export type {
   AgentMessage,
   AgentSessionEvent,
+  RpcExtensionUIRequest,
+  RpcExtensionUIResponse,
   SessionEntry,
   SessionInfo,
 };
@@ -43,6 +51,15 @@ export type LiveItem =
       tool: LiveToolExecution;
       /** 权威的 toolResult 消息，提交（message_end）后填充。 */
       message?: AgentMessage;
+    }
+  | {
+      id: string;
+      kind: "custom";
+      phase: "live" | "committed";
+      message: AgentMessage;
+      /** pi 会话条目 id；重建时按它匹配以保持 id 稳定（custom 消息重建
+       *  时会新建对象，无法像普通消息那样按对象身份匹配）。 */
+      entryId?: string;
     };
 
 /** Slim model reference the server emits and accepts on the wire.
@@ -84,6 +101,8 @@ export type ServerMessage =
       availableModels?: ModelDescriptor[];
       thinking?: ThinkingState;
     }
+  /** 扩展 UI 请求（官方 RPC 模式 extension_ui_request 帧原样转发）。 */
+  | { type: "ui_request"; request: RpcExtensionUIRequest }
   | { type: "error"; error: string };
 
 /** JSON messages the client sends to the session WebSocket server. */
@@ -91,7 +110,9 @@ export type ClientMessage =
   | { type: "prompt"; message: string }
   | { type: "set_model"; provider: string; modelId: string }
   | { type: "set_thinking_level"; level: ThinkingLevel }
-  | { type: "resync" };
+  | { type: "resync" }
+  /** 扩展 UI 应答（官方 RPC 模式 extension_ui_response 帧原样转发）。 */
+  | { type: "ui_response"; response: RpcExtensionUIResponse };
 
 // ─── REST wire types ───────────────────────────────────────────────────
 

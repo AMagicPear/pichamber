@@ -74,6 +74,21 @@ export const useConversationSession = () => {
       applyModelState(message);
       // 服务器只在 agent_settled 发一次 busy=false —— 会话文件变了，刷新侧栏。
       if (message.busy === false) void refreshSessions();
+    } else if (message.type === "ui_request") {
+      const { request } = message;
+      if (request.type !== "extension_ui_request") return;
+      if (
+        request.method === "select" ||
+        request.method === "confirm" ||
+        request.method === "input" ||
+        request.method === "editor"
+      ) {
+        // 对话框组件接入前自动取消，避免插件挂起（未来由前端弹窗应答）。
+        const summary = request.method === "confirm" ? request.message : request.title;
+        console.warn("[pichamber] 插件 UI 请求暂未支持，自动取消:", summary);
+        ws?.send({ type: "ui_response", response: { type: "extension_ui_response", id: request.id, cancelled: true } });
+      }
+      // notify/setStatus/setWidget/setTitle/set_editor_text 为广播型，暂忽略。
     } else if (message.type === "error") {
       lastError.value = message.error;
     }
