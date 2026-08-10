@@ -292,7 +292,6 @@ onMounted(async () => {
       </IconButton>
       <IconButton size="large" label="Keyboard shortcuts"><QuestionIcon /></IconButton>
       <IconButton size="large" label="About" @click="aboutOpen = true"><InformationIcon /></IconButton>
-      <button type="button" class="sidebar__update">update</button>
     </footer>
 
     <AboutModal :show="aboutOpen" @close="aboutOpen = false" />
@@ -538,16 +537,5 @@ onMounted(async () => {
   flex: 0 0 42px;
   gap: 2px;
   padding: 5px 8px;
-}
-.sidebar__update {
-  margin-left: auto;
-  padding: 3px 9px;
-  border: 1px solid #b7cbe0;
-  border-radius: 7px;
-  color: #315d91;
-  font-size: 12px;
-}
-.sidebar__update:hover {
-  background: rgb(0 0 0 / 4%);
 }
 </style>
