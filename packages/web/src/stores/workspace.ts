@@ -1,5 +1,5 @@
 import { reactive, ref } from "vue";
-import { listSessions, toMessage } from "@/api/client";
+import { createSession, listSessions, toMessage } from "@/api/client";
 import type { ConversationTranscriptMessage, SessionInfo } from "@pichamber/shared";
 
 export const workspace = reactive({
@@ -26,7 +26,11 @@ export const sessionTitle = (session: SessionInfo | string): string => {
     typeof session === "string" ? sessions.value.find(({ id }) => id === session) : session;
   const sessionId = typeof session === "string" ? session : session.id;
 
-  return sessionInfo?.name?.trim() || sessionInfo?.firstMessage?.trim() || `Session ${sessionId}`;
+  return (
+    sessionInfo?.name?.trim() ||
+    sessionInfo?.firstMessage?.trim() ||
+    (sessionInfo?.messageCount === 0 ? "New Session" : `Session ${sessionId}`)
+  );
 };
 
 export const loadSessions = () => {
@@ -49,13 +53,48 @@ export const loadSessions = () => {
   return sessionsLoadPromise;
 };
 
+const syncWorkspaceMetadata = (sessionId: string) => {
+  const session = sessions.value.find(({ id }) => id === sessionId);
+  if (!session || workspace.sessionId !== sessionId) return;
+  workspace.sessionName = sessionTitle(session);
+  workspace.folderName = session.cwd?.split("/").pop() ?? null;
+  workspace.cwd = session.cwd || null;
+};
+
+let sessionsRefreshPromise: Promise<void> | null = null;
+
+/** Refresh the server snapshot without replacing the visible list with a loading state. */
+export const refreshSessions = () => {
+  if (sessionsRefreshPromise) return sessionsRefreshPromise;
+
+  sessionsRefreshPromise = (async () => {
+    if (sessionsLoadPromise) await sessionsLoadPromise;
+    try {
+      sessions.value = await listSessions();
+      sessionsError.value = null;
+      if (workspace.sessionId) syncWorkspaceMetadata(workspace.sessionId);
+    } catch (error) {
+      sessionsError.value = toMessage(error);
+    }
+  })().finally(() => {
+    sessionsRefreshPromise = null;
+  });
+
+  return sessionsRefreshPromise;
+};
+
+export const createSessionForCwd = async (cwd: string) => {
+  const { sessionId } = await createSession(cwd);
+  workspace.sessionId = sessionId;
+  workspace.cwd = cwd;
+  workspace.folderName = cwd.split("/").pop() ?? null;
+  workspace.sessionName = "New Session";
+  return sessionId;
+};
+
 export const updateWorkspace = async (sessionId: string) => {
   workspace.sessionId = sessionId;
   await loadSessions();
   if (workspace.sessionId !== sessionId) return;
-
-  const session = sessions.value.find(({ id }) => id === sessionId);
-  workspace.sessionName = sessionTitle(session ?? sessionId);
-  workspace.folderName = session?.cwd?.split("/")?.pop() ?? null;
-  workspace.cwd = session?.cwd ?? null;
+  syncWorkspaceMetadata(sessionId);
 };

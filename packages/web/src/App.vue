@@ -11,18 +11,23 @@ import SessionSidebar from "@/components/panels/SessionSidebar.vue";
 import TerminalPanel from "@/components/panels/TerminalPanel.vue";
 import ConversationPanel from "./components/panels/ConversationPanel.vue";
 import { useRouter } from "vue-router";
-import { updateWorkspace, workspace } from "./stores/workspace";
-import { createSession } from "./api/client";
+import { createSessionForCwd, sessionsError, updateWorkspace, workspace } from "./stores/workspace";
+import { toMessage } from "./api/client";
 
 const router = useRouter();
 
 router.afterEach(async (to) => {
   if (to.name == "new-session") {
-    const session = await createSession(workspace.cwd ?? "~");
-    workspace.sessionId = session.sessionId;
+    try {
+      const sessionId = await createSessionForCwd(workspace.cwd ?? "~");
+      workspace.sessionId = sessionId;
+      await router.replace({ name: "session", params: { sessionId } });
+    } catch (error) {
+      sessionsError.value = toMessage(error);
+    }
   } else if (to.name == "session") {
     const sessionId = to.params.sessionId;
-    if (typeof sessionId === "string") updateWorkspace(sessionId);
+    if (typeof sessionId === "string") await updateWorkspace(sessionId);
   }
 });
 </script>

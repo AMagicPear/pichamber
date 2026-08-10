@@ -24,6 +24,7 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { ui } from "@/stores/ui";
 import {
+  createSessionForCwd,
   loadSessions,
   sessionTitle,
   sessions,
@@ -32,7 +33,7 @@ import {
   workspace,
 } from "@/stores/workspace";
 import { settings } from "@/stores/settings";
-import { createSession, deleteSession, toMessage } from "@/api/client";
+import { deleteSession, toMessage } from "@/api/client";
 
 const visibleSessions = computed(() => {
   if (!settings.hideTemporarySessions) return sessions.value;
@@ -118,8 +119,9 @@ const startProjectSession = async (cwd: string) => {
 
   if (router.currentRoute.value.name === "new-session") {
     try {
-      const session = await createSession(cwd);
-      workspace.sessionId = session.sessionId;
+      const sessionId = await createSessionForCwd(cwd);
+      workspace.sessionId = sessionId;
+      await router.replace({ name: "session", params: { sessionId } });
     } catch (error) {
       sessionsError.value = toMessage(error);
     }
@@ -189,9 +191,9 @@ onMounted(async () => {
     <div class="sidebar__actions" aria-label="Workspace actions">
       <div>
         <IconButton label="Add project"><FolderAddIcon /></IconButton>
-        <RouterLink to="/new" custom v-slot="{ navigate }">
-          <IconButton label="New session" @click="navigate"><ChatNewIcon /></IconButton>
-        </RouterLink>
+        <IconButton label="New session" @click="startProjectSession(workspace.cwd ?? '~')">
+          <ChatNewIcon />
+        </IconButton>
         <IconButton label="New multi-run"><ArrowsMerge /></IconButton>
         <IconButton label="Scheduled tasks"><CalendarScheduleIcon /></IconButton>
       </div>
@@ -390,12 +392,31 @@ onMounted(async () => {
   position: absolute;
   top: 3px;
   right: 2px;
-  opacity: 0.55;
-  transition: opacity 120ms ease;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(3px);
+  color: #888;
+  transition:
+    transform 150ms ease-out,
+    opacity 150ms ease-out;
 }
-.session-list__project-new:hover:not(:disabled),
-.session-list__section:hover .session-list__project-new {
+.session-list__project-new :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+.session-list__project:hover + .session-list__project-new,
+.session-list__project-new:hover:not(:disabled) {
   opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  color: #222;
+}
+.session-list__project-new:hover:not(:disabled) {
+  background: transparent;
+  box-shadow: none;
 }
 .session-list__project:hover {
   background: rgb(0 0 0 / 4%);

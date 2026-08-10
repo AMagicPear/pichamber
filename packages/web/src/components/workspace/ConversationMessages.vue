@@ -149,7 +149,7 @@ const liveToolDetails = computed(() =>
 </script>
 
 <template>
-  <div ref="scroller" class="conversation__messages" @scroll="onScroll" @wheel="onWheel">
+  <div ref="scroller" class="conversation__messages scroll-fade-bottom" @scroll="onScroll" @wheel="onWheel">
     <div ref="content" class="conversation__content">
       <template v-for="entry in entries" :key="entry.id">
       <article v-if="messageFor(entry)?.role === 'user'" class="conversation-message conversation-message--user">
@@ -196,7 +196,7 @@ const liveToolDetails = computed(() =>
 .conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
-.conversation-message__user { width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 12px 20px; border: 1px solid #ece9e0; border-radius: 12px 12px 4px; background: #f7f6f2; }
+.conversation-message__user { width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid #ece9e0; border-radius: 12px 12px 4px; background: #f7f6f2; }
 
 /* Error variants: red accent on the message block so failed turns read at
  * a glance instead of looking like an empty successful bubble. The author

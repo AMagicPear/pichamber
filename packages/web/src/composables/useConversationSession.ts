@@ -2,6 +2,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { computed, onBeforeUnmount, ref, type Ref } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
+import { refreshSessions } from "@/stores/workspace";
 import type {
   ConversationTranscriptMessage,
   LiveConversationState,
@@ -112,6 +113,13 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
             entries.value = message.messages;
           } else {
             live.value = message.live;
+            if (
+              message.live.pendingUserMessages.length === 0 &&
+              message.live.streamingMessage === undefined &&
+              message.live.toolExecutions.length === 0
+            ) {
+              void refreshSessions();
+            }
           }
         },
         (status) => {
