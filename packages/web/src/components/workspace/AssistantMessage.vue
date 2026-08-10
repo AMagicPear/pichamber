@@ -37,6 +37,9 @@ const label = computed(() =>
 const provider = computed(() =>
   props.message.role === "assistant" ? ((props.message as AssistantLike).provider ?? "") : "",
 );
+const modelId = computed(() =>
+  props.message.role === "assistant" ? (props.message.model ?? "") : "",
+);
 const text = computed(() => messageText(props.message));
 const thinking = computed(() => thinkingText(props.message));
 /** Auto expand/collapse the Thinking detail: expanded while the model is
@@ -51,7 +54,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   >
     <template v-if="error">
       <header class="conversation-message__author conversation-message__author--error">
-        <ProviderLogo :provider-id="provider" :size="16" />
+        <ProviderLogo :provider-id="provider" :model-id="modelId" :size="16" />
         {{ label }}
         <span class="conversation-message__error-tag">{{ error.reason }}</span>
       </header>
@@ -59,7 +62,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
     </template>
     <template v-else>
       <header class="conversation-message__author">
-        <ProviderLogo :provider-id="provider" :size="16" /> {{ label }}
+        <ProviderLogo :provider-id="provider" :model-id="modelId" :size="16" /> {{ label }}
       </header>
       <ConversationDetail
         v-if="thinking"

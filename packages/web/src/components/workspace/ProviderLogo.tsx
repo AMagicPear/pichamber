@@ -26,34 +26,67 @@ const aliases = new Map([
   ["wafer", "wafer.ai"],
 ]);
 
+const namePrefixes = new Map([
+  ["gpt-", "openai"],
+  ["o1", "openai"],
+  ["o3", "openai"],
+  ["o4", "openai"],
+]);
+
 const normalize = (value: string) =>
   value.toLowerCase().trim().replace(/^models\./, "").replace(/^provider\./, "").replace(/\s+/g, "-");
 
-const candidatesFor = (providerId: string) => {
+/** Candidates derived from the provider id alone — aliases, normalized
+ *  provider string, and its primary segment. */
+const providerCandidates = (providerId: string) => {
   const normalized = normalize(providerId);
   if (!normalized) return [];
   const compact = normalized.replace(/[^a-z0-9_\-./:]/g, "");
   const primary = compact.split(/[/:]/)[0] || compact;
-  return [...new Set([aliases.get(compact), aliases.get(primary), compact, primary].filter(Boolean))] as string[];
+  return [
+    ...new Set([aliases.get(compact), aliases.get(primary), compact, primary].filter(Boolean)),
+  ] as string[];
 };
 
-const localSourceFor = (providerId: string) => {
-  const candidates = candidatesFor(providerId);
+/** When the provider side yields nothing, fall back to a brand lookup by
+ *  model id prefix (e.g. "gpt-4o" → "openai"). Returns a single-element
+ *  candidate list — the brand key — or [] when no prefix matches. */
+const modelIdFallback = (modelId: string) => {
+  const normalized = normalize(modelId);
+  if (!normalized) return [];
+  const compact = normalized.replace(/[^a-z0-9_\-./:]/g, "");
+  const hit = [...namePrefixes.entries()].find(([prefix]) => compact.startsWith(prefix))?.[1];
+  return hit ? [hit] : [];
+};
+
+const localSourceFor = (providerId: string, modelId = "") => {
+  const candidates = providerCandidates(providerId);
   const id = candidates.find((candidate) => localLogos.has(candidate));
-  return id ? localLogos.get(id) ?? null : null;
+  if (id) return localLogos.get(id) ?? null;
+  return modelIdFallback(modelId)
+    .map((candidate) => localLogos.get(candidate) ?? null)
+    .find((src): src is string => src !== null) ?? null;
 };
 
 export default defineComponent({
   name: "ProviderLogo",
   props: {
     providerId: { type: String, default: "" },
+    modelId: { type: String, default: "" },
     size: { type: [Number, String] as PropType<number | string>, default: 16 },
     alt: { type: String, default: "" },
     class: { type: String, default: "" },
   },
   setup(props) {
-    const localSrc = computed(() => localSourceFor(props.providerId));
-    const remoteId = computed(() => candidatesFor(props.providerId)[0] ?? null);
+    /** Resolution order: provider aliases/local → model id prefix → remote
+     *  fallback for the provider → model id prefix fallback → none. */
+    const candidates = computed(() => {
+      const fromProvider = providerCandidates(props.providerId);
+      if (fromProvider.length > 0) return fromProvider;
+      return modelIdFallback(props.modelId);
+    });
+    const localSrc = computed(() => localSourceFor(props.providerId, props.modelId));
+    const remoteId = computed(() => candidates.value[0] ?? null);
     const state = ref<LogoState>(localSrc.value ? "local" : remoteId.value ? "remote" : "none");
 
     watch(

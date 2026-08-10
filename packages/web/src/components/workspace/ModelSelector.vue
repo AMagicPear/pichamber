@@ -78,7 +78,7 @@ const placeholder = computed(() => {
       aria-haspopup="listbox"
       @click="toggle"
     >
-      <ProviderLogo class="model-selector__icon" :provider-id="model?.provider ?? ''" :size="16" />
+      <ProviderLogo class="model-selector__icon" :provider-id="model?.provider ?? ''" :model-id="model?.id ?? ''" :size="16" />
       <span class="model-selector__name">{{ placeholder }}</span>
       <ArrowDownSIcon class="model-selector__chevron" />
     </button>
@@ -113,7 +113,7 @@ const placeholder = computed(() => {
             :class="{ 'is-active': model?.provider === candidate.provider && model?.id === candidate.id }"
             @click="onSelect(candidate)"
           >
-            <ProviderLogo class="model-selector__item-icon" :provider-id="candidate.provider" :size="16" />
+            <ProviderLogo class="model-selector__item-icon" :provider-id="candidate.provider" :model-id="candidate.id" :size="16" />
             <span class="model-selector__item-name">{{ candidate.name }}</span>
           </button>
         </div>
