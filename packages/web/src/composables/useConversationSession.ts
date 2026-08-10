@@ -13,7 +13,7 @@ import type {
 export const useConversationSession = (entries: Ref<ConversationTranscriptMessage[]>) => {
   const draft = ref<string>();
   const connected = ref(false);
-  const live = ref<LiveConversationState>({ pendingUserMessages: [], toolExecutions: [] });
+  const live = ref<LiveConversationState>({ pendingUserMessages: [], toolExecutions: [], busy: false });
   /** Empty until the server confirms available models in `ready`/`model_state`. */
   const availableModels = ref<ModelDescriptor[]>([]);
   const model = ref<ModelDescriptor | undefined>();
@@ -44,7 +44,7 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
     if (status.type === "ready") {
       connected.value = true;
       entries.value = status.messages ?? [];
-      live.value = status.live ?? { pendingUserMessages: [], toolExecutions: [] };
+      live.value = status.live ?? { pendingUserMessages: [], toolExecutions: [], busy: false };
       lastError.value = null;
       if (status.thinking) {
         applyModelState({
@@ -103,7 +103,7 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
     disconnect();
     activeSessionId = sessionId;
     entries.value = [];
-    live.value = { pendingUserMessages: [], toolExecutions: [] };
+    live.value = { pendingUserMessages: [], toolExecutions: [], busy: false };
     try {
       ws = connectSessionWs(
         sessionId,
@@ -113,11 +113,11 @@ export const useConversationSession = (entries: Ref<ConversationTranscriptMessag
             entries.value = message.messages;
           } else {
             live.value = message.live;
-            if (
-              message.live.pendingUserMessages.length === 0 &&
-              message.live.streamingMessage === undefined &&
-              message.live.toolExecutions.length === 0
-            ) {
+            // The server marks the run idle only once, on agent_settled —
+            // that's the signal that the session file changed and the
+            // sidebar needs a refresh. (Mid-run lulls are busy, so this
+            // can't fire spuriously between tool events.)
+            if (!message.live.busy) {
               void refreshSessions();
             }
           }

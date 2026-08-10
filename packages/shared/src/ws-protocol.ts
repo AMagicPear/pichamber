@@ -28,6 +28,11 @@ export type LiveConversationState = {
   pendingUserMessages: AgentMessage[];
   streamingMessage?: AgentMessage;
   toolExecutions: LiveToolExecution[];
+  /** True while an agent run is in progress (first message_start of the
+   *  run … agent_settled). Lets the client distinguish "mid-run lulls"
+   *  (e.g. between committing a reply and the next tool event) from the
+   *  run actually finishing. */
+  busy: boolean;
 };
 
 /** Slim model reference the server emits and accepts on the wire.

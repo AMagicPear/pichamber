@@ -15,15 +15,21 @@ type SessionChannel = {
     pendingUserMessages: LiveConversationState["pendingUserMessages"];
     streamingMessage?: LiveConversationState["streamingMessage"];
     toolExecutions: Map<string, LiveToolExecution>;
+    busy: boolean;
   };
   /** Re-snapshot model + thinking state and broadcast to all sockets. */
   queueModelStateBroadcast: () => void;
+  /** Re-snapshot the transcript and broadcast it — followed by the live
+   *  state — on the next microtask. Used to commit a just-finished message
+   *  into the transcript. */
+  queueCommitBroadcast: () => void;
 };
 
 // sessionId → one shared SDK listener plus all subscribed sockets.
 const channelsBySession = new Map<string, SessionChannel>();
 
 const liveState = (channel: SessionChannel): LiveConversationState => ({
+  busy: channel.live.busy,
   pendingUserMessages: channel.live.pendingUserMessages,
   streamingMessage: channel.live.streamingMessage,
   toolExecutions: [...channel.live.toolExecutions.values()],
@@ -65,11 +71,23 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     });
   };
 
+  let commitBroadcastQueued = false;
+  const queueCommitBroadcast = () => {
+    if (commitBroadcastQueued) return;
+    commitBroadcastQueued = true;
+    queueMicrotask(() => {
+      commitBroadcastQueued = false;
+      broadcast({ type: "messages", messages: getConversationMessages(session) });
+      broadcast({ type: "live", live: liveState(channel) });
+    });
+  };
+
   const channel: SessionChannel = {
     sockets: new Set(),
     unsubscribe: () => undefined,
-    live: { pendingUserMessages: [], toolExecutions: new Map() },
+    live: { pendingUserMessages: [], toolExecutions: new Map(), busy: false },
     queueModelStateBroadcast,
+    queueCommitBroadcast,
   };
   const broadcast = (msg: ServerMessage) => {
     const payload = JSON.stringify(msg);
@@ -78,18 +96,40 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     }
   };
   channel.unsubscribe = session.subscribe((event) => {
-    if (event.type === "message_start" && event.message.role === "user") {
-      channel.live.pendingUserMessages.push(event.message);
-      broadcast({ type: "live", live: liveState(channel) });
-    } else if (event.type === "message_start" && event.message.role === "assistant") {
-      channel.live.streamingMessage = event.message;
-      broadcast({ type: "live", live: liveState(channel) });
+    if (event.type === "message_start") {
+      channel.live.busy = true;
+      if (event.message.role === "user") {
+        channel.live.pendingUserMessages.push(event.message);
+        broadcast({ type: "live", live: liveState(channel) });
+      } else if (event.message.role === "assistant") {
+        channel.live.streamingMessage = event.message;
+        broadcast({ type: "live", live: liveState(channel) });
+      }
+      // toolResult/custom messages are already surfaced via the live tool chips.
     } else if (event.type === "message_update" && event.message.role === "assistant") {
       channel.live.streamingMessage = event.message;
       broadcast({ type: "live", live: liveState(channel) });
-    } else if (event.type === "message_end" && event.message.role === "assistant") {
-      channel.live.streamingMessage = event.message;
-      broadcast({ type: "live", live: liveState(channel) });
+    } else if (event.type === "message_end") {
+      // The session persists the message right after this emit returns, so
+      // the transcript broadcast is queued on a microtask — it then includes
+      // the finished message, and the live slot it occupied is cleared in the
+      // same frame (messages before live, so clients never see a gap).
+      const { role } = event.message;
+      if (role === "user") {
+        channel.live.pendingUserMessages = channel.live.pendingUserMessages.filter(
+          (m) => m !== event.message,
+        );
+      } else if (role === "assistant") {
+        channel.live.streamingMessage = undefined;
+      } else if (role === "toolResult") {
+        // The finished tool is now part of the transcript; drop the live chip
+        // so replies and tool calls interleave in execution order.
+        const toolCallId = (event.message as { toolCallId?: unknown }).toolCallId;
+        if (typeof toolCallId === "string") channel.live.toolExecutions.delete(toolCallId);
+      }
+      if (role === "user" || role === "assistant" || role === "toolResult") {
+        queueCommitBroadcast();
+      }
     } else if (event.type === "tool_execution_start") {
       channel.live.toolExecutions.set(event.toolCallId, {
         toolCallId: event.toolCallId,
@@ -127,6 +167,7 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       channel.live.pendingUserMessages = [];
       channel.live.streamingMessage = undefined;
       channel.live.toolExecutions.clear();
+      channel.live.busy = false;
       broadcast({ type: "messages", messages: getConversationMessages(session) });
       broadcast({ type: "live", live: liveState(channel) });
     } else if (event.type === "thinking_level_changed") {
