@@ -211,26 +211,31 @@ onMounted(async () => {
 
       <template v-else>
         <section v-for="project in projectGroups" :key="project.cwd" class="session-list__section">
-          <button
-            type="button"
-            class="session-list__project"
-            :aria-expanded="!collapsedProjects.has(project.cwd)"
-            @click="toggleProject(project.cwd)"
-          >
-            <component
-              :is="collapsedProjects.has(project.cwd) ? FolderIcon : FolderOpenIcon"
-              class="session-list__project-folder"
-            />
-            <span class="session-list__project-title">{{ projectName(project.cwd) }}</span>
-          </button>
-          <IconButton
-            class="session-list__project-new"
-            label="New session in project"
-            size="compact"
-            @click.stop="startProjectSession(project.cwd)"
-          >
-            <AddIcon />
-          </IconButton>
+          <div class="session-list__project-header">
+            <button
+              type="button"
+              class="session-list__project"
+              :aria-expanded="!collapsedProjects.has(project.cwd)"
+              @click="toggleProject(project.cwd)"
+            >
+              <span
+                class="session-list__project-folder"
+                :class="{ 'is-open': !collapsedProjects.has(project.cwd) }"
+              >
+                <FolderIcon class="session-list__project-folder-icon session-list__project-folder-icon--closed" />
+                <FolderOpenIcon class="session-list__project-folder-icon session-list__project-folder-icon--open" />
+              </span>
+              <span class="session-list__project-title">{{ projectName(project.cwd) }}</span>
+            </button>
+            <IconButton
+              class="session-list__project-new"
+              label="New session in project"
+              size="compact"
+              @click.stop="startProjectSession(project.cwd)"
+            >
+              <AddIcon />
+            </IconButton>
+          </div>
           <template v-if="!collapsedProjects.has(project.cwd)">
             <RouterLink
               v-for="session in visibleProjectSessions(project.cwd, project.sessions)"
@@ -300,10 +305,12 @@ onMounted(async () => {
 
 <style scoped>
 .sidebar {
-  display: flex;
+  --sidebar-gutter: 8px;
+
+  display: grid;
   width: 100%;
   height: 100%;
-  flex-direction: column;
+  grid-template-rows: 48px 40px minmax(0, 1fr) 42px;
   overflow: hidden;
   color: #1f1f1f;
   font-size: 14px;
@@ -316,10 +323,9 @@ onMounted(async () => {
   align-items: center;
 }
 .sidebar__topbar {
-  flex: 0 0 48px;
   gap: 14px;
   align-items: center;
-  padding: 7px 14px 7px 48px;
+  padding: 7px var(--sidebar-gutter) 7px 48px;
 }
 .sidebar__search-group {
   display: flex;
@@ -342,26 +348,24 @@ onMounted(async () => {
   width: 40px;
 }
 .sidebar__actions {
-  flex: 0 0 40px;
   justify-content: space-between;
-  padding: 4px 8px;
+  padding: 4px var(--sidebar-gutter);
 }
 .sidebar__actions > div {
-  gap: 3px;
+  gap: 2px;
 }
 .sidebar__actions > div + div {
-  padding-left: 7px;
+  padding-left: 8px;
 }
 .session-list {
-  flex: 1;
   min-height: 0;
-  padding: 8px 6px 10px 8px;
+  padding: 6px var(--sidebar-gutter) 8px;
   overflow: auto;
 }
 .session-list__section + .session-list__section {
-  margin-top: 8px;
+  margin-top: 6px;
 }
-.session-list__section {
+.session-list__project-header {
   position: relative;
 }
 .session-list__project {
@@ -379,60 +383,94 @@ onMounted(async () => {
   border-radius: 6px;
   font-size: 14px;
   font-weight: 450;
-  line-height: 22px;
-  padding-right: 34px;
+  line-height: 20px;
+  padding-right: 36px;
   text-align: left;
   cursor: pointer;
   transition:
     background-color 120ms ease,
     color 120ms ease;
 }
-.session-list__project-new {
+.session-list__project-new,
+.session-list__menu-trigger {
   position: absolute;
-  top: 3px;
-  right: 2px;
+  top: 50%;
+  inset-inline-end: 4px;
   width: 24px;
   height: 24px;
   margin: 0;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(3px);
+  transform: translate(3px, -50%);
   color: #888;
   transition:
     transform 150ms ease-out,
     opacity 150ms ease-out;
 }
-.session-list__project-new :deep(svg) {
+.session-list__project-new :deep(svg),
+.session-list__menu-trigger :deep(svg) {
   width: 13px;
   height: 13px;
 }
-.session-list__project:hover + .session-list__project-new,
-.session-list__project-new:hover:not(:disabled) {
+.session-list__project-header:is(:hover, :focus-within) .session-list__project-new,
+.session-list__item:is(:hover, .is-menu-open) .session-list__menu-trigger {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0);
+  transform: translate(0, -50%);
   color: #222;
 }
-.session-list__project-new:hover:not(:disabled) {
+.session-list__project-header:is(:hover, :focus-within) .session-list__project {
+  background: rgb(0 0 0 / 4%);
+}
+.session-list__project-header:is(:hover, :focus-within) :is(
+  .session-list__project-folder,
+  .session-list__project-title
+) {
+  transform: translateX(1px);
+}
+.session-list__project-new:hover:not(:disabled),
+.session-list__menu-trigger:hover:not(:disabled) {
   background: transparent;
   box-shadow: none;
 }
-.session-list__project:hover {
-  background: rgb(0 0 0 / 4%);
-}
 .session-list__project-folder {
+  position: relative;
+  display: block;
   width: 14px;
   height: 14px;
   color: #777;
   flex: 0 0 auto;
-  transition: transform 150ms ease-out;
+  transform-origin: 30% 65%;
+  transition: transform 150ms ease-out, color 150ms ease-out;
+}
+.session-list__project-folder-icon {
+  position: absolute;
+  inset: 0;
+  width: 14px;
+  height: 14px;
+  transform-origin: 30% 65%;
+  transition:
+    opacity 150ms ease-out,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.session-list__project-folder-icon--closed {
+  opacity: 1;
+  transform: scale(1);
+}
+.session-list__project-folder-icon--open {
+  opacity: 0;
+  transform: translate(1px, 1px) scale(0.82);
+}
+.session-list__project-folder.is-open .session-list__project-folder-icon--closed {
+  opacity: 0;
+  transform: translate(-1px, -1px) scale(0.82);
+}
+.session-list__project-folder.is-open .session-list__project-folder-icon--open {
+  opacity: 1;
+  transform: translate(0) scale(1);
 }
 .session-list__project-title {
   transition: transform 150ms ease-out;
-}
-.session-list__project:hover .session-list__project-folder,
-.session-list__project:hover .session-list__project-title {
-  transform: translateX(1px);
 }
 .session-list__item {
   display: flex;
@@ -440,14 +478,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 31px;
-  padding: 6px 7px 6px 28px;
+  min-height: 30px;
+  padding: 5px 36px 5px 28px;
   border-radius: 6px;
   color: inherit;
   text-decoration: none;
   text-align: left;
   font-size: 14px;
-  line-height: 19px;
+  line-height: 20px;
   cursor: pointer;
   transition: background-color 120ms ease;
 }
@@ -470,50 +508,25 @@ onMounted(async () => {
   transform: translateX(1px);
 }
 .session-list__age {
-  margin-left: 8px;
+  position: absolute;
+  top: 50%;
+  inset-inline-end: 4px;
+  width: 24px;
   color: #888;
   font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  transform: translateY(-50%);
   white-space: nowrap;
   transition: opacity 120ms ease-out;
 }
-.session-list__menu-trigger {
-  position: absolute;
-  top: 50%;
-  right: 7px;
-  width: 24px;
-  height: 24px;
-  margin: 0;
+.session-list__item:is(:hover, .is-menu-open) .session-list__age {
   opacity: 0;
-  pointer-events: none;
-  transform: translate(3px, -50%);
-  color: #888;
-  transition:
-    transform 150ms ease-out,
-    opacity 150ms ease-out;
-}
-.session-list__menu-trigger :deep(svg) {
-  width: 13px;
-  height: 13px;
-}
-.session-list__item:hover .session-list__age,
-.session-list__item.is-menu-open .session-list__age {
-  opacity: 0;
-}
-.session-list__item:hover .session-list__menu-trigger,
-.session-list__item.is-menu-open .session-list__menu-trigger {
-  opacity: 1;
-  pointer-events: auto;
-  color: #222;
-  transform: translate(0, -50%);
-}
-.session-list__menu-trigger:hover:not(:disabled) {
-  background: transparent;
-  box-shadow: none;
 }
 .session-list__more {
   display: block;
   margin-left: 20px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border-radius: 6px;
   color: #8b8b8b;
   font-size: 12px;
@@ -526,7 +539,7 @@ onMounted(async () => {
   background: rgb(0 0 0 / 4%);
 }
 .session-list__state {
-  margin: 14px 7px 0 28px;
+  margin: 12px 8px 0 28px;
   color: #888;
   font-size: 12px;
 }
@@ -534,8 +547,14 @@ onMounted(async () => {
   color: #b3261e;
 }
 .sidebar__footer {
-  flex: 0 0 42px;
   gap: 2px;
-  padding: 5px 8px;
+  padding: 5px var(--sidebar-gutter);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-list__project-folder,
+  .session-list__project-folder-icon {
+    transition: none;
+  }
 }
 </style>
