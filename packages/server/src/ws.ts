@@ -1,7 +1,14 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
-import type { LiveItem, ModelDescriptor, ServerMessage, ThinkingState } from "@pichamber/shared";
+import type {
+  LiveItem,
+  ModelDescriptor,
+  ServerMessage,
+  SessionStatsView,
+  ThinkingState,
+} from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
+import { computeSessionStatsView } from "./context";
 import { toMessage } from "./error";
 import { createUiBridge, type UiBridge } from "./extension-ui";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
@@ -30,6 +37,9 @@ type ChannelState = {
   model: ModelDescriptor | undefined;
   availableModels: ModelDescriptor[];
   thinking: ThinkingState;
+  /** Pre-computed view for the Context pane; refreshed on every state
+   *  change that could affect it (message_end, model switch, etc.). */
+  stats: SessionStatsView;
 };
 
 type SessionChannel = {
@@ -45,10 +55,22 @@ type SessionChannel = {
 // sessionId → one shared SDK listener plus all subscribed sockets.
 const channelsBySession = new Map<string, SessionChannel>();
 
-const initialModelState = (): Pick<ChannelState, "model" | "availableModels" | "thinking"> => ({
+const initialModelState = (): Pick<
+  ChannelState,
+  "model" | "availableModels" | "thinking" | "stats"
+> => ({
   model: undefined,
   availableModels: [],
   thinking: { level: "off", availableLevels: ["off"] },
+  stats: {
+    model: undefined,
+    modified: "",
+    context: { tokens: null, contextWindow: 0, percent: null, tokensText: "—" },
+    messages: { total: 0, user: 0, assistant: 0 },
+    cost: { value: "$0.00", raw: 0 },
+    lastAssistant: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    cacheHit: "0.0%",
+  },
 });
 
 /** 把权威条目重建为 item 列表；无变化的场合（settle 时内容一致）跳过快照广播。 */
@@ -73,8 +95,29 @@ const reconcile = (channel: SessionChannel, session: AgentSession, keepLive: boo
 };
 
 const snapshotMessage = (channel: SessionChannel): ServerMessage => {
-  const { seq, busy, items, model, availableModels, thinking } = channel.state;
-  return { type: "snapshot", seq, busy, items, model, availableModels, thinking };
+  const { seq, busy, items, model, availableModels, thinking, stats } = channel.state;
+  return { type: "snapshot", seq, busy, items, model, availableModels, thinking, stats };
+};
+
+/** Cheap shallow diff on the fields the client actually renders. Skips the
+ *  broadcast when nothing visible changed, so idle ticks don't wake the UI. */
+const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean => {
+  if (prev.modified !== next.modified) return true;
+  if (prev.context.tokens !== next.context.tokens) return true;
+  if (prev.context.percent !== next.context.percent) return true;
+  if (prev.context.tokensText !== next.context.tokensText) return true;
+  if (prev.context.contextWindow !== next.context.contextWindow) return true;
+  if (prev.messages.total !== next.messages.total) return true;
+  if (prev.messages.user !== next.messages.user) return true;
+  if (prev.messages.assistant !== next.messages.assistant) return true;
+  if (prev.cost.raw !== next.cost.raw) return true;
+  if (prev.cacheHit !== next.cacheHit) return true;
+  if (prev.lastAssistant.input !== next.lastAssistant.input) return true;
+  if (prev.lastAssistant.output !== next.lastAssistant.output) return true;
+  if (prev.lastAssistant.reasoning !== next.lastAssistant.reasoning) return true;
+  if (prev.lastAssistant.cacheRead !== next.lastAssistant.cacheRead) return true;
+  if (prev.lastAssistant.cacheWrite !== next.lastAssistant.cacheWrite) return true;
+  return false;
 };
 
 /** 扫描最后一个 custom_message 条目（自定义消息在 emit 前已持久化）。 */
@@ -103,10 +146,16 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
           channel.state.model = model;
           channel.state.availableModels = availableModels;
           channel.state.thinking = getThinkingState(session);
+          // Model/thinking switches also change `contextUsage.contextWindow`,
+          // so the Context pane's percentage needs a fresh recompute in the
+          // same broadcast.
+          const stats = computeSessionStatsView(session);
+          channel.state.stats = stats;
           broadcastState(channel, {
             model,
             availableModels,
             thinking: channel.state.thinking,
+            stats,
           });
         })
         .catch((error) => {
@@ -139,7 +188,13 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
   };
   const broadcastState = (
     channel: SessionChannel,
-    fields: { busy?: boolean; model?: ModelDescriptor; availableModels?: ModelDescriptor[]; thinking?: ThinkingState },
+    fields: {
+      busy?: boolean;
+      model?: ModelDescriptor;
+      availableModels?: ModelDescriptor[];
+      thinking?: ThinkingState;
+      stats?: SessionStatsView;
+    },
   ) => {
     channel.state.seq += 1;
     broadcast({ type: "state", seq: channel.state.seq, ...fields });
@@ -245,6 +300,16 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
             broadcastItem(item);
           }
         }
+        // Stats refresh: pi appends the entry to the session manager just
+        // before emitting this event, so the new totals (including the
+        // freshly-closed assistant turn's usage) are visible immediately.
+        // `message_start` doesn't touch totals, so we don't need to
+        // recompute there.
+        const stats = computeSessionStatsView(session);
+        if (statsChanged(state.stats, stats)) {
+          state.stats = stats;
+          broadcastState(channel, { stats });
+        }
         break;
       }
       case "tool_execution_start": {
@@ -287,7 +352,17 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         // 与权威状态对齐：compaction/重试/分支导航会改变条目，内容一致时跳过
         // 快照广播（id 按对象身份保持，客户端无感）。
         if (reconcile(channel, session, false)) broadcastSnapshot();
-        broadcastState(channel, { busy: false });
+        // Stats also need a refresh after settlement: compactions, retries
+        // and branch navigation all change message counts and (after the
+        // next LLM response) contextUsage. We only broadcast when the view
+        // actually moved to avoid waking the client on idle ticks.
+        const settledStats = computeSessionStatsView(session);
+        const statsFields: { busy: false; stats?: SessionStatsView } = { busy: false };
+        if (statsChanged(state.stats, settledStats)) {
+          state.stats = settledStats;
+          statsFields.stats = settledStats;
+        }
+        broadcastState(channel, statsFields);
         break;
       }
       case "entry_appended": {
@@ -372,6 +447,9 @@ export const sessionWsHandler: WsHandler = {
       channel.state.model = model;
       channel.state.availableModels = availableModels;
       channel.state.thinking = getThinkingState(session);
+      // Seed the Context pane's view before the first snapshot. Computed
+      // after the model is known so the contextWindow is accurate.
+      channel.state.stats = computeSessionStatsView(session);
     } catch (error) {
       console.error("Failed to load model snapshot", sessionId, error);
     }

@@ -80,6 +80,46 @@ export type ThinkingState = {
   availableLevels: ThinkingLevel[];
 };
 
+/** Per-message usage breakdown for the most recent assistant turn. Numbers
+ *  are the raw token counts the provider reported; the client renders them
+ *  via `Intl.NumberFormat`. */
+export type LastAssistantUsage = {
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  cacheWrite: number;
+};
+
+/** Pre-computed, ready-to-render session stats. The server builds this from
+ *  pi's `AgentSession` so the client doesn't have to duplicate the
+ *  formatting (date, percent, cost, cache hit, etc.). Display strings are
+ *  already produced; the view also carries the raw values so the client
+ *  can re-format if it ever needs to. */
+export type SessionStatsView = {
+  /** Active model descriptor; mirrors the standalone `state.model` field
+   *  but bundled so the Context pane can render without an extra lookup. */
+  model: ModelDescriptor | undefined;
+  /** Localized "Jul 20, 2026, 9:10 AM" string; empty when no entry has
+   *  been recorded yet. */
+  modified: string;
+  context: {
+    /** Estimated context tokens; null when unknown (e.g. right after a
+     *  compaction, before the next assistant turn reports usage). */
+    tokens: number | null;
+    contextWindow: number;
+    /** "0.0%"–"100.0%" formatted to one decimal; null while `tokens` is null. */
+    percent: string | null;
+    /** Comma-grouped token count, e.g. "95,881"; "—" while unknown. */
+    tokensText: string;
+  };
+  messages: { total: number; user: number; assistant: number };
+  cost: { value: string; raw: number };
+  lastAssistant: LastAssistantUsage;
+  /** Cache hit rate, e.g. "99.4%". `cacheRead / (cacheRead + input)`. */
+  cacheHit: string;
+};
+
 /** JSON messages the server sends to session WebSocket clients.
  *  每个消息都携带单调递增的 seq；客户端发现 seq 不连续即请求 resync。 */
 export type ServerMessage =
@@ -91,6 +131,7 @@ export type ServerMessage =
       model?: ModelDescriptor;
       availableModels?: ModelDescriptor[];
       thinking?: ThinkingState;
+      stats?: SessionStatsView;
     }
   | { type: "item"; seq: number; item: LiveItem }
   | {
@@ -100,6 +141,7 @@ export type ServerMessage =
       model?: ModelDescriptor;
       availableModels?: ModelDescriptor[];
       thinking?: ThinkingState;
+      stats?: SessionStatsView;
     }
   /** 扩展 UI 请求（官方 RPC 模式 extension_ui_request 帧原样转发）。 */
   | { type: "ui_request"; request: RpcExtensionUIRequest }
