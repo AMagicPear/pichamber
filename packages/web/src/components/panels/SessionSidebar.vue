@@ -449,6 +449,7 @@ onMounted(async () => {
   width: 14px;
   height: 14px;
   transform-origin: 30% 65%;
+  overflow: visible;
   transition:
     opacity 150ms ease-out,
     transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
