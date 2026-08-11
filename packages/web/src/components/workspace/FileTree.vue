@@ -187,15 +187,17 @@ export default defineComponent({
   flex: 1;
   align-items: center;
   gap: 6px;
-  height: 30px;
+  height: 32px;
   min-width: 0;
   padding: 0 10px;
-  border: 1px solid #dedede;
+  border: 1px solid #e7e4dc;
   border-radius: 8px;
-  background: #fff;
+  background: #fafaf7;
+  transition: border-color 120ms ease, background-color 120ms ease;
 }
 .file-tree__search:focus-within {
   border-color: #bcbcbc;
+  background: #fff;
 }
 .file-tree__search-icon {
   width: 16px;
@@ -217,14 +219,14 @@ export default defineComponent({
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
 }
 .file-tree__search input::-webkit-search-cancel-button {
   display: none;
   appearance: none;
 }
 .file-tree__search input::placeholder {
-  color: #6d6d6d;
+  color: #999;
 }
 .file-tree__search-clear {
   display: inline-flex;
@@ -297,7 +299,7 @@ export default defineComponent({
   min-height: 28px;
   padding: 3px 10px 3px 6px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -307,7 +309,7 @@ export default defineComponent({
   transition: background-color 120ms ease;
 }
 .file-tree__row:hover {
-  background: rgb(0 0 0 / 4%);
+  background: #f2f0ea;
 }
 .file-tree__row:focus-visible {
   outline: 2px solid #3978d4;
@@ -343,9 +345,9 @@ export default defineComponent({
 }
 .file-tree__state {
   margin: 0;
-  padding: 16px;
+  padding: 14px;
   color: #888;
-  font-size: 12px;
+  font-size: 13px;
 }
 .file-tree__state--error {
   color: #a33;

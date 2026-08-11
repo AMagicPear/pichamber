@@ -169,31 +169,37 @@ const placeholder = computed(() => {
   opacity: 0.55;
 }
 
-/* The shared MenuPanel sizes the 360×360 box via the width/height props. */
+/* The shared MenuPanel sizes the 360×360 box via the width/height props.
+   Search box styling matches FileRefPicker's (@ picker). */
 .model-selector__search {
   flex: 0 0 auto;
   padding: 8px;
-  border-bottom: 1px solid #efece4;
+  border-bottom: 1px solid #ededed;
 }
 .model-selector__search input {
   width: 100%;
-  height: 28px;
+  height: 32px;
   padding: 0 10px;
-  border: 1px solid #e2dfd5;
-  border-radius: 6px;
+  border: 1px solid #e7e4dc;
+  border-radius: 8px;
   outline: 0;
   font: inherit;
   font-size: 13px;
-  background: #fff;
+  background: #fafaf7;
+  transition: border-color 120ms ease;
 }
 .model-selector__search input:focus {
-  border-color: #3978d4;
+  border-color: #bcbcbc;
+  background: #fff;
+}
+.model-selector__search input::placeholder {
+  color: #999;
 }
 .model-selector__list {
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
-  padding: 6px;
+  padding: 4px;
 }
 .model-selector__group {
   margin-bottom: 4px;
@@ -219,7 +225,7 @@ const placeholder = computed(() => {
   flex: 0 0 16px;
 }
 .model-selector__empty {
-  padding: 14px 8px;
+  padding: 14px;
   color: #888;
   font-size: 13px;
   text-align: center;

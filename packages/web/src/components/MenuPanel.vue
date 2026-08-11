@@ -55,8 +55,8 @@ defineProps<{
   max-height: calc(100vh - 80px);
   overflow: hidden;
   padding: 4px;
-  border: 1px solid #e2dfd5;
-  border-radius: 10px;
+  border: 1px solid #dedbd2;
+  border-radius: 12px;
   background: #fff;
   box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
 }
@@ -68,7 +68,7 @@ defineProps<{
   min-height: 28px;
   padding: 4px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -77,7 +77,7 @@ defineProps<{
   cursor: pointer;
 }
 .menu-panel :deep(.menu-item:hover) {
-  background: rgb(0 0 0 / 4%);
+  background: #f2f0ea;
 }
 .menu-panel :deep(.menu-item.is-active) {
   background: var(--menu-item-active-bg, rgb(57 120 212 / 12%));
