@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@earendil-works/pi-agent-core": "^0.82.1",
+    "@earendil-works/pi-ai": "^0.82.1",
     "@earendil-works/pi-coding-agent": "^0.82.1",
     "@tsconfig/node24": "^24.0.4",
     "@types/babel__core": "^7.20.5",

@@ -1,5 +1,6 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { getLastAssistantUsage } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { LastAssistantUsage, ModelDescriptor, SessionStatsView } from "@pichamber/shared";
 
 const numberFormat = new Intl.NumberFormat("en-US");
@@ -14,16 +15,14 @@ const dateFormat = new Intl.DateTimeFormat("en-US", {
 const formatPercent = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
 const formatCost = (raw: number) => `$${raw.toFixed(2)}`;
 
-/** Pull a Model<Api> down to the slim ModelDescriptor the wire already
- *  ships. Avoids the pi-ai Model<TApi> type leaking into shared. */
-const modelDescriptor = (session: AgentSession): ModelDescriptor | undefined => {
-  const m = session.model;
-  if (!m) return undefined;
+/** Pull a Model<Api> down to the slim ModelDescriptor the wire ships. */
+const modelDescriptor = (model: Model<Api> | undefined): ModelDescriptor | undefined => {
+  if (!model) return undefined;
   return {
-    provider: m.provider,
-    id: m.id,
-    name: m.name || m.id,
-    reasoning: Boolean(m.reasoning),
+    provider: model.provider,
+    id: model.id,
+    name: model.name || model.id,
+    reasoning: Boolean(model.reasoning),
   };
 };
 
@@ -72,7 +71,7 @@ export const computeSessionStatsView = (session: AgentSession): SessionStatsView
   const cacheHit = totalRead > 0 ? formatPercent(stats.tokens.cacheRead / totalRead) : "0.0%";
 
   return {
-    model: modelDescriptor(session),
+    model: modelDescriptor(session.model),
     modified: modifiedDate ? dateFormat.format(modifiedDate) : "",
     context: {
       tokens: stats.contextUsage?.tokens ?? null,

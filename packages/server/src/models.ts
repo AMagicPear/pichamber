@@ -1,12 +1,9 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelDescriptor, ThinkingState } from "@pichamber/shared";
 
-/** Strongly-typed alias for whatever the session runtime surfaces. We pull
- *  it off `ModelRuntime.getAvailable()`'s signature rather than naming the
- *  pi-ai `Model<TApi>` type directly — server code doesn't ship anything
- *  from pi-ai to clients, so depending on the transitive type transitively
- *  adds noise to the lockfile. */
-type AvailableModel = Awaited<ReturnType<AgentSession["modelRuntime"]["getAvailable"]>>[number];
+/** ModelRuntime 暴露的模型类型（getAvailable 返回 Model<Api>[]）。 */
+type AvailableModel = Model<Api>;
 
 /** Wait until the runtime has finished refreshing availability, so callers
  *  (e.g. ws `ready` and post-`set_model` broadcasts) see the full set of

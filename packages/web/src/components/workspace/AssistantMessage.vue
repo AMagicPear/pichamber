@@ -1,19 +1,16 @@
 <script setup lang="ts">
 import MarkdownRender from "markstream-vue";
 import { computed } from "vue";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@pichamber/shared";
 import BrainAi3Icon from "@/assets/icons/BrainAi3.svg";
 import ConversationDetail from "./ConversationDetail.vue";
 import ProviderLogo from "./ProviderLogo";
 import { inline, messageText, thinkingStreaming as thinkingStreamingOf, thinkingText } from "./messageContent";
 
-/** Structural peeks at AssistantMessage so we don't pull @earendil-works/pi-ai
- *  into the workspace just for two fields. */
-type AssistantLike = {
-  provider?: string;
-  stopReason?: "stop" | "toolUse" | "error" | "aborted";
-  errorMessage?: string;
-};
+/** 从 AgentMessage union 里取 assistant 消息（pi-ai 类型带真实字段）。 */
+const asAssistant = (message: AgentMessage): AssistantMessage | undefined =>
+  message.role === "assistant" ? (message as AssistantMessage) : undefined;
 
 const props = defineProps<{
   message: AgentMessage;
@@ -22,24 +19,19 @@ const props = defineProps<{
 }>();
 
 const error = computed(() => {
-  if (props.message.role !== "assistant") return undefined;
-  const stopReason = (props.message as AssistantLike).stopReason;
+  const assistant = asAssistant(props.message);
+  if (!assistant) return undefined;
+  const stopReason = assistant.stopReason;
   if (stopReason !== "error" && stopReason !== "aborted") return undefined;
-  const text = (props.message as AssistantLike).errorMessage?.trim();
+  const text = assistant.errorMessage?.trim();
   // Pi fills `errorMessage` for both error/aborted; if it's empty, fall back to
   // the stopReason so the panel never renders as a phantom empty bubble.
   return { reason: stopReason, message: text || `Assistant turn ${stopReason}` };
 });
 
-const label = computed(() =>
-  props.message.role === "assistant" ? props.message.model : "Assistant",
-);
-const provider = computed(() =>
-  props.message.role === "assistant" ? ((props.message as AssistantLike).provider ?? "") : "",
-);
-const modelId = computed(() =>
-  props.message.role === "assistant" ? (props.message.model ?? "") : "",
-);
+const label = computed(() => asAssistant(props.message)?.model ?? "Assistant");
+const provider = computed(() => asAssistant(props.message)?.provider ?? "");
+const modelId = computed(() => asAssistant(props.message)?.model ?? "");
 const text = computed(() => messageText(props.message));
 const thinking = computed(() => thinkingText(props.message));
 /** Auto expand/collapse the Thinking detail: expanded while the model is
