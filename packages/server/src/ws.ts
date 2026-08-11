@@ -11,6 +11,7 @@ import type { ServerWebSocket } from "bun";
 import { computeSessionStatsView } from "./context";
 import { toMessage } from "./error";
 import { createUiBridge, type UiBridge } from "./extension-ui";
+import { expandFileRefs } from "./file-refs";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { conversationItems, deactivateSession, getConversationEntries, getSession } from "./session";
 import type { SessionWsData, WsHandler } from "./index";
@@ -484,10 +485,14 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "prompt message must be a string");
           return;
         }
+        // 发送前展开消息里的 @path 引用（对齐原生 TUI）：图片 → images
+        // 附件，其他 → <file> 块；解析不了的 @ 保留原样。
+        const { text, images } = await expandFileRefs(input.message, session.sessionManager.getCwd());
+        if (bunWS.data.closed) return;
         // Fire-and-forget: prompt() runs until the retry/queue drains; events
         // flow back via subscribe().
         session
-          .prompt(input.message)
+          .prompt(text, images.length > 0 ? { images } : undefined)
           .catch((err: unknown) =>
             sendError(bunWS, toMessage(err)),
           );

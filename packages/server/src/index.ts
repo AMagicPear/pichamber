@@ -2,7 +2,7 @@ import type { ServerWebSocket } from "bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
-import { listDirectory, WorkspaceError } from "./fs";
+import { listDirectory, searchFiles, WorkspaceError } from "./fs";
 import { commit, getDiff, getStatus, stagePaths, unstagePaths } from "./git";
 import {
   createSessionWithCwd,
@@ -255,6 +255,12 @@ Bun.serve({
         } catch (err) {
           return fsErrorResponse(err);
         }
+      },
+    },
+    "/api/fs/search": {
+      GET: async (req) => {
+        const q = new URL(req.url).searchParams.get("q") ?? "";
+        return Response.json({ entries: await searchFiles(q) });
       },
     },
   },

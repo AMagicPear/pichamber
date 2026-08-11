@@ -27,8 +27,7 @@ export const messageText = (message?: AgentMessage): string => {
     .join("\n\n");
 };
 
-/** Concatenated thinking parts (collapsed behind a "Thinking" detail). */
-export const thinkingText = (message?: AgentMessage): string =>
+/** Concatenated thinking parts (collapsed behind a "Thinking" detail). */export const thinkingText = (message?: AgentMessage): string =>
   partsOf(message)
     .map((part) =>
       typeof part === "object" && part?.type === "thinking" && typeof part.thinking === "string"
@@ -37,6 +36,17 @@ export const thinkingText = (message?: AgentMessage): string =>
     )
     .filter(Boolean)
     .join("\n\n");
+
+/** Image parts (attachments / read-tool results), rendered as thumbnails. */
+export const messageImages = (message?: AgentMessage): Array<{ data: string; mimeType: string }> =>
+  partsOf(message).flatMap((part) =>
+    typeof part === "object" &&
+    part?.type === "image" &&
+    typeof part.data === "string" &&
+    typeof part.mimeType === "string"
+      ? [{ data: part.data, mimeType: part.mimeType }]
+      : [],
+  );
 
 /** True while the model is still streaming into a thinking part: the last
  *  content part is `thinking` (pi appends deltas to the last part in stream

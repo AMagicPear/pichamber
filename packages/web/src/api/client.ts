@@ -10,6 +10,7 @@ import type {
   ListResult,
   PtyStartOptions,
   PtyStartResult,
+  SearchResult,
   SessionEntry,
   SessionInfo,
   VersionInfo,
@@ -74,6 +75,11 @@ export const listDirectory = async (path?: string) => {
   const url = path ? `${BASE}/fs/list?path=${encodeURIComponent(path)}` : `${BASE}/fs/list`;
   const r = await fetch(url);
   return await jsonOrThrow<ListResult>(r);
+};
+
+export const searchFiles = async (query: string) => {
+  const r = await fetch(`${BASE}/fs/search?q=${encodeURIComponent(query)}`);
+  return await jsonOrThrow<SearchResult>(r);
 };
 
 // ─── Git (Git pane) ───────────────────────────────────────────────────

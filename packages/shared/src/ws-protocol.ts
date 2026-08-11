@@ -197,6 +197,11 @@ export type ListResult = {
   entries: DirEntry[];
 };
 
+/** Response body for GET /api/fs/search. */
+export type SearchResult = {
+  entries: DirEntry[];
+};
+
 /** Response body for GET /api/version. */
 export type VersionInfo = {
   /** The pi coding-agent version the server embeds. */

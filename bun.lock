@@ -20,8 +20,9 @@
     },
     "packages/server": {
       "name": "@pichamber/server",
-      "version": "0.5.3",
+      "version": "0.5.4",
       "dependencies": {
+        "@earendil-works/pi-ai": "^0.82.1",
         "@earendil-works/pi-coding-agent": "^0.82.1",
         "@pichamber/shared": "workspace:*",
         "bun-pty": "^0.4.10",
@@ -33,7 +34,7 @@
     },
     "packages/shared": {
       "name": "@pichamber/shared",
-      "version": "0.5.3",
+      "version": "0.5.4",
       "devDependencies": {
         "@earendil-works/pi-agent-core": "^0.82.1",
         "@earendil-works/pi-coding-agent": "^0.82.1",
@@ -41,7 +42,7 @@
     },
     "packages/web": {
       "name": "@pichamber/web",
-      "version": "0.5.3",
+      "version": "0.5.4",
       "dependencies": {
         "@pichamber/shared": "workspace:*",
         "ghostty-web": "^0.4.0",

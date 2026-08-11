@@ -5,7 +5,7 @@ import type { LiveItem } from "@pichamber/shared";
 import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
-import { messageText } from "./messageContent";
+import { messageImages, messageText } from "./messageContent";
 import { workspace } from "@/stores/workspace";
 
 const props = defineProps<{
@@ -126,6 +126,14 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
             :fade="false"
             :viewport-priority="false"
           />
+          <div v-if="messageImages(item.message).length > 0" class="conversation-message__images">
+            <img
+              v-for="(img, i) in messageImages(item.message)"
+              :key="i"
+              :src="`data:${img.mimeType};base64,${img.data}`"
+              alt="Attached image"
+            />
+          </div>
         </article>
         <AssistantMessage v-else-if="item.kind === 'assistant'" :message="item.message" :final="item.phase === 'committed'" />
         <ToolResultMessage v-else-if="item.kind === 'tool'" :detail="toolDetail(item)" />
@@ -148,6 +156,22 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
 .conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
 .conversation-message__user { width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid #ece9e0; border-radius: 12px 12px 4px; background: #f7f6f2; }
+
+/* Attached images inside the user bubble: thumbnails capped to the bubble
+   width, stacked vertically with the text above. */
+.conversation-message__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.conversation-message__images img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  object-fit: contain;
+}
 
 /* Error variants: red accent on the message block so failed turns read at
  * a glance instead of looking like an empty successful bubble. The author

@@ -3,7 +3,6 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ModelDescriptor } from "@pichamber/shared";
 import { nextTick, ref } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
-import Attachment2Icon from "@/assets/icons/Attachment2.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
 import GithubIcon from "@/assets/icons/Github.svg";
 import GitPullRequestIcon from "@/assets/icons/GitPullRequest.svg";
@@ -13,7 +12,7 @@ import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import Modal from "@/components/layout/Modal.vue";
-import FilePicker from "@/components/workspace/FilePicker.vue";
+import FileRefPicker from "@/components/workspace/FileRefPicker.vue";
 import ModelSelector from "@/components/workspace/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
 import { usePopover } from "@/composables/usePopover";
@@ -62,41 +61,76 @@ const insertAtCursor = (text: string) => {
   }
 };
 
-// Attachment action menu, anchored to the add button.
+// ── @ file reference picker ─────────────────────────────────────────────
+// 对齐原生 TUI：输入 @（光标前 token 以 @ 开头、无空格）时弹出项目内文件
+// 选择面板；在 textarea 继续打字会通过 @ 前缀联动过滤；选中后把 @token
+// 替换为 @相对路径，发送时由服务端展开成 <file> 块 / 图片附件。
+const pickerOpen = ref(false);
+const pickerQuery = ref("");
+/** @ 后的已输入前缀（仅在其变化时同步到面板，避免覆盖面板内编辑）。 */
+let lastRefPrefix = "";
+
+const detectAtRef = () => {
+  const el = inputEl.value;
+  if (!el) {
+    pickerOpen.value = false;
+    return;
+  }
+  const before = el.value.slice(0, el.selectionStart);
+  const m = /(^|[^\w@])@([^\s]*)$/.exec(before);
+  if (m) {
+    pickerOpen.value = true;
+    if (m[2] !== lastRefPrefix) {
+      lastRefPrefix = m[2] ?? "";
+      pickerQuery.value = m[2] ?? "";
+    }
+  } else {
+    pickerOpen.value = false;
+  }
+};
+
+const onKeyup = (event: KeyboardEvent) => {
+  if (event.key === "Escape") {
+    pickerOpen.value = false;
+    return;
+  }
+  // 光标移动后重新判定 @ token（方向键 / Home / End / 点击）。
+  if (event.key.startsWith("Arrow") || event.key === "Home" || event.key === "End") {
+    detectAtRef();
+  }
+};
+
+const onPickFile = (relativePath: string) => {
+  pickerOpen.value = false;
+  lastRefPrefix = "";
+  const el = inputEl.value;
+  const current = draft.value ?? "";
+  if (!el) {
+    draft.value = `${current}@${relativePath}`;
+    return;
+  }
+  // 替换光标前的 @token 为 @相对路径；无 token 时直接插在光标处。
+  const before = el.value.slice(0, el.selectionStart);
+  const m = /(^|[^\w@])@([^\s]*)$/.exec(before);
+  const atIndex = m ? m.index! + m[1]!.length : el.selectionStart;
+  draft.value = el.value.slice(0, atIndex) + `@${relativePath}` + el.value.slice(el.selectionStart);
+  nextTick(() => {
+    el.focus();
+    const pos = atIndex + 1 + relativePath.length;
+    el.setSelectionRange(pos, pos);
+  });
+};
+
+// Attachment action menu (links only — files live behind `@` now).
 const attachRoot = ref<HTMLElement | null>(null);
 const { open: menuOpen, style: menuStyle, close: closeMenu, toggle: toggleMenu } = usePopover({
   root: attachRoot,
   trigger: ".composer__attach-trigger",
   panel: ".menu-panel",
   width: 190,
-  // 4px panel padding + three 28px menu rows.
-  height: () => 4 + 3 * 28,
+  // 4px panel padding + two 28px menu rows.
+  height: () => 4 + 2 * 28,
 });
-
-// File picker, anchored to the same button; only one popover is open at a
-// time, so both listen for outside clicks via the shared .menu-panel class.
-const { open: pickerOpen, style: pickerStyle, close: closePicker } = usePopover({
-  root: attachRoot,
-  trigger: ".composer__attach-trigger",
-  panel: ".menu-panel",
-  width: 340,
-  height: 380,
-});
-
-const onToggleAttach = () => {
-  closePicker();
-  toggleMenu();
-};
-
-const onAttachFiles = () => {
-  closeMenu();
-  pickerOpen.value = true;
-};
-
-const onPickFile = (relativePath: string) => {
-  closePicker();
-  insertAtCursor(`@${relativePath}`);
-};
 
 // GitHub issue / PR link dialog — simplified to pasting a URL.
 const linkDialogOpen = ref(false);
@@ -124,13 +158,17 @@ const confirmLink = () => {
 
 <template>
   <div class="composer">
+    <FileRefPicker :open="pickerOpen" v-model:query="pickerQuery" @select="onPickFile" />
     <textarea
       ref="inputEl"
       v-model="draft"
       class="composer__input"
       placeholder="@ for files/agents; / for commands and skills; ! for shell; # for snippets"
       rows="1"
+      @input="detectAtRef"
       @keydown="onKeydown"
+      @keyup="onKeyup"
+      @click="detectAtRef"
     />
     <div class="composer__footer">
       <div class="composer__footer-leading">
@@ -139,16 +177,12 @@ const confirmLink = () => {
             class="composer__attach-trigger"
             size="compact"
             label="Add attachment"
-            :aria-expanded="menuOpen || pickerOpen"
-            @click="onToggleAttach"
+            :aria-expanded="menuOpen"
+            @click="toggleMenu"
           >
             <AddCircleIcon />
           </IconButton>
           <MenuPanel :open="menuOpen" :style="menuStyle" role="menu" aria-label="Composer actions">
-            <button type="button" class="menu-item" role="menuitem" @click="onAttachFiles">
-              <Attachment2Icon />
-              Attach files
-            </button>
             <button type="button" class="menu-item" role="menuitem" @click="openLinkDialog('issue')">
               <GithubIcon />
               Link GitHub Issue
@@ -158,7 +192,6 @@ const confirmLink = () => {
               Link GitHub PR
             </button>
           </MenuPanel>
-          <FilePicker :open="pickerOpen" :style="pickerStyle" @select="onPickFile" />
         </div>
         <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
         <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
@@ -228,6 +261,7 @@ const confirmLink = () => {
 
 <style scoped>
 .composer {
+  position: relative; /* anchor for the upward file-ref picker */
   display: flex;
   flex-direction: column;
   width: min(
