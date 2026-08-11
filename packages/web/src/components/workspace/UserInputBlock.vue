@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ModelDescriptor } from "@pichamber/shared";
-import { nextTick, ref } from "vue";
+import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
+import Attachment2Icon from "@/assets/icons/Attachment2.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
 import GithubIcon from "@/assets/icons/Github.svg";
 import GitPullRequestIcon from "@/assets/icons/GitPullRequest.svg";
@@ -42,6 +43,8 @@ const onKeydown = (event: KeyboardEvent) => {
 };
 
 const inputEl = ref<HTMLTextAreaElement | null>(null);
+/** Composer 根节点：浮窗开着时点击外部（不在 composer 内）关闭。 */
+const composerEl = ref<HTMLElement | null>(null);
 
 /** Insert text at the caret, restoring focus and caret position. */
 const insertAtCursor = (text: string) => {
@@ -67,6 +70,8 @@ const insertAtCursor = (text: string) => {
 // 替换为 @相对路径，发送时由服务端展开成 <file> 块 / 图片附件。
 const pickerOpen = ref(false);
 const pickerQuery = ref("");
+/** 菜单入口打开时聚焦搜索框；@ 入口保持 textarea 焦点（联动过滤）。 */
+const pickerFocusSearch = ref(false);
 /** @ 后的已输入前缀（仅在其变化时同步到面板，避免覆盖面板内编辑）。 */
 let lastRefPrefix = "";
 
@@ -79,6 +84,7 @@ const detectAtRef = () => {
   const before = el.value.slice(0, el.selectionStart);
   const m = /(^|[^\w@])@([^\s]*)$/.exec(before);
   if (m) {
+    pickerFocusSearch.value = false;
     pickerOpen.value = true;
     if (m[2] !== lastRefPrefix) {
       lastRefPrefix = m[2] ?? "";
@@ -121,16 +127,51 @@ const onPickFile = (relativePath: string) => {
   });
 };
 
-// Attachment action menu (links only — files live behind `@` now).
+/** 点击 composer 外部时关闭浮窗（@ 入口靠 detectAtRef，菜单入口靠这里）。 */
+let closeOnOutside: ((event: PointerEvent) => void) | null = null;
+watch(pickerOpen, (open) => {
+  if (closeOnOutside) {
+    document.removeEventListener("pointerdown", closeOnOutside);
+    closeOnOutside = null;
+  }
+  if (open) {
+    closeOnOutside = (event: PointerEvent) => {
+      if (composerEl.value && !composerEl.value.contains(event.target as Node)) {
+        pickerOpen.value = false;
+      }
+    };
+    document.addEventListener("pointerdown", closeOnOutside);
+  }
+});
+onBeforeUnmount(() => {
+  if (closeOnOutside) document.removeEventListener("pointerdown", closeOnOutside);
+});
+
+// Attachment action menu (files picker + links).
 const attachRoot = ref<HTMLElement | null>(null);
 const { open: menuOpen, style: menuStyle, close: closeMenu, toggle: toggleMenu } = usePopover({
   root: attachRoot,
   trigger: ".composer__attach-trigger",
   panel: ".menu-panel",
   width: 190,
-  // 4px panel padding + two 28px menu rows.
-  height: () => 4 + 2 * 28,
+  // 4px panel padding + three 28px menu rows.
+  height: () => 4 + 3 * 28,
 });
+
+/** 菜单与浮窗互斥：开菜单先关浮窗。 */
+const onToggleAttach = () => {
+  pickerOpen.value = false;
+  toggleMenu();
+};
+
+/** 菜单 "Attach files"：打开浮窗（聚焦搜索框，搜索词从头开始）。 */
+const openPickerFromMenu = () => {
+  closeMenu();
+  lastRefPrefix = "";
+  pickerQuery.value = "";
+  pickerFocusSearch.value = true;
+  pickerOpen.value = true;
+};
 
 // GitHub issue / PR link dialog — simplified to pasting a URL.
 const linkDialogOpen = ref(false);
@@ -157,8 +198,13 @@ const confirmLink = () => {
 </script>
 
 <template>
-  <div class="composer">
-    <FileRefPicker :open="pickerOpen" v-model:query="pickerQuery" @select="onPickFile" />
+  <div ref="composerEl" class="composer">
+    <FileRefPicker
+      :open="pickerOpen"
+      v-model:query="pickerQuery"
+      :focus-search="pickerFocusSearch"
+      @select="onPickFile"
+    />
     <textarea
       ref="inputEl"
       v-model="draft"
@@ -177,12 +223,16 @@ const confirmLink = () => {
             class="composer__attach-trigger"
             size="compact"
             label="Add attachment"
-            :aria-expanded="menuOpen"
-            @click="toggleMenu"
+            :aria-expanded="menuOpen || pickerOpen"
+            @click="onToggleAttach"
           >
             <AddCircleIcon />
           </IconButton>
           <MenuPanel :open="menuOpen" :style="menuStyle" role="menu" aria-label="Composer actions">
+            <button type="button" class="menu-item" role="menuitem" @click="openPickerFromMenu">
+              <Attachment2Icon />
+              Attach files
+            </button>
             <button type="button" class="menu-item" role="menuitem" @click="openLinkDialog('issue')">
               <GithubIcon />
               Link GitHub Issue

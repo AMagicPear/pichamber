@@ -309,7 +309,7 @@ export default defineComponent({
   transition: background-color 120ms ease;
 }
 .file-tree__row:hover {
-  background: #f2f0ea;
+  background: #f5f4f0;
 }
 .file-tree__row:focus-visible {
   outline: 2px solid #3978d4;

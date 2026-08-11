@@ -77,7 +77,7 @@ defineProps<{
   cursor: pointer;
 }
 .menu-panel :deep(.menu-item:hover) {
-  background: #f2f0ea;
+  background: #f5f4f0;
 }
 .menu-panel :deep(.menu-item.is-active) {
   background: var(--menu-item-active-bg, rgb(57 120 212 / 12%));

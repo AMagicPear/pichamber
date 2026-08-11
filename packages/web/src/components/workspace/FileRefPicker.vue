@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type { DirEntry } from "@pichamber/shared";
 import { listDirectory, searchFiles, toMessage } from "@/api/client";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
@@ -9,6 +9,8 @@ import { workspace } from "@/stores/workspace";
 
 const props = defineProps<{
   open: boolean;
+  /** 打开时是否聚焦搜索框（菜单入口用；@ 入口保持 textarea 焦点）。 */
+  focusSearch?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -72,9 +74,10 @@ watch(
     if (open) {
       cwd.value = null;
       // 搜索词由外部 @ 前缀同步；打开时若有词直接搜，否则列根目录。
-      // 焦点留在 textarea：@ 后继续打字会联动过滤（TUI 行为）。
+      // @ 入口焦点留在 textarea（继续打字联动过滤）；菜单入口聚焦搜索框。
       if (query.value.trim()) void runSearch(query.value);
       else void loadDir(null);
+      if (props.focusSearch) nextTick(() => searchBox.value?.focus());
     }
   },
 );
@@ -274,7 +277,7 @@ const onSearchKeydown = (event: KeyboardEvent) => {
   cursor: pointer;
 }
 .file-ref-picker__row:hover {
-  background: #f2f0ea;
+  background: #f5f4f0;
 }
 .file-ref-picker__label {
   display: flex;
