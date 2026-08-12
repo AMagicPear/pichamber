@@ -52,7 +52,7 @@ const FileTreeNode = defineComponent({
             onClick={toggle}
           >
             <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}> 
-              <img src={EntryIcon} alt="" />
+              <svg aria-hidden="true"><use href={EntryIcon} /></svg>
             </span>
             <span class="file-tree__name">{props.entry.name}</span>
           </button>

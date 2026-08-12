@@ -171,7 +171,7 @@ const onSearchKeydown = (event: KeyboardEvent) => {
           @click="entry.isDirectory ? enter(entry) : pick(entry)"
         >
           <span class="file-ref-picker__label">
-            <img class="file-ref-picker__icon" :src="getEntryIcon(entry.name, entry.isDirectory, false)" alt="" />
+            <svg class="file-ref-picker__icon" aria-hidden="true"><use :href="getEntryIcon(entry.name, entry.isDirectory, false)" /></svg>
             <span class="file-ref-picker__name">{{ entry.name }}</span>
           </span>
           <span v-if="!entry.isDirectory" class="file-ref-picker__ref">@{{ relFor(entry) }}</span>

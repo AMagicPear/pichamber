@@ -33,7 +33,7 @@ const icon = computed(() => (parts.value ? getEntryIcon(parts.value.tail, false,
 
 <template>
   <span class="file-path">
-    <img v-if="icon" class="file-path__icon" :src="icon" alt="" />
+    <svg v-if="icon" class="file-path__icon" aria-hidden="true"><use :href="icon" /></svg>
     <template v-if="parts">
       <span v-if="showPrefix" class="file-path__prefix">{{ parts.prefix }}</span>
       <span class="file-path__tail" :title="props.path">{{ parts.tail }}</span>

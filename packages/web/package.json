@@ -8,6 +8,9 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
+    "predev": "node scripts/build-catppuccin-sprite.mjs",
+    "prebuild": "node scripts/build-catppuccin-sprite.mjs",
+    "sprite": "node scripts/build-catppuccin-sprite.mjs",
     "type-check": "node ../../scripts/vue-tsc.mjs --build --force"
   },
   "dependencies": {
