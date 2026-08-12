@@ -22,6 +22,7 @@ defineProps<{
       :content="detail.content"
       :diff="detail.diff"
       :codeFileName="detail.codeFileName"
+      :images="detail.images"
     />
   </article>
 </template>

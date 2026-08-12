@@ -103,12 +103,16 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
   const output = message
     ? messageText(message) || JSON.stringify(message, null, 2)
     : JSON.stringify(tool.result === undefined ? tool.args : tool.result, null, 2);
+  // 读图片时 message 里有 image part；live 阶段没有 message，partialResult
+  // 只是占位文字，所以图片只在提交后出现。
+  const images = message ? messageImages(message) : [];
   return conversationToolDetail({
     toolName: tool.toolName || (typeof messageMeta?.toolName === "string" ? messageMeta.toolName : ""),
     args: tool.args,
     output,
     isError: messageMeta?.isError === true || tool.isError === true,
     fallbackPreview: messageText(message) || JSON.stringify(tool.args),
+    images,
   });
 };
 </script>

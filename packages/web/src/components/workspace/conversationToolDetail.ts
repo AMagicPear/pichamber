@@ -4,6 +4,10 @@ import FileEditIcon from "@/assets/icons/FileEdit.svg";
 import FileTextIcon from "@/assets/icons/FileText.svg";
 import { inline } from "./messageContent";
 import { displayPath, patchOpsSummary, toolDiff } from "./toolDiff";
+
+/** 单张图片附件，data 是 base64（不含前缀），由渲染层补 data: URL。 */
+export type ToolImage = { data: string; mimeType: string };
+
 export type ConversationToolDetail = {
   label: string;
   /** Collapsed single-line preview (plain text for bash/ls/thinking). */
@@ -19,6 +23,8 @@ export type ConversationToolDetail = {
   diff?: string;
   /** read 工具的结果渲染为文件视图（行号+高亮）。 */
   codeFileName?: string;
+  /** read 工具读取图片时的图片附件。存在时跳过 code view 改渲染为缩略图。 */
+  images?: ToolImage[];
 };
 
 type ToolDetailInput = {
@@ -27,6 +33,8 @@ type ToolDetailInput = {
   output: string;
   isError?: boolean;
   fallbackPreview: string;
+  /** 来自 message 的图片附件（read 图片文件时填充）。 */
+  images?: ToolImage[];
 };
 
 const isFileTool = (toolName: string) =>
@@ -56,6 +64,7 @@ export const conversationToolDetail = ({
   output,
   isError,
   fallbackPreview,
+  images,
 }: ToolDetailInput): ConversationToolDetail => {
   const failed = isError === true;
   const command = recordValue(args, "command");
@@ -71,6 +80,9 @@ export const conversationToolDetail = ({
   const path = recordValue(args, "path");
   if (isFileTool(toolName) && path) {
     const relative = displayPath(path);
+    // read 工具读取图片时，结果里只有 "Read image file [mime]" 这行占位文字，
+    // 真正的图在 image part 里。检测到图片附件时不要把占位文字当文件内容渲染。
+    const hasImages = !failed && toolName === "read" && !!images && images.length > 0;
     return {
       label: failed ? errorLabel(toolName) : fileLabel(toolName),
       // 失败也保留路径：让用户知道是哪个文件操作失败。
@@ -81,8 +93,9 @@ export const conversationToolDetail = ({
       // 成功时把真实编辑渲染成 diff（摘要文本被 DiffView 替代）。
       diff: failed ? undefined : toolDiff(toolName, args),
       // read 的结果就是文件内容：渲染成带行号/高亮的文件视图；
-      // 失败时直接显示纯文本错误。
-      codeFileName: !failed && toolName === "read" ? relative : undefined,
+      // 失败时直接显示纯文本错误；图片结果优先用图片渲染。
+      codeFileName: !failed && toolName === "read" && !hasImages ? relative : undefined,
+      images: hasImages ? images : undefined,
     };
   }
 

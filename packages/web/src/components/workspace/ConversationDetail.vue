@@ -22,6 +22,8 @@ const props = defineProps<{
    *  the plain content text (tool result summaries are redundant next to
    *  the real diff). */
   diff?: string;
+  /** 图片附件（read 图片文件时），渲染为缩略图而非 code view。 */
+  images?: { data: string; mimeType: string }[];
   /** Auto-expand while true (caller flips it when streaming starts) and
    *  auto-collapse when it flips false (streaming segment ended). Manual
    *  toggles between the flips are respected. */
@@ -73,6 +75,14 @@ watch(
           :viewport-priority="false"
         />
         <DiffView v-else-if="diff" class="conversation-detail__diff" :patch="diff ?? ''" />
+        <div v-else-if="images && images.length > 0" class="conversation-detail__images">
+          <img
+            v-for="(img, i) in images"
+            :key="i"
+            :src="`data:${img.mimeType};base64,${img.data}`"
+            alt="Read image"
+          />
+        </div>
         <CodeView
           v-else-if="codeFileName"
           class="conversation-detail__code"
@@ -170,6 +180,21 @@ watch(
 .conversation-detail__diff {
   max-width: 100%;
   min-width: 0;
+}
+/* 图片附件缩略图：与用户消息里的图片风格一致——封顶宽度但不被强制放大。 */
+.conversation-detail__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.conversation-detail__images img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border: 1px solid #e7e4dc;
+  border-radius: 8px;
+  background: #fafaf7;
+  object-fit: contain;
 }
 .conversation-detail__content {
   white-space: pre-wrap;
