@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import TerminalIcon from "@/assets/icons/TerminalBox.svg";
+import ToolIcon from "@/assets/icons/Tool.svg";
 import type { ConversationToolDetail } from "./conversationToolDetail";
 import ConversationDetail from "./ConversationDetail.vue";
 
@@ -15,7 +15,7 @@ defineProps<{
   >
     <ConversationDetail
       class="conversation-message__details"
-      :icon="detail.icon ?? TerminalIcon"
+      :icon="detail.icon ?? ToolIcon"
       :label="detail.label"
       :preview="detail.preview"
       :path="detail.path"

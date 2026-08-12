@@ -2,6 +2,7 @@ import type { Component } from "vue";
 import FileAddIcon from "@/assets/icons/FileAdd.svg";
 import FileEditIcon from "@/assets/icons/FileEdit.svg";
 import FileTextIcon from "@/assets/icons/FileText.svg";
+import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import { inline } from "./messageContent";
 import { displayPath, patchOpsSummary, toolDiff } from "./toolDiff";
 
@@ -73,6 +74,7 @@ export const conversationToolDetail = ({
       label: failed ? errorLabel("Shell Command") : "Shell Command",
       preview: command ?? inline(fallbackPreview),
       content: output,
+      icon: TerminalIcon,
       isError: failed,
     };
   }
