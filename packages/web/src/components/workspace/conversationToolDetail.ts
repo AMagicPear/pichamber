@@ -107,6 +107,7 @@ export const conversationToolDetail = ({
       label: failed ? errorLabel(toolName) : "Apply Patch",
       preview: summary ?? inline(fallbackPreview),
       content: output,
+      icon: FileEditIcon,
       isError: failed,
       // apply_patch 的 diff 渲染暂时放弃（多文件解析不理想），先恢复摘要文本。
     };
