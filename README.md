@@ -20,6 +20,15 @@ A monorepo workspace using [Bun](https://bun.sh) workspaces.
 - [earendil-works/pi](https://github.com/earendil-works/pi) — provides the coding-agent runtime used by the server.
 - [openchamber/openchamber](https://github.com/openchamber/openchamber) — served as a reference for the UI design.
 
+## License
+
+pichamber is MIT — see [LICENSE](./LICENSE). Bundled third-party packages
+(pi-coding-agent, markstream-vue, mermaid, katex, vue, monaco-editor,
+catppuccin-vsc-icons, and others) are listed with their respective
+licenses in [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md); the
+upstream LICENSE files ship in `node_modules/<package>/LICENSE` after
+`bun install`.
+
 ## Project structure
 
 ```

@@ -48,6 +48,7 @@
     "dist-web",
     "bin",
     "LICENSE",
+    "THIRD_PARTY_LICENSES.md",
     "README.md",
     "package.json"
   ],
