@@ -2,7 +2,10 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
 import type {
   LiveItem,
+  AgentActivity,
   ModelDescriptor,
+  PendingMessages,
+  RuntimeResources,
   ServerMessage,
   SessionStatsView,
   ThinkingState,
@@ -30,6 +33,8 @@ type ChannelState = {
   /** 正在流式的 assistant item（message_start 到 message_end）。 */
   streaming?: AssistantItem;
   busy: boolean;
+  activity: AgentActivity;
+  pending: PendingMessages;
   /** 广播序号：每个 ServerMessage 递增，客户端用它做间隙检测。 */
   seq: number;
   userCount: number;
@@ -41,6 +46,7 @@ type ChannelState = {
   /** Pre-computed view for the Context pane; refreshed on every state
    *  change that could affect it (message_end, model switch, etc.). */
   stats: SessionStatsView;
+  resources: RuntimeResources;
 };
 
 type SessionChannel = {
@@ -51,14 +57,35 @@ type SessionChannel = {
   uiBridge: UiBridge;
   /** Re-snapshot model + thinking state and broadcast to all sockets. */
   queueModelStateBroadcast: () => void;
+  ready: Promise<void>;
 };
 
 // sessionId → one shared SDK listener plus all subscribed sockets.
 const channelsBySession = new Map<string, SessionChannel>();
 
+const broadcastChannelState = (
+  channel: SessionChannel,
+  fields: {
+    busy?: boolean;
+    activity?: AgentActivity;
+    pending?: PendingMessages;
+    model?: ModelDescriptor;
+    availableModels?: ModelDescriptor[];
+    thinking?: ThinkingState;
+    stats?: SessionStatsView;
+    resources?: RuntimeResources;
+  },
+) => {
+  channel.state.seq += 1;
+  const payload = JSON.stringify({ type: "state", seq: channel.state.seq, ...fields } satisfies ServerMessage);
+  for (const socket of channel.sockets) {
+    if (socket.readyState === 1) socket.send(payload);
+  }
+};
+
 const initialModelState = (): Pick<
   ChannelState,
-  "model" | "availableModels" | "thinking" | "stats"
+  "model" | "availableModels" | "thinking" | "stats" | "resources"
 > => ({
   model: undefined,
   availableModels: [],
@@ -72,7 +99,31 @@ const initialModelState = (): Pick<
     lastAssistant: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
     cacheHit: "0.0%",
   },
+  resources: { commands: [], tools: [], extensions: [], diagnostics: [] },
 });
+
+const snapshotResources = (session: AgentSession): RuntimeResources => {
+  const result = session.resourceLoader.getExtensions();
+  const activeTools = new Set(result.runtime.getActiveTools());
+  return {
+    commands: result.runtime.getCommands(),
+    tools: result.runtime.getAllTools().map((tool) => ({
+      name: tool.name,
+      description: tool.description ?? "",
+      active: activeTools.has(tool.name),
+      sourceInfo: tool.sourceInfo,
+    })),
+    extensions: result.extensions
+      .filter((extension) => !extension.hidden)
+      .map((extension) => ({
+        path: extension.path,
+        sourceInfo: extension.sourceInfo,
+        commands: [...extension.commands.keys()],
+        tools: [...extension.tools.keys()],
+      })),
+    diagnostics: result.errors,
+  };
+};
 
 /** 把权威条目重建为 item 列表；无变化的场合（settle 时内容一致）跳过快照广播。 */
 const reconcile = (channel: SessionChannel, session: AgentSession, keepLive: boolean) => {
@@ -96,8 +147,21 @@ const reconcile = (channel: SessionChannel, session: AgentSession, keepLive: boo
 };
 
 const snapshotMessage = (channel: SessionChannel): ServerMessage => {
-  const { seq, busy, items, model, availableModels, thinking, stats } = channel.state;
-  return { type: "snapshot", seq, busy, items, model, availableModels, thinking, stats };
+  const { seq, busy, activity, pending, items, model, availableModels, thinking, stats, resources } =
+    channel.state;
+  return {
+    type: "snapshot",
+    seq,
+    busy,
+    activity,
+    pending,
+    items,
+    model,
+    availableModels,
+    thinking,
+    stats,
+    resources,
+  };
 };
 
 /** Cheap shallow diff on the fields the client actually renders. Skips the
@@ -168,15 +232,21 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
   const channel: SessionChannel = {
     sockets: new Set(),
     unsubscribe: () => undefined,
-    state: { items: [], busy: false, seq: 0, userCount: 0, assistantCount: 0, customCount: 0, ...initialModelState() },
+    state: {
+      items: [],
+      busy: false,
+      activity: { phase: "idle" },
+      pending: { steering: [], followUp: [] },
+      seq: 0,
+      userCount: 0,
+      assistantCount: 0,
+      customCount: 0,
+      ...initialModelState(),
+    },
     queueModelStateBroadcast,
+    ready: Promise.resolve(),
     uiBridge: createUiBridge((request) => broadcast({ type: "ui_request", request })),
   };
-  // 官方接入方式：与 TUI/RPC 模式相同的 bindExtensions，扩展的 session_start
-  // 等生命周期正常触发，ui.* 调用经 uiBridge 转发给前端等应答。
-  session
-    .bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" })
-    .catch((error) => console.error("Failed to bind extension UI", sessionId, error));
   const broadcast = (msg: ServerMessage) => {
     const payload = JSON.stringify(msg);
     for (const bunWS of channel.sockets) {
@@ -191,10 +261,13 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     channel: SessionChannel,
     fields: {
       busy?: boolean;
+      activity?: AgentActivity;
+      pending?: PendingMessages;
       model?: ModelDescriptor;
       availableModels?: ModelDescriptor[];
       thinking?: ThinkingState;
       stats?: SessionStatsView;
+      resources?: RuntimeResources;
     },
   ) => {
     channel.state.seq += 1;
@@ -208,6 +281,12 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
   channel.unsubscribe = session.subscribe((event) => {
     const state = channel.state;
     switch (event.type) {
+      case "agent_start": {
+        state.busy = true;
+        state.activity = { phase: "thinking" };
+        broadcastState(channel, { busy: true, activity: state.activity });
+        break;
+      }
       case "message_start": {
         const { role } = event.message;
         // busy 只在真正的 agent 回合置位（回合必然以 user/assistant 消息开始）；
@@ -226,6 +305,8 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
           state.items.push(item);
           broadcastItem(item);
         } else if (role === "assistant") {
+          state.activity = { phase: "responding" };
+          broadcastState(channel, { activity: state.activity });
           const item: AssistantItem = {
             id: `a-${++state.assistantCount}`,
             kind: "assistant",
@@ -314,6 +395,8 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         break;
       }
       case "tool_execution_start": {
+        state.activity = { phase: "tool", toolName: event.toolName };
+        broadcastState(channel, { activity: state.activity });
         const item: LiveItem = {
           id: `tool:${event.toolCallId}`,
           kind: "tool",
@@ -345,10 +428,40 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
           item.tool.running = false;
           broadcastItem(item);
         }
+        const runningTool = state.items.find(
+          (candidate): candidate is Extract<LiveItem, { kind: "tool" }> =>
+            candidate.kind === "tool" && candidate.tool.running,
+        );
+        state.activity = runningTool
+          ? { phase: "tool", toolName: runningTool.tool.toolName }
+          : { phase: "thinking" };
+        broadcastState(channel, { activity: state.activity });
+        break;
+      }
+      case "queue_update": {
+        state.pending = { steering: [...event.steering], followUp: [...event.followUp] };
+        broadcastState(channel, { pending: state.pending });
+        break;
+      }
+      case "compaction_start": {
+        state.busy = true;
+        state.activity = { phase: "compacting" };
+        broadcastState(channel, { busy: true, activity: state.activity });
+        break;
+      }
+      case "auto_retry_start": {
+        state.busy = true;
+        state.activity = {
+          phase: "retrying",
+          attempt: event.attempt,
+          maxAttempts: event.maxAttempts,
+        };
+        broadcastState(channel, { busy: true, activity: state.activity });
         break;
       }
       case "agent_settled": {
         state.busy = false;
+        state.activity = { phase: "idle" };
         state.streaming = undefined;
         // 与权威状态对齐：compaction/重试/分支导航会改变条目，内容一致时跳过
         // 快照广播（id 按对象身份保持，客户端无感）。
@@ -358,7 +471,13 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         // next LLM response) contextUsage. We only broadcast when the view
         // actually moved to avoid waking the client on idle ticks.
         const settledStats = computeSessionStatsView(session);
-        const statsFields: { busy: false; stats?: SessionStatsView } = { busy: false };
+        state.resources = snapshotResources(session);
+        const statsFields: {
+          busy: false;
+          activity: AgentActivity;
+          stats?: SessionStatsView;
+          resources: RuntimeResources;
+        } = { busy: false, activity: state.activity, resources: state.resources };
         if (statsChanged(state.stats, settledStats)) {
           state.stats = settledStats;
           statsFields.stats = settledStats;
@@ -386,6 +505,17 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
   // 订阅前先对齐一次，保证首个连接的 snapshot 就带完整历史。
   reconcile(channel, session, true);
   channelsBySession.set(sessionId, channel);
+  // 与 TUI/RPC 相同：先安装 listener，再 await extension binding，这样
+  // session_start 产生的自定义消息/UI 请求不会丢失，首个 snapshot 也能带命令。
+  channel.ready = Promise.resolve()
+    .then(() => session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" }))
+    .then(() => {
+      channel.state.resources = snapshotResources(session);
+    })
+    .catch((error) => {
+      console.error("Failed to bind extensions", sessionId, error);
+      channel.state.resources = snapshotResources(session);
+    });
   return channel;
 };
 
@@ -394,18 +524,21 @@ const detachListener = (sessionId: string, ws: BunWS) => {
   if (!channel) return;
   channel.sockets.delete(ws);
   if (channel.sockets.size !== 0) return;
-  // 没有客户端在场了：取消挂起的扩展 UI 对话框，避免插件永久等待。
-  channel.uiBridge.cancelPending();
-  channel.unsubscribe();
-  channelsBySession.delete(sessionId);
-  deactivateSession(sessionId).catch((error) => {
-    console.error("Failed to deactivate session", sessionId, error);
+  void channel.ready.then(() => {
+    if (channelsBySession.get(sessionId) !== channel || channel.sockets.size !== 0) return;
+    // 没有客户端在场了：取消挂起的扩展 UI 对话框，避免插件永久等待。
+    channel.uiBridge.cancelPending();
+    channel.unsubscribe();
+    channelsBySession.delete(sessionId);
+    deactivateSession(sessionId).catch((error) => {
+      console.error("Failed to deactivate session", sessionId, error);
+    });
   });
 };
 
 export const closeSessionSockets = (sessionId: string) => {
   const channel = channelsBySession.get(sessionId);
-  if (!channel) return;
+  if (!channel) return Promise.resolve();
   channel.unsubscribe();
   channelsBySession.delete(sessionId);
   for (const ws of channel.sockets) {
@@ -414,6 +547,7 @@ export const closeSessionSockets = (sessionId: string) => {
     if (ws.readyState === 1) ws.close(1000, "Session deleted");
   }
   channel.sockets.clear();
+  return channel.ready;
 };
 
 const sendError = (ws: BunWS, error: string) => {
@@ -443,6 +577,8 @@ export const sessionWsHandler: WsHandler = {
     const channel = attachListener(sessionId, session);
     channel.sockets.add(bunWS);
     bunWS.data.attached = true;
+    await channel.ready;
+    if (bunWS.data.closed || !bunWS.data.attached) return;
     try {
       const { model, availableModels } = await getEffectiveModelDescriptor(session);
       channel.state.model = model;
@@ -489,13 +625,47 @@ export const sessionWsHandler: WsHandler = {
         // 附件，其他 → <file> 块；解析不了的 @ 保留原样。
         const { text, images } = await expandFileRefs(input.message, session.sessionManager.getCwd());
         if (bunWS.data.closed) return;
+        const streamingBehavior =
+          input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
+            ? input.streamingBehavior
+            : session.isStreaming
+              ? "steer"
+              : undefined;
         // Fire-and-forget: prompt() runs until the retry/queue drains; events
         // flow back via subscribe().
         session
-          .prompt(text, images.length > 0 ? { images } : undefined)
+          .prompt(text, {
+            ...(images.length > 0 ? { images } : {}),
+            ...(streamingBehavior ? { streamingBehavior } : {}),
+          })
+          .finally(() => {
+            const channel = channelsBySession.get(sessionId);
+            if (!channel) return;
+            channel.state.resources = snapshotResources(session);
+            broadcastChannelState(channel, { resources: channel.state.resources });
+          })
           .catch((err: unknown) =>
             sendError(bunWS, toMessage(err)),
           );
+        return;
+      }
+      case "restore_pending": {
+        const restored = session.clearQueue();
+        const messages = [...restored.steering, ...restored.followUp];
+        if (messages.length > 0 && bunWS.readyState === 1) {
+          bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
+        }
+        return;
+      }
+      case "abort": {
+        if (input.restorePending !== false) {
+          const restored = session.clearQueue();
+          const messages = [...restored.steering, ...restored.followUp];
+          if (messages.length > 0 && bunWS.readyState === 1) {
+            bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
+          }
+        }
+        session.abort().catch((error) => sendError(bunWS, toMessage(error)));
         return;
       }
       case "set_model": {

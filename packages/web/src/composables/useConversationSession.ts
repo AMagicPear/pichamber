@@ -1,11 +1,14 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
 import { refreshSessions } from "@/stores/workspace";
 import type {
   LiveItem,
+  AgentActivity,
   ModelDescriptor,
+  PendingMessages,
+  RuntimeResources,
   ServerMessage,
   SessionStatsView,
   ThinkingState,
@@ -23,6 +26,37 @@ const connected = ref(false);
 /** 统一 item 流：服务器铸造的稳定 id 终生不变，live→committed 只翻字段。 */
 const items = ref<LiveItem[]>([]);
 const busy = ref(false);
+const activity = ref<AgentActivity>({ phase: "idle" });
+const pending = ref<PendingMessages>({ steering: [], followUp: [] });
+const resources = ref<RuntimeResources>({
+  commands: [],
+  tools: [],
+  extensions: [],
+  diagnostics: [],
+});
+const extensionUi = reactive({
+  dialog: null as
+    | Extract<
+        import("@earendil-works/pi-coding-agent").RpcExtensionUIRequest,
+        { method: "select" | "confirm" | "input" | "editor" }
+      >
+    | null,
+  notifications: [] as Array<{
+    id: string;
+    message: string;
+    type: "info" | "warning" | "error";
+  }>,
+  statuses: {} as Record<string, string>,
+  widgets: {} as Record<
+    string,
+    { lines: string[]; placement: "aboveEditor" | "belowEditor" }
+  >,
+});
+const extensionDialogQueue: Array<NonNullable<typeof extensionUi.dialog>> = [];
+
+const showNextExtensionDialog = () => {
+  extensionUi.dialog = extensionDialogQueue.shift() ?? null;
+};
 /** Empty until the server confirms available models in `snapshot`/`state`. */
 const availableModels = ref<ModelDescriptor[]>([]);
 const model = ref<ModelDescriptor | undefined>();
@@ -76,8 +110,11 @@ const onMessage = (message: ServerMessage) => {
     connected.value = true;
     items.value = message.items;
     busy.value = message.busy;
+    activity.value = message.activity;
+    pending.value = message.pending;
     lastSeq = message.seq;
     applyModelState(message);
+    resources.value = message.resources;
   } else if (message.type === "item") {
     if (message.seq !== lastSeq + 1) {
       requestResync();
@@ -92,24 +129,42 @@ const onMessage = (message: ServerMessage) => {
     }
     lastSeq = message.seq;
     if (message.busy !== undefined) busy.value = message.busy;
+    if (message.activity) activity.value = message.activity;
+    if (message.pending) pending.value = message.pending;
+    if (message.resources) resources.value = message.resources;
     applyModelState(message);
     // 服务器只在 agent_settled 发一次 busy=false —— 会话文件变了，刷新侧栏。
     if (message.busy === false) void refreshSessions();
   } else if (message.type === "ui_request") {
     const { request } = message;
     if (request.type !== "extension_ui_request") return;
-    if (
-      request.method === "select" ||
-      request.method === "confirm" ||
-      request.method === "input" ||
-      request.method === "editor"
-    ) {
-      // 对话框组件接入前自动取消，避免插件挂起（未来由前端弹窗应答）。
-      const summary = request.method === "confirm" ? request.message : request.title;
-      console.warn("[pichamber] 插件 UI 请求暂未支持，自动取消:", summary);
-      ws?.send({ type: "ui_response", response: { type: "extension_ui_response", id: request.id, cancelled: true } });
+    if (request.method === "select" || request.method === "confirm" || request.method === "input" || request.method === "editor") {
+      if (extensionUi.dialog) extensionDialogQueue.push(request);
+      else extensionUi.dialog = request;
+    } else if (request.method === "notify") {
+      extensionUi.notifications.push({
+        id: request.id,
+        message: request.message,
+        type: request.notifyType ?? "info",
+      });
+      setTimeout(() => dismissNotification(request.id), 5_000);
+    } else if (request.method === "setStatus") {
+      if (request.statusText) extensionUi.statuses[request.statusKey] = request.statusText;
+      else delete extensionUi.statuses[request.statusKey];
+    } else if (request.method === "setWidget") {
+      if (request.widgetLines) {
+        extensionUi.widgets[request.widgetKey] = {
+          lines: request.widgetLines,
+          placement: request.widgetPlacement ?? "aboveEditor",
+        };
+      } else delete extensionUi.widgets[request.widgetKey];
+    } else if (request.method === "setTitle") {
+      document.title = request.title || "Pichamber";
+    } else if (request.method === "set_editor_text") {
+      draft.value = request.text;
     }
-    // notify/setStatus/setWidget/setTitle/set_editor_text 为广播型，暂忽略。
+  } else if (message.type === "draft_restore") {
+    draft.value = [...message.messages, draft.value?.trim()].filter(Boolean).join("\n\n");
   } else if (message.type === "error") {
     lastError.value = message.error;
   }
@@ -127,13 +182,31 @@ const canSend = computed(
   () => connected.value && draft.value != undefined && draft.value.trim().length > 0,
 );
 
-const send = () => {
+const send = (streamingBehavior?: "steer" | "followUp") => {
   const text = draft.value?.trim();
   if (!canSend.value || !ws || !text) return;
   // Clear any previous error so the toast doesn't linger into the next turn.
   lastError.value = null;
-  ws.send({ type: "prompt", message: text });
+  ws.send({ type: "prompt", message: text, streamingBehavior });
   draft.value = undefined;
+};
+
+const abort = () => ws?.send({ type: "abort", restorePending: true });
+const restorePending = () => ws?.send({ type: "restore_pending" });
+
+const respondToExtension = (
+  response:
+    | { type: "extension_ui_response"; id: string; cancelled: true }
+    | { type: "extension_ui_response"; id: string; value: string }
+    | { type: "extension_ui_response"; id: string; confirmed: boolean },
+) => {
+  ws?.send({ type: "ui_response", response });
+  showNextExtensionDialog();
+};
+
+const dismissNotification = (id: string) => {
+  const index = extensionUi.notifications.findIndex((notification) => notification.id === id);
+  if (index !== -1) extensionUi.notifications.splice(index, 1);
 };
 
 /** Pi owns the model and thinking state. Wait for its state broadcast
@@ -159,6 +232,15 @@ const disconnect = () => {
   connected.value = false;
   items.value = [];
   busy.value = false;
+  activity.value = { phase: "idle" };
+  pending.value = { steering: [], followUp: [] };
+  resources.value = { commands: [], tools: [], extensions: [], diagnostics: [] };
+  extensionUi.dialog = null;
+  extensionDialogQueue.splice(0);
+  extensionUi.notifications.splice(0);
+  for (const key of Object.keys(extensionUi.statuses)) delete extensionUi.statuses[key];
+  for (const key of Object.keys(extensionUi.widgets)) delete extensionUi.widgets[key];
+  document.title = "Pichamber";
   model.value = undefined;
   availableModels.value = [];
   thinking.value = { level: "off", availableLevels: ["off"] };
@@ -197,16 +279,24 @@ export const useConversationSession = () => {
 
   return {
     availableModels,
+    abort,
+    activity,
     busy,
     canSend,
     connect,
     connected,
     disconnect,
     dismissError,
+    dismissNotification,
     draft,
     items,
     lastError,
     model,
+    pending,
+    resources,
+    extensionUi,
+    respondToExtension,
+    restorePending,
     send,
     setModel,
     setThinkingLevel,

@@ -17,6 +17,7 @@ import SortDescIcon from "@/assets/icons/SortDesc.svg";
 import { ArrowsMerge } from "@/components/ArrowsMerge";
 import IconButton from "@/components/IconButton.vue";
 import AboutModal from "@/components/modals/AboutModal.vue";
+import ProjectPickerModal from "@/components/modals/ProjectPickerModal.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 import { pathBasename } from "@pichamber/shared";
@@ -180,6 +181,12 @@ const removeSelectedSession = async () => {
 };
 
 const aboutOpen = ref(false);
+const projectPickerOpen = ref(false);
+
+const openProject = async (cwd: string) => {
+  projectPickerOpen.value = false;
+  await startProjectSession(cwd);
+};
 
 onMounted(async () => {
   await loadSessions();
@@ -197,7 +204,7 @@ onMounted(async () => {
 
     <div class="sidebar__actions" aria-label="Workspace actions">
       <div>
-        <IconButton label="Add project" disabled><FolderAddIcon /></IconButton>
+        <IconButton label="Add project" @click="projectPickerOpen = true"><FolderAddIcon /></IconButton>
         <IconButton label="New session" @click="startProjectSession(workspace.cwd ?? '~')">
           <ChatNewIcon />
         </IconButton>
@@ -307,6 +314,7 @@ onMounted(async () => {
     </footer>
 
     <AboutModal :show="aboutOpen" @close="aboutOpen = false" />
+    <ProjectPickerModal :show="projectPickerOpen" @close="projectPickerOpen = false" @select="openProject" />
   </aside>
 </template>
 

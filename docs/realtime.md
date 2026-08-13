@@ -6,7 +6,14 @@
 
 ## 当前实现
 
-- AI session 使用 `/ws/:sessionId`，JSON 消息为 `{ type: "prompt", message }`，服务端事件包装为 `{ type: "event", event }`。
+- AI session 使用 `/ws/:sessionId`。客户端消息包括 `prompt`（可指定
+  `streamingBehavior: "steer" | "followUp"`）、`abort`、`restore_pending`、
+  model/thinking 更新和 extension UI 应答。
+- 服务端不透传原始 SDK 事件，而是发送可恢复的 `snapshot`、有序的 `item` /
+  `state`、extension `ui_request` 和 `error`。Snapshot/state 包含 agent activity、
+  steering/follow-up 队列、当前 Pi commands、extension/tool inventory 与 diagnostics。
+- `/` 补全只使用 Pi SDK `getCommands()` 返回的 extension、prompt template 和
+  skill commands；TUI 内建 `/model`、`/settings` 等由 Web 原生控件承担。
 - 终端 PTY 使用独立的 `/ws/pty/:ptyId`，输入是原始字符串，resize 使用 JSON 控制帧，输出是带 ANSI 的字符串。
 - 两种协议各自一条连接，由服务端 `WsHandler` 分派；没有把 session 和 PTY 复用到同一条多路复用连接。
 

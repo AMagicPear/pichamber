@@ -1,50 +1,67 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { ModelDescriptor } from "@pichamber/shared";
-import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+import type { AgentActivity, ModelDescriptor, PendingMessages, SlashCommandInfo } from "@pichamber/shared";
+import { computed, nextTick, ref } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
-import Attachment2Icon from "@/assets/icons/Attachment2.svg";
 import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
-import GithubIcon from "@/assets/icons/Github.svg";
-import GitPullRequestIcon from "@/assets/icons/GitPullRequest.svg";
 import MicIcon from "@/assets/icons/Mic.svg";
+import CloseIcon from "@/assets/icons/Close.svg";
 import SendIcon from "@/assets/icons/SendPlane2.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
-import MenuPanel from "@/components/MenuPanel.vue";
-import Modal from "@/components/layout/Modal.vue";
-import FileRefPicker from "@/components/workspace/FileRefPicker.vue";
+import ComposerShelf from "@/components/workspace/ComposerShelf.vue";
 import ModelSelector from "@/components/workspace/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
-import { usePopover } from "@/composables/usePopover";
 
 const draft = defineModel<string | undefined>({ required: true });
 
-defineProps<{
+const emit = defineEmits<{
+  send: [behavior?: "steer" | "followUp"];
+  abort: [];
+  restorePending: [];
+  selectModel: [model: ModelDescriptor];
+  selectThinkingLevel: [level: ThinkingLevel];
+}>();
+
+const props = defineProps<{
   canSend: boolean;
+  busy: boolean;
+  activity: AgentActivity;
+  pending: PendingMessages;
+  commands: SlashCommandInfo[];
+  extensionStatuses: Record<string, string>;
+  extensionWidgets: Record<string, { lines: string[]; placement: "aboveEditor" | "belowEditor" }>;
   model: ModelDescriptor | undefined;
   availableModels: ModelDescriptor[];
   thinkingLevel: ThinkingLevel;
   availableThinkingLevels: ThinkingLevel[];
 }>();
 
-const emit = defineEmits<{
-  send: [];
-  selectModel: [model: ModelDescriptor];
-  selectThinkingLevel: [level: ThinkingLevel];
-}>();
+const submitMode = ref<"steer" | "followUp">("steer");
+const shelf = ref<InstanceType<typeof ComposerShelf> | null>(null);
+const shelfMode = ref<"files" | "commands" | null>(null);
+const shelfQuery = ref("");
 
 const onKeydown = (event: KeyboardEvent) => {
-  // Enter sends; Shift+Enter inserts a newline.
+  if (shelfMode.value && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+    event.preventDefault();
+    shelf.value?.move(event.key === "ArrowUp" ? -1 : 1);
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    if (shelfMode.value) shelfMode.value = null;
+    else if (props.busy) emit("abort");
+    return;
+  }
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
-    emit("send");
+    if (shelfMode.value) shelf.value?.choose();
+    else emit("send", props.busy ? (event.altKey ? "followUp" : submitMode.value) : undefined);
   }
 };
 
 const inputEl = ref<HTMLTextAreaElement | null>(null);
-/** Composer 根节点：浮窗开着时点击外部（不在 composer 内）关闭。 */
-const composerEl = ref<HTMLElement | null>(null);
 
 /** Insert text at the caret, restoring focus and caret position. */
 const insertAtCursor = (text: string) => {
@@ -64,184 +81,123 @@ const insertAtCursor = (text: string) => {
   }
 };
 
-// ── @ file reference picker ─────────────────────────────────────────────
-// 对齐原生 TUI：输入 @（光标前 token 以 @ 开头、无空格）时弹出项目内文件
-// 选择面板；在 textarea 继续打字会通过 @ 前缀联动过滤；选中后把 @token
-// 替换为 @相对路径，发送时由服务端展开成 <file> 块 / 图片附件。
-const pickerOpen = ref(false);
-const pickerQuery = ref("");
-/** 菜单入口打开时聚焦搜索框；@ 入口保持 textarea 焦点（联动过滤）。 */
-const pickerFocusSearch = ref(false);
-/** @ 后的已输入前缀（仅在其变化时同步到面板，避免覆盖面板内编辑）。 */
-let lastRefPrefix = "";
-
-const detectAtRef = () => {
+const detectTrigger = () => {
   const el = inputEl.value;
   if (!el) {
-    pickerOpen.value = false;
+    shelfMode.value = null;
     return;
   }
   const before = el.value.slice(0, el.selectionStart);
-  const m = /(^|[^\w@])@([^\s]*)$/.exec(before);
+  const m = /(^|\s)([@/])([^\s]*)$/.exec(before);
   if (m) {
-    pickerFocusSearch.value = false;
-    pickerOpen.value = true;
-    if (m[2] !== lastRefPrefix) {
-      lastRefPrefix = m[2] ?? "";
-      pickerQuery.value = m[2] ?? "";
-    }
-  } else {
-    pickerOpen.value = false;
-  }
-};
-
-const onKeyup = (event: KeyboardEvent) => {
-  if (event.key === "Escape") {
-    pickerOpen.value = false;
-    return;
-  }
-  // 光标移动后重新判定 @ token（方向键 / Home / End / 点击）。
-  if (event.key.startsWith("Arrow") || event.key === "Home" || event.key === "End") {
-    detectAtRef();
-  }
+    shelfMode.value = m[2] === "@" ? "files" : "commands";
+    shelfQuery.value = m[3] ?? "";
+  } else shelfMode.value = null;
 };
 
 const onPickFile = (relativePath: string) => {
-  pickerOpen.value = false;
-  lastRefPrefix = "";
+  replaceTrigger(`@${relativePath} `);
+};
+
+const onPickCommand = (command: SlashCommandInfo) => {
+  replaceTrigger(`/${command.name} `);
+};
+
+const replaceTrigger = (replacement: string) => {
+  shelfMode.value = null;
   const el = inputEl.value;
   const current = draft.value ?? "";
   if (!el) {
-    draft.value = `${current}@${relativePath}`;
+    draft.value = current + replacement;
     return;
   }
-  // 替换光标前的 @token 为 @相对路径；无 token 时直接插在光标处。
   const before = el.value.slice(0, el.selectionStart);
-  const m = /(^|[^\w@])@([^\s]*)$/.exec(before);
-  const atIndex = m ? m.index! + m[1]!.length : el.selectionStart;
-  draft.value = el.value.slice(0, atIndex) + `@${relativePath}` + el.value.slice(el.selectionStart);
+  const m = /(^|\s)([@/])([^\s]*)$/.exec(before);
+  const triggerIndex = m ? m.index + m[1]!.length : el.selectionStart;
+  draft.value = el.value.slice(0, triggerIndex) + replacement + el.value.slice(el.selectionStart);
   nextTick(() => {
     el.focus();
-    const pos = atIndex + 1 + relativePath.length;
+    const pos = triggerIndex + replacement.length;
     el.setSelectionRange(pos, pos);
   });
 };
 
-/** 点击 composer 外部时关闭浮窗（@ 入口靠 detectAtRef，菜单入口靠这里）。 */
-let closeOnOutside: ((event: PointerEvent) => void) | null = null;
-watch(pickerOpen, (open) => {
-  if (closeOnOutside) {
-    document.removeEventListener("pointerdown", closeOnOutside);
-    closeOnOutside = null;
+const openFiles = () => {
+  const el = inputEl.value;
+  const current = draft.value ?? "";
+  const cursor = el?.selectionStart ?? current.length;
+  const needsSpace = cursor > 0 && !/\s/.test(current[cursor - 1] ?? "");
+  insertAtCursor(`${needsSpace ? " " : ""}@`);
+  shelfMode.value = "files";
+  shelfQuery.value = "";
+};
+
+const pendingCount = computed(() => props.pending.steering.length + props.pending.followUp.length);
+const activityText = computed(() => {
+  switch (props.activity.phase) {
+    case "thinking": return "Thinking";
+    case "responding": return "Responding";
+    case "tool": return `Running ${props.activity.toolName}`;
+    case "compacting": return "Compacting context";
+    case "retrying": return `Retrying ${props.activity.attempt}/${props.activity.maxAttempts}`;
+    default: return "Ready";
   }
-  if (open) {
-    closeOnOutside = (event: PointerEvent) => {
-      if (composerEl.value && !composerEl.value.contains(event.target as Node)) {
-        pickerOpen.value = false;
-      }
-    };
-    document.addEventListener("pointerdown", closeOnOutside);
-  }
-});
-onBeforeUnmount(() => {
-  if (closeOnOutside) document.removeEventListener("pointerdown", closeOnOutside);
 });
 
-// Attachment action menu (files picker + links).
-const attachRoot = ref<HTMLElement | null>(null);
-const { open: menuOpen, style: menuStyle, close: closeMenu, toggle: toggleMenu } = usePopover({
-  root: attachRoot,
-  trigger: ".composer__attach-trigger",
-  panel: ".menu-panel",
-  width: 190,
-  // 4px panel padding + three 28px menu rows.
-  height: () => 4 + 3 * 28,
-});
-
-/** 菜单与浮窗互斥：开菜单先关浮窗。 */
-const onToggleAttach = () => {
-  pickerOpen.value = false;
-  toggleMenu();
-};
-
-/** 菜单 "Attach files"：打开浮窗（聚焦搜索框，搜索词从头开始）。 */
-const openPickerFromMenu = () => {
-  closeMenu();
-  lastRefPrefix = "";
-  pickerQuery.value = "";
-  pickerFocusSearch.value = true;
-  pickerOpen.value = true;
-};
-
-// GitHub issue / PR link dialog — simplified to pasting a URL.
-const linkDialogOpen = ref(false);
-const linkKind = ref<"issue" | "pr">("issue");
-const linkUrl = ref("");
-
-const openLinkDialog = (kind: "issue" | "pr") => {
-  closeMenu();
-  linkKind.value = kind;
-  linkUrl.value = "";
-  linkDialogOpen.value = true;
-};
-
-const confirmLink = () => {
-  const url = linkUrl.value.trim();
-  if (!url) return;
-  const number = url.match(/#(\d+)/)?.[1];
-  const label = number
-    ? `${linkKind.value === "issue" ? "Issue" : "PR"} #${number}`
-    : `GitHub ${linkKind.value === "issue" ? "issue" : "PR"}`;
-  insertAtCursor(`[${label}](${url})`);
-  linkDialogOpen.value = false;
-};
+const aboveWidgets = computed(() => Object.values(props.extensionWidgets).filter((widget) => widget.placement === "aboveEditor"));
+const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter((widget) => widget.placement === "belowEditor"));
 </script>
 
 <template>
-  <div ref="composerEl" class="composer">
-    <FileRefPicker
-      :open="pickerOpen"
-      v-model:query="pickerQuery"
-      :focus-search="pickerFocusSearch"
-      @select="onPickFile"
+  <div class="composer" :class="{ 'is-busy': busy, 'has-shelf': shelfMode }">
+    <ComposerShelf
+      ref="shelf"
+      :mode="shelfMode"
+      :query="shelfQuery"
+      :commands="commands"
+      @select-file="onPickFile"
+      @select-command="onPickCommand"
     />
+    <div v-for="(widget, index) in aboveWidgets" :key="`above:${index}`" class="composer__widget">
+      <span v-for="(line, lineIndex) in widget.lines" :key="lineIndex">{{ line }}</span>
+    </div>
     <textarea
       ref="inputEl"
       v-model="draft"
       class="composer__input"
-      placeholder="@ for files/agents; / for commands and skills; ! for shell; # for snippets"
+      placeholder="Ask Pi anything. Type @ for files or / for commands."
       rows="1"
-      @input="detectAtRef"
+      @input="detectTrigger"
       @keydown="onKeydown"
-      @keyup="onKeyup"
-      @click="detectAtRef"
+      @click="detectTrigger"
     />
+    <div v-if="busy || pendingCount || Object.keys(extensionStatuses).length" class="composer__status">
+      <span v-if="busy" class="composer__activity"><i />{{ activityText }}</span>
+      <span v-for="(text, key) in extensionStatuses" :key="key" class="composer__extension-status">{{ text }}</span>
+      <div v-if="busy" class="composer__delivery" aria-label="Message delivery">
+        <button type="button" :class="{ 'is-active': submitMode === 'steer' }" @click="submitMode = 'steer'">Steer</button>
+        <button type="button" :class="{ 'is-active': submitMode === 'followUp' }" @click="submitMode = 'followUp'">Follow up</button>
+      </div>
+      <IconButton v-if="busy" size="compact" label="Stop agent" @click="emit('abort')"><CloseIcon /></IconButton>
+    </div>
+    <div v-if="pendingCount" class="composer__queue">
+      <div v-for="(message, index) in pending.steering" :key="`steer:${index}:${message}`">
+        <span>Steer</span><p>{{ message }}</p>
+      </div>
+      <div v-for="(message, index) in pending.followUp" :key="`follow:${index}:${message}`">
+        <span>Follow up</span><p>{{ message }}</p>
+      </div>
+      <button type="button" @click="emit('restorePending')">Restore all</button>
+    </div>
+    <div v-for="(widget, index) in belowWidgets" :key="`below:${index}`" class="composer__widget">
+      <span v-for="(line, lineIndex) in widget.lines" :key="lineIndex">{{ line }}</span>
+    </div>
     <div class="composer__footer">
       <div class="composer__footer-leading">
-        <div ref="attachRoot" class="composer__attach">
-          <IconButton
-            class="composer__attach-trigger"
-            size="compact"
-            label="Add attachment"
-            :aria-expanded="menuOpen || pickerOpen"
-            @click="onToggleAttach"
-          >
+        <div class="composer__attach">
+          <IconButton size="compact" label="Attach files" :aria-expanded="shelfMode === 'files'" @click="openFiles">
             <AddCircleIcon />
           </IconButton>
-          <MenuPanel :open="menuOpen" :style="menuStyle" role="menu" aria-label="Composer actions">
-            <button type="button" class="menu-item" role="menuitem" @click="openPickerFromMenu">
-              <Attachment2Icon />
-              Attach files
-            </button>
-            <button type="button" class="menu-item" role="menuitem" @click="openLinkDialog('issue')">
-              <GithubIcon />
-              Link GitHub Issue
-            </button>
-            <button type="button" class="menu-item" role="menuitem" @click="openLinkDialog('pr')">
-              <GitPullRequestIcon />
-              Link GitHub PR
-            </button>
-          </MenuPanel>
         </div>
         <IconButton size="compact" label="Expand composer" disabled><FullscreenIcon /></IconButton>
         <IconButton size="compact" label="Goal mode" disabled><TargetIcon /></IconButton>
@@ -260,58 +216,18 @@ const confirmLink = () => {
           />
         </div>
         <IconButton size="compact" label="Dictation" disabled><MicIcon /></IconButton>
-        <IconButton size="compact" label="Send" :disabled="!canSend" @click="emit('send')">
+        <IconButton size="compact" :label="busy ? (submitMode === 'steer' ? 'Steer agent' : 'Queue follow-up') : 'Send'" :disabled="!canSend" @click="emit('send', busy ? submitMode : undefined)">
           <SendIcon />
         </IconButton>
       </div>
     </div>
   </div>
 
-  <Modal size="sm" :show="linkDialogOpen" @close="linkDialogOpen = false">
-    <template #body>
-      <div class="link-dialog">
-        <!-- Modal size=sm already left-aligns body content. Header +
-             helper copy follow openchamber's Link GitHub Issue dialog. -->
-        <header class="link-dialog__header">
-          <h3 class="link-dialog__title">
-            Link GitHub {{ linkKind === "issue" ? "Issue" : "Pull Request" }}
-          </h3>
-          <p class="link-dialog__subtitle">
-            Paste the URL — we'll derive the label from the issue or PR number.
-          </p>
-        </header>
-        <input
-          v-model="linkUrl"
-          class="link-dialog__input"
-          type="url"
-          autofocus
-          :placeholder="
-            linkKind === 'issue'
-              ? 'https://github.com/owner/repo/issues/123'
-              : 'https://github.com/owner/repo/pull/123'
-          "
-          aria-label="GitHub URL"
-          @keydown.enter="confirmLink"
-        />
-        <div class="link-dialog__actions">
-          <button type="button" class="link-dialog__btn" @click="linkDialogOpen = false">Cancel</button>
-          <button
-            type="button"
-            class="link-dialog__btn link-dialog__btn--primary"
-            :disabled="!linkUrl.trim()"
-            @click="confirmLink"
-          >
-            Insert link
-          </button>
-        </div>
-      </div>
-    </template>
-  </Modal>
 </template>
 
 <style scoped>
 .composer {
-  position: relative; /* anchor for the upward file-ref picker */
+  position: relative;
   display: flex;
   flex-direction: column;
   width: min(
@@ -321,6 +237,18 @@ const confirmLink = () => {
   overflow: visible;
   border: 1px solid #dedbd2;
   border-radius: 13px;
+  background: #fff;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.composer:focus-within {
+  border-color: #bcb8ae;
+  box-shadow: 0 2px 12px rgb(35 32 25 / 5%);
+}
+.composer.is-busy {
+  border-color: #b9c5d3;
+}
+.composer.has-shelf {
+  border-radius: 0 0 13px 13px;
 }
 .composer__input {
   display: block;
@@ -345,6 +273,110 @@ const confirmLink = () => {
 }
 .composer__input::placeholder {
   color: #747474;
+}
+.composer__status,
+.composer__queue,
+.composer__widget {
+  border-top: 1px solid #eeece6;
+}
+.composer__status {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 9px 4px 12px;
+  color: #6f6b63;
+  font-size: 11px;
+}
+.composer__activity {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  color: #4d5f72;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer__activity i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: #5d7895;
+  animation: activity-pulse 1.2s ease-in-out infinite;
+}
+@keyframes activity-pulse {
+  50% { opacity: 0.35; transform: scale(0.78); }
+}
+.composer__extension-status {
+  min-width: 0;
+  overflow: hidden;
+  color: #79746c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer__delivery {
+  display: inline-flex;
+  height: 24px;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 6px;
+  background: #eeece7;
+}
+.composer__delivery button {
+  padding: 0 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #77736b;
+  font: inherit;
+  cursor: pointer;
+}
+.composer__delivery button.is-active {
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+  color: #383630;
+}
+.composer__widget {
+  display: grid;
+  gap: 2px;
+  padding: 7px 12px;
+  background: #fbfaf7;
+  color: #67635b;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.composer__queue {
+  display: grid;
+  gap: 3px;
+  padding: 6px 9px;
+  background: #faf9f6;
+}
+.composer__queue > div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 7px;
+  min-height: 23px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: #6c675f;
+  font-size: 11px;
+}
+.composer__queue > div span { color: #4f6478; font-weight: 600; }
+.composer__queue > div p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer__queue > button {
+  justify-self: end;
+  padding: 3px 6px;
+  border: 0;
+  background: transparent;
+  color: #69655e;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 .composer__footer {
   display: flex;
@@ -382,82 +414,7 @@ const confirmLink = () => {
   justify-content: flex-end;
   gap: 4px;
 }
-
-/* GitHub link dialog (rendered through Modal; scoped classes match since
- * Modal's body slot is inlined in this component's template). The
- * dialog is a quiet form: the primary action uses the same warm-amber
- * tint we apply to the git panel's Commit button so the two "commit
- * intent" surfaces feel related without inventing a separate palette. */
-.link-dialog {
-  display: grid;
-  gap: 14px;
-}
-.link-dialog__header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.link-dialog__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #171717;
-}
-.link-dialog__subtitle {
-  margin: 0;
-  color: #888;
-  font-size: 13px;
-  line-height: 1.45;
-}
-.link-dialog__input {
-  width: 100%;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid #e7e4dc;
-  border-radius: 10px;
-  outline: 0;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  background: #fff;
-  transition: border-color 120ms ease;
-}
-.link-dialog__input:focus {
-  border-color: #bcbcbc;
-}
-.link-dialog__input::placeholder {
-  color: #999;
-}
-.link-dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.link-dialog__btn {
-  height: 32px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-.link-dialog__btn:hover:not(:disabled) {
-  background: rgb(0 0 0 / 5%);
-}
-.link-dialog__btn--primary {
-  background: #f3ece4;
-  color: #6b4a2e;
-  font-weight: 500;
-}
-.link-dialog__btn--primary:hover:not(:disabled) {
-  background: #ebe2d6;
-}
-.link-dialog__btn:disabled {
-  cursor: default;
-  opacity: 0.5;
+@media (prefers-reduced-motion: reduce) {
+  .composer__activity i { animation: none; }
 }
 </style>

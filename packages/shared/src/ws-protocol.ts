@@ -5,6 +5,8 @@ import type {
   RpcExtensionUIResponse,
   SessionEntry,
   SessionInfo,
+  SlashCommandInfo,
+  SourceInfo,
 } from "@earendil-works/pi-coding-agent";
 
 export * from "./paths";
@@ -16,6 +18,42 @@ export type {
   RpcExtensionUIResponse,
   SessionEntry,
   SessionInfo,
+  SlashCommandInfo,
+  SourceInfo,
+};
+
+export type AgentActivity =
+  | { phase: "idle" }
+  | { phase: "thinking" }
+  | { phase: "responding" }
+  | { phase: "tool"; toolName: string }
+  | { phase: "compacting" }
+  | { phase: "retrying"; attempt: number; maxAttempts: number };
+
+export type PendingMessages = {
+  steering: string[];
+  followUp: string[];
+};
+
+export type RuntimeToolInfo = {
+  name: string;
+  description: string;
+  active: boolean;
+  sourceInfo: SourceInfo;
+};
+
+export type ExtensionInfo = {
+  path: string;
+  sourceInfo: SourceInfo;
+  commands: string[];
+  tools: string[];
+};
+
+export type RuntimeResources = {
+  commands: SlashCommandInfo[];
+  tools: RuntimeToolInfo[];
+  extensions: ExtensionInfo[];
+  diagnostics: Array<{ path: string; error: string }>;
 };
 
 type ToolExecutionStartEvent = Extract<AgentSessionEvent, { type: "tool_execution_start" }>;
@@ -129,29 +167,38 @@ export type ServerMessage =
       type: "snapshot";
       seq: number;
       busy: boolean;
+      activity: AgentActivity;
+      pending: PendingMessages;
       items: LiveItem[];
       model?: ModelDescriptor;
       availableModels?: ModelDescriptor[];
       thinking?: ThinkingState;
       stats?: SessionStatsView;
+      resources: RuntimeResources;
     }
   | { type: "item"; seq: number; item: LiveItem }
   | {
       type: "state";
       seq: number;
       busy?: boolean;
+      activity?: AgentActivity;
+      pending?: PendingMessages;
       model?: ModelDescriptor;
       availableModels?: ModelDescriptor[];
       thinking?: ThinkingState;
       stats?: SessionStatsView;
+      resources?: RuntimeResources;
     }
   /** 扩展 UI 请求（官方 RPC 模式 extension_ui_request 帧原样转发）。 */
   | { type: "ui_request"; request: RpcExtensionUIRequest }
+  | { type: "draft_restore"; messages: string[] }
   | { type: "error"; error: string };
 
 /** JSON messages the client sends to the session WebSocket server. */
 export type ClientMessage =
-  | { type: "prompt"; message: string }
+  | { type: "prompt"; message: string; streamingBehavior?: "steer" | "followUp" }
+  | { type: "abort"; restorePending?: boolean }
+  | { type: "restore_pending" }
   | { type: "set_model"; provider: string; modelId: string }
   | { type: "set_thinking_level"; level: ThinkingLevel }
   | { type: "resync" }
@@ -200,6 +247,12 @@ export type ListResult = {
 /** Response body for GET /api/fs/search. */
 export type SearchResult = {
   entries: DirEntry[];
+};
+
+export type ProjectBrowseResult = {
+  path: string;
+  parent: string | null;
+  entries: Array<{ name: string; path: string }>;
 };
 
 /** Response body for GET /api/version. */

@@ -13,6 +13,7 @@ import type {
   SearchResult,
   SessionInfo,
   VersionInfo,
+  ProjectBrowseResult,
 } from "@pichamber/shared";
 
 const BASE = "/api";
@@ -49,6 +50,15 @@ export const deleteSession = (sessionId: string) =>
   fetch(`${BASE}/sessions/${sessionId}`, { method: "DELETE" }).then((r) =>
     jsonOrThrow<{ ok: true }>(r),
   );
+
+export const browseProjectDirectories = (path?: string) => {
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  const query = params.toString();
+  return fetch(`${BASE}/projects/browse${query ? `?${query}` : ""}`).then((r) =>
+    jsonOrThrow<ProjectBrowseResult>(r),
+  );
+};
 
 // ─── Terminal (PTY) ───────────────────────────────────────────────────
 

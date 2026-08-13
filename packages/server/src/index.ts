@@ -21,6 +21,7 @@ import {
   writePty,
 } from "./pty";
 import { closeSessionSockets, sessionWsHandler } from "./ws";
+import { browseProjectDirectories } from "./projects";
 import { toMessage } from "./error";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./workspace";
 
@@ -177,10 +178,21 @@ const server = Bun.serve({
     },
     "/api/sessions/:id": {
       DELETE: async (req) => {
-        closeSessionSockets(req.params.id);
+        await closeSessionSockets(req.params.id);
         const result = await deleteSession(req.params.id);
         if (!result.ok) return Response.json({ error: "session not found" }, { status: 404 });
         return Response.json(result);
+      },
+    },
+    "/api/projects/browse": {
+      GET: async (req) => {
+        try {
+          return Response.json(
+            await browseProjectDirectories(new URL(req.url).searchParams.get("path")),
+          );
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
       },
     },
     "/api/daemon/shutdown": {

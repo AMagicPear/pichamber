@@ -11,6 +11,7 @@ import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
 import ConversationMessages from "@/components/workspace/ConversationMessages.vue";
 import UserInputBlock from "@/components/workspace/UserInputBlock.vue";
+import ExtensionUiHost from "@/components/workspace/ExtensionUiHost.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { workspace } from "@/stores/workspace";
 import { computed, watch } from "vue";
@@ -39,6 +40,15 @@ const {
   thinking,
   setModel,
   setThinkingLevel,
+  abort,
+  activity,
+  busy,
+  pending,
+  resources,
+  extensionUi,
+  respondToExtension,
+  restorePending,
+  dismissNotification,
 } = useConversationSession();
 
 const hasConversation = computed(() => items.value.length > 0);
@@ -69,13 +79,28 @@ watch(
     <UserInputBlock
       v-model="draft"
       :can-send="canSend"
+      :busy="busy"
+      :activity="activity"
+      :pending="pending"
+      :commands="resources.commands"
+      :extension-statuses="extensionUi.statuses"
+      :extension-widgets="extensionUi.widgets"
       :model="model"
       :available-models="availableModels"
       :thinking-level="thinking.level"
       :available-thinking-levels="thinking.availableLevels"
       @send="send"
+      @abort="abort"
+      @restore-pending="restorePending"
       @select-model="setModel"
       @select-thinking-level="setThinkingLevel"
+    />
+
+    <ExtensionUiHost
+      :dialog="extensionUi.dialog"
+      :notifications="extensionUi.notifications"
+      @respond="respondToExtension"
+      @dismiss-notification="dismissNotification"
     />
 
     <div v-if="items.length === 0" class="presets" aria-label="Prompt starters">

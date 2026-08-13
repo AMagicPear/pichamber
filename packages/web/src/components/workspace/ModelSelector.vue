@@ -170,7 +170,7 @@ const placeholder = computed(() => {
 }
 
 /* The shared MenuPanel sizes the 360×360 box via the width/height props.
-   Search box styling matches FileRefPicker's (@ picker). */
+   Search box styling matches the composer shelf. */
 .model-selector__search {
   flex: 0 0 auto;
   padding: 8px;
