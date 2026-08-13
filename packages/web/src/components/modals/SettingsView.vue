@@ -27,6 +27,7 @@ import StackIcon from "@/assets/icons/Stack.svg";
 import { McpIcon } from "@/components/McpIcon";
 import { settings } from "@/stores/settings";
 import { useConversationSession } from "@/composables/useConversationSession";
+import { useTheme } from "@/composables/useTheme";
 
 defineOptions({ name: "SettingsView" });
 
@@ -40,7 +41,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { key: "appearance", label: "Appearance", icon: PaletteIcon },
+  { key: "appearance", label: "Appearance", icon: PaletteIcon, enabled: true },
   { key: "chat", label: "Chat", icon: ChatAi3Icon },
   { key: "notifications", label: "Notifications", icon: Notification3Icon },
   { key: "sessions", label: "Sessions", icon: ChatHistoryIcon, enabled: true },
@@ -61,10 +62,11 @@ const navItems: NavItem[] = [
   { key: "skills-catalog", label: "Skills Catalog", icon: BookIcon },
 ];
 
-const activeKey = ref<string>("sessions");
+const activeKey = ref<string>("appearance");
 const searchQuery = ref("");
 const settingsSize = ref(216);
 const { resources } = useConversationSession();
+const { preference: themePreference, options: themeOptions, setTheme } = useTheme();
 
 const visibleNavItems = computed(() =>
   navItems.filter((item) =>
@@ -124,7 +126,32 @@ const selectItem = (key: string) => {
         </div>
 
         <div class="settings-page__body">
-          <template v-if="activeKey === 'sessions'">
+          <template v-if="activeKey === 'appearance'">
+            <header class="settings-page__heading">
+              <h1>Appearance</h1>
+              <p>Choose how Pichamber looks on this device.</p>
+            </header>
+
+            <section class="settings-group">
+              <h2>Theme</h2>
+              <div class="theme-options" role="radiogroup" aria-label="Theme">
+                <button
+                  v-for="option in themeOptions"
+                  :key="option.id"
+                  type="button"
+                  role="radio"
+                  :aria-checked="themePreference === option.id"
+                  :class="{ 'is-active': themePreference === option.id }"
+                  @click="setTheme(option.id)"
+                >
+                  <span class="theme-options__preview" :class="`is-${option.id}`"><i /><i /></span>
+                  <span><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
+                </button>
+              </div>
+            </section>
+          </template>
+
+          <template v-else-if="activeKey === 'sessions'">
             <header class="settings-page__heading">
               <h1>Sessions</h1>
               <p>Control which sessions appear in the sidebar.</p>
@@ -184,7 +211,7 @@ const selectItem = (key: string) => {
   width: 100%;
   height: 100%;
   flex-direction: column;
-  background: #fff;
+  background: var(--ui-surface);
   font-size: 14px;
 }
 .settings-nav__search {
@@ -195,10 +222,10 @@ const selectItem = (key: string) => {
   height: 36px;
   margin: 12px 10px 4px;
   padding: 0 10px;
-  border: 1px solid #dfddd4;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff;
-  color: #888;
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
 }
 .settings-nav__search-icon {
   width: 16px;
@@ -215,7 +242,7 @@ const selectItem = (key: string) => {
   font: inherit;
 }
 .settings-nav__search input::placeholder {
-  color: #999;
+  color: var(--ui-text-muted);
 }
 
 .settings-nav__list {
@@ -242,30 +269,30 @@ const selectItem = (key: string) => {
   font-weight: 400;
   text-align: left;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 .settings-nav__list button svg {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  color: #777;
+  color: var(--ui-text-muted);
 }
 .settings-nav__list button:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--ui-surface-hover);
 }
 .settings-nav__list button:disabled {
   cursor: default;
   opacity: 0.45;
 }
 .settings-nav__list .is-active button {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ui-surface-selected);
 }
 .settings-nav__list .is-active button svg {
-  color: #171717;
+  color: var(--ui-text-strong);
 }
 .settings-nav__empty {
   padding: 14px 12px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 13px;
   text-align: center;
 }
@@ -276,7 +303,7 @@ const selectItem = (key: string) => {
   flex: 1 1 0;
   flex-direction: column;
   min-width: 0;
-  background: #fff;
+  background: var(--ui-surface);
 }
 .settings-page__close {
   position: absolute;
@@ -296,14 +323,14 @@ const selectItem = (key: string) => {
   align-items: flex-start;
   gap: 10px;
   padding: 14px 0;
-  color: #222;
+  color: var(--ui-text-strong);
   cursor: pointer;
 }
 .settings-option input {
   width: 16px;
   height: 16px;
   margin: 2px 0 0;
-  accent-color: #222;
+  accent-color: var(--ui-text-strong);
 }
 .settings-option span {
   display: grid;
@@ -313,7 +340,7 @@ const selectItem = (key: string) => {
   font-weight: 500;
 }
 .settings-option small {
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 12px;
 }
 .settings-page__heading {
@@ -330,9 +357,31 @@ const selectItem = (key: string) => {
 }
 .settings-page__heading p {
   margin: 0;
-  color: #777;
+  color: var(--ui-text-muted);
   font-size: 14px;
 }
+.settings-group { display: grid; max-width: 720px; gap: 10px; }
+.settings-group h2 { margin: 0; color: var(--ui-text-muted); font-size: 12px; font-weight: 500; }
+.theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.theme-options > button { display: grid; min-width: 0; gap: 9px; padding: 10px; border: 1px solid var(--ui-border-subtle); border-radius: 8px; background: var(--ui-surface); text-align: left; transition: border-color var(--ui-duration-fast) var(--ui-ease-standard), background-color var(--ui-duration-fast) var(--ui-ease-standard); }
+.theme-options > button:hover { background: var(--ui-surface-hover); }
+.theme-options > button.is-active { border-color: var(--ui-border-focus); background: var(--ui-surface-selected); }
+.theme-options > button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+.theme-options > button > span:last-child { display: grid; min-width: 0; gap: 2px; }
+.theme-options strong { color: var(--ui-text-strong); font-size: 13px; font-weight: 500; }
+.theme-options small { color: var(--ui-text-muted); font-size: 11px; line-height: 1.35; }
+.theme-options__preview { position: relative; display: block; height: 44px; overflow: hidden; border: 1px solid #d9d6ce; border-radius: 6px; background: #f7f6f2; }
+.theme-options__preview::before { position: absolute; inset: 0 auto 0 0; width: 28%; border-right: 1px solid #dedbd2; background: #efede7; content: ""; }
+.theme-options__preview i { position: absolute; left: 36%; right: 8%; height: 5px; border-radius: 2px; background: #d5d1c8; }
+.theme-options__preview i:first-child { top: 12px; right: 28%; }
+.theme-options__preview i:last-child { top: 23px; }
+.theme-options__preview.is-dark { border-color: #403f3b; background: #222220; }
+.theme-options__preview.is-dark::before { border-color: #44433f; background: #2a2a27; }
+.theme-options__preview.is-dark i { background: #565550; }
+.theme-options__preview.is-system { background: linear-gradient(135deg, #f7f6f2 0 49.5%, #222220 50%); }
+.theme-options__preview.is-system::before { background: linear-gradient(135deg, #efede7 0 49.5%, #2a2a27 50%); }
+.theme-options__preview.is-system i { background: linear-gradient(135deg, #d5d1c8 0 49.5%, #565550 50%); }
+@media (max-width: 700px) { .theme-options { grid-template-columns: 1fr; } }
 .extension-diagnostics,
 .extension-list {
   display: grid;
@@ -344,10 +393,10 @@ const selectItem = (key: string) => {
   display: grid;
   gap: 3px;
   padding: 10px 12px;
-  border-left: 3px solid #ad5959;
+  border-left: 3px solid var(--ui-error-strong);
   border-radius: 4px;
-  background: #faf1f1;
-  color: #713838;
+  background: var(--ui-error-bg);
+  color: var(--ui-error-fg);
   font-size: 12px;
 }
 .extension-diagnostics strong { overflow-wrap: anywhere; font-weight: 600; }
@@ -355,7 +404,7 @@ const selectItem = (key: string) => {
   display: grid;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid #e2dfd7;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 7px;
 }
 .extension-card header {
@@ -369,21 +418,21 @@ const selectItem = (key: string) => {
 .extension-card header strong { font-size: 13px; font-weight: 600; }
 .extension-card header span,
 .extension-card header small {
-  color: #817c73;
+  color: var(--ui-text-muted);
   font-size: 11px;
 }
-.extension-card header span { padding: 2px 5px; border-radius: 4px; background: #efede8; }
+.extension-card header span { padding: 2px 5px; border-radius: 4px; background: var(--ui-surface-selected); }
 .extension-card header small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .extension-card__resources { display: flex; flex-wrap: wrap; gap: 5px; }
 .extension-card__resources span {
   padding: 3px 6px;
   border-radius: 4px;
-  background: #eef1f3;
-  color: #4e6275;
+  background: var(--ui-extension-bg);
+  color: var(--ui-extension-fg);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
 }
 .extension-card p,
-.extension-empty { margin: 0; color: #88837b; font-size: 12px; }
-.extension-empty { max-width: 720px; padding: 20px 0; border-top: 1px solid #ece9e2; }
+.extension-empty { margin: 0; color: var(--ui-text-muted); font-size: 12px; }
+.extension-empty { max-width: 720px; padding: 20px 0; border-top: 1px solid var(--ui-border-subtle); }
 </style>

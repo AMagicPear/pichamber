@@ -159,10 +159,10 @@ defineExpose({ move, choose });
   max-height: min(292px, 42vh);
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #cbc8bf;
-  border-bottom-color: #e6e2d9;
+  border: 1px solid var(--ui-border-focus);
+  border-bottom-color: var(--ui-border);
   border-radius: 10px 10px 0 0;
-  background: #fff;
+  background: var(--ui-surface);
   box-shadow: 0 -12px 30px rgb(33 31 26 / 10%);
 }
 .composer-shelf__header,
@@ -170,21 +170,21 @@ defineExpose({ move, choose });
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  color: #77736a;
+  color: var(--ui-text-muted);
   font-size: 11px;
 }
 .composer-shelf__header {
   justify-content: space-between;
   min-height: 36px;
   padding: 0 12px;
-  border-bottom: 1px solid #ebe8e1;
-  background: #fbfaf7;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  background: var(--ui-surface-subtle);
 }
 .composer-shelf__kind {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: #37352f;
+  color: var(--ui-text-strong);
   font-size: 12px;
   font-weight: 600;
 }
@@ -212,7 +212,7 @@ defineExpose({ move, choose });
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #272621;
+  color: var(--ui-text);
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -235,7 +235,7 @@ defineExpose({ move, choose });
   padding: 5px 8px;
 }
 .composer-shelf__row.is-selected {
-  background: #f0eee8;
+  background: var(--ui-surface-selected);
 }
 .composer-shelf__command-copy {
   display: grid;
@@ -252,7 +252,7 @@ defineExpose({ move, choose });
 .composer-shelf__description {
   min-width: 0;
   overflow: hidden;
-  color: #7d7970;
+  color: var(--ui-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -265,18 +265,18 @@ defineExpose({ move, choose });
   justify-self: end;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #eceae5;
-  color: #666159;
+  background: var(--ui-surface-selected);
+  color: var(--ui-text-muted);
   font-size: 10px;
   line-height: 14px;
 }
-.composer-shelf__source.is-extension { background: #e8edf4; color: #455c79; }
-.composer-shelf__source.is-skill { background: #e8f0e7; color: #476548; }
-.composer-shelf__source.is-prompt { background: #f2eade; color: #765a34; }
+.composer-shelf__source.is-extension { background: var(--ui-extension-bg); color: var(--ui-extension-fg); }
+.composer-shelf__source.is-skill { background: var(--ui-skill-bg); color: var(--ui-skill-fg); }
+.composer-shelf__source.is-prompt { background: var(--ui-prompt-bg); color: var(--ui-prompt-fg); }
 .composer-shelf__state {
   margin: 0;
   padding: 18px 12px;
-  color: #858078;
+  color: var(--ui-text-muted);
   font-size: 12px;
   text-align: center;
 }
@@ -285,10 +285,10 @@ defineExpose({ move, choose });
   gap: 12px;
   min-height: 27px;
   padding: 0 12px;
-  border-top: 1px solid #ebe8e1;
-  background: #fbfaf7;
+  border-top: 1px solid var(--ui-border-subtle);
+  background: var(--ui-surface-subtle);
 }
-.composer-shelf__footer span { color: #9a968d; }
+.composer-shelf__footer span { color: var(--ui-text-muted); }
 @media (max-width: 640px) {
   .composer-shelf__row--file .composer-shelf__description { display: none; }
   .composer-shelf__row--file { grid-template-columns: auto minmax(0, 1fr); }

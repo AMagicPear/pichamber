@@ -128,7 +128,7 @@ const modelTitle = computed(() => {
 
 <style scoped>
 .context-pane {
-  background: #fff;
+  background: var(--ui-surface);
 }
 
 .context-pane__empty {
@@ -145,11 +145,11 @@ const modelTitle = computed(() => {
   margin: 0 0 6px;
   font-size: 14px;
   font-weight: 600;
-  color: #171717;
+  color: var(--ui-text-strong);
 }
 
 .context-pane__empty span {
-  color: #777;
+  color: var(--ui-text-muted);
   font-size: 12px;
 }
 
@@ -166,7 +166,7 @@ const modelTitle = computed(() => {
   flex-direction: column;
   gap: 2px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #ececec;
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 
 .context-pane__model {
@@ -175,14 +175,14 @@ const modelTitle = computed(() => {
   gap: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #171717;
+  color: var(--ui-text-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .context-pane__model-provider {
-  color: #171717;
+  color: var(--ui-text-strong);
 }
 
 .context-pane__model-sep {
@@ -190,14 +190,14 @@ const modelTitle = computed(() => {
 }
 
 .context-pane__model-id {
-  color: #555;
+  color: var(--ui-text-muted);
   font-family:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 12.5px;
 }
 
 .context-pane__date {
-  color: #8a8a8a;
+  color: var(--ui-text-muted);
   font-size: 11.5px;
 }
 
@@ -209,7 +209,7 @@ const modelTitle = computed(() => {
 
 .context-pane__heading {
   margin: 0 0 4px;
-  color: #8a8a8a;
+  color: var(--ui-text-muted);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -223,7 +223,7 @@ const modelTitle = computed(() => {
 }
 
 .context-pane__value {
-  color: #171717;
+  color: var(--ui-text-strong);
   font-family:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 16px;
@@ -232,7 +232,7 @@ const modelTitle = computed(() => {
 }
 
 .context-pane__sub {
-  color: #8a8a8a;
+  color: var(--ui-text-muted);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
@@ -241,7 +241,7 @@ const modelTitle = computed(() => {
   height: 4px;
   margin-top: 8px;
   border-radius: 999px;
-  background: #f0eee7;
+  background: var(--ui-surface-selected);
   overflow: hidden;
 }
 
@@ -257,16 +257,16 @@ const modelTitle = computed(() => {
   align-items: baseline;
   gap: 12px;
   padding: 1px 0;
-  color: #555;
+  color: var(--ui-text-muted);
   font-size: 12px;
 }
 
 .context-pane__row-label {
-  color: #6f6f6f;
+  color: var(--ui-text-muted);
 }
 
 .context-pane__row-value {
-  color: #171717;
+  color: var(--ui-text-strong);
   font-family:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 12.5px;

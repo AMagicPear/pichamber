@@ -111,7 +111,7 @@ export default defineComponent({
         ? h("img", {
             src: src.value,
             alt: props.alt || `${props.providerId} logo`,
-            class: ["provider-logo", props.class],
+            class: ["provider-logo", "provider-logo--image", props.class],
             width: props.size,
             height: props.size,
             style: { display: "block", objectFit: "contain" },

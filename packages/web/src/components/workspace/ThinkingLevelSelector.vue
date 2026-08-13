@@ -114,7 +114,7 @@ const onSelect = (next: ThinkingLevel) => {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 .thinking-selector__trigger:hover {
   background: rgb(113 141 40 / 12%);

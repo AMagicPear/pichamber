@@ -122,21 +122,24 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
     <div ref="content" class="conversation__content">
       <template v-for="item in items" :key="item.id">
         <article v-if="item.kind === 'user'" class="conversation-message conversation-message--user">
-          <MarkdownRender
-            class="conversation-message__user markdown-chat"
-            mode="chat"
-            :content="messageText(item.message)"
-            :final="true"
-            :fade="false"
-            :viewport-priority="false"
-          />
-          <div v-if="messageImages(item.message).length > 0" class="conversation-message__images">
-            <img
-              v-for="(img, i) in messageImages(item.message)"
-              :key="i"
-              :src="`data:${img.mimeType};base64,${img.data}`"
-              alt="Attached image"
+          <div class="conversation-message__user">
+            <MarkdownRender
+              v-if="messageText(item.message)"
+              class="markdown-chat"
+              mode="chat"
+              :content="messageText(item.message)"
+              :final="true"
+              :fade="false"
+              :viewport-priority="false"
             />
+            <div v-if="messageImages(item.message).length > 0" class="conversation-message__images">
+              <img
+                v-for="(img, i) in messageImages(item.message)"
+                :key="i"
+                :src="`data:${img.mimeType};base64,${img.data}`"
+                alt="Attached image"
+              />
+            </div>
           </div>
         </article>
         <AssistantMessage v-else-if="item.kind === 'assistant'" :message="item.message" :final="item.phase === 'committed'" />
@@ -153,28 +156,41 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
    first paint), so very long histories scroll smoothly and resizing the
    pane doesn't relayout everything. Cheap, native, no height bookkeeping;
    expanded tool details survive remounts, which is a free bonus. */
-.conversation-message { width: 100%; max-width: var(--conversation-content-width); min-width: 0; margin: 0 auto; padding: 0 clamp(12px, 2.5vw, var(--conversation-inline-gutter)); color: #292827; content-visibility: auto; contain-intrinsic-size: auto 96px; }
+.conversation-message { width: 100%; max-width: var(--conversation-content-width); min-width: 0; margin: 0 auto; padding: 0 clamp(12px, 2.5vw, var(--conversation-inline-gutter)); color: var(--ui-text); content-visibility: auto; contain-intrinsic-size: auto 96px; }
 .conversation-message + .conversation-message { margin-top: 28px; }
 .conversation-message--assistant + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
-.conversation-message__user { width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid #ece9e0; border-radius: 12px 12px 4px; background: #f7f6f2; }
+.conversation-message__user { display: grid; width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid var(--ui-border-subtle); border-radius: 12px 12px 4px; background: var(--ui-surface-muted); }
 
 /* Attached images inside the user bubble: thumbnails capped to the bubble
    width, stacked vertically with the text above. */
 .conversation-message__images {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
   margin-top: 8px;
 }
+.conversation-message__images:first-child { margin-top: 0; }
 .conversation-message__images img {
   display: block;
-  max-width: 100%;
+  width: auto;
+  max-width: min(100%, 420px);
   max-height: 320px;
+  border: 1px solid #e2ded5;
   border-radius: 8px;
+  background: var(--ui-surface);
   object-fit: contain;
+  animation: user-image-enter 180ms var(--ui-ease-emphasized) both;
+}
+@keyframes user-image-enter {
+  from { opacity: 0; transform: translateY(3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-message__images img { animation: none; }
 }
 
 /* Error variants: red accent on the message block so failed turns read at
@@ -182,11 +198,11 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
  * header and text colors live in AssistantMessage.vue. */
 .conversation-message--assistant-error {
   padding: 14px 16px;
-  border: 1px solid #f4c2c2;
+  border: 1px solid var(--ui-error-border);
   border-radius: 10px;
-  background: rgb(255 240 240 / 60%);
+  background: var(--ui-error-bg);
 }
 .conversation-message--tool-error :deep(.conversation-detail__label) {
-  color: #a83838;
+  color: var(--ui-error-strong);
 }
 </style>

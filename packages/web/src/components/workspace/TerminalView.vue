@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { FitAddon, Terminal, type Ghostty, type IDisposable } from "ghostty-web";
 import { connectPtyWs, type WsHandle } from "@/api/ws";
 import { toMessage } from "@/api/client";
 import { useGhosttyInit } from "@/composables/useGhostty";
 import { releaseTerminalCleanup, replaceTerminalCleanup } from "@/composables/terminalRegistry";
+import { useTheme } from "@/composables/useTheme";
 
 const props = defineProps<{ ptyId: string }>();
 const emit = defineEmits<{ exited: [{ reason: string }] }>();
@@ -22,7 +23,14 @@ let pendingOutput = "";
 let outputFrame: number | undefined;
 let outputWriting = false;
 
-const terminalTheme = {
+const { resolvedTheme } = useTheme();
+const terminalTheme = () => resolvedTheme.value === "dark" ? {
+  background: "#1d1d1b",
+  foreground: "#e8e6e1",
+  cursor: "#e8e6e1",
+  cursorAccent: "#1d1d1b",
+  selectionBackground: "#4a4944",
+} : {
   background: "#ffffff",
   foreground: "#1f1f1f",
   cursor: "#1f1f1f",
@@ -97,7 +105,7 @@ const createTerminal = async (): Promise<Terminal | null> => {
     fontSize: 13,
     fontFamily:
       '"Maple Mono NF CN", "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
-    theme: terminalTheme,
+    theme: terminalTheme(),
     scrollback: 5000,
   });
   const fit = new FitAddon();
@@ -141,6 +149,9 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(teardown);
+watch(resolvedTheme, () => {
+  if (terminal) terminal.options.theme = terminalTheme();
+});
 </script>
 
 <template>
@@ -163,7 +174,7 @@ onBeforeUnmount(teardown);
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 .terminal-view__host {
   width: 100%;
@@ -184,7 +195,7 @@ onBeforeUnmount(teardown);
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  color: #686663;
+  color: var(--ui-text-muted);
   font-size: 13px;
 }
 .terminal-view__overlay p {
@@ -192,11 +203,11 @@ onBeforeUnmount(teardown);
 }
 .terminal-view__overlay strong {
   display: block;
-  color: #555555;
+  color: var(--ui-text-strong);
 }
 .terminal-view__overlay span {
   display: block;
   margin-top: 4px;
-  color: #686663;
+  color: var(--ui-text-muted);
 }
 </style>

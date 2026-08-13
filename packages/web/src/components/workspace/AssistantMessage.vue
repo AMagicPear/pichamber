@@ -86,7 +86,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: #292827;
+  color: var(--ui-text);
   font-size: 15px;
   font-weight: 700;
 }
@@ -116,13 +116,13 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #a83838;
+  color: var(--ui-error-strong);
 }
 .conversation-message__error-tag {
   padding: 1px 8px;
-  border: 1px solid #e8b5b5;
+  border: 1px solid var(--ui-error-border);
   border-radius: 999px;
-  color: #a83838;
+  color: var(--ui-error-strong);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -130,7 +130,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
 }
 .conversation-message__error-text {
   margin: 0;
-  color: #6f2828;
+  color: var(--ui-error-fg);
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;

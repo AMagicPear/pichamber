@@ -273,8 +273,8 @@ watch(
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #ffffff;
-  color: #171717;
+  background: var(--ui-surface);
+  color: var(--ui-text);
 }
 
 /* ── Header ────────────────────────────────────────────────────────── */
@@ -311,19 +311,19 @@ watch(
   height: 100%;
   padding: 0 8px;
   background: transparent;
-  color: #777;
+  color: var(--ui-text-muted);
   cursor: pointer;
   transition: color 120ms ease;
 }
 .terminal__tab:hover {
-  color: #171717;
+  color: var(--ui-text-strong);
 }
 .terminal__tab:focus-visible {
   outline: 2px solid #b65323;
   outline-offset: -2px;
 }
 .terminal__tab.is-active {
-  color: #171717;
+  color: var(--ui-text-strong);
 }
 .terminal__tab.is-active::after {
   position: absolute;
@@ -338,7 +338,7 @@ watch(
 .terminal__tab-icon {
   width: 16px;
   height: 16px;
-  color: #777;
+  color: var(--ui-text-muted);
   transition: opacity 120ms ease;
 }
 .terminal__tab.is-active .terminal__tab-icon {
@@ -363,7 +363,7 @@ watch(
   border: 0;
   border-radius: 3px;
   background: transparent;
-  color: #777;
+  color: var(--ui-text-muted);
   opacity: 0;
   cursor: pointer;
   transition:
@@ -381,7 +381,7 @@ watch(
   opacity: 1;
 }
 .terminal__tab-icon-close:hover {
-  background: rgb(0 0 0 / 6%);
+  background: var(--ui-surface-hover);
 }
 .terminal__tab-title {
   max-width: 140px;
@@ -403,7 +403,7 @@ watch(
   position: relative;
   flex: 1 1 0;
   min-height: 0;
-  background: #ffffff;
+  background: var(--ui-surface);
 }
 .terminal__pane {
   position: absolute;
@@ -419,7 +419,7 @@ watch(
   justify-content: center;
   gap: 12px;
   height: 100%;
-  color: #777;
+  color: var(--ui-text-muted);
   font-size: 13px;
 }
 .terminal__action {
@@ -428,10 +428,10 @@ watch(
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid #dad8ce;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #ffffff;
-  color: #333230;
+  background: var(--ui-surface);
+  color: var(--ui-text-strong);
   font-size: 12px;
   font-weight: 500;
   box-shadow: 0 1px 2px rgb(16 15 15 / 4%);
@@ -448,8 +448,8 @@ watch(
 }
 .terminal__action:hover {
   border-color: #b65323;
-  background: #fffaf5;
-  color: #171717;
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-strong);
 }
 .terminal__action:focus-visible {
   outline: 2px solid #b65323;
@@ -464,7 +464,7 @@ watch(
 .terminal__state span {
   display: block;
   margin-top: 4px;
-  color: #888;
+  color: var(--ui-text-muted);
 }
 .terminal__empty p,
 .terminal__state p {

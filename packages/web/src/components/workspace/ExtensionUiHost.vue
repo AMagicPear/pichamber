@@ -98,12 +98,13 @@ const confirm = (confirmed: boolean) => {
     </template>
   </Modal>
 
-  <div class="extension-notifications" aria-live="polite">
+  <TransitionGroup name="extension-toast" tag="div" class="extension-notifications" aria-live="polite">
     <div v-for="notification in notifications" :key="notification.id" class="extension-toast" :class="`is-${notification.type}`">
+      <i aria-hidden="true" />
       <span>{{ notification.message }}</span>
       <button type="button" aria-label="Dismiss notification" @click="emit('dismissNotification', notification.id)"><CloseIcon /></button>
     </div>
-  </div>
+  </TransitionGroup>
 </template>
 
 <style scoped>
@@ -114,24 +115,25 @@ const confirm = (confirmed: boolean) => {
 }
 .extension-dialog header { display: grid; gap: 5px; }
 .extension-dialog__label {
-  color: #7c776e;
+  color: var(--ui-text-muted);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
 }
-.extension-dialog h3 { margin: 0; color: #24221e; font-size: 16px; font-weight: 600; }
-.extension-dialog p { margin: 0; color: #706b62; font-size: 13px; line-height: 1.45; }
+.extension-dialog h3 { margin: 0; color: var(--ui-text-strong); font-size: 16px; font-weight: 600; }
+.extension-dialog p { margin: 0; color: var(--ui-text-muted); font-size: 13px; line-height: 1.45; }
 .extension-dialog input,
 .extension-dialog textarea {
   width: 100%;
   padding: 9px 10px;
-  border: 1px solid #d8d4ca;
+  border: 1px solid var(--ui-border);
   border-radius: 7px;
   outline: none;
   color: inherit;
   font: inherit;
   font-size: 13px;
   resize: vertical;
+  background: var(--ui-surface);
 }
 .extension-dialog input:focus,
 .extension-dialog textarea:focus { border-color: #9eabb9; box-shadow: 0 0 0 2px rgb(91 119 149 / 12%); }
@@ -141,13 +143,13 @@ const confirm = (confirmed: boolean) => {
   padding: 7px 10px;
   border: 0;
   border-radius: 6px;
-  background: #f4f2ed;
+  background: var(--ui-surface-subtle);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.extension-dialog__options button:hover { background: #eae7df; }
+.extension-dialog__options button:hover { background: var(--ui-surface-hover); }
 .extension-dialog footer { display: flex; justify-content: flex-end; gap: 7px; }
 .extension-dialog footer button {
   min-height: 32px;
@@ -157,9 +159,16 @@ const confirm = (confirmed: boolean) => {
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition:
+    background-color var(--ui-duration-fast) var(--ui-ease-standard),
+    box-shadow var(--ui-duration-fast) var(--ui-ease-standard),
+    transform var(--ui-duration-fast) var(--ui-ease-standard);
 }
-.extension-dialog__secondary { background: transparent; color: #666159; }
-.extension-dialog__primary { background: #28394b; color: #fff; }
+.extension-dialog__secondary { background: transparent; color: var(--ui-text-muted); }
+.extension-dialog__secondary:hover { background: var(--ui-surface-hover); }
+.extension-dialog__primary { background: var(--ui-primary); box-shadow: var(--ui-shadow-control); color: var(--ui-surface); }
+.extension-dialog__primary:hover { background: var(--ui-primary-hover); transform: translateY(-1px); }
+.extension-dialog footer button:active { transform: translateY(1px); }
 .extension-notifications {
   position: fixed;
   z-index: 120;
@@ -171,21 +180,41 @@ const confirm = (confirmed: boolean) => {
 }
 .extension-toast {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 10px 10px 12px;
-  border: 1px solid #d9d6ce;
-  border-left: 3px solid #6f8193;
-  border-radius: 7px;
-  background: #fff;
-  box-shadow: 0 7px 22px rgb(0 0 0 / 12%);
-  color: #34312c;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 9px 10px 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-raised), 0 1px 2px rgb(35 32 27 / 6%);
+  color: var(--ui-text);
   font-size: 13px;
   line-height: 1.4;
 }
-.extension-toast.is-warning { border-left-color: #b18442; }
-.extension-toast.is-error { border-left-color: #a85252; }
+.extension-toast > i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #777f84; box-shadow: 0 0 0 3px rgb(119 127 132 / 10%); }
+.extension-toast.is-warning > i { background: #a87b36; box-shadow: 0 0 0 3px rgb(168 123 54 / 11%); }
+.extension-toast.is-error > i { background: #a6534f; box-shadow: 0 0 0 3px rgb(166 83 79 / 11%); }
 .extension-toast span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.extension-toast button { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: #777; cursor: pointer; }
+.extension-toast button { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--ui-text-muted); cursor: pointer; }
+.extension-toast button:hover { background: var(--ui-surface-hover); color: var(--ui-text-strong); }
 .extension-toast svg { width: 13px; height: 13px; }
+.extension-toast-enter-active,
+.extension-toast-leave-active,
+.extension-toast-move {
+  transition:
+    opacity var(--ui-duration-medium) var(--ui-ease-standard),
+    transform 180ms var(--ui-ease-emphasized);
+}
+.extension-toast-enter-from,
+.extension-toast-leave-to {
+  opacity: 0;
+  transform: translate(8px, 4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .extension-dialog footer button,
+  .extension-toast-enter-active,
+  .extension-toast-leave-active,
+  .extension-toast-move { transition: none; }
+}
 </style>

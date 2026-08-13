@@ -235,13 +235,13 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
     var(--conversation-content-width)
   );
   overflow: visible;
-  border: 1px solid #dedbd2;
+  border: 1px solid var(--ui-border);
   border-radius: 13px;
-  background: #fff;
+  background: var(--ui-surface);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 .composer:focus-within {
-  border-color: #bcb8ae;
+  border-color: var(--ui-border-focus);
   box-shadow: 0 2px 12px rgb(35 32 25 / 5%);
 }
 .composer.is-busy {
@@ -272,12 +272,12 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
   background: transparent;
 }
 .composer__input::placeholder {
-  color: #747474;
+  color: var(--ui-text-muted);
 }
 .composer__status,
 .composer__queue,
 .composer__widget {
-  border-top: 1px solid #eeece6;
+  border-top: 1px solid var(--ui-border-subtle);
 }
 .composer__status {
   display: flex;
@@ -285,7 +285,7 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
   align-items: center;
   gap: 10px;
   padding: 4px 9px 4px 12px;
-  color: #6f6b63;
+  color: var(--ui-text-muted);
   font-size: 11px;
 }
 .composer__activity {
@@ -313,7 +313,7 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
 .composer__extension-status {
   min-width: 0;
   overflow: hidden;
-  color: #79746c;
+  color: var(--ui-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -323,28 +323,28 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
   margin-left: auto;
   padding: 2px;
   border-radius: 6px;
-  background: #eeece7;
+  background: var(--ui-surface-selected);
 }
 .composer__delivery button {
   padding: 0 7px;
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #77736b;
+  color: var(--ui-text-muted);
   font: inherit;
   cursor: pointer;
 }
 .composer__delivery button.is-active {
-  background: #fff;
+  background: var(--ui-surface);
   box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
-  color: #383630;
+  color: var(--ui-text-strong);
 }
 .composer__widget {
   display: grid;
   gap: 2px;
   padding: 7px 12px;
-  background: #fbfaf7;
-  color: #67635b;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-muted);
   font-size: 12px;
   line-height: 1.4;
   white-space: pre-wrap;
@@ -353,7 +353,7 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
   display: grid;
   gap: 3px;
   padding: 6px 9px;
-  background: #faf9f6;
+  background: var(--ui-surface-subtle);
 }
 .composer__queue > div {
   display: grid;
@@ -363,7 +363,7 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
   min-height: 23px;
   padding: 3px 5px;
   border-radius: 4px;
-  color: #6c675f;
+  color: var(--ui-text-muted);
   font-size: 11px;
 }
 .composer__queue > div span { color: #4f6478; font-weight: 600; }
@@ -373,7 +373,7 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
   padding: 3px 6px;
   border: 0;
   background: transparent;
-  color: #69655e;
+  color: var(--ui-text-muted);
   font: inherit;
   font-size: 11px;
   cursor: pointer;

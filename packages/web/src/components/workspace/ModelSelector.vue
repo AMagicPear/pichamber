@@ -148,7 +148,7 @@ const placeholder = computed(() => {
   transition: background-color 120ms ease;
 }
 .model-selector__trigger:hover:not(:disabled) {
-  background: rgb(0 0 0 / 5%);
+  background: var(--ui-surface-hover);
 }
 .model-selector__trigger:disabled {
   cursor: default;
@@ -174,26 +174,26 @@ const placeholder = computed(() => {
 .model-selector__search {
   flex: 0 0 auto;
   padding: 8px;
-  border-bottom: 1px solid #ededed;
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .model-selector__search input {
   width: 100%;
   height: 32px;
   padding: 0 10px;
-  border: 1px solid #e7e4dc;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
   outline: 0;
   font: inherit;
   font-size: 13px;
-  background: #fafaf7;
-  transition: border-color 120ms ease;
+  background: var(--ui-surface-subtle);
+  transition: border-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 .model-selector__search input:focus {
-  border-color: #bcbcbc;
-  background: #fff;
+  border-color: var(--ui-border-focus);
+  background: var(--ui-surface);
 }
 .model-selector__search input::placeholder {
-  color: #999;
+  color: var(--ui-text-muted);
 }
 .model-selector__list {
   flex: 1 1 0;
@@ -206,7 +206,7 @@ const placeholder = computed(() => {
 }
 .model-selector__group-title {
   padding: 6px 8px 2px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -226,7 +226,7 @@ const placeholder = computed(() => {
 }
 .model-selector__empty {
   padding: 14px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 13px;
   text-align: center;
 }

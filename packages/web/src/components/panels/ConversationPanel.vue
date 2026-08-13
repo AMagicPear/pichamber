@@ -152,10 +152,10 @@ watch(
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border: 1px solid #f4c2c2;
+  border: 1px solid var(--ui-error-border);
   border-radius: 10px;
-  background: rgb(255 240 240 / 80%);
-  color: #6f2828;
+  background: var(--ui-error-bg);
+  color: var(--ui-error-fg);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -163,7 +163,7 @@ watch(
   width: 18px;
   height: 18px;
   flex: 0 0 18px;
-  color: #a83838;
+  color: var(--ui-error-strong);
 }
 .conversation__error-text {
   flex: 1 1 auto;
@@ -180,11 +180,11 @@ watch(
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #6f2828;
+  color: var(--ui-error-fg);
   cursor: pointer;
 }
 .conversation__error-close:hover {
-  background: rgb(168 56 56 / 12%);
+  background: var(--ui-error-hover);
 }
 .conversation__error-close svg {
   width: 14px;
@@ -203,9 +203,9 @@ watch(
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border: 1px solid #d9d7cf;
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
-  color: #666;
+  color: var(--ui-text-muted);
   font-size: 14px;
   line-height: 18px;
 }
@@ -215,12 +215,12 @@ watch(
   opacity: 0.7;
 }
 .presets > button:hover {
-  background: rgb(0 0 0 / 4%);
+  background: var(--ui-surface-hover);
 }
 .presets > :deep(.presets__add) {
-  border: 1px solid #d9d7cf;
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
-  color: #666;
+  color: var(--ui-text-muted);
 }
 .conversation--active .presets {
   display: none;

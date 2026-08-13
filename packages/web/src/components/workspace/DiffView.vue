@@ -3,6 +3,7 @@
 // styled scroll box, so the parent doesn't need its own wrapper.
 import { createDiffSurface } from "stream-diffs";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useTheme } from "@/composables/useTheme";
 
 const props = defineProps<{
   /** Raw unified diff text (e.g. stdout from `git diff`). */
@@ -13,6 +14,7 @@ const props = defineProps<{
 }>();
 
 const host = ref<HTMLElement>();
+const { resolvedTheme } = useTheme();
 let controller: ReturnType<typeof createDiffSurface> | undefined;
 
 const render = async () => {
@@ -25,7 +27,7 @@ const render = async () => {
     kind: "patch",
     patch: props.patch,
     options: {
-      theme: { light: "vitesse-light", dark: "vitesse-dark" },
+      theme: resolvedTheme.value === "dark" ? "vitesse-dark" : "vitesse-light",
       diffStyle: props.diffStyle ?? "unified",
       // Word-level highlight inside changed lines so small edits read
       // like prose instead of full-line blocks.
@@ -41,7 +43,7 @@ const render = async () => {
 
 onMounted(() => void render());
 onBeforeUnmount(() => controller?.dispose());
-watch(() => [props.patch, props.diffStyle], () => void render());
+watch(() => [props.patch, props.diffStyle, resolvedTheme.value], () => void render());
 </script>
 
 <template>
@@ -54,9 +56,9 @@ watch(() => [props.patch, props.diffStyle], () => void render());
   flex: 1 1 0;
   min-height: 120px;
   overflow: auto;
-  border: 1px solid #e7e4dc;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
-  background: #fafaf7;
+  background: var(--ui-surface-subtle);
 }
 /* Pierre's [data-code] is `display: grid; grid-template-columns:
    gutter 1fr`, so the content column and each line's + / - strip

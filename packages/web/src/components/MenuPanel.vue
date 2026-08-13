@@ -55,10 +55,10 @@ defineProps<{
   max-height: calc(100vh - 80px);
   overflow: hidden;
   padding: 4px;
-  border: 1px solid #dedbd2;
+  border: 1px solid var(--ui-border);
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-raised);
 }
 .menu-panel :deep(.menu-item) {
   display: flex;
@@ -77,14 +77,14 @@ defineProps<{
   cursor: pointer;
 }
 .menu-panel :deep(.menu-item:hover) {
-  background: #f5f4f0;
+  background: var(--ui-surface-hover);
 }
 .menu-panel :deep(.menu-item.is-active) {
   background: var(--menu-item-active-bg, rgb(57 120 212 / 12%));
   color: var(--menu-item-active-color, #1f3a6b);
 }
 .menu-panel :deep(.menu-item:focus-visible) {
-  outline: 2px solid #3978d4;
+  outline: 2px solid var(--ui-focus);
   outline-offset: -2px;
 }
 .menu-panel :deep(.menu-item svg) {
@@ -98,7 +98,7 @@ defineProps<{
   gap: 12px;
 }
 .menu-panel :deep(.menu-item__hint) {
-  color: #999;
+  color: var(--ui-text-muted);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;

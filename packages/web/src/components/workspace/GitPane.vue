@@ -289,17 +289,17 @@ watch(() => workspace.cwd, load);
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #171717;
+  color: var(--ui-text);
 }
 
 .git-pane__count {
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 12px;
   font-weight: 500;
 }
 
 .git-pane__hint {
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 12px;
   font-weight: 400;
 }
@@ -324,11 +324,11 @@ watch(() => workspace.cwd, load);
 }
 
 .git-pane__row:hover {
-  background: rgb(0 0 0 / 4%);
+  background: var(--ui-surface-hover);
 }
 
 .git-pane__row.is-selected {
-  background: rgb(0 0 0 / 6%);
+  background: var(--ui-surface-selected);
 }
 
 /* Stage toggle: mirrors openchamber's `+` icon. aria-pressed is the
@@ -344,7 +344,7 @@ watch(() => workspace.cwd, load);
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #888;
+  color: var(--ui-text-muted);
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
 }
@@ -355,8 +355,8 @@ watch(() => workspace.cwd, load);
 }
 
 .git-pane__stage-toggle:hover {
-  background: rgb(0 0 0 / 5%);
-  color: #222;
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-strong);
 }
 
 .git-pane__row.is-staged .git-pane__stage-toggle {
@@ -416,7 +416,7 @@ watch(() => workspace.cwd, load);
 .git-pane__state {
   margin: 0;
   padding: 14px 4px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 13px;
 }
 
@@ -432,10 +432,10 @@ watch(() => workspace.cwd, load);
   min-height: 120px;
   margin: 0;
   padding: 24px 12px;
-  border: 1px solid #e7e4dc;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
-  background: #fafaf7;
-  color: #999;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-muted);
   font-size: 13px;
   text-align: center;
   display: grid;
@@ -451,23 +451,23 @@ watch(() => workspace.cwd, load);
   width: 100%;
   box-sizing: border-box;
   padding: 10px 12px;
-  border: 1px solid #e7e4dc;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
   outline: 0;
   resize: none;
   color: inherit;
   font: inherit;
   font-size: 13px;
-  background: #fff;
-  transition: border-color 120ms ease;
+  background: var(--ui-surface);
+  transition: border-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 
 .git-pane__commit-input:focus {
-  border-color: #bcbcbc;
+  border-color: var(--ui-border-focus);
 }
 
 .git-pane__commit-input::placeholder {
-  color: #999;
+  color: var(--ui-text-muted);
 }
 
 .git-pane__commit-actions {
@@ -481,8 +481,8 @@ watch(() => workspace.cwd, load);
   padding: 0 14px;
   border: 1px solid #dedbd4;
   border-radius: 8px;
-  background: rgb(0 0 0 / 4%);
-  color: #222;
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-strong);
   font: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -491,12 +491,12 @@ watch(() => workspace.cwd, load);
 }
 
 .git-pane__btn--primary {
-  background: rgb(0 0 0 / 4%);
-  color: #222;
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-strong);
 }
 
 .git-pane__btn--primary:hover:not(:disabled) {
-  background: rgb(0 0 0 / 8%);
+  background: var(--ui-surface-selected);
 }
 
 .git-pane__btn:disabled {

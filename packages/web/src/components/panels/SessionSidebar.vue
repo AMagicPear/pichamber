@@ -327,7 +327,7 @@ onMounted(async () => {
   height: 100%;
   grid-template-rows: 48px 40px minmax(0, 1fr) 42px;
   overflow: hidden;
-  color: #1f1f1f;
+  color: var(--ui-text);
   font-size: 14px;
 }
 .sidebar__topbar,
@@ -347,7 +347,7 @@ onMounted(async () => {
   width: 68px;
   height: 28px;
   overflow: hidden;
-  border: 1px solid #dfddd4;
+  border: 1px solid var(--ui-border);
   border-radius: 9px;
 }
 .sidebar__search-group > :deep(.icon-button) {
@@ -356,7 +356,7 @@ onMounted(async () => {
 .sidebar__search-group > :deep(.icon-button + .icon-button) {
   flex: 0 0 28px;
   width: 28px;
-  border-left: 1px solid #dfddd4;
+  border-left: 1px solid var(--ui-border);
 }
 .sidebar__search-group > :deep(.search-primary) {
   flex: 0 0 40px;
@@ -417,7 +417,7 @@ onMounted(async () => {
   opacity: 0;
   pointer-events: none;
   transform: translate(3px, -50%);
-  color: #888;
+  color: var(--ui-text-muted);
   transition:
     transform 150ms ease-out,
     opacity 150ms ease-out;
@@ -432,10 +432,10 @@ onMounted(async () => {
   opacity: 1;
   pointer-events: auto;
   transform: translate(0, -50%);
-  color: #222;
+  color: var(--ui-text-strong);
 }
 .session-list__project-header:is(:hover, :focus-within) .session-list__project {
-  background: rgb(0 0 0 / 4%);
+  background: var(--ui-surface-hover);
 }
 .session-list__project-header:is(:hover, :focus-within) :is(
   .session-list__project-folder,
@@ -453,7 +453,7 @@ onMounted(async () => {
   display: block;
   width: 14px;
   height: 14px;
-  color: #777;
+  color: var(--ui-text-muted);
   flex: 0 0 auto;
   transform-origin: 30% 65%;
   transition: transform 150ms ease-out, color 150ms ease-out;
@@ -507,7 +507,7 @@ onMounted(async () => {
 }
 .session-list__item.is-active,
 .session-list__item.is-active:hover {
-  background: rgb(0 0 0 / 7%);
+  background: var(--ui-surface-selected);
 }
 .session-list__title {
   flex: 1 1 auto;
@@ -520,7 +520,7 @@ onMounted(async () => {
   white-space: nowrap;
 }
 .session-list__item:hover .session-list__title {
-  color: #111;
+  color: var(--ui-text-strong);
   transform: translateX(1px);
 }
 .session-list__age {
@@ -528,7 +528,7 @@ onMounted(async () => {
   top: 50%;
   inset-inline-end: 4px;
   width: 24px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 12px;
   line-height: 20px;
   text-align: center;
@@ -544,7 +544,7 @@ onMounted(async () => {
   margin-left: 20px;
   padding: 4px 8px;
   border-radius: 6px;
-  color: #8b8b8b;
+  color: var(--ui-text-muted);
   font-size: 12px;
   cursor: pointer;
   transition:
@@ -552,11 +552,11 @@ onMounted(async () => {
     color 120ms ease;
 }
 .session-list__more:hover {
-  background: rgb(0 0 0 / 4%);
+  background: var(--ui-surface-hover);
 }
 .session-list__state {
   margin: 12px 8px 0 28px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 12px;
 }
 .session-list__state--error {

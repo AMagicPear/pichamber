@@ -98,7 +98,7 @@ watch(
 <style scoped>
 .conversation-detail {
   margin: 0;
-  color: #292827;
+  color: var(--ui-text);
   font-size: 14px;
 }
 .conversation-detail__summary {
@@ -169,12 +169,12 @@ watch(
   text-overflow: ellipsis;
 }
 .conversation-detail__preview--plain {
-  color: #76746d;
+  color: var(--ui-text-muted);
 }
 .conversation-detail__content,
 .conversation-detail__markdown {
   margin: 0;
-  color: #76746d;
+  color: var(--ui-text-muted);
 }
 /* DiffView 自带滚动盒，这里只要撑满展开区的宽度。 */
 .conversation-detail__diff {
@@ -191,9 +191,9 @@ watch(
   display: block;
   max-width: 100%;
   max-height: 320px;
-  border: 1px solid #e7e4dc;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
-  background: #fafaf7;
+  background: var(--ui-surface-subtle);
   object-fit: contain;
 }
 .conversation-detail__content {
@@ -218,6 +218,6 @@ watch(
 }
 .conversation-detail.is-expanded .conversation-detail__body-inner {
   padding-left: 24px;
-  border-left: 1px solid #dedbd4;
+  border-left: 1px solid var(--ui-border);
 }
 </style>

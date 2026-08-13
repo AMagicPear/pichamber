@@ -31,8 +31,20 @@
   --ms-flow-heading-5-mb: 6px;
   --ms-flow-heading-6-mt: 14px;
   --ms-flow-heading-6-mb: 6px;
-  color: #292827;
+  --inline-code-bg: var(--ui-code-inline-bg);
+  --inline-code-fg: var(--ui-code-inline-fg);
+  --table-border: var(--ui-border);
+  --table-header-bg: var(--ui-table-header-bg);
+  color: var(--ui-text);
   overflow-wrap: anywhere;
+}
+
+.markdown-chat .table-node tbody tr:nth-child(2n) {
+  background-color: var(--ui-table-stripe-bg);
+}
+
+.markdown-chat .table-node tbody tr:hover {
+  background-color: var(--ui-surface-hover);
 }
 
 /* Links keep markstream's muted tone (the default LinkNode style) instead

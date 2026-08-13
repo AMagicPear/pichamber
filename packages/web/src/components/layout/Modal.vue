@@ -58,7 +58,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--ui-overlay);
   transition: opacity 150ms ease;
 }
 .modal-container {
@@ -67,7 +67,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
   flex-direction: column;
   overflow: hidden;
   border-radius: 12px;
-  background: #fff;
+  background: var(--ui-surface);
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.18);
   transition:
     opacity 150ms ease,

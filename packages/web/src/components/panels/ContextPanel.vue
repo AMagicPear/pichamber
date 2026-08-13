@@ -71,7 +71,7 @@ const activeTabConfig = computed(() => tabs.find((tab) => tab.id === activeTab.v
   width: 100%;
   height: 100%;
   overflow: hidden;
-  color: #171717;
+  color: var(--ui-text);
   /* Container queries let the tab strip decide on its own when labels
      no longer fit — no JS needed. Threshold sits a hair above the
      right-pane min (200px) so labels still show at the very minimum. */
@@ -90,7 +90,7 @@ const activeTabConfig = computed(() => tabs.find((tab) => tab.id === activeTab.v
   margin: 11px 8px 0;
   padding: 3px;
   border-radius: 10px;
-  background: #f7f7f5;
+  background: var(--ui-surface-subtle);
   transition: margin 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -104,7 +104,7 @@ const activeTabConfig = computed(() => tabs.find((tab) => tab.id === activeTab.v
   padding: 0 8px;
   border: 1px solid transparent;
   border-radius: 8px;
-  color: #686868;
+  color: var(--ui-text-muted);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -117,8 +117,8 @@ const activeTabConfig = computed(() => tabs.find((tab) => tab.id === activeTab.v
 }
 
 .context-panel__tabs button:hover {
-  background: rgb(255 255 255 / 60%);
-  color: #222;
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-strong);
 }
 
 .context-panel__tabs button:focus-visible {
@@ -132,14 +132,14 @@ const activeTabConfig = computed(() => tabs.find((tab) => tab.id === activeTab.v
 }
 
 .context-panel__tabs .is-active {
-  border-color: #e2dfd5;
-  background: #fff;
-  color: #222;
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text-strong);
   box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
 }
 
 .context-panel__tabs .is-active:hover {
-  background: #fff;
+  background: var(--ui-surface);
 }
 
 .context-panel__tabs button>span {

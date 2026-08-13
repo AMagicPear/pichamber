@@ -6,6 +6,7 @@
 // baseline inside the conversation.
 import { createDiffSurface } from "stream-diffs";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useTheme } from "@/composables/useTheme";
 
 const props = defineProps<{
   /** File contents. */
@@ -15,6 +16,7 @@ const props = defineProps<{
 }>();
 
 const host = ref<HTMLElement>();
+const { resolvedTheme } = useTheme();
 let surface: ReturnType<typeof createDiffSurface> | undefined;
 
 const render = async () => {
@@ -24,7 +26,7 @@ const render = async () => {
     kind: "file",
     file: { name: props.fileName ?? "file.txt", contents: props.content, lang: undefined },
     options: {
-      theme: { light: "vitesse-light", dark: "vitesse-dark" },
+      theme: resolvedTheme.value === "dark" ? "vitesse-dark" : "vitesse-light",
     },
   });
   surface = next;
@@ -33,7 +35,7 @@ const render = async () => {
 
 onMounted(() => void render());
 onBeforeUnmount(() => surface?.dispose());
-watch(() => props.content, () => void render());
+watch(() => [props.content, resolvedTheme.value], () => void render());
 </script>
 
 <template>
@@ -48,9 +50,9 @@ watch(() => props.content, () => void render());
   max-width: 100%;
   min-width: 0;
   overflow: auto;
-  border: 1px solid #e7e4dc;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
-  background: #fafaf7;
+  background: var(--ui-surface-subtle);
 }
 .code-view :deep(.stream-diffs-shell) {
   background: transparent;

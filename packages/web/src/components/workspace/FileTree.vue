@@ -179,7 +179,7 @@ export default defineComponent({
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-bottom: 1px solid #ededed;
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .file-tree__search {
   display: flex;
@@ -189,20 +189,20 @@ export default defineComponent({
   height: 32px;
   min-width: 0;
   padding: 0 10px;
-  border: 1px solid #e7e4dc;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 8px;
-  background: #fafaf7;
-  transition: border-color 120ms ease, background-color 120ms ease;
+  background: var(--ui-surface-subtle);
+  transition: border-color var(--ui-duration-fast) var(--ui-ease-standard), background-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 .file-tree__search:focus-within {
-  border-color: #bcbcbc;
-  background: #fff;
+  border-color: var(--ui-border-focus);
+  background: var(--ui-surface);
 }
 .file-tree__search-icon {
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
-  color: #666;
+  color: var(--ui-text-muted);
 }
 .file-tree__search-icon svg {
   display: block;
@@ -225,7 +225,7 @@ export default defineComponent({
   appearance: none;
 }
 .file-tree__search input::placeholder {
-  color: #999;
+  color: var(--ui-text-muted);
 }
 .file-tree__search-clear {
   display: inline-flex;
@@ -235,11 +235,11 @@ export default defineComponent({
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  color: #777;
+  color: var(--ui-text-muted);
 }
 .file-tree__search-clear:hover {
-  background: #ededed;
-  color: #333;
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-strong);
 }
 .file-tree__search-clear:focus-visible {
   outline: 2px solid #3978d4;
@@ -266,7 +266,7 @@ export default defineComponent({
   position: relative;
   margin: 0 0 0 12px;
   padding: 0 0 0 12px;
-  border-left: 1px solid #e5e5e5;
+  border-left: 1px solid var(--ui-border-subtle);
   overflow: visible;
 }
 .file-tree__children > .file-tree__item::before {
@@ -275,7 +275,7 @@ export default defineComponent({
   left: -12px;
   width: 12px;
   height: 1px;
-  background: #e5e5e5;
+  background: var(--ui-border-subtle);
   content: "";
 }
 .file-tree__children > .file-tree__item:last-child::after {
@@ -284,7 +284,7 @@ export default defineComponent({
   bottom: 0;
   left: -13px;
   width: 2px;
-  background: #fff;
+  background: var(--ui-surface);
   content: "";
 }
 .file-tree__item {
@@ -305,13 +305,13 @@ export default defineComponent({
   font-size: 14px;
   text-align: left;
   cursor: pointer;
-  transition: background-color 120ms ease;
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 .file-tree__row:hover {
-  background: #f5f4f0;
+  background: var(--ui-surface-hover);
 }
 .file-tree__row:focus-visible {
-  outline: 2px solid #3978d4;
+  outline: 2px solid var(--ui-focus);
   outline-offset: -2px;
 }
 .file-tree__icon {
@@ -345,7 +345,7 @@ export default defineComponent({
 .file-tree__state {
   margin: 0;
   padding: 14px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 13px;
 }
 .file-tree__state--error {

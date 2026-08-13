@@ -52,7 +52,7 @@ import { workspace } from "@/stores/workspace";
   align-items: center;
   justify-content: space-between;
   padding: 0 10px 0 16px;
-  border-bottom: 1px solid #e8e6df;
+  border-bottom: 1px solid var(--ui-border-subtle);
 }
 .session-header.is-left-collapsed {
   padding-left: 48px;
@@ -84,7 +84,7 @@ import { workspace } from "@/stores/workspace";
 }
 .session-header p {
   overflow: hidden;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 11px;
   line-height: 14px;
   text-overflow: ellipsis;

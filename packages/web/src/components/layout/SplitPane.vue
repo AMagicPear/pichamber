@@ -251,7 +251,7 @@ const handleStyle = computed(() => {
   bottom: 0;
   left: 4px;
   width: 1px;
-  background: #e8e6df;
+  background: var(--ui-border-subtle);
   transition:
     left 120ms ease,
     width 120ms ease,
@@ -289,7 +289,7 @@ const handleStyle = computed(() => {
 }
 .split-pane__handle.is-dragging .split-pane__line,
 .split-pane__handle:hover .split-pane__line {
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--ui-border-focus);
   left: 3px;
   width: 3px;
 }

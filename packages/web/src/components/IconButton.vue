@@ -46,8 +46,8 @@ withDefaults(
   color: inherit;
   cursor: pointer;
   transition:
-    background-color 120ms ease,
-    box-shadow 120ms ease,
+    background-color var(--ui-duration-fast) var(--ui-ease-standard),
+    box-shadow var(--ui-duration-fast) var(--ui-ease-standard),
     transform 80ms ease;
 }
 .icon-button--compact {
@@ -64,13 +64,13 @@ withDefaults(
   border-radius: 8px;
 }
 .icon-button:hover:not(:disabled) {
-  background: rgb(0 0 0 / 5%);
+  background: var(--ui-surface-hover);
   box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
 .icon-button:focus-visible {
-  outline: 2px solid #3978d4;
+  outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
-  background: rgb(0 0 0 / 4%);
+  background: var(--ui-surface-hover);
   box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
 }
 .icon-button:active:not(:disabled) {

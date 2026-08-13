@@ -71,7 +71,7 @@ onMounted(async () => {
 .about__meta {
   display: grid;
   gap: 2px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 12px;
 }
 .about__meta p {
@@ -87,13 +87,13 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #888;
+  color: var(--ui-text-muted);
   font-size: 12px;
   text-decoration: none;
-  transition: color 120ms ease;
+  transition: color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 .about__links a:hover {
-  color: #171717;
+  color: var(--ui-text);
 }
 .about__links svg {
   width: 16px;
@@ -115,11 +115,11 @@ onMounted(async () => {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  color: #888;
+  color: var(--ui-text-muted);
 }
 .about__close:hover {
-  background: rgb(0 0 0 / 5%);
-  color: #171717;
+  background: var(--ui-surface-hover);
+  color: var(--ui-text);
 }
 .about__close svg {
   width: 16px;

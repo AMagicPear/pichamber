@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { createCodeStream } from "stream-diffs";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useTheme } from "@/composables/useTheme";
 
 const props = defineProps<{
   node: {
@@ -10,6 +11,7 @@ const props = defineProps<{
 }>();
 
 const host = ref<HTMLElement>();
+const { resolvedTheme } = useTheme();
 let controller: ReturnType<typeof createCodeStream> | undefined;
 let viewportObserver: IntersectionObserver | undefined;
 
@@ -20,7 +22,7 @@ const render = async () => {
   const next = createCodeStream({
     fileName: `code.${props.node.language || "txt"}`,
     language: props.node.language || "plaintext",
-    theme: { light: "vitesse-light", dark: "vitesse-dark" },
+    theme: resolvedTheme.value === "dark" ? "vitesse-dark" : "vitesse-light",
     lineNumbers: true,
   });
   controller = next;
@@ -59,7 +61,7 @@ onBeforeUnmount(() => {
   viewportObserver?.disconnect();
   controller?.dispose();
 });
-watch(() => [props.node.code, props.node.language], () => void render());
+watch(() => [props.node.code, props.node.language, resolvedTheme.value], () => void render());
 </script>
 
 <template>
@@ -69,7 +71,7 @@ watch(() => [props.node.code, props.node.language], () => void render());
 <style scoped>
 .conversation-code-block {
   overflow: hidden;
-  border: 1px solid #e4e1da;
+  border: 1px solid var(--ui-border-subtle);
   border-radius: 6px;
 }
 .conversation-code-block :deep(.stream-diffs-shell) {
