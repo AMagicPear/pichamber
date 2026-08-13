@@ -25,7 +25,7 @@ const ORPHAN_GRACE_MS = 5_000;
 
 const getDefaultShell = (): string => {
   if (process.env.SHELL) return process.env.SHELL;
-  if (process.platform === "win32") return process.env.COMSPEC ?? "cmd.exe";
+  if (process.platform === "win32") return "powershell.exe";
   return "/bin/zsh";
 };
 
