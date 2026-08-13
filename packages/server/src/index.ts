@@ -244,14 +244,20 @@ Bun.serve({
     },
 
     // ── Filesystem (files panel) ─────────────────────────────────
-    // Paths are absolute, or relative to the active workspace.
-    // Anything outside the workspace returns 400 — outside-workspace
+    // Paths are absolute, or relative to the active workspace. The
+    // active workspace defaults to the user's home directory but the
+    // client passes the session cwd as `workspaceRoot` so the file tree
+    // tracks wherever the user opened the session (a Windows project on
+    // a different drive than the home directory is the motivating case).
+    // Anything outside that workspace returns 400 — outside-workspace
     // grants are intentionally deferred until workspace switching lands.
     "/api/fs/list": {
       GET: async (req) => {
-        const path = new URL(req.url).searchParams.get("path") ?? undefined;
+        const url = new URL(req.url);
+        const path = url.searchParams.get("path") ?? undefined;
+        const workspaceRoot = url.searchParams.get("workspaceRoot") ?? undefined;
         try {
-          return Response.json(await listDirectory(path));
+          return Response.json(await listDirectory(path, workspaceRoot));
         } catch (err) {
           return fsErrorResponse(err);
         }
@@ -259,8 +265,10 @@ Bun.serve({
     },
     "/api/fs/search": {
       GET: async (req) => {
-        const q = new URL(req.url).searchParams.get("q") ?? "";
-        return Response.json({ entries: await searchFiles(q) });
+        const url = new URL(req.url);
+        const q = url.searchParams.get("q") ?? "";
+        const workspaceRoot = url.searchParams.get("workspaceRoot") ?? undefined;
+        return Response.json({ entries: await searchFiles(q, 60, workspaceRoot) });
       },
     },
   },

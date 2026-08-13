@@ -19,6 +19,7 @@ import IconButton from "@/components/IconButton.vue";
 import AboutModal from "@/components/modals/AboutModal.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
+import { pathBasename } from "@pichamber/shared";
 import type { SessionInfo } from "@pichamber/shared";
 import { computed, nextTick, onMounted, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
@@ -65,9 +66,15 @@ const sessionAge = (session: SessionInfo) => {
   return `${Math.floor(months / 12)}y`;
 };
 
-const projectPath = (cwd: string) => cwd.replace(/\/+$/, "") || "/";
+const projectPath = (cwd: string) => cwd.replace(/[\\/]+$/, "") || "/";
 
-const projectName = (cwd: string) => projectPath(cwd).split("/").pop() || "/";
+const projectName = (cwd: string) => {
+  const trimmed = projectPath(cwd);
+  // Cross-platform basename — on Windows `C:\Users\foo\projects\pichamber`
+  // must still resolve to `pichamber`, not the entire drive path.
+  const name = pathBasename(trimmed);
+  return name || trimmed || "/";
+};
 
 const projectGroups = computed(() => {
   const groups = new Map<string, SessionInfo[]>();

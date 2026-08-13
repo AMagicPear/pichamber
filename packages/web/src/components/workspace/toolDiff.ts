@@ -12,11 +12,14 @@
  */
 
 import { workspace } from "@/stores/workspace";
+import { stripParent } from "@pichamber/shared";
 
-/** Strip the workspace prefix so in-workspace files read as relative paths. */
+/** Strip the workspace prefix so in-workspace files read as relative paths.
+ *  Cross-platform: a Windows cwd (`C:\Users\foo`) strips off both `\` and
+ *  `/` children, so tool result rows look the same on either OS. */
 export const displayPath = (path: string): string => {
   const cwd = workspace.cwd;
-  return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
+  return cwd ? stripParent(cwd, path) ?? path : path;
 };
 
 type Args = Record<string, unknown> | undefined;

@@ -1,5 +1,6 @@
 import { reactive, ref } from "vue";
 import { createSession, listSessions, toMessage } from "@/api/client";
+import { pathBasename } from "@pichamber/shared";
 import type { SessionInfo } from "@pichamber/shared";
 
 export const workspace = reactive({
@@ -56,7 +57,7 @@ const syncWorkspaceMetadata = (sessionId: string) => {
   const session = sessions.value.find(({ id }) => id === sessionId);
   if (!session || workspace.sessionId !== sessionId) return;
   workspace.sessionName = sessionTitle(session);
-  workspace.folderName = session.cwd?.split("/").pop() ?? null;
+  workspace.folderName = session.cwd ? pathBasename(session.cwd) : null;
   workspace.cwd = session.cwd || null;
 };
 
@@ -86,7 +87,7 @@ export const createSessionForCwd = async (cwd: string) => {
   const { sessionId } = await createSession(cwd);
   workspace.sessionId = sessionId;
   workspace.cwd = cwd;
-  workspace.folderName = cwd.split("/").pop() ?? null;
+  workspace.folderName = cwd ? pathBasename(cwd) : null;
   workspace.sessionName = "New Session";
   return sessionId;
 };

@@ -71,14 +71,20 @@ export const stopPty = (ptyId: string) =>
 
 // ─── Filesystem (files panel) ────────────────────────────────────────
 
-export const listDirectory = async (path?: string) => {
-  const url = path ? `${BASE}/fs/list?path=${encodeURIComponent(path)}` : `${BASE}/fs/list`;
+export const listDirectory = async (path?: string, workspaceRoot?: string) => {
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  if (workspaceRoot) params.set("workspaceRoot", workspaceRoot);
+  const qs = params.toString();
+  const url = qs ? `${BASE}/fs/list?${qs}` : `${BASE}/fs/list`;
   const r = await fetch(url);
   return await jsonOrThrow<ListResult>(r);
 };
 
-export const searchFiles = async (query: string) => {
-  const r = await fetch(`${BASE}/fs/search?q=${encodeURIComponent(query)}`);
+export const searchFiles = async (query: string, workspaceRoot?: string) => {
+  const params = new URLSearchParams({ q: query });
+  if (workspaceRoot) params.set("workspaceRoot", workspaceRoot);
+  const r = await fetch(`${BASE}/fs/search?${params}`);
   return await jsonOrThrow<SearchResult>(r);
 };
 

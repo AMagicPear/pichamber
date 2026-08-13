@@ -9,6 +9,7 @@
  * "icon → muted dirs → bright basename" layout without duplicating logic.
  */
 import { computed } from "vue";
+import { lastSeparatorIndex } from "@pichamber/shared";
 import { getEntryIcon } from "@/components/workspace/fileIcon";
 
 const props = withDefaults(
@@ -23,7 +24,9 @@ const props = withDefaults(
 
 const parts = computed(() => {
   if (!props.path) return null;
-  const separator = props.path.lastIndexOf("/");
+  // Treat both `/` and `\` as separators so the basename lights up on
+  // Windows paths (e.g. `C:\Users\foo\file.ts` → `file.ts`).
+  const separator = lastSeparatorIndex(props.path);
   if (separator < 0) return { prefix: "", tail: props.path };
   return { prefix: props.path.slice(0, separator + 1), tail: props.path.slice(separator + 1) };
 });

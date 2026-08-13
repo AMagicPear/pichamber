@@ -84,8 +84,12 @@ export default defineComponent({
       error.value = null;
       entries.value = [];
       try {
-        const cwd = workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : undefined;
-        const result = await listDirectory(cwd);
+        // The session cwd (when set) doubles as both the directory to list
+        // and the workspace root the server uses for containment/display —
+        // so a project on a different drive than the home directory still
+        // loads on Windows.
+        const workspaceRoot = workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : undefined;
+        const result = await listDirectory(workspaceRoot, workspaceRoot);
         if (currentRequest !== requestVersion) return;
         entries.value = result.entries;
       } catch (err) {

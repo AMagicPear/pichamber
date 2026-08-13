@@ -7,6 +7,8 @@ import type {
   SessionInfo,
 } from "@earendil-works/pi-coding-agent";
 
+export * from "./paths";
+
 export type {
   AgentMessage,
   AgentSessionEvent,

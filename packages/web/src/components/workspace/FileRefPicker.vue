@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import type { DirEntry } from "@pichamber/shared";
+import { pathDirname } from "@pichamber/shared";
 import { listDirectory, searchFiles, toMessage } from "@/api/client";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
 import IconButton from "@/components/IconButton.vue";
@@ -42,7 +43,7 @@ const loadDir = async (dir: string | null) => {
   error.value = null;
   entries.value = [];
   try {
-    const result = await listDirectory(dir ?? root.value ?? undefined);
+    const result = await listDirectory(dir ?? root.value ?? undefined, root.value ?? undefined);
     if (current !== requestVersion) return;
     entries.value = result.entries;
   } catch (err) {
@@ -57,7 +58,7 @@ const runSearch = async (q: string) => {
   searching.value = true;
   error.value = null;
   try {
-    const result = await searchFiles(q);
+    const result = await searchFiles(q, root.value ?? undefined);
     if (current !== requestVersion) return;
     entries.value = result.entries;
   } catch (err) {
@@ -97,17 +98,23 @@ const atRoot = computed(
 const displayPath = computed(() => {
   if (searchingNow.value) return `Search: ${query.value.trim()}`;
   if (cwd.value === null) return "~";
-  if (root.value && cwd.value.startsWith(`${root.value}/`)) {
-    return `~/${cwd.value.slice(root.value.length + 1)}`;
+  if (root.value && cwd.value.length > root.value.length && cwd.value.startsWith(root.value)) {
+    const sep = cwd.value[root.value.length];
+    // Preserve the on-disk separator (`~/foo` vs `~\foo`) so the picker
+    // header matches what the OS would show.
+    return `~${sep}${cwd.value.slice(root.value.length + 1)}`;
   }
   return cwd.value;
 });
 
 /** Workspace-relative form of an entry, so `@` resolves against the cwd. */
-const relFor = (entry: DirEntry): string =>
-  root.value && entry.path.startsWith(`${root.value}/`)
-    ? entry.path.slice(root.value.length + 1)
-    : entry.relativePath;
+const relFor = (entry: DirEntry): string => {
+  if (root.value && entry.path.length > root.value.length && entry.path.startsWith(root.value)) {
+    const sep = entry.path[root.value.length];
+    if (sep === "/" || sep === "\\") return entry.path.slice(root.value.length + 1);
+  }
+  return entry.relativePath;
+};
 
 const enter = (entry: DirEntry) => {
   // 从搜索进入目录：切换回浏览模式，清空搜索词。
@@ -118,7 +125,10 @@ const enter = (entry: DirEntry) => {
 
 const goUp = () => {
   if (atRoot.value) return;
-  cwd.value = cwd.value!.split("/").slice(0, -1).join("/") || "/";
+  // Cross-platform dirname (treats both `/` and `\` as separators) so
+  // navigating up works for sessions opened on Windows.
+  const parent = pathDirname(cwd.value!);
+  cwd.value = parent || cwd.value!;
   void loadDir(cwd.value);
 };
 

@@ -16,8 +16,9 @@
 import { readdir, realpath, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { DirEntry, ListResult } from "@pichamber/shared";
+import { stripParent } from "@pichamber/shared";
 
-import { getWorkspace, isWithinWorkspace, resolveInWorkspace, shortPath } from "./workspace";
+import { isWithinWorkspace, resolveInWorkspace, resolveWorkspace, shortPath } from "./workspace";
 
 export class WorkspaceError extends Error {
   readonly status: number;
@@ -30,24 +31,27 @@ export class WorkspaceError extends Error {
 /**
  * Reject any path that escapes the workspace, including symlink targets.
  */
-const ensureWithinWorkspace = async (input: string): Promise<string> => {
-  const resolved = resolveInWorkspace(input);
+const ensureWithinWorkspace = async (input: string, workspace: string): Promise<string> => {
+  const resolved = resolveInWorkspace(input, workspace);
   const checkedPath = await realpath(resolved);
-  if (!isWithinWorkspace(checkedPath)) {
+  if (!isWithinWorkspace(checkedPath, workspace)) {
     throw new WorkspaceError("Path is outside of the active workspace");
   }
   return checkedPath;
 };
 
-const toRelative = (path: string): string => {
-  const workspace = getWorkspace();
-  if (path === workspace) return "";
-  if (path.startsWith(`${workspace}/`)) return path.slice(workspace.length + 1);
-  return "";
+const toRelative = (path: string, workspace: string): string => {
+  const relative = stripParent(workspace, path);
+  return relative ?? "";
 };
 
-export const listDirectory = async (input?: string): Promise<ListResult> => {
-  const target = input === undefined || input === "" ? getWorkspace() : await ensureWithinWorkspace(input);
+export const listDirectory = async (
+  input: string | undefined,
+  workspaceOverride?: string | null,
+): Promise<ListResult> => {
+  const workspace = resolveWorkspace(workspaceOverride);
+  const target =
+    input === undefined || input === "" ? workspace : await ensureWithinWorkspace(input, workspace);
   const dirents = await readdir(target, { withFileTypes: true });
   const entries = await Promise.all(
     dirents.map(async (dirent): Promise<DirEntry> => {
@@ -64,7 +68,7 @@ export const listDirectory = async (input?: string): Promise<ListResult> => {
       return {
         name: dirent.name,
         path: entryPath,
-        relativePath: toRelative(entryPath),
+        relativePath: toRelative(entryPath, workspace),
         isDirectory,
         isFile: dirent.isFile(),
         isSymbolicLink,
@@ -75,7 +79,7 @@ export const listDirectory = async (input?: string): Promise<ListResult> => {
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
     return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
   });
-  return { path: target, displayPath: shortPath(target), entries };
+  return { path: target, displayPath: shortPath(target, workspace), entries };
 };
 
 /** 递归搜索 workspace 内名字匹配的文件/目录（BFS，限深度、跳过大目录）。
@@ -91,19 +95,23 @@ const SKIP_SEARCH_DIRS = new Set([
 ]);
 const MAX_SEARCH_DEPTH = 4;
 
-const toEntry = (name: string, path: string, isDirectory: boolean): DirEntry => ({
+const toEntry = (name: string, path: string, isDirectory: boolean, workspace: string): DirEntry => ({
   name,
   path,
-  relativePath: toRelative(path),
+  relativePath: toRelative(path, workspace),
   isDirectory,
   isFile: !isDirectory,
   isSymbolicLink: false,
 });
 
-export const searchFiles = async (query: string, limit = 60): Promise<DirEntry[]> => {
+export const searchFiles = async (
+  query: string,
+  limit = 60,
+  workspaceOverride?: string | null,
+): Promise<DirEntry[]> => {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  const workspace = getWorkspace();
+  const workspace = resolveWorkspace(workspaceOverride);
   const matches: DirEntry[] = [];
   let frontier: string[] = [workspace];
   for (let depth = 0; frontier.length > 0 && depth <= MAX_SEARCH_DEPTH && matches.length < limit; depth++) {
@@ -124,9 +132,9 @@ export const searchFiles = async (query: string, limit = 60): Promise<DirEntry[]
           if (dirent.isDirectory()) {
             if (dirent.name.startsWith(".") || SKIP_SEARCH_DIRS.has(dirent.name)) continue;
             next.push(entryPath);
-            if (dirent.name.toLowerCase().includes(q)) matches.push(toEntry(dirent.name, entryPath, true));
+            if (dirent.name.toLowerCase().includes(q)) matches.push(toEntry(dirent.name, entryPath, true, workspace));
           } else if (dirent.isFile() && dirent.name.toLowerCase().includes(q)) {
-            matches.push(toEntry(dirent.name, entryPath, false));
+            matches.push(toEntry(dirent.name, entryPath, false, workspace));
           }
         }
       }),
@@ -144,4 +152,3 @@ export const searchFiles = async (query: string, limit = 60): Promise<DirEntry[]
     })
     .slice(0, limit);
 };
-
