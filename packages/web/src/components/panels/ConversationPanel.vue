@@ -88,7 +88,7 @@ watch(
         <component :is="preset.icon" />
         <span>{{ preset.label }}</span>
       </button>
-      <IconButton class="presets__add" label="Add prompt starter"><AddIcon /></IconButton>
+      <IconButton class="presets__add" label="Add prompt starter" disabled><AddIcon /></IconButton>
     </div>
   </section>
 </template>

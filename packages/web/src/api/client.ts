@@ -11,11 +11,9 @@ import type {
   PtyStartOptions,
   PtyStartResult,
   SearchResult,
-  SessionEntry,
   SessionInfo,
   VersionInfo,
 } from "@pichamber/shared";
-import { workspace } from "@/stores/workspace";
 
 const BASE = "/api";
 
@@ -45,10 +43,7 @@ export const createSession = (cwd: string) =>
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
-  }).then((r) => jsonOrThrow<{ sessionId: string }>(r));
-
-export const getEntries = (sessionId: string) =>
-  fetch(`${BASE}/sessions/${sessionId}`).then((r) => jsonOrThrow<SessionEntry[]>(r));
+  }).then((r) => jsonOrThrow<{ sessionId: string; cwd: string }>(r));
 
 export const deleteSession = (sessionId: string) =>
   fetch(`${BASE}/sessions/${sessionId}`, { method: "DELETE" }).then((r) =>
@@ -71,55 +66,52 @@ export const stopPty = (ptyId: string) =>
 
 // ─── Filesystem (files panel) ────────────────────────────────────────
 
-export const listDirectory = async (path?: string, workspaceRoot?: string) => {
+export const listDirectory = async (sessionId?: string | null, path?: string) => {
   const params = new URLSearchParams();
+  if (sessionId) params.set("sessionId", sessionId);
   if (path) params.set("path", path);
-  if (workspaceRoot) params.set("workspaceRoot", workspaceRoot);
   const qs = params.toString();
   const url = qs ? `${BASE}/fs/list?${qs}` : `${BASE}/fs/list`;
   const r = await fetch(url);
   return await jsonOrThrow<ListResult>(r);
 };
 
-export const searchFiles = async (query: string, workspaceRoot?: string) => {
+export const searchFiles = async (sessionId: string | null | undefined, query: string) => {
   const params = new URLSearchParams({ q: query });
-  if (workspaceRoot) params.set("workspaceRoot", workspaceRoot);
+  if (sessionId) params.set("sessionId", sessionId);
   const r = await fetch(`${BASE}/fs/search?${params}`);
   return await jsonOrThrow<SearchResult>(r);
 };
 
 // ─── Git (Git pane) ───────────────────────────────────────────────────
 
-/** Session workspace root, like FileTree: "~" means the server default. */
-export const gitCwd = () => (workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : undefined);
-
-export const getGitStatus = () =>
-  fetch(`${BASE}/git/status?cwd=${encodeURIComponent(gitCwd() ?? "")}`).then((r) =>
+export const getGitStatus = (sessionId?: string | null) =>
+  fetch(`${BASE}/git/status?sessionId=${encodeURIComponent(sessionId ?? "")}`).then((r) =>
     jsonOrThrow<GitStatus>(r),
   );
 
-export const getGitDiff = (path: string, staged: boolean) =>
+export const getGitDiff = (sessionId: string | null | undefined, path: string, staged: boolean) =>
   fetch(
-    `${BASE}/git/diff?cwd=${encodeURIComponent(gitCwd() ?? "")}&path=${encodeURIComponent(path)}&staged=${staged ? 1 : 0}`,
+    `${BASE}/git/diff?sessionId=${encodeURIComponent(sessionId ?? "")}&path=${encodeURIComponent(path)}&staged=${staged ? 1 : 0}`,
   ).then((r) => jsonOrThrow<GitDiffResult>(r));
 
-export const stageGitPaths = (paths?: string[]) =>
+export const stageGitPaths = (sessionId: string | null | undefined, paths?: string[]) =>
   fetch(`${BASE}/git/stage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd: gitCwd(), paths } satisfies GitStageRequest),
+    body: JSON.stringify({ sessionId: sessionId ?? undefined, paths } satisfies GitStageRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
 
-export const unstageGitPaths = (paths: string[]) =>
+export const unstageGitPaths = (sessionId: string | null | undefined, paths: string[]) =>
   fetch(`${BASE}/git/unstage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd: gitCwd(), paths } satisfies GitStageRequest),
+    body: JSON.stringify({ sessionId: sessionId ?? undefined, paths } satisfies GitStageRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
 
-export const commitGit = (message: string) =>
+export const commitGit = (sessionId: string | null | undefined, message: string) =>
   fetch(`${BASE}/git/commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd: gitCwd(), message } satisfies GitCommitRequest),
+    body: JSON.stringify({ sessionId: sessionId ?? undefined, message } satisfies GitCommitRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));

@@ -11,11 +11,11 @@
  * - Unresolvable / out-of-workspace / oversized references stay as-is
  *   so the model can decide what to do with them.
  */
-import { access, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { ImageContent } from "@earendil-works/pi-ai";
 
-import { isWithinWorkspace } from "./workspace";
+import { canonicalPathInWorkspace, canonicalWorkspace } from "./workspace";
 
 /** 单文件展开上限（原始字节）。 */
 const MAX_EXPAND_BYTES = 200 * 1024;
@@ -61,14 +61,13 @@ const escapeTag = (value: string): string =>
  */
 const expandRef = async (
   ref: string,
-  cwd: string,
+  workspace: string,
 ): Promise<{ replacement: string; images: ImageContent[] } | null> => {
-  const absolutePath = isAbsolute(ref) ? ref : resolve(cwd, ref);
-  // 路径解析后仍在 workspace 内才展开（home 目录即 workspace，天然覆盖
-  // 会话 cwd 之外的常见引用）。
-  if (!isWithinWorkspace(absolutePath)) return null;
   try {
-    await access(absolutePath);
+    const absolutePath = await canonicalPathInWorkspace(
+      isAbsolute(ref) ? ref : resolve(workspace, ref),
+      workspace,
+    );
     const stats = await stat(absolutePath);
     if (!stats.isFile() || stats.size === 0) return null;
     const buffer = await readFile(absolutePath);
@@ -109,13 +108,19 @@ export const expandFileRefs = async (text: string, cwd: string): Promise<{ text:
   const images: ImageContent[] = [];
   const matches = [...text.matchAll(FILE_REF_RE)];
   if (matches.length === 0) return { text, images };
+  let workspace: string;
+  try {
+    workspace = await canonicalWorkspace(cwd);
+  } catch {
+    return { text, images };
+  }
   const expanded: string[] = [];
   let cursor = 0;
   for (const match of matches) {
     // 裸形式剥掉句子结尾标点（"看图 @a.png。" → a.png），引号形式原样。
     const ref = match[3] ?? stripTrailingPunct(match[4] ?? "");
     if (!ref) continue;
-    const result = await expandRef(ref, cwd);
+    const result = await expandRef(ref, workspace);
     if (!result) continue;
     // 前缀字符（m[1]）保留，@token 整体替换为展开块。
     expanded.push(text.slice(cursor, match.index!));

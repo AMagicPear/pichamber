@@ -36,6 +36,7 @@
     "build": "bun --filter '*' build",
     "build:web": "bun --filter @pichamber/web build",
     "build:server": "bun --filter @pichamber/server build",
+    "test": "bun test",
     "type-check": "bun --filter '*' type-check",
     "lint": "oxlint . --fix",
     "package": "bun run build:web && rm -rf dist dist-web && bun build packages/server/src/index.ts --outfile dist/server.js --target bun --external bun-pty --external @earendil-works/pi-coding-agent && cp -r packages/web/dist dist-web"

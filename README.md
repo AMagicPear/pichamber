@@ -47,6 +47,9 @@ pichamber/
 | [`@pichamber/web`](./packages/web)       | Vue 3 (rc) · Vite · Pinia · Vue Router | Browser SPA |
 | [`@pichamber/server`](./packages/server) | Bun runtime                          | HTTP server |
 
+Remote-host and Pi runtime decisions are documented in
+[`docs/architecture.md`](./docs/architecture.md).
+
 ## Prerequisites
 
 - [Bun](https://bun.sh) ≥ 1.3
@@ -77,6 +80,9 @@ bun run build
 
 # Type-check all packages (uses project references)
 bun run type-check
+
+# Run focused logic tests
+bun run test
 
 # Lint everything with oxlint
 bun run lint

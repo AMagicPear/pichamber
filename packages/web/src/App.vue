@@ -9,27 +9,7 @@ import ContextPanel from "@/components/panels/ContextPanel.vue";
 import SessionHeader from "@/components/panels/SessionHeader.vue";
 import SessionSidebar from "@/components/panels/SessionSidebar.vue";
 import TerminalPanel from "@/components/panels/TerminalPanel.vue";
-import ConversationPanel from "./components/panels/ConversationPanel.vue";
-import { useRouter } from "vue-router";
-import { createSessionForCwd, sessionsError, updateWorkspace, workspace } from "./stores/workspace";
-import { toMessage } from "./api/client";
-
-const router = useRouter();
-
-router.afterEach(async (to) => {
-  if (to.name == "new-session") {
-    try {
-      const sessionId = await createSessionForCwd(workspace.cwd ?? "~");
-      workspace.sessionId = sessionId;
-      await router.replace({ name: "session", params: { sessionId } });
-    } catch (error) {
-      sessionsError.value = toMessage(error);
-    }
-  } else if (to.name == "session") {
-    const sessionId = to.params.sessionId;
-    if (typeof sessionId === "string") await updateWorkspace(sessionId);
-  }
-});
+import { RouterView } from "vue-router";
 </script>
 
 <template>
@@ -57,7 +37,7 @@ router.afterEach(async (to) => {
                   :maximized="ui.maximized.bottom" @update:size="ui.setSize('bottom', $event)"
                   @update:maximized="ui.setMaximized('bottom', $event)">
                   <template #default>
-                    <ConversationPanel />
+                    <RouterView />
                   </template>
                   <template #sidebar>
                     <TerminalPanel />

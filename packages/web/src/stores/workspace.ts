@@ -14,8 +14,7 @@ export const sessions = ref<SessionInfo[]>([]);
 export const sessionsLoading = ref(false);
 export const sessionsError = ref<string | null>(null);
 // sessionsLoadPromise 用于防止重复加载会话列表
-// 比如说，当直接访问后面带一个 session ID 的 URL 时，App.vue 会在 mounted 时调用 updateWorkspace，
-// 而 SessionSidebar.vue 也会在 mounted 时调用 loadSessions，这样就会导致重复加载会话列表
+// 直接访问 session URL 时路由守卫和侧栏都需要会话列表，复用同一请求。
 let sessionsLoadPromise: Promise<void> | null = null;
 
 // 这个功能是传入一个会话，获取会话的标题
@@ -53,12 +52,13 @@ export const loadSessions = () => {
   return sessionsLoadPromise;
 };
 
-const syncWorkspaceMetadata = (sessionId: string) => {
+const syncWorkspaceMetadata = (sessionId: string): boolean => {
   const session = sessions.value.find(({ id }) => id === sessionId);
-  if (!session || workspace.sessionId !== sessionId) return;
+  if (!session || workspace.sessionId !== sessionId) return false;
   workspace.sessionName = sessionTitle(session);
   workspace.folderName = session.cwd ? pathBasename(session.cwd) : null;
   workspace.cwd = session.cwd || null;
+  return true;
 };
 
 let sessionsRefreshPromise: Promise<void> | null = null;
@@ -84,17 +84,23 @@ export const refreshSessions = () => {
 };
 
 export const createSessionForCwd = async (cwd: string) => {
-  const { sessionId } = await createSession(cwd);
+  const { sessionId, cwd: resolvedCwd } = await createSession(cwd);
   workspace.sessionId = sessionId;
-  workspace.cwd = cwd;
-  workspace.folderName = cwd ? pathBasename(cwd) : null;
+  workspace.cwd = resolvedCwd;
+  workspace.folderName = pathBasename(resolvedCwd);
   workspace.sessionName = "New Session";
   return sessionId;
 };
 
 export const updateWorkspace = async (sessionId: string) => {
+  // A freshly created empty session is active in memory before Pi persists it,
+  // so it may not appear in listAll() yet. Its local metadata is authoritative.
+  if (workspace.sessionId === sessionId && workspace.cwd !== null) return true;
   workspace.sessionId = sessionId;
   await loadSessions();
-  if (workspace.sessionId !== sessionId) return;
-  syncWorkspaceMetadata(sessionId);
+  if (workspace.sessionId !== sessionId) return false;
+  if (sessionsError.value) return true;
+  if (syncWorkspaceMetadata(sessionId)) return true;
+  await refreshSessions();
+  return sessionsError.value ? true : syncWorkspaceMetadata(sessionId);
 };

@@ -35,13 +35,14 @@ interface NavItem {
   key: string;
   label: string;
   icon: unknown;
+  enabled?: boolean;
 }
 
 const navItems: NavItem[] = [
   { key: "appearance", label: "Appearance", icon: PaletteIcon },
   { key: "chat", label: "Chat", icon: ChatAi3Icon },
   { key: "notifications", label: "Notifications", icon: Notification3Icon },
-  { key: "sessions", label: "Sessions", icon: ChatHistoryIcon },
+  { key: "sessions", label: "Sessions", icon: ChatHistoryIcon, enabled: true },
   { key: "shortcuts", label: "Shortcuts", icon: CommandIcon },
   { key: "git", label: "Git", icon: GitBranchIcon },
   { key: "magic-prompts", label: "Magic Prompts", icon: AiGenerate2Icon },
@@ -59,7 +60,7 @@ const navItems: NavItem[] = [
   { key: "skills-catalog", label: "Skills Catalog", icon: BookIcon },
 ];
 
-const activeKey = ref<string>("home");
+const activeKey = ref<string>("sessions");
 const searchQuery = ref("");
 const settingsSize = ref(216);
 
@@ -69,25 +70,7 @@ const visibleNavItems = computed(() =>
   ),
 );
 
-interface HomeCard {
-  key: string;
-  title: string;
-  description: string;
-}
-
-const homeCards: HomeCard[] = [
-  { key: "providers", title: "Providers", description: "Connect models + credentials" },
-  { key: "agents", title: "Agents", description: "Prompts, tools, permissions" },
-  { key: "skills-catalog", title: "Skills Catalog", description: "Install skills from catalogs" },
-  { key: "mcp", title: "MCP", description: "Configure MCP servers + connections" },
-  { key: "usage", title: "Usage", description: "Quota + spend visibility" },
-];
-
 const selectItem = (key: string) => {
-  activeKey.value = key;
-};
-
-const openHomeCard = (key: string) => {
   activeKey.value = key;
 };
 </script>
@@ -118,7 +101,7 @@ const openHomeCard = (key: string) => {
             :key="item.key"
             :class="{ 'is-active': activeKey === item.key }"
           >
-            <button type="button" @click="selectItem(item.key)">
+            <button type="button" :disabled="!item.enabled" @click="selectItem(item.key)">
               <component :is="item.icon" />
               <span>{{ item.label }}</span>
             </button>
@@ -139,39 +122,18 @@ const openHomeCard = (key: string) => {
         </div>
 
         <div class="settings-page__body">
-          <template v-if="activeKey === 'sessions'">
-            <header class="settings-page__heading">
-              <h1>Sessions</h1>
-              <p>Control which sessions appear in the sidebar.</p>
-            </header>
-
-            <label class="settings-option">
-              <input v-model="settings.hideTemporarySessions" type="checkbox" />
-              <span>
-                <strong>Hide temporary sessions</strong>
-                <small>Hide sessions under /tmp and macOS temporary folders.</small>
-              </span>
-            </label>
-          </template>
-          <template v-else>
           <header class="settings-page__heading">
-            <h1>Settings</h1>
-            <p>Jump to common pages.</p>
+            <h1>Sessions</h1>
+            <p>Control which sessions appear in the sidebar.</p>
           </header>
 
-          <div class="settings-page__cards">
-            <button
-              v-for="card in homeCards"
-              :key="card.key"
-              type="button"
-              class="settings-card"
-              @click="openHomeCard(card.key)"
-            >
-              <span class="settings-card__title">{{ card.title }}</span>
-              <span class="settings-card__description">{{ card.description }}</span>
-            </button>
-          </div>
-          </template>
+          <label class="settings-option">
+            <input v-model="settings.hideTemporarySessions" type="checkbox" />
+            <span>
+              <strong>Hide temporary sessions</strong>
+              <small>Hide sessions under /tmp and macOS temporary folders.</small>
+            </span>
+          </label>
         </div>
       </section>
     </template>
@@ -250,8 +212,12 @@ const openHomeCard = (key: string) => {
   flex-shrink: 0;
   color: #777;
 }
-.settings-nav__list button:hover {
+.settings-nav__list button:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.04);
+}
+.settings-nav__list button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 .settings-nav__list .is-active button {
   background: rgba(0, 0, 0, 0.06);
@@ -328,35 +294,5 @@ const openHomeCard = (key: string) => {
   margin: 0;
   color: #777;
   font-size: 14px;
-}
-.settings-page__cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 720px;
-}
-.settings-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 14px 16px;
-  border: 1px solid #eeeae1;
-  border-radius: 10px;
-  background: #fff;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color 120ms ease;
-}
-.settings-card:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-.settings-card__title {
-  font-size: 14px;
-  font-weight: 600;
-}
-.settings-card__description {
-  color: #888;
-  font-size: 12px;
 }
 </style>

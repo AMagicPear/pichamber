@@ -190,24 +190,24 @@ onMounted(async () => {
   <aside class="sidebar">
     <div class="sidebar__topbar">
       <div class="sidebar__search-group">
-        <IconButton class="search-primary" label="Search"><SearchIcon /></IconButton>
-        <IconButton label="Search options"><ArrowDownSIcon /></IconButton>
+        <IconButton class="search-primary" label="Search" disabled><SearchIcon /></IconButton>
+        <IconButton label="Search options" disabled><ArrowDownSIcon /></IconButton>
       </div>
     </div>
 
     <div class="sidebar__actions" aria-label="Workspace actions">
       <div>
-        <IconButton label="Add project"><FolderAddIcon /></IconButton>
+        <IconButton label="Add project" disabled><FolderAddIcon /></IconButton>
         <IconButton label="New session" @click="startProjectSession(workspace.cwd ?? '~')">
           <ChatNewIcon />
         </IconButton>
-        <IconButton label="New multi-run"><ArrowsMerge /></IconButton>
-        <IconButton label="Scheduled tasks"><CalendarScheduleIcon /></IconButton>
+        <IconButton label="New multi-run" disabled><ArrowsMerge /></IconButton>
+        <IconButton label="Scheduled tasks" disabled><CalendarScheduleIcon /></IconButton>
       </div>
       <div>
-        <IconButton label="Search sessions"><SearchIcon /></IconButton>
-        <IconButton label="Select sessions"><CheckboxMultipleIcon /></IconButton>
-        <IconButton label="Sort projects"><SortDescIcon /></IconButton>
+        <IconButton label="Search sessions" disabled><SearchIcon /></IconButton>
+        <IconButton label="Select sessions" disabled><CheckboxMultipleIcon /></IconButton>
+        <IconButton label="Sort projects" disabled><SortDescIcon /></IconButton>
       </div>
     </div>
 
@@ -302,7 +302,7 @@ onMounted(async () => {
       <IconButton size="large" label="Settings" @click="ui.settingsOpen = true">
         <SettingsIcon />
       </IconButton>
-      <IconButton size="large" label="Keyboard shortcuts"><QuestionIcon /></IconButton>
+      <IconButton size="large" label="Keyboard shortcuts" disabled><QuestionIcon /></IconButton>
       <IconButton size="large" label="About" @click="aboutOpen = true"><InformationIcon /></IconButton>
     </footer>
 

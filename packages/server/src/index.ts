@@ -2,13 +2,12 @@ import type { ServerWebSocket } from "bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
-import { listDirectory, searchFiles, WorkspaceError } from "./fs";
+import { listDirectory, searchFiles } from "./fs";
 import { commit, getDiff, getStatus, stagePaths, unstagePaths } from "./git";
 import {
   createSessionWithCwd,
   deleteSession,
-  getConversationEntries,
-  getSession,
+  getSessionCwd,
   listAllSessions,
 } from "./session";
 import {
@@ -23,6 +22,7 @@ import {
 } from "./pty";
 import { closeSessionSockets, sessionWsHandler } from "./ws";
 import { toMessage } from "./error";
+import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./workspace";
 
 // ─── WebSocket protocol multiplexing ───────────────────────────────────
 //
@@ -68,6 +68,13 @@ const fsErrorResponse = (err: unknown): Response => {
   const message = toMessage(err);
   console.error("Filesystem operation failed:", err);
   return Response.json({ error: message }, { status: 500 });
+};
+
+const requestCwd = async (sessionId?: string | null) => {
+  if (!sessionId) return getWorkspace();
+  const cwd = await getSessionCwd(sessionId);
+  if (!cwd) throw new WorkspaceError("Session not found", 404);
+  return canonicalWorkspace(cwd);
 };
 
 const ptyWsHandler: WsHandler = {
@@ -116,6 +123,7 @@ const ptyWsHandler: WsHandler = {
 // ─── HTTP + WebSocket server ───────────────────────────────────────────
 
 Bun.serve({
+  hostname: "127.0.0.1",
   port: 3000,
   routes: {
     "/api/health": {
@@ -125,23 +133,30 @@ Bun.serve({
       GET: () => Response.json({ pi: PI_VERSION }),
     },
     "/api/sessions": {
-      GET: async () => Response.json(await listAllSessions()),
+      GET: async () => {
+        const sessions = await listAllSessions();
+        return Response.json(
+          await Promise.all(
+            sessions.map(async (session) => ({
+              ...session,
+              cwd: await canonicalWorkspace(session.cwd).catch(() => session.cwd),
+            })),
+          ),
+        );
+      },
       POST: async (req) => {
         const { cwd } = (await req.json()) as { cwd: string };
-        const session = await createSessionWithCwd(cwd);
+        const workspace = await canonicalWorkspace(cwd);
+        const session = await createSessionWithCwd(workspace);
         return Response.json({
           sessionId: session.sessionId,
+          cwd: workspace,
           sessionFile: session.sessionFile,
           tools: session.getActiveToolNames(),
         });
       },
     },
     "/api/sessions/:id": {
-      GET: async (req) => {
-        const session = await getSession(req.params.id);
-        if (!session) return Response.json({ error: "session not found" }, { status: 404 });
-        return Response.json(getConversationEntries(session));
-      },
       DELETE: async (req) => {
         closeSessionSockets(req.params.id);
         const result = await deleteSession(req.params.id);
@@ -156,18 +171,17 @@ Bun.serve({
     "/api/pty/start": {
       POST: async (req) => {
         const body = (await req.json().catch(() => ({}))) as {
-          cwd?: string;
+          sessionId?: string;
           cols?: number;
           rows?: number;
-          shell?: string;
         };
         try {
+          const cwd = await requestCwd(body.sessionId);
           return Response.json(
             startPty({
-              cwd: body.cwd,
+              cwd,
               cols: body.cols ?? 80,
               rows: body.rows ?? 24,
-              shell: body.shell,
             }),
           );
         } catch (err) {
@@ -188,8 +202,9 @@ Bun.serve({
     // workspace-relative. Not a git repository → 400 with git's message.
     "/api/git/status": {
       GET: async (req) => {
-        const cwd = new URL(req.url).searchParams.get("cwd") ?? undefined;
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
         try {
+          const cwd = await requestCwd(sessionId);
           return Response.json(await getStatus(cwd));
         } catch (err) {
           return fsErrorResponse(err);
@@ -199,10 +214,11 @@ Bun.serve({
     "/api/git/diff": {
       GET: async (req) => {
         const url = new URL(req.url);
-        const cwd = url.searchParams.get("cwd") ?? undefined;
+        const sessionId = url.searchParams.get("sessionId");
         const path = url.searchParams.get("path") ?? "";
         const staged = url.searchParams.get("staged") === "1";
         try {
+          const cwd = await requestCwd(sessionId);
           return Response.json({ diff: await getDiff(cwd, path, staged) });
         } catch (err) {
           return fsErrorResponse(err);
@@ -211,8 +227,9 @@ Bun.serve({
     },
     "/api/git/stage": {
       POST: async (req) => {
-        const { cwd, paths } = (await req.json().catch(() => ({}))) as { cwd?: string; paths?: string[] };
+        const { sessionId, paths } = (await req.json().catch(() => ({}))) as { sessionId?: string; paths?: string[] };
         try {
+          const cwd = await requestCwd(sessionId);
           await stagePaths(cwd, paths);
           return Response.json({ ok: true });
         } catch (err) {
@@ -222,8 +239,9 @@ Bun.serve({
     },
     "/api/git/unstage": {
       POST: async (req) => {
-        const { cwd, paths } = (await req.json().catch(() => ({}))) as { cwd?: string; paths?: string[] };
+        const { sessionId, paths } = (await req.json().catch(() => ({}))) as { sessionId?: string; paths?: string[] };
         try {
+          const cwd = await requestCwd(sessionId);
           await unstagePaths(cwd, paths ?? []);
           return Response.json({ ok: true });
         } catch (err) {
@@ -233,8 +251,9 @@ Bun.serve({
     },
     "/api/git/commit": {
       POST: async (req) => {
-        const { cwd, message } = (await req.json().catch(() => ({}))) as { cwd?: string; message?: string };
+        const { sessionId, message } = (await req.json().catch(() => ({}))) as { sessionId?: string; message?: string };
         try {
+          const cwd = await requestCwd(sessionId);
           await commit(cwd, message ?? "");
           return Response.json({ ok: true });
         } catch (err) {
@@ -244,20 +263,15 @@ Bun.serve({
     },
 
     // ── Filesystem (files panel) ─────────────────────────────────
-    // Paths are absolute, or relative to the active workspace. The
-    // active workspace defaults to the user's home directory but the
-    // client passes the session cwd as `workspaceRoot` so the file tree
-    // tracks wherever the user opened the session (a Windows project on
-    // a different drive than the home directory is the motivating case).
-    // Anything outside that workspace returns 400 — outside-workspace
-    // grants are intentionally deferred until workspace switching lands.
+    // The server resolves the active workspace from sessionId. Paths may be
+    // absolute or workspace-relative; canonical paths outside it are rejected.
     "/api/fs/list": {
       GET: async (req) => {
         const url = new URL(req.url);
         const path = url.searchParams.get("path") ?? undefined;
-        const workspaceRoot = url.searchParams.get("workspaceRoot") ?? undefined;
+        const sessionId = url.searchParams.get("sessionId");
         try {
-          return Response.json(await listDirectory(path, workspaceRoot));
+          return Response.json(await listDirectory(path, await requestCwd(sessionId)));
         } catch (err) {
           return fsErrorResponse(err);
         }
@@ -267,8 +281,12 @@ Bun.serve({
       GET: async (req) => {
         const url = new URL(req.url);
         const q = url.searchParams.get("q") ?? "";
-        const workspaceRoot = url.searchParams.get("workspaceRoot") ?? undefined;
-        return Response.json({ entries: await searchFiles(q, 60, workspaceRoot) });
+        const sessionId = url.searchParams.get("sessionId");
+        try {
+          return Response.json({ entries: await searchFiles(q, 60, await requestCwd(sessionId)) });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
       },
     },
   },

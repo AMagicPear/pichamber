@@ -13,43 +13,26 @@
  *   used for display. Empty for entries outside the workspace.
  * - Directories-first sort, then case-insensitive name.
  */
-import { readdir, realpath, stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { relative, resolve } from "node:path";
 import type { DirEntry, ListResult } from "@pichamber/shared";
-import { stripParent } from "@pichamber/shared";
 
-import { isWithinWorkspace, resolveInWorkspace, resolveWorkspace, shortPath } from "./workspace";
-
-export class WorkspaceError extends Error {
-  readonly status: number;
-  constructor(message: string, status = 400) {
-    super(message);
-    this.status = status;
-  }
-}
+import { canonicalPathInWorkspace, canonicalWorkspace, shortPath } from "./workspace";
 
 /**
  * Reject any path that escapes the workspace, including symlink targets.
  */
 const ensureWithinWorkspace = async (input: string, workspace: string): Promise<string> => {
-  const resolved = resolveInWorkspace(input, workspace);
-  const checkedPath = await realpath(resolved);
-  if (!isWithinWorkspace(checkedPath, workspace)) {
-    throw new WorkspaceError("Path is outside of the active workspace");
-  }
-  return checkedPath;
+  return canonicalPathInWorkspace(input, workspace);
 };
 
-const toRelative = (path: string, workspace: string): string => {
-  const relative = stripParent(workspace, path);
-  return relative ?? "";
-};
+const toRelative = (path: string, workspace: string): string => relative(workspace, path);
 
 export const listDirectory = async (
   input: string | undefined,
-  workspaceOverride?: string | null,
+  workspacePath?: string | null,
 ): Promise<ListResult> => {
-  const workspace = resolveWorkspace(workspaceOverride);
+  const workspace = await canonicalWorkspace(workspacePath);
   const target =
     input === undefined || input === "" ? workspace : await ensureWithinWorkspace(input, workspace);
   const dirents = await readdir(target, { withFileTypes: true });
@@ -107,11 +90,11 @@ const toEntry = (name: string, path: string, isDirectory: boolean, workspace: st
 export const searchFiles = async (
   query: string,
   limit = 60,
-  workspaceOverride?: string | null,
+  workspacePath?: string | null,
 ): Promise<DirEntry[]> => {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  const workspace = resolveWorkspace(workspaceOverride);
+  const workspace = await canonicalWorkspace(workspacePath);
   const matches: DirEntry[] = [];
   let frontier: string[] = [workspace];
   for (let depth = 0; frontier.length > 0 && depth <= MAX_SEARCH_DEPTH && matches.length < limit; depth++) {

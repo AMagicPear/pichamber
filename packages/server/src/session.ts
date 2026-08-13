@@ -59,6 +59,13 @@ export const getSession = async (id: string): Promise<AgentSession | null> => {
   return session;
 };
 
+export const getSessionCwd = async (id: string): Promise<string | null> => {
+  const active = activeSessions.get(id);
+  if (active) return active.sessionManager.getCwd();
+  const sessionFile = await getSessionFileWithId(id);
+  return sessionFile ? SessionManager.open(sessionFile).getCwd() : null;
+};
+
 // Match Pi's interactive transcript: render the active context path, not its full journal.
 export const getConversationEntries = (session: AgentSession) =>
   session.sessionManager.buildContextEntries();

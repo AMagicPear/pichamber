@@ -13,14 +13,39 @@
 const SLASH = 47; // "/"
 const BACKSLASH = 92; // "\"
 
-/** Trim trailing separators from `path`. Returns the original if there
- *  are none. Mirrors how `path.basename` / `path.dirname` treat trailing
- *  slashes as cosmetic. */
+const isSeparator = (code: number) => code === SLASH || code === BACKSLASH;
+
+const nextSeparatorIndex = (path: string, start: number) => {
+  for (let i = start; i < path.length; i++) {
+    if (isSeparator(path.charCodeAt(i))) return i;
+  }
+  return -1;
+};
+
+const rootLength = (path: string): number => {
+  if (path.length === 0) return 0;
+  if (
+    path.length >= 2 &&
+    isSeparator(path.charCodeAt(0)) &&
+    isSeparator(path.charCodeAt(1))
+  ) {
+    const serverEnd = nextSeparatorIndex(path, 2);
+    if (serverEnd < 0) return path.length;
+    const shareEnd = nextSeparatorIndex(path, serverEnd + 1);
+    return shareEnd < 0 ? path.length : shareEnd + 1;
+  }
+  if (isSeparator(path.charCodeAt(0))) return 1;
+  if (path.length >= 3 && path[1] === ":" && isSeparator(path.charCodeAt(2))) return 3;
+  return 0;
+};
+
+/** Trim cosmetic trailing separators without destroying `/` or `C:\`. */
 const trimTrailing = (path: string): string => {
   let end = path.length;
-  while (end > 0) {
+  const root = rootLength(path);
+  while (end > root) {
     const code = path.charCodeAt(end - 1);
-    if (code !== SLASH && code !== BACKSLASH) break;
+    if (!isSeparator(code)) break;
     end -= 1;
   }
   return end === path.length ? path : path.slice(0, end);
@@ -33,7 +58,7 @@ export const lastSeparatorIndex = (path: string): number => {
   const trimmed = trimTrailing(path);
   for (let i = trimmed.length - 1; i >= 0; i--) {
     const code = trimmed.charCodeAt(i);
-    if (code === SLASH || code === BACKSLASH) return i;
+    if (isSeparator(code)) return i;
   }
   return -1;
 };
@@ -43,6 +68,7 @@ export const lastSeparatorIndex = (path: string): number => {
 export const pathBasename = (path: string): string => {
   const trimmed = trimTrailing(path);
   if (trimmed.length === 0) return path;
+  if (trimmed.length === rootLength(trimmed)) return trimmed;
   const i = lastSeparatorIndex(trimmed);
   return i < 0 ? trimmed : trimmed.slice(i + 1);
 };
@@ -51,37 +77,22 @@ export const pathBasename = (path: string): string => {
  *  Mirrors `path.dirname`: trailing separators are cosmetic and ignored. */
 export const pathDirname = (path: string): string => {
   const trimmed = trimTrailing(path);
-  if (trimmed.length === 0) return "";
+  const root = rootLength(trimmed);
+  if (trimmed.length <= root) return trimmed;
   const i = lastSeparatorIndex(trimmed);
-  return i < 0 ? "" : trimmed.slice(0, i);
+  if (i < 0) return "";
+  return trimmed.slice(0, Math.max(i, root));
 };
 
-/** True iff `child` equals `parent` or lives underneath it. */
-export const isWithinPath = (parent: string, child: string): boolean => {
-  if (child === parent) return true;
-  // The parent/child boundary must be a real separator; without this,
-  // `/foo/barbaz` would erroneously match `/foo/bar`.
-  const len = parent.length;
-  if (child.length > len) {
-    if (child.startsWith(parent) && (child.charCodeAt(len) === SLASH || child.charCodeAt(len) === BACKSLASH)) {
-      return true;
-    }
-  }
-  return false;
-};
-
-/** Strip `parent` from the front of `child` if `child` is rooted there.
- *  Returns "" when `child === parent`, the bare remainder otherwise. */
+/** UI-only prefix stripping for paths received from the same server. Security
+ *  checks belong on the server and use `node:path.relative` plus `realpath`. */
 export const stripParent = (parent: string, child: string): string | undefined => {
-  if (child === parent) return "";
-  const len = parent.length;
-  if (child.length > len && child.startsWith(parent)) {
-    const sep = child.charCodeAt(len);
-    if (sep === SLASH || sep === BACKSLASH) return child.slice(len + 1);
-  }
-  return undefined;
+  const normalizedParent = trimTrailing(parent);
+  if (child === normalizedParent) return "";
+  if (!child.startsWith(normalizedParent)) return undefined;
+  const root = rootLength(normalizedParent);
+  if (normalizedParent.length === root) return child.slice(root);
+  return isSeparator(child.charCodeAt(normalizedParent.length))
+    ? child.slice(normalizedParent.length + 1)
+    : undefined;
 };
-
-/** Strip any trailing separator (`/` or `\`). Returns "" only for empty input. */
-export const trimTrailingSeparators = (path: string): string =>
-  path.replace(/[\\/]+$/, "");

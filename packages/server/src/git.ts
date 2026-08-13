@@ -11,7 +11,7 @@
  */
 import type { GitChange, GitStatus } from "@pichamber/shared";
 import { getWorkspace } from "./workspace";
-import { WorkspaceError } from "./fs";
+import { WorkspaceError } from "./workspace";
 
 type GitResult = { stdout: string; stderr: string; code: number };
 
@@ -55,27 +55,27 @@ const codeToStatus = (code: string): GitChange["status"] => {
   }
 };
 
-/**
- * Parse `git status --porcelain=v1 -b`. First line is `## <branch>…`,
- * remaining lines are two-character status codes + path.
- */
+/** Parse NUL-delimited porcelain output so paths are never quoted or escaped. */
 export const parseStatus = (stdout: string): GitStatus => {
-  const lines = stdout.split("\n").filter(Boolean);
+  const records = stdout.split("\0");
   let branch: string | null = null;
   const changes: GitChange[] = [];
 
-  for (const line of lines) {
-    if (line.startsWith("## ")) {
-      branch = line.slice(3).split("...")[0] || null;
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+    if (!record) continue;
+    if (record.startsWith("## ")) {
+      const head = record.slice(3).split("...")[0] ?? "";
+      branch = head.startsWith("HEAD ")
+        ? null
+        : head.replace(/^No commits yet on /, "").split(" ")[0] || null;
       continue;
     }
-    if (line.length < 4) continue;
+    if (record.length < 4) continue;
 
-    const [index, worktree] = [line[0], line[1]];
-    let path = line.slice(3);
-    // Renames/copies are `old -> new`; we surface the destination path.
-    const arrow = path.indexOf(" -> ");
-    if (arrow !== -1) path = path.slice(arrow + 4);
+    const [index, worktree] = [record[0], record[1]];
+    const path = record.slice(3);
+    if (index === "R" || index === "C" || worktree === "R" || worktree === "C") i += 1;
 
     if (index === "?" && worktree === "?") {
       changes.push({ path, status: "untracked", staged: false });
@@ -94,7 +94,7 @@ export const parseStatus = (stdout: string): GitStatus => {
 };
 
 export const getStatus = async (cwd?: string): Promise<GitStatus> => {
-  const result = await runGit(cwd, ["status", "--porcelain=v1", "-b"]);
+  const result = await runGit(cwd, ["status", "--porcelain=v1", "-z", "-b"]);
   assertOk(result);
   return parseStatus(result.stdout);
 };

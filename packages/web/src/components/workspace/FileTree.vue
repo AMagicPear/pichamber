@@ -26,7 +26,7 @@ const FileTreeNode = defineComponent({
       children.value = [];
       error.value = null;
       try {
-        children.value = (await listDirectory(props.entry.path)).entries;
+        children.value = (await listDirectory(workspace.sessionId, props.entry.path)).entries;
       } catch (err) {
         children.value = null;
         error.value = toMessage(err);
@@ -84,12 +84,7 @@ export default defineComponent({
       error.value = null;
       entries.value = [];
       try {
-        // The session cwd (when set) doubles as both the directory to list
-        // and the workspace root the server uses for containment/display —
-        // so a project on a different drive than the home directory still
-        // loads on Windows.
-        const workspaceRoot = workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : undefined;
-        const result = await listDirectory(workspaceRoot, workspaceRoot);
+        const result = await listDirectory(workspace.sessionId);
         if (currentRequest !== requestVersion) return;
         entries.value = result.entries;
       } catch (err) {
@@ -139,10 +134,10 @@ export default defineComponent({
             )}
           </div>
           <div class="file-tree__actions">
-            <IconButton size="standard" label="New file">
+            <IconButton size="standard" label="New file" disabled>
               <FileAddIcon />
             </IconButton>
-            <IconButton size="standard" label="New folder">
+            <IconButton size="standard" label="New folder" disabled>
               <FolderAddIcon />
             </IconButton>
             <IconButton size="standard" label="Reload" onClick={load}>

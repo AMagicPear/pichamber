@@ -31,7 +31,7 @@ const load = async () => {
   loading.value = true;
   error.value = null;
   try {
-    status.value = await getGitStatus();
+    status.value = await getGitStatus(workspace.sessionId);
     // Keep the selection in sync: the picked file may have changed/staged
     // state after a git operation.
     if (selected.value) {
@@ -61,7 +61,7 @@ const select = async (change: GitChange) => {
     if (change.status === "untracked") {
       diff.value = ""; // git has nothing to diff against.
     } else {
-      diff.value = (await getGitDiff(change.path, change.staged)).diff;
+      diff.value = (await getGitDiff(workspace.sessionId, change.path, change.staged)).diff;
     }
   } catch (err) {
     diffError.value = toMessage(err);
@@ -73,8 +73,8 @@ const select = async (change: GitChange) => {
 const toggleStaged = async (change: GitChange) => {
   error.value = null;
   try {
-    if (change.staged) await unstageGitPaths([change.path]);
-    else await stageGitPaths([change.path]);
+    if (change.staged) await unstageGitPaths(workspace.sessionId, [change.path]);
+    else await stageGitPaths(workspace.sessionId, [change.path]);
     await load();
   } catch (err) {
     error.value = toMessage(err);
@@ -87,7 +87,7 @@ const commit = async () => {
   committing.value = true;
   error.value = null;
   try {
-    await commitGit(message);
+    await commitGit(workspace.sessionId, message);
     commitMsg.value = "";
     await load();
   } catch (err) {

@@ -3,7 +3,7 @@
 import { statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { spawn, type IDisposable, type IPty } from "bun-pty";
-import type { PtyStartOptions, PtyStartResult } from "@pichamber/shared";
+import type { PtyStartResult } from "@pichamber/shared";
 
 import { getWorkspace, shortPath } from "./workspace";
 
@@ -73,9 +73,9 @@ export const hasPty = (ptyId: string): boolean => {
   return handles.has(ptyId);
 };
 
-export const startPty = (options: PtyStartOptions): PtyStartResult => {
+export const startPty = (options: { cwd?: string; cols: number; rows: number }): PtyStartResult => {
   const cwd = resolveCwd(options.cwd);
-  const shell = options.shell ?? getDefaultShell();
+  const shell = getDefaultShell();
   const id = crypto.randomUUID();
   let handle: PtyHandle | undefined;
 

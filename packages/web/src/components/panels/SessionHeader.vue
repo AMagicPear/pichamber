@@ -24,7 +24,7 @@ import { workspace } from "@/stores/workspace";
     </div>
 
     <nav class="session-header__tools" aria-label="Session tools">
-      <IconButton label="Projects"><StackIcon /></IconButton>
+      <IconButton label="Projects" disabled><StackIcon /></IconButton>
       <IconButton
         label="Toggle terminal panel"
         :pressed="ui.panels.bottom.open"
@@ -32,7 +32,7 @@ import { workspace } from "@/stores/workspace";
       >
         <TerminalBoxIcon />
       </IconButton>
-      <IconButton label="Web"><GlobalIcon /></IconButton>
+      <IconButton label="Web" disabled><GlobalIcon /></IconButton>
       <IconButton
         label="Toggle right sidebar"
         :pressed="ui.panels.right.open"
@@ -40,7 +40,7 @@ import { workspace } from "@/stores/workspace";
       >
         <LayoutRightIcon />
       </IconButton>
-      <IconButton label="Account"><AiAgentIcon class="account-icon" /></IconButton>
+      <IconButton label="Account" disabled><AiAgentIcon class="account-icon" /></IconButton>
     </nav>
   </header>
 </template>

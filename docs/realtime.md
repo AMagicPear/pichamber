@@ -449,7 +449,7 @@ function send(text: string) {
 SDK 的 `SessionManager._persist()` 要等到 **首条 assistant 消息** 才会写 JSONL 文件:
 - POST → 创建内存 session(分配了 `sessionFile` 路径,**文件不存在**)
 - 收到 user 消息 + assistant 响应后才落盘
-- 所以 “刚 POST 还没 prompt”的会话 → dispose 后 GET /api/sessions/:id 会 404
+- 所以 “刚 POST 还没 prompt”的会话在 dispose 后不会出现在 session 列表中
 
 **不为之加保质逻辑** — 这不是 bug,是 pi 的设计。“没发过消息的会话”= 不存在。前端如果意外丢失 sessionId,重新 POST 即可。
 
@@ -469,7 +469,7 @@ SDK 的 `SessionManager._persist()` 要等到 **首条 assistant 消息** 才会
 
 - `prompt-ack` 回执:SDK 事件流已包含 `agent_end` + error,多一条协议是冗余
 - `abort` / `steer` 命令:等真有需求再加
-- ws reconnect 重发历史:需要时前端调 GET /api/sessions/:id
+- ws reconnect 重发历史:首帧 snapshot 携带当前权威 item 列表
 
 ---
 

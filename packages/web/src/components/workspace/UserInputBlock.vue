@@ -243,8 +243,8 @@ const confirmLink = () => {
             </button>
           </MenuPanel>
         </div>
-        <IconButton size="compact" label="Expand composer"><FullscreenIcon /></IconButton>
-        <IconButton size="compact" label="Goal mode"><TargetIcon /></IconButton>
+        <IconButton size="compact" label="Expand composer" disabled><FullscreenIcon /></IconButton>
+        <IconButton size="compact" label="Goal mode" disabled><TargetIcon /></IconButton>
       </div>
       <div class="composer__footer-trailing">
         <div class="composer__models">
@@ -259,7 +259,7 @@ const confirmLink = () => {
             @select="emit('selectThinkingLevel', $event)"
           />
         </div>
-        <IconButton size="compact" label="Dictation"><MicIcon /></IconButton>
+        <IconButton size="compact" label="Dictation" disabled><MicIcon /></IconButton>
         <IconButton size="compact" label="Send" :disabled="!canSend" @click="emit('send')">
           <SendIcon />
         </IconButton>

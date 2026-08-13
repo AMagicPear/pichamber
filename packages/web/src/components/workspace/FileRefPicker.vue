@@ -22,8 +22,8 @@ const emit = defineEmits<{
 /** 搜索词受外部（textarea 的 @ 前缀）联动，也可在面板里直接编辑。 */
 const query = defineModel<string>("query", { default: "" });
 
-/** Workspace root the picker browses from (the session cwd, like the
- *  files panel); null falls back to the server's default workspace. */
+/** Workspace root used only for display and relative references. The server
+ *  resolves the authoritative root from `workspace.sessionId`. */
 const root = computed(() => (workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : null));
 
 /** Current directory as an absolute path; null = the workspace root. */
@@ -43,7 +43,7 @@ const loadDir = async (dir: string | null) => {
   error.value = null;
   entries.value = [];
   try {
-    const result = await listDirectory(dir ?? root.value ?? undefined, root.value ?? undefined);
+    const result = await listDirectory(workspace.sessionId, dir ?? undefined);
     if (current !== requestVersion) return;
     entries.value = result.entries;
   } catch (err) {
@@ -58,7 +58,7 @@ const runSearch = async (q: string) => {
   searching.value = true;
   error.value = null;
   try {
-    const result = await searchFiles(q, root.value ?? undefined);
+    const result = await searchFiles(workspace.sessionId, q);
     if (current !== requestVersion) return;
     entries.value = result.entries;
   } catch (err) {

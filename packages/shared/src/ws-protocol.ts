@@ -162,12 +162,10 @@ export type ClientMessage =
 
 /** Request body for POST /api/pty/start. */
 export type PtyStartOptions = {
-  /** Working directory for the spawned shell. Defaults to the user's home. */
-  cwd?: string;
+  /** Session whose working directory owns this terminal. */
+  sessionId?: string;
   cols: number;
   rows: number;
-  /** Override the shell binary. Defaults to $SHELL or platform default. */
-  shell?: string;
 };
 
 /** Response body for POST /api/pty/start. */
@@ -236,15 +234,13 @@ export type GitDiffResult = {
 
 /** Request body for POST /api/git/stage and /api/git/unstage. */
 export type GitStageRequest = {
-  /** Session workspace root; omit to use the server default. */
-  cwd?: string;
+  sessionId?: string;
   /** Paths to stage/unstage. Omit for stage to add everything. */
   paths?: string[];
 };
 
 /** Request body for POST /api/git/commit. */
 export type GitCommitRequest = {
-  /** Session workspace root; omit to use the server default. */
-  cwd?: string;
+  sessionId?: string;
   message: string;
 };

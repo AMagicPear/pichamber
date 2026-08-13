@@ -83,7 +83,7 @@ const createTab = async () => {
     const result = await startPty({
       cols: 80,
       rows: 24,
-      cwd: workspace.cwd && workspace.cwd !== "~" ? workspace.cwd : undefined,
+      sessionId: workspace.sessionId ?? undefined,
     });
     const existing = tabs.value.find((t) => t.id === localId);
     if (!existing) {

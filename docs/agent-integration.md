@@ -82,7 +82,6 @@ export default { port: 3000, fetch: app.fetch };
 | GET | `/api/health` | — | `{ok: true}` | 健康检查 |
 | GET | `/api/sessions` | — | `SessionInfo[]` | 列出所有 session。**顺带建 id→path 索引**(见 Step 3) |
 | POST | `/api/sessions` | `{cwd: string}` | `{sessionId: string}` | 在 cwd 下创建新 session,返回 id |
-| GET | `/api/sessions/:id` | — | `SessionEntry[]` 或 404 | 读 session 历史 entries |
 | DELETE | `/api/sessions/:id` | — | `{ok: true}` 或 404 | 删除 session(清理内存 + 删本地 `.jsonl` 文件) |
 
 ### 1.3 验证
@@ -95,18 +94,12 @@ bun --filter @pichamber/server start
 ```bash
 # 列 session(取第一个 id)
 curl localhost:3000/api/health
-FIRST=$(curl -s localhost:3000/api/sessions | jq -r '.[0].id')
-curl -s "localhost:3000/api/sessions/$FIRST" | jq '.[0].type'
-
 # 创建
 curl -X POST -H 'Content-Type: application/json' \
   -d '{"cwd":"/path/to/project"}' \
   http://localhost:3000/api/sessions
 # {"sessionId":"019f8ea9-..."}
 
-# 不存在的 id → 404
-curl -s -w "%{http_code}\n" "localhost:3000/api/sessions/00000000-0000-0000-0000-000000000000"
-# {"error":"session not found"}404
 ```
 
 ### 1.4 何时才考虑抽出 service 文件
