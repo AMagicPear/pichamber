@@ -24,6 +24,16 @@ import { closeSessionSockets, sessionWsHandler } from "./ws";
 import { toMessage } from "./error";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./workspace";
 
+const hostname = process.env.PICHAMBER_HOST || "127.0.0.1";
+const configuredPort = Number(process.env.PICHAMBER_PORT || 3000);
+if (!Number.isInteger(configuredPort) || configuredPort < 1 || configuredPort > 65_535) {
+  throw new Error(`Invalid PICHAMBER_PORT: ${process.env.PICHAMBER_PORT}`);
+}
+const version = process.env.PICHAMBER_VERSION || "dev";
+const instanceId = process.env.PICHAMBER_INSTANCE_ID;
+const daemonToken = process.env.PICHAMBER_DAEMON_TOKEN;
+const startedAt = new Date().toISOString();
+
 // ─── WebSocket protocol multiplexing ───────────────────────────────────
 //
 // Bun's `websocket` callbacks receive (ws, message) — the data payload is
@@ -122,12 +132,21 @@ const ptyWsHandler: WsHandler = {
 
 // ─── HTTP + WebSocket server ───────────────────────────────────────────
 
-Bun.serve({
-  hostname: "127.0.0.1",
-  port: 3000,
+const server = Bun.serve({
+  hostname,
+  port: configuredPort,
   routes: {
     "/api/health": {
-      GET: () => Response.json({ ok: true }),
+      GET: () =>
+        Response.json({
+          ok: true,
+          app: "pichamber",
+          version,
+          pi: PI_VERSION,
+          pid: process.pid,
+          startedAt,
+          instanceId,
+        }),
     },
     "/api/version": {
       GET: () => Response.json({ pi: PI_VERSION }),
@@ -162,6 +181,15 @@ Bun.serve({
         const result = await deleteSession(req.params.id);
         if (!result.ok) return Response.json({ error: "session not found" }, { status: 404 });
         return Response.json(result);
+      },
+    },
+    "/api/daemon/shutdown": {
+      POST: (req) => {
+        if (!daemonToken || req.headers.get("Authorization") !== `Bearer ${daemonToken}`) {
+          return Response.json({ error: "Not found" }, { status: 404 });
+        }
+        setTimeout(shutdown, 0);
+        return Response.json({ ok: true });
       },
     },
 
@@ -325,7 +353,7 @@ Bun.serve({
     // `packages/web/dist` in the source repo. Dev uses Vite instead.
     const webDist = [
       join(import.meta.dir, "..", "dist-web"),
-      join(import.meta.dir, "..", "web", "dist"),
+      join(import.meta.dir, "..", "..", "web", "dist"),
     ].find((dir) => existsSync(join(dir, "index.html")));
 
     const serveWeb = async (url: URL): Promise<Response | null> => {
@@ -361,11 +389,12 @@ Bun.serve({
   },
 });
 
-console.log("Server listening on http://localhost:3000");
+console.log(`Pichamber ${version} listening on http://${hostname}:${configuredPort}`);
 
 // Best-effort cleanup on shutdown. Useful when Bun restarts in --hot mode.
 const shutdown = () => {
   stopAllPtys();
+  server.stop(true);
   process.exit(0);
 };
 process.on("SIGINT", shutdown);

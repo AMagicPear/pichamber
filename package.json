@@ -39,7 +39,9 @@
     "test": "bun test",
     "type-check": "bun --filter '*' type-check",
     "lint": "oxlint . --fix",
-    "package": "bun run build:web && rm -rf dist dist-web && bun build packages/server/src/index.ts --outfile dist/server.js --target bun --external bun-pty --external @earendil-works/pi-coding-agent && cp -r packages/web/dist dist-web"
+    "package": "node scripts/package.mjs",
+    "prepack": "bun run package",
+    "test:package": "node scripts/package-smoke.mjs"
   },
   "bin": {
     "pichamber": "bin/pichamber.js"
@@ -47,7 +49,8 @@
   "files": [
     "dist",
     "dist-web",
-    "bin",
+    "bin/pichamber.js",
+    "bin/cli.js",
     "LICENSE",
     "THIRD_PARTY_LICENSES.md",
     "README.md",

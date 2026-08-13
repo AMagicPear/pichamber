@@ -8,8 +8,30 @@ Requires [Bun](https://bun.sh) (the backend runs on it).
 
 ```sh
 npm i -g @amagicpear/pichamber
-pichamber   # starts the server on http://localhost:3000
+cd your-project
+pichamber
 ```
+
+The command starts a local background server when needed, creates a session for
+the current directory, and opens it in your browser. Later invocations reuse the
+same server.
+
+```sh
+pichamber ../another-project  # open another workspace
+pichamber --no-open           # print the session URL only
+pichamber status              # inspect the background server
+pichamber logs -f             # follow server logs
+pichamber stop                # stop it cleanly
+
+# Foreground mode for debugging, containers, or an SSH tunnel
+pichamber serve --host 127.0.0.1 --port 3000
+```
+
+Run `pichamber --help` for all options. State and logs are stored under
+`~/Library/Application Support/pichamber` on macOS,
+`$XDG_STATE_HOME/pichamber` on Linux, and `%LOCALAPPDATA%\\pichamber` on
+Windows. Set `PICHAMBER_STATE_DIR` to override that location or
+`PICHAMBER_PORT` to change the default port.
 
 ## Develop
 
