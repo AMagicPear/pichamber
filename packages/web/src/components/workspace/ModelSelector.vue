@@ -36,10 +36,11 @@ const close = () => {
 };
 
 /** Group available models by provider, keeping the current selection
- *  pinned at the top of its bucket so it stays visible after a search. */
+ *  pinned at the top of its bucket so it stays visible after a search.
+ *  Each entry carries the provider's Pi display name for the group title. */
 const grouped = computed(() => {
   const term = search.value.trim().toLowerCase();
-  const buckets = new Map<string, ModelDescriptor[]>();
+  const buckets = new Map<string, { name: string; models: ModelDescriptor[] }>();
   for (const candidate of props.availableModels) {
     if (
       term &&
@@ -49,12 +50,11 @@ const grouped = computed(() => {
     ) {
       continue;
     }
-    const bucket = buckets.get(candidate.provider) ?? [];
-    bucket.push(candidate);
+    const bucket = buckets.get(candidate.provider) ?? { name: candidate.providerName, models: [] };
+    bucket.models.push(candidate);
     buckets.set(candidate.provider, bucket);
   }
-  const result = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b));
-  return result;
+  return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b));
 });
 
 const onSelect = (next: ModelDescriptor) => {
@@ -101,10 +101,10 @@ const placeholder = computed(() => {
         />
       </div>
       <div class="model-selector__list">
-        <div v-for="[provider, models] in grouped" :key="provider" class="model-selector__group">
-          <div class="model-selector__group-title">{{ provider }}</div>
+        <div v-for="[provider, group] in grouped" :key="provider" class="model-selector__group">
+          <div class="model-selector__group-title">{{ group.name }}</div>
           <button
-            v-for="candidate in models"
+            v-for="candidate in group.models"
             :key="`${candidate.provider}/${candidate.id}`"
             type="button"
             class="menu-item"
@@ -132,17 +132,17 @@ const placeholder = computed(() => {
 .model-selector__trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  max-width: 240px;
-  height: 32px;
-  padding: 0 8px 0 10px;
+  max-width: 220px;
+  height: 26px;
+  padding: 0 5px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 120ms ease;
@@ -155,7 +155,8 @@ const placeholder = computed(() => {
   opacity: 0.55;
 }
 .model-selector__icon {
-  flex: 0 0 16px;
+  flex: 0 0 15px;
+  opacity: 0.78;
 }
 .model-selector__name {
   overflow: hidden;
@@ -163,9 +164,9 @@ const placeholder = computed(() => {
   white-space: nowrap;
 }
 .model-selector__chevron {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
   opacity: 0.55;
 }
 

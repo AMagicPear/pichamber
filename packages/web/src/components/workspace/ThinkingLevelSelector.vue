@@ -101,28 +101,30 @@ const onSelect = (next: ThinkingLevel) => {
 .thinking-selector__trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
-  max-width: 200px;
-  height: 32px;
-  padding: 0 8px 0 10px;
+  max-width: 170px;
+  height: 26px;
+  padding: 0 5px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  color: #718d28;
+  color: var(--ui-text-muted);
   font: inherit;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 .thinking-selector__trigger:hover {
-  background: rgb(113 141 40 / 12%);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-strong);
 }
 .thinking-selector__icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  opacity: 0.72;
 }
 .thinking-selector__label {
   overflow: hidden;
@@ -130,9 +132,9 @@ const onSelect = (next: ThinkingLevel) => {
   white-space: nowrap;
 }
 .thinking-selector__chevron {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
   opacity: 0.55;
 }
 </style>

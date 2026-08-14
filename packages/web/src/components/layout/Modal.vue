@@ -4,10 +4,11 @@ import { onBeforeUnmount, watch } from "vue";
 const props = withDefaults(
   defineProps<{
     show: boolean;
-    /** sm = compact card (about), lg = full workspace (settings). */
+    /** sm = compact card, picker = top-mounted picker, lg = full workspace. */
     size?: "sm" | "lg";
+    placement?: "center" | "top";
   }>(),
-  { size: "lg" },
+  { size: "lg", placement: "center" },
 );
 const emit = defineEmits<{ close: [] }>();
 
@@ -31,11 +32,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
     <div
       v-if="show"
       class="modal-mask"
+      :class="`modal-mask--${placement}`"
       role="dialog"
       aria-modal="true"
       @click.self="emit('close')"
     >
-      <div class="modal-container" :class="`modal-container--${size}`">
+      <div class="modal-container" :class="[`modal-container--${size}`, `modal-container--${placement}`]">
         <header class="modal__header">
           <slot name="header">Settings</slot>
         </header>
@@ -58,17 +60,22 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ui-overlay);
+  background: rgb(20 19 17 / 32%);
   transition: opacity 150ms ease;
+}
+.modal-mask--top {
+  align-items: flex-start;
+  padding-top: 64px;
 }
 .modal-container {
   position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 12px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 10px;
   background: var(--ui-surface);
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--ui-shadow-raised);
   transition:
     opacity 150ms ease,
     transform 150ms ease;
@@ -81,8 +88,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
 }
 .modal-container--sm {
   width: calc(100vw - 32px);
-  max-width: 300px;
-  padding: 24px;
+  max-width: 360px;
+  padding: 18px;
+}
+.modal-container--top {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 96px);
+}
+.modal-container--top.modal-container--sm {
+  max-width: 560px;
+  padding: 0;
 }
 .modal-container--sm .modal__body {
   /* Auto-height container: don't let flex-basis:0 collapse the body. */
@@ -109,5 +124,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
 .modal-enter-from .modal-container,
 .modal-leave-to .modal-container {
   transform: scale(0.98);
+}
+.modal-enter-from .modal-container--top,
+.modal-leave-to .modal-container--top {
+  transform: translateY(-8px);
 }
 </style>

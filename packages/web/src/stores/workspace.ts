@@ -1,13 +1,18 @@
 import { reactive, ref } from "vue";
 import { createSession, listSessions, toMessage } from "@/api/client";
 import { pathBasename } from "@pichamber/shared";
-import type { SessionInfo } from "@pichamber/shared";
+import type { ModelDescriptor, SessionInfo } from "@pichamber/shared";
 
 export const workspace = reactive({
   cwd: "~" as string | null,
   folderName: null as string | null,
   sessionId: null as string | null,
   sessionName: "New Session" as string | null,
+  /** Active model mirror so views outside the conversation panel (header)
+   *  can read the same provider/model the input area is bound to. Owned
+   *  by `useConversationSession`: it writes on every snapshot/state push
+   *  and clears on disconnect. */
+  currentModel: undefined as ModelDescriptor | undefined,
 });
 
 export const sessions = ref<SessionInfo[]>([]);

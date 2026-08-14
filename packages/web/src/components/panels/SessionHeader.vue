@@ -6,9 +6,41 @@ import LayoutRightIcon from "@/assets/icons/LayoutRight.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalBoxIcon from "@/assets/icons/TerminalBox.svg";
 import IconButton from "@/components/IconButton.vue";
+import MenuPanel from "@/components/MenuPanel.vue";
+import ProviderQuotaPanel from "@/components/workspace/ProviderQuotaPanel.vue";
+import { useConversationSession } from "@/composables/useConversationSession";
+import { usePopover } from "@/composables/usePopover";
+import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
+import { computed, onMounted, ref } from "vue";
 import { ui } from "@/stores/ui";
 import { workspace } from "@/stores/workspace";
 
+const { availableModels } = useConversationSession();
+
+/** At least one quoted provider is configured when the Pi SDK reports a
+ *  provider that the server registry also supports. Loads the supported
+ *  list once on mount so the button doesn't flicker. */
+const hasQuotedProvider = computed(() => {
+  const supported = new Set(getQuotaProviders().value.map((p) => p.id));
+  return availableModels.value.some((model) => supported.has(model.provider));
+});
+
+onMounted(() => {
+  void loadQuotaProviders();
+});
+
+const root = ref<HTMLElement | null>(null);
+const { open, style, toggle } = usePopover({
+  root,
+  trigger: ".providers-button",
+  panel: ".menu-panel",
+  width: 280,
+  height: 0,
+});
+const onProvidersClick = () => {
+  if (!hasQuotedProvider.value) return;
+  toggle();
+};
 </script>
 
 <template>
@@ -24,7 +56,21 @@ import { workspace } from "@/stores/workspace";
     </div>
 
     <nav class="session-header__tools" aria-label="Session tools">
-      <IconButton label="Projects" disabled><StackIcon /></IconButton>
+      <div ref="root" class="providers-trigger">
+        <IconButton
+          class="providers-button"
+          label="Token plan usage"
+          :title="hasQuotedProvider ? 'View token plan usage' : 'No supported providers configured'"
+          :pressed="open"
+          :disabled="!hasQuotedProvider"
+          @click="onProvidersClick"
+        >
+          <StackIcon />
+        </IconButton>
+        <MenuPanel :open="open" :style="style" :width="280" aria-label="Token plan usage">
+          <ProviderQuotaPanel :open="open" />
+        </MenuPanel>
+      </div>
       <IconButton
         label="Toggle terminal panel"
         :pressed="ui.panels.bottom.open"
@@ -96,5 +142,11 @@ import { workspace } from "@/stores/workspace";
 .account-icon {
   width: 22px;
   height: 22px;
+}
+
+/* Wraps the trigger so `usePopover` can scope its outside-click
+ * listener to the same element the trigger lives in. */
+.providers-trigger {
+  display: inline-flex;
 }
 </style>

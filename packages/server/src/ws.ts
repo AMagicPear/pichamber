@@ -328,14 +328,13 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
 
     // Flush messages submitted while compaction ran, mirroring the TUI's
     // flushCompactionQueue: the first message restarts the conversation
-    // as a fresh prompt, the rest queue as steer/followUp. Extension
-    // commands were already executed immediately when received.
+    // as a fresh prompt (agent is idle post-compaction, so the original
+    // streamingBehavior is meaningless), the rest queue as steer/followUp.
+    // Extension commands were already executed immediately when received.
     if (options?.flushQueue && channel.compactionQueue.length > 0) {
       const [first, ...rest] = channel.compactionQueue;
       channel.compactionQueue = [];
-      session
-        .prompt(first.text, { streamingBehavior: first.mode })
-        .catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
+      session.prompt(first.text).catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
       for (const m of rest) {
         const submit = m.mode === "followUp" ? session.followUp(m.text) : session.steer(m.text);
         submit.catch((err: unknown) => console.error("flush queued message failed", sessionId, err));
@@ -345,12 +344,25 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     if (reconcile(channel, session, false)) broadcastSnapshot();
     const settledStats = computeSessionStatsView(session);
     state.resources = snapshotResources(session);
+    // Read busy/activity at broadcast time (the flush above may have
+    // synchronously fired agent_start which already flipped them back to
+    // true/thinking). Without this we'd broadcast a stale "idle" frame and
+    // the client would briefly flicker between idle and thinking.
+    // Also include pending so the composer queue refreshes after the flush
+    // drained compactionQueue — otherwise it shows the old (now-empty)
+    // list until the SDK's queue_update arrives.
     const fields: {
-      busy: false;
+      busy: boolean;
       activity: AgentActivity;
+      pending: PendingMessages;
       stats?: SessionStatsView;
       resources: RuntimeResources;
-    } = { busy: false, activity: state.activity, resources: state.resources };
+    } = {
+      busy: state.busy,
+      activity: state.activity,
+      pending: pendingWithQueue(channel),
+      resources: state.resources,
+    };
     if (statsChanged(state.stats, settledStats)) {
       state.stats = settledStats;
       fields.stats = settledStats;
@@ -529,6 +541,10 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       case "compaction_start": {
         state.busy = true;
         state.activity = { phase: "compacting" };
+        // Defensive: if the SDK ever skipped an agent_settled on the way
+        // to compaction_start (e.g. nested compaction), drop the streaming
+        // pointer so late message_updates can't mutate an aborted item.
+        state.streaming = undefined;
         // A fresh compaction must not inherit a stale queue.
         channel.compactionQueue = [];
         broadcastState(channel, { busy: true, activity: state.activity });

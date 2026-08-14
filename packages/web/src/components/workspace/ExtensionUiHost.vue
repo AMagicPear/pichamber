@@ -111,23 +111,23 @@ const confirm = (confirmed: boolean) => {
 .extension-dialog {
   display: grid;
   width: 100%;
-  gap: 16px;
+  gap: 13px;
 }
-.extension-dialog header { display: grid; gap: 5px; }
+.extension-dialog header { display: grid; gap: 4px; }
 .extension-dialog__label {
   color: var(--ui-text-muted);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
 }
-.extension-dialog h3 { margin: 0; color: var(--ui-text-strong); font-size: 16px; font-weight: 600; }
+.extension-dialog h3 { margin: 0; color: var(--ui-text-strong); font-size: 15px; font-weight: 600; }
 .extension-dialog p { margin: 0; color: var(--ui-text-muted); font-size: 13px; line-height: 1.45; }
 .extension-dialog input,
 .extension-dialog textarea {
   width: 100%;
-  padding: 9px 10px;
+  padding: 8px 9px;
   border: 1px solid var(--ui-border);
-  border-radius: 7px;
+  border-radius: 5px;
   outline: none;
   color: inherit;
   font: inherit;
@@ -137,13 +137,13 @@ const confirm = (confirmed: boolean) => {
 }
 .extension-dialog input:focus,
 .extension-dialog textarea:focus { border-color: #9eabb9; box-shadow: 0 0 0 2px rgb(91 119 149 / 12%); }
-.extension-dialog__options { display: grid; gap: 4px; }
+.extension-dialog__options { display: grid; gap: 3px; }
 .extension-dialog__options button {
-  min-height: 34px;
-  padding: 7px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--ui-surface-subtle);
+  min-height: 31px;
+  padding: 6px 9px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 5px;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -152,10 +152,10 @@ const confirm = (confirmed: boolean) => {
 .extension-dialog__options button:hover { background: var(--ui-surface-hover); }
 .extension-dialog footer { display: flex; justify-content: flex-end; gap: 7px; }
 .extension-dialog footer button {
-  min-height: 32px;
-  padding: 0 13px;
+  min-height: 30px;
+  padding: 0 11px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   font: inherit;
   font-size: 13px;
   cursor: pointer;

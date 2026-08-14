@@ -22,6 +22,8 @@ import {
 } from "./pty";
 import { closeSessionSockets, sessionWsHandler } from "./ws";
 import { browseProjectDirectories } from "./projects";
+import { getProviderQuota, listQuotaProviders } from "./quota";
+import { getSession } from "./session";
 import { toMessage } from "./error";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./workspace";
 
@@ -192,6 +194,31 @@ const server = Bun.serve({
           );
         } catch (err) {
           return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/quota/providers": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        const session = await getSession(sessionId);
+        if (!session) return Response.json({ error: "session not found" }, { status: 404 });
+        return Response.json({ providers: listQuotaProviders(session) });
+      },
+    },
+    "/api/quota/:provider": {
+      GET: async (req) => {
+        const provider = req.params.provider;
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) {
+          return Response.json({ error: "sessionId required" }, { status: 400 });
+        }
+        try {
+          const session = await getSession(sessionId);
+          if (!session) return Response.json({ error: "session not found" }, { status: 404 });
+          return Response.json(await getProviderQuota(provider, session));
+        } catch (err) {
+          return Response.json({ error: toMessage(err) }, { status: 500 });
         }
       },
     },

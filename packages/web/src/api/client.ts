@@ -8,6 +8,8 @@ import type {
   GitStageRequest,
   GitStatus,
   ListResult,
+  ProviderQuota,
+  ProviderDescriptor,
   PtyStartOptions,
   PtyStartResult,
   SearchResult,
@@ -125,3 +127,15 @@ export const commitGit = (sessionId: string | null | undefined, message: string)
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId: sessionId ?? undefined, message } satisfies GitCommitRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+
+// ─── Provider quotas ─────────────────────────────────────────────────
+
+export const fetchQuotaProviders = (sessionId: string) =>
+  fetch(`${BASE}/quota/providers?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
+    jsonOrThrow<{ providers: ProviderDescriptor[] }>(r),
+  );
+
+export const fetchProviderQuota = (sessionId: string, provider: string) =>
+  fetch(`${BASE}/quota/${encodeURIComponent(provider)}?sessionId=${encodeURIComponent(sessionId)}`).then(
+    (r) => jsonOrThrow<ProviderQuota>(r),
+  );

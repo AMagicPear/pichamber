@@ -118,12 +118,54 @@ export type LiveItem =
  *  We don't ship the full Model<Api> because the pi-ai type erases to
  *  Model<Api> and the wire only cares about provider/id + display info. */
 export type ModelDescriptor = {
+  /** Pi provider id (e.g. "minimax-cn"). Used for routing/logo lookup. */
   provider: string;
+  /** Human-readable provider name from Pi's registry (e.g. "MiniMax"). */
+  providerName: string;
   id: string;
   /** Display name; falls back to id when the model registry has no friendly name. */
   name: string;
   /** Whether the model supports extended thinking. */
   reasoning: boolean;
+};
+
+/** One slice of a provider's quota — e.g. MiniMax's 5-hour window. */
+export type QuotaWindow = {
+  /** Short label rendered in the panel ("5h", "Weekly", …). */
+  label: string;
+  /** Fraction of the window already consumed, in [0, 1]. */
+  utilization: number;
+  /** Unix ms when this window resets to 0. `0` when the provider has no
+   *  reset concept (e.g. DeepSeek's pay-as-you-go balance). */
+  resetsAt: number;
+  /** Optional free-form override: when a provider's quota isn't really
+   *  "utilization of a window" (DeepSeek's balance), the panel shows
+   *  this string instead of a progress bar. */
+  display?: string;
+};
+
+/** Successful quota snapshot for a provider. */
+export type QuotaSnapshot = {
+  provider: string;
+  windows: QuotaWindow[];
+  /** Unix ms when the server last fetched this from the upstream API. */
+  fetchedAt: number;
+};
+
+/** Error payload when quota lookup fails (missing key, upstream down,
+ *  provider not supported yet, …). Kept in the same shape as a snapshot
+ *  minus `windows` so the panel can render a single "not available"
+ *  row instead of branching across two record types. */
+export type ProviderQuota =
+  | (QuotaSnapshot & { error?: undefined })
+  | (Omit<QuotaSnapshot, "windows"> & { error: string; windows?: undefined });
+
+/** Provider metadata shared by model and quota surfaces. The display name is
+ * resolved from Pi's provider registry on the server; clients must not
+ * derive it from ids or adapter labels. */
+export type ProviderDescriptor = {
+  id: string;
+  name: string;
 };
 
 export type ThinkingState = {

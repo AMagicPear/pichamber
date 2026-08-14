@@ -1,6 +1,7 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ModelDescriptor, ThinkingState } from "@pichamber/shared";
+import { providerName } from "./providers";
 
 /** ModelRuntime 暴露的模型类型（getAvailable 返回 Model<Api>[]）。 */
 type AvailableModel = Model<Api>;
@@ -20,8 +21,9 @@ const awaitAvailabilityRefresh = async (session: AgentSession): Promise<readonly
   }
 };
 
-const toDescriptor = (model: AvailableModel): ModelDescriptor => ({
+const toDescriptor = (model: AvailableModel, name: string): ModelDescriptor => ({
   provider: model.provider,
+  providerName: name,
   id: model.id,
   name: model.name || model.id,
   reasoning: Boolean(model.reasoning),
@@ -32,7 +34,7 @@ const toDescriptor = (model: AvailableModel): ModelDescriptor => ({
  *  again here. */
 export const listAvailableModels = async (session: AgentSession): Promise<ModelDescriptor[]> => {
   const models = await awaitAvailabilityRefresh(session);
-  return models.map(toDescriptor);
+  return models.map((model) => toDescriptor(model, providerName(session, model.provider)));
 };
 
 /** Pick the current model out of the available set so the client always
@@ -46,7 +48,7 @@ export const getEffectiveModelDescriptor = async (
   const current = session.model;
   if (!current) return { model: undefined, availableModels };
   const match = availableModels.find((m) => m.provider === current.provider && m.id === current.id);
-  return { model: match ?? toDescriptor(current), availableModels };
+  return { model: match ?? toDescriptor(current, providerName(session, current.provider)), availableModels };
 };
 
 export const getThinkingState = (session: AgentSession): ThinkingState => ({

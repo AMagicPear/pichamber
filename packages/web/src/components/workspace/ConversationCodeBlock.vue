@@ -8,17 +8,33 @@ const props = defineProps<{
     code?: string;
     language?: string;
   };
+  /** markstream-vue passes `stream` to code_block overrides; false once the
+   *  parent MarkdownRender is final, true while the model is still writing.
+   *  stream-diffs is designed for the streaming→settled split: incremental
+   *  `updateSnapshot` during streaming, a single `finalize` once stable. The
+   *  previous version of this component re-mounted + re-finalized on every
+   *  prop change, which made the highlight flicker on every token delta. */
+  stream?: boolean;
 }>();
 
 const host = ref<HTMLElement>();
 const { resolvedTheme } = useTheme();
 let controller: ReturnType<typeof createCodeStream> | undefined;
+let mountedGeneration = 0;
+/** Once we've upgraded to the File surface, stop pushing snapshots — the
+ *  surface is locked in and any trailing code from late-arriving deltas
+ *  would just race the finalize. */
+let finalized = false;
 let viewportObserver: IntersectionObserver | undefined;
 
-const render = async () => {
+/** Mount a fresh controller (language or theme changed, or first mount).
+ *  Called at most once per generation; concurrent calls early-out via the
+ *  generation guard so a mid-mount prop change doesn't double-mount. */
+const mount = async () => {
+  const gen = ++mountedGeneration;
   controller?.dispose();
+  finalized = false;
   if (!host.value) return;
-
   const next = createCodeStream({
     fileName: `code.${props.node.language || "txt"}`,
     language: props.node.language || "plaintext",
@@ -27,11 +43,11 @@ const render = async () => {
   });
   controller = next;
   await next.mount(host.value);
-  if (controller !== next) return;
+  if (gen !== mountedGeneration || controller !== next) {
+    next.dispose();
+    return;
+  }
   next.updateSnapshot(props.node.code || "");
-  // disableFileHeader：pierre File surface 默认渲染文件名 header（无语言时
-  // 默认名 code.txt）——代码块不该显示文件名，直接禁掉。
-  await next.finalize({ view: "file", disableFileHeader: true });
 };
 
 /** 首次挂载时容器可能尚未布局（刷新后滚动恢复 / content-visibility 跳过），
@@ -41,11 +57,11 @@ const renderIfEmpty = () => {
   if (!el) return;
   const child = el.firstElementChild;
   const height = child?.getBoundingClientRect().height ?? el.getBoundingClientRect().height;
-  if (height <= 0) void render();
+  if (height <= 0) void mount();
 };
 
 onMounted(() => {
-  void render();
+  void mount();
   viewportObserver = new IntersectionObserver(
     (entries) => {
       if (entries.some((e) => e.isIntersecting)) {
@@ -60,8 +76,42 @@ onMounted(() => {
 onBeforeUnmount(() => {
   viewportObserver?.disconnect();
   controller?.dispose();
+  controller = undefined;
 });
-watch(() => [props.node.code, props.node.language, resolvedTheme.value], () => void render());
+
+/** Language / theme changes require a re-mount (stream-diffs locks these in
+ *  on creation). Code changes just push a snapshot — incremental, no flicker. */
+watch(
+  () => [props.node.language, resolvedTheme.value],
+  () => void mount(),
+);
+
+watch(
+  () => props.node.code,
+  (code) => {
+    // Once finalized the surface is locked; ignore late deltas so we don't
+    // race against the File view we just upgraded into.
+    if (finalized) return;
+    controller?.updateSnapshot(code || "");
+  },
+);
+
+/** Markstream flips `stream` to false when the surrounding MarkdownRender
+ *  becomes final. That's the moment to upgrade from the live-highlight
+ *  pre tag to the interactive File surface (line numbers, collapse, copy).
+ *  We only do this once per mount — finalize locks the surface. */
+watch(
+  () => props.stream === false,
+  (isFinal) => {
+    if (!isFinal || !controller || finalized) return;
+    finalized = true;
+    // disableFileHeader: pierre's File surface defaults to a filename header
+    // (or "code.txt" when language is unknown). Code blocks shouldn't show
+    // that — keep it suppressed.
+    void controller.finalize({ view: "file", disableFileHeader: true });
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

@@ -1,8 +1,8 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { computed, onBeforeUnmount, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
-import { refreshSessions } from "@/stores/workspace";
+import { refreshSessions, workspace } from "@/stores/workspace";
 import type {
   LiveItem,
   AgentActivity,
@@ -60,6 +60,14 @@ const showNextExtensionDialog = () => {
 /** Empty until the server confirms available models in `snapshot`/`state`. */
 const availableModels = ref<ModelDescriptor[]>([]);
 const model = ref<ModelDescriptor | undefined>();
+/** Mirror the active model into the shared `workspace` store so views
+ *  outside the conversation panel (header quota chip, account badge, …)
+ *  see the same provider/model without subscribing to the WS themselves.
+ *  Runs at module scope so the mirror is always live, independent of how
+ *  many components currently call `useConversationSession`. */
+watch(model, (next) => {
+  workspace.currentModel = next;
+});
 const thinking = ref<ThinkingState>({ level: "off", availableLevels: ["off"] });
 /** Pre-formatted Context-pane view; the server is the source of truth. */
 const stats = ref<SessionStatsView | undefined>();

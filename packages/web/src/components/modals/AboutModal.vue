@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import AppLogo from "@/components/AppLogo";
 import Modal from "@/components/layout/Modal.vue";
+import IconButton from "@/components/IconButton.vue";
 import CloseIcon from "@/assets/icons/Close.svg";
 import GithubIcon from "@/assets/icons/Github.svg";
 import { getVersion } from "@/api/client";
@@ -41,9 +42,9 @@ onMounted(async () => {
           </a>
         </div>
         <p class="about__made-with">Made with love for the community</p>
-        <button type="button" class="about__close" aria-label="Close" @click="emit('close')">
+        <IconButton class="about__close" label="Close" size="compact" @click="emit('close')">
           <CloseIcon />
-        </button>
+        </IconButton>
       </div>
     </template>
   </Modal>
@@ -109,20 +110,6 @@ onMounted(async () => {
   position: absolute;
   top: -8px;
   right: -8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
   color: var(--ui-text-muted);
-}
-.about__close:hover {
-  background: var(--ui-surface-hover);
-  color: var(--ui-text);
-}
-.about__close svg {
-  width: 16px;
-  height: 16px;
 }
 </style>
