@@ -3,7 +3,7 @@
  * Sizes stay compact so the conversation reads like a chat, not a doc. */
 .markdown-chat {
   --ms-text-body: 14px;
-  --ms-leading-body: 1.5;
+  --ms-leading-body: 1.6;
   --ms-text-h1: 20px;
   --ms-leading-h1: 1.25;
   --ms-text-h2: 17px;
@@ -13,7 +13,7 @@
   --ms-text-h4: 14px;
   --ms-text-h5: 14px;
   --ms-text-h6: 14px;
-  --ms-flow-paragraph-y: 8px;
+  --ms-flow-paragraph-y: 10px;
   --ms-flow-list-y: 8px;
   --ms-flow-list-item-y: 2px;
   --ms-flow-codeblock-y: 12px;
@@ -36,7 +36,33 @@
   --table-border: var(--ui-border);
   --table-header-bg: var(--ui-table-header-bg);
   color: var(--ui-text);
+  /* Aggressive break for long URLs / file paths in mixed CJK+Latin user
+   * messages — `overflow-wrap: anywhere` alone still leaves unbroken runs
+   * (the user message bubble in the wild has long paths that exceed a
+   * single break opportunity). `word-break: break-word` is the fallback
+   * for older engines that don't honor `anywhere`. */
   overflow-wrap: anywhere;
+  word-break: break-word;
+  /* Tighter character spacing reads cleaner at the 14px chat size. */
+  letter-spacing: 0.005em;
+  font-feature-settings: "kern", "liga", "calt";
+}
+
+/* Justify prose for article-like rhythm — the request was for two-end
+ * aligned reading. Browser handles CJK justification automatically when
+ * `text-align: justify` is set (modern engines: inter-character spacing).
+ * `text-wrap: pretty` avoids orphans/widows on the last line. */
+.markdown-chat p {
+  text-align: justify;
+  text-justify: inter-word;
+  text-wrap: pretty;
+}
+
+/* Keep headings, lists, code, tables, blockquotes left-aligned — justify
+ * looks broken on headings, list items, and tabular content. */
+.markdown-chat :is(h1, h2, h3, h4, h5, h6, li, blockquote, pre, table),
+.markdown-chat :is(h1, h2, h3, h4, h5, h6, li, blockquote, pre, table) p {
+  text-align: left;
 }
 
 .markdown-chat .table-node tbody tr:nth-child(2n) {
@@ -53,6 +79,7 @@
 .markdown-chat a {
   color: var(--link-color, hsl(215 55% 62%));
   text-decoration: none;
+  word-break: break-all;
 }
 .markdown-chat a:hover {
   text-decoration: underline;

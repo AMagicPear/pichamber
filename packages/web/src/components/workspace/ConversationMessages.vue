@@ -164,6 +164,14 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
 .conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
 .conversation-message__user { display: grid; width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid var(--ui-border-subtle); border-radius: 12px 12px 4px; background: var(--ui-surface-muted); }
 
+/* Force the bubble to actually honor its 85% cap when the content
+   carries long unbroken strings (paths / URLs in mixed CJK messages).
+   Grid items default to min-width: auto, which lets a long line push the
+   bubble past the cap; resetting to 0 lets `max-width` take effect and
+   hands the wrap rules in `markdown-chat` down to the markdown node. */
+.conversation-message__user { min-width: 0; max-width: 85%; }
+.conversation-message__user > * { min-width: 0; max-width: 100%; }
+
 /* Attached images inside the user bubble: thumbnails capped to the bubble
    width, stacked vertically with the text above. */
 .conversation-message__images {

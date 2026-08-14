@@ -9,11 +9,15 @@ withDefaults(
     size?: "compact" | "standard" | "large";
     pressed?: boolean;
     disabled?: boolean;
+    /** Color tone override. `danger` tints the icon red (for stop/cancel)
+     *  while keeping the ghost-outline body — no filled background. */
+    tone?: "danger";
   }>(),
   {
     size: "standard",
     pressed: undefined,
     disabled: false,
+    tone: undefined,
   },
 );
 </script>
@@ -22,7 +26,7 @@ withDefaults(
   <button
     type="button"
     class="icon-button"
-    :class="`icon-button--${size}`"
+    :class="[`icon-button--${size}`, tone && `icon-button--tone-${tone}`]"
     :aria-label="label"
     :title="label"
     :aria-pressed="pressed"
@@ -89,5 +93,14 @@ withDefaults(
 .icon-button--compact :deep(svg) {
   width: 16px;
   height: 16px;
+}
+
+/* Danger tone: red icon, no fill — matches the rest of the ghost
+ * outline buttons in shape, only the color signals "stop / cancel". */
+.icon-button--tone-danger {
+  color: var(--ui-error-strong);
+}
+.icon-button--tone-danger:hover:not(:disabled) {
+  background: var(--ui-error-hover);
 }
 </style>
