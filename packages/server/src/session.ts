@@ -109,8 +109,9 @@ export const conversationItems = (session: AgentSession, existing: LiveItem[]): 
   const byEntryId = new Map<string, LiveItem>();
   for (const item of existing) {
     if (item.kind === "tool") byToolCallId.set(item.tool.toolCallId, item);
-    else if (item.kind === "custom" && item.entryId) byEntryId.set(item.entryId, item);
-    else byMessage.set(item.message, item);
+    else if ((item.kind === "custom" || item.kind === "compaction") && item.entryId)
+      byEntryId.set(item.entryId, item);
+    else if (item.kind !== "compaction") byMessage.set(item.message, item);
   }
 
   const items: LiveItem[] = [];
@@ -129,11 +130,31 @@ export const conversationItems = (session: AgentSession, existing: LiveItem[]): 
       }
       continue;
     }
+    if (entry.type === "compaction") {
+      // 压缩后 buildContextEntries 用 compaction 条目替代被压缩的旧消息。
+      // 对齐 TUI 的 CompactionSummaryMessage：重建为一条摘要块，entryId
+      // 保证重连/刷新后 id 稳定。
+      const prev = byEntryId.get(entry.id);
+      if (prev) {
+        items.push(prev);
+      } else {
+        items.push({
+          id: `e:${entry.id}`,
+          kind: "compaction",
+          phase: "committed",
+          summary: entry.summary,
+          tokensBefore: entry.tokensBefore,
+          timestamp: new Date(entry.timestamp).getTime(),
+          entryId: entry.id,
+        });
+      }
+      continue;
+    }
     for (const message of sessionEntryToContextMessages(entry)) {
       if (message.role === "toolResult") {
         const toolCallId = toolCallIdOf(message);
         const prev = toolCallId ? byToolCallId.get(toolCallId) : undefined;
-        if (prev) {
+        if (prev && prev.kind === "tool") {
           items.push({ ...prev, message, phase: "committed" });
         } else if (toolCallId) {
           const isError = (message as { isError?: unknown }).isError === true;
@@ -154,7 +175,7 @@ export const conversationItems = (session: AgentSession, existing: LiveItem[]): 
         }
       } else if (message.role === "user" || message.role === "assistant") {
         const prev = byMessage.get(message);
-        if (prev) items.push({ ...prev, message, phase: "committed" });
+        if (prev && prev.kind !== "compaction") items.push({ ...prev, message, phase: "committed" });
         else items.push({ id: `e:${entry.id}`, kind: message.role, phase: "committed", message });
       }
       // 其他角色（custom/compaction/branchSummary）不进会话视图。

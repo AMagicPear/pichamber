@@ -14,7 +14,6 @@ import type { ServerWebSocket } from "bun";
 import { computeSessionStatsView } from "./context";
 import { toMessage } from "./error";
 import { createUiBridge, type UiBridge } from "./extension-ui";
-import { expandFileRefs } from "./file-refs";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { conversationItems, deactivateSession, getConversationEntries, getSession } from "./session";
 import type { SessionWsData, WsHandler } from "./index";
@@ -58,30 +57,54 @@ type SessionChannel = {
   /** Re-snapshot model + thinking state and broadcast to all sockets. */
   queueModelStateBroadcast: () => void;
   ready: Promise<void>;
+  /** Messages submitted while compaction is running; flushed on compaction_end. */
+  compactionQueue: CompactionQueuedMessage[];
+};
+
+/** A message held while compaction is running, mirroring the TUI's
+ *  `compactionQueuedMessages` (queueCompactionMessage). Flushed as the first
+ *  prompt + steer/followUp after compaction ends. */
+type CompactionQueuedMessage = {
+  text: string;
+  mode: "steer" | "followUp";
 };
 
 // sessionId → one shared SDK listener plus all subscribed sockets.
 const channelsBySession = new Map<string, SessionChannel>();
 
-const broadcastChannelState = (
-  channel: SessionChannel,
-  fields: {
-    busy?: boolean;
-    activity?: AgentActivity;
-    pending?: PendingMessages;
-    model?: ModelDescriptor;
-    availableModels?: ModelDescriptor[];
-    thinking?: ThinkingState;
-    stats?: SessionStatsView;
-    resources?: RuntimeResources;
-  },
-) => {
+/** Broadcast a `state` frame to a channel's sockets, bumping `seq` first.
+ *  The client detects gaps in `seq` and requests a resync, so every message
+ *  through this function is monotonic. */
+type StateFields = {
+  busy?: boolean;
+  activity?: AgentActivity;
+  pending?: PendingMessages;
+  model?: ModelDescriptor;
+  availableModels?: ModelDescriptor[];
+  thinking?: ThinkingState;
+  stats?: SessionStatsView;
+  resources?: RuntimeResources;
+};
+const broadcastState = (channel: SessionChannel, fields: StateFields) => {
   channel.state.seq += 1;
   const payload = JSON.stringify({ type: "state", seq: channel.state.seq, ...fields } satisfies ServerMessage);
   for (const socket of channel.sockets) {
     if (socket.readyState === 1) socket.send(payload);
   }
 };
+
+/** The pending view the client shows: SDK queue plus messages held in the
+ *  compaction queue (which are not yet in the SDK's queue). */
+const pendingWithQueue = (channel: SessionChannel): PendingMessages => ({
+  steering: [
+    ...channel.state.pending.steering,
+    ...channel.compactionQueue.filter((m) => m.mode === "steer").map((m) => m.text),
+  ],
+  followUp: [
+    ...channel.state.pending.followUp,
+    ...channel.compactionQueue.filter((m) => m.mode === "followUp").map((m) => m.text),
+  ],
+});
 
 const initialModelState = (): Pick<
   ChannelState,
@@ -105,8 +128,15 @@ const initialModelState = (): Pick<
 const snapshotResources = (session: AgentSession): RuntimeResources => {
   const result = session.resourceLoader.getExtensions();
   const activeTools = new Set(result.runtime.getActiveTools());
+  // Mirror the TUI's `enableSkillCommands` setting: the SDK's `getCommands()`
+  // unconditionally emits skill entries (`skill:*`), so the interactive TUI
+  // filters them out before they reach the autocomplete dropdown. Do the same
+  // here so /settings toggles the shelf's skills in pichamber.
+  const commands = session.settingsManager.getEnableSkillCommands()
+    ? result.runtime.getCommands()
+    : result.runtime.getCommands().filter((command) => command.source !== "skill");
   return {
-    commands: result.runtime.getCommands(),
+    commands,
     tools: result.runtime.getAllTools().map((tool) => ({
       name: tool.name,
       description: tool.description ?? "",
@@ -136,12 +166,18 @@ const reconcile = (channel: SessionChannel, session: AgentSession, keepLive: boo
   const next = [...rebuilt, ...live];
   const changed =
     next.length !== state.items.length ||
-    next.some(
-      (item, i) =>
-        state.items[i]?.id !== item.id ||
-        state.items[i]?.message !== item.message ||
-        state.items[i]?.phase !== item.phase,
-    );
+    next.some((item, i) => {
+      const prevItem = state.items[i];
+      if (!prevItem) return true;
+      // compaction 条目没有 message 字段，内容不可变，只比较 id/phase。
+      return (
+        prevItem.id !== item.id ||
+        prevItem.phase !== item.phase ||
+        (prevItem.kind !== "compaction" &&
+          item.kind !== "compaction" &&
+          prevItem.message !== item.message)
+      );
+    });
   state.items = next;
   return changed;
 };
@@ -245,6 +281,7 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     },
     queueModelStateBroadcast,
     ready: Promise.resolve(),
+    compactionQueue: [],
     uiBridge: createUiBridge((request) => broadcast({ type: "ui_request", request })),
   };
   const broadcast = (msg: ServerMessage) => {
@@ -257,25 +294,68 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     channel.state.seq += 1;
     broadcast({ type: "item", seq: channel.state.seq, item });
   };
-  const broadcastState = (
-    channel: SessionChannel,
-    fields: {
-      busy?: boolean;
-      activity?: AgentActivity;
-      pending?: PendingMessages;
-      model?: ModelDescriptor;
-      availableModels?: ModelDescriptor[];
-      thinking?: ThinkingState;
-      stats?: SessionStatsView;
-      resources?: RuntimeResources;
-    },
-  ) => {
-    channel.state.seq += 1;
-    broadcast({ type: "state", seq: channel.state.seq, ...fields });
-  };
   const broadcastSnapshot = () => {
     channel.state.seq += 1;
     broadcast(snapshotMessage(channel));
+  };
+
+  /** Common settlement shape shared by `compaction_end` and `agent_settled`:
+   *  reset busy/activity/streaming, rebuild items against the authoritative
+   *  session manager, refresh stats + resources, and broadcast the new
+   *  state. Compaction additionally surfaces SDK errors as toasts and
+   *  flushes its message queue before settling. */
+  const settleChannel = (options?: { errorMessage?: string; flushQueue?: boolean }) => {
+    const state = channel.state;
+    state.busy = false;
+    state.activity = { phase: "idle" };
+    state.streaming = undefined;
+
+    // Compaction failure toast: SDK emits compaction_end before rejecting,
+    // so the client sees one consistent message; aborted compactions leave
+    // errorMessage undefined and stay silent.
+    if (options?.errorMessage) {
+      broadcast({
+        type: "ui_request",
+        request: {
+          type: "extension_ui_request",
+          id: crypto.randomUUID(),
+          method: "notify",
+          message: options.errorMessage.replace(/^Compaction failed: /, ""),
+          notifyType: "error",
+        },
+      } satisfies ServerMessage);
+    }
+
+    // Flush messages submitted while compaction ran, mirroring the TUI's
+    // flushCompactionQueue: the first message restarts the conversation
+    // as a fresh prompt, the rest queue as steer/followUp. Extension
+    // commands were already executed immediately when received.
+    if (options?.flushQueue && channel.compactionQueue.length > 0) {
+      const [first, ...rest] = channel.compactionQueue;
+      channel.compactionQueue = [];
+      session
+        .prompt(first.text, { streamingBehavior: first.mode })
+        .catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
+      for (const m of rest) {
+        const submit = m.mode === "followUp" ? session.followUp(m.text) : session.steer(m.text);
+        submit.catch((err: unknown) => console.error("flush queued message failed", sessionId, err));
+      }
+    }
+
+    if (reconcile(channel, session, false)) broadcastSnapshot();
+    const settledStats = computeSessionStatsView(session);
+    state.resources = snapshotResources(session);
+    const fields: {
+      busy: false;
+      activity: AgentActivity;
+      stats?: SessionStatsView;
+      resources: RuntimeResources;
+    } = { busy: false, activity: state.activity, resources: state.resources };
+    if (statsChanged(state.stats, settledStats)) {
+      state.stats = settledStats;
+      fields.stats = settledStats;
+    }
+    broadcastState(channel, fields);
   };
 
   channel.unsubscribe = session.subscribe((event) => {
@@ -353,7 +433,10 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         } else if (role === "assistant") {
           // 用 FIFO 匹配而非 streaming 指针：abort 后迟到 message_end 可能
           // 落在新 run 已开始的时刻，streaming 已被新消息占用。
-          const item = state.items.find((i) => i.kind === "assistant" && i.phase === "live");
+          const item = state.items.find(
+            (i): i is Extract<LiveItem, { kind: "assistant" }> =>
+              i.kind === "assistant" && i.phase === "live",
+          );
           if (item) {
             item.message = message;
             item.phase = "committed";
@@ -446,7 +529,19 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       case "compaction_start": {
         state.busy = true;
         state.activity = { phase: "compacting" };
+        // A fresh compaction must not inherit a stale queue.
+        channel.compactionQueue = [];
         broadcastState(channel, { busy: true, activity: state.activity });
+        break;
+      }
+      case "compaction_end": {
+        // Failure text (Nothing to compact / Already compacted / 摘要生成
+        // 失败等) 走右下角 toast；aborted（Esc 中断）errorMessage undefined。
+        const errorMessage = (event as { errorMessage?: unknown }).errorMessage;
+        settleChannel({
+          errorMessage: typeof errorMessage === "string" && errorMessage ? errorMessage : undefined,
+          flushQueue: true,
+        });
         break;
       }
       case "auto_retry_start": {
@@ -460,29 +555,7 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         break;
       }
       case "agent_settled": {
-        state.busy = false;
-        state.activity = { phase: "idle" };
-        state.streaming = undefined;
-        // 与权威状态对齐：compaction/重试/分支导航会改变条目，内容一致时跳过
-        // 快照广播（id 按对象身份保持，客户端无感）。
-        if (reconcile(channel, session, false)) broadcastSnapshot();
-        // Stats also need a refresh after settlement: compactions, retries
-        // and branch navigation all change message counts and (after the
-        // next LLM response) contextUsage. We only broadcast when the view
-        // actually moved to avoid waking the client on idle ticks.
-        const settledStats = computeSessionStatsView(session);
-        state.resources = snapshotResources(session);
-        const statsFields: {
-          busy: false;
-          activity: AgentActivity;
-          stats?: SessionStatsView;
-          resources: RuntimeResources;
-        } = { busy: false, activity: state.activity, resources: state.resources };
-        if (statsChanged(state.stats, settledStats)) {
-          state.stats = settledStats;
-          statsFields.stats = settledStats;
-        }
-        broadcastState(channel, statsFields);
+        settleChannel();
         break;
       }
       case "entry_appended": {
@@ -621,9 +694,9 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "prompt message must be a string");
           return;
         }
-        // 发送前展开消息里的 @path 引用（对齐原生 TUI）：图片 → images
-        // 附件，其他 → <file> 块；解析不了的 @ 保留原样。
-        const { text, images } = await expandFileRefs(input.message, session.sessionManager.getCwd());
+        // Forward user text verbatim. `@path` references stay literal — the
+        // model reaches the file via the `read` tool, matching the official
+        // interactive TUI's behavior.
         if (bunWS.data.closed) return;
         const streamingBehavior =
           input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
@@ -631,18 +704,33 @@ export const sessionWsHandler: WsHandler = {
             : session.isStreaming
               ? "steer"
               : undefined;
+        // Compaction aborts the running agent first, so `isStreaming` is false
+        // while a summary is being generated. Sending now would start a fresh
+        // turn racing the summary LLM call. Mirror the TUI: queue non-command
+        // messages until compaction_end, but let extension commands (any
+        // `/...`) execute immediately — the SDK routes those itself.
+        const channel = channelsBySession.get(sessionId);
+        if (session.isCompacting && channel) {
+          if (!input.message.startsWith("/")) {
+            channel.compactionQueue.push({
+              text: input.message,
+              mode: streamingBehavior === "followUp" ? "followUp" : "steer",
+            });
+            broadcastState(channel, { pending: pendingWithQueue(channel) });
+          } else {
+            session.prompt(input.message).catch((err: unknown) => sendError(bunWS, toMessage(err)));
+          }
+          return;
+        }
         // Fire-and-forget: prompt() runs until the retry/queue drains; events
         // flow back via subscribe().
         session
-          .prompt(text, {
-            ...(images.length > 0 ? { images } : {}),
-            ...(streamingBehavior ? { streamingBehavior } : {}),
-          })
+          .prompt(input.message, (streamingBehavior ? { streamingBehavior } : {}))
           .finally(() => {
             const channel = channelsBySession.get(sessionId);
             if (!channel) return;
             channel.state.resources = snapshotResources(session);
-            broadcastChannelState(channel, { resources: channel.state.resources });
+            broadcastState(channel, { resources: channel.state.resources });
           })
           .catch((err: unknown) =>
             sendError(bunWS, toMessage(err)),
@@ -666,6 +754,22 @@ export const sessionWsHandler: WsHandler = {
           }
         }
         session.abort().catch((error) => sendError(bunWS, toMessage(error)));
+        return;
+      }
+      case "compact": {
+        // Manual compaction. The SDK's compact() aborts the current agent
+        // turn first (same as Pi's /compact), then summarizes older entries
+        // into a compaction summary. compaction_start/compaction_end events
+        // flow back via subscribe() and drive the activity indicator.
+        const customInstructions =
+          typeof input.customInstructions === "string" && input.customInstructions.trim()
+            ? input.customInstructions.trim()
+            : undefined;
+        session
+          .compact(customInstructions)
+          // 失败已由 compaction_end 的 errorMessage 统一 toast（SDK 在
+          // reject 前必先 emit compaction_end），这里只留日志兑底。
+          .catch((err: unknown) => console.error("compact failed", sessionId, toMessage(err)));
         return;
       }
       case "set_model": {

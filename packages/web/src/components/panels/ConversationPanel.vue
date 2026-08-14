@@ -43,6 +43,7 @@ const {
   abort,
   activity,
   busy,
+  compact,
   pending,
   resources,
   extensionUi,
@@ -91,6 +92,7 @@ watch(
       :available-thinking-levels="thinking.availableLevels"
       @send="send"
       @abort="abort"
+      @compact="compact"
       @restore-pending="restorePending"
       @select-model="setModel"
       @select-thinking-level="setThinkingLevel"

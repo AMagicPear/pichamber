@@ -14,9 +14,10 @@
  * - Directories-first sort, then case-insensitive name.
  */
 import { readdir, stat } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { basename, relative, resolve } from "node:path";
 import type { DirEntry, ListResult } from "@pichamber/shared";
 
+import { fdSearch, isFdAvailable, scoreEntry } from "./fd-search";
 import { canonicalPathInWorkspace, canonicalWorkspace, shortPath } from "./workspace";
 
 /**
@@ -65,8 +66,10 @@ export const listDirectory = async (
   return { path: target, displayPath: shortPath(target, workspace), entries };
 };
 
-/** 递归搜索 workspace 内名字匹配的文件/目录（BFS，限深度、跳过大目录）。
- *  给 @ 文件选择面板的搜索框用。 */
+/** Recursively search the workspace for entries whose name or path matches
+ *  the query (BFS with a depth cap, skipping large noisy dirs). Used as a
+ *  fallback when `fd` isn't installed; ranks identically to the fd path
+ *  via the shared `scoreEntry`. */
 const SKIP_SEARCH_DIRS = new Set([
   "node_modules",
   "Library",
@@ -87,14 +90,15 @@ const toEntry = (name: string, path: string, isDirectory: boolean, workspace: st
   isSymbolicLink: false,
 });
 
-export const searchFiles = async (
-  query: string,
-  limit = 60,
-  workspacePath?: string | null,
+/** Fallback search used when `fd` is not installed on the host. Walks the
+ *  workspace BFS-style with a depth cap; ranks matches with the same
+ *  `scoreEntry` fd uses (so fd-installed and fd-missing hosts return hits
+ *  in the same order). */
+const bfsFallbackSearch = async (
+  q: string,
+  workspace: string,
+  limit: number,
 ): Promise<DirEntry[]> => {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  const workspace = await canonicalWorkspace(workspacePath);
   const matches: DirEntry[] = [];
   let frontier: string[] = [workspace];
   for (let depth = 0; frontier.length > 0 && depth <= MAX_SEARCH_DEPTH && matches.length < limit; depth++) {
@@ -115,8 +119,8 @@ export const searchFiles = async (
           if (dirent.isDirectory()) {
             if (dirent.name.startsWith(".") || SKIP_SEARCH_DIRS.has(dirent.name)) continue;
             next.push(entryPath);
-            if (dirent.name.toLowerCase().includes(q)) matches.push(toEntry(dirent.name, entryPath, true, workspace));
-          } else if (dirent.isFile() && dirent.name.toLowerCase().includes(q)) {
+            if (scoreEntry(entryPath, q, true) > 0) matches.push(toEntry(dirent.name, entryPath, true, workspace));
+          } else if (dirent.isFile() && scoreEntry(entryPath, q, false) > 0) {
             matches.push(toEntry(dirent.name, entryPath, false, workspace));
           }
         }
@@ -124,14 +128,31 @@ export const searchFiles = async (
     );
     frontier = next;
   }
-  // 前缀命中优先，然后目录优先，再按名字。
   return matches
-    .sort((a, b) => {
-      const aPrefix = a.name.toLowerCase().startsWith(q) ? 1 : 0;
-      const bPrefix = b.name.toLowerCase().startsWith(q) ? 1 : 0;
-      if (aPrefix !== bPrefix) return bPrefix - aPrefix;
-      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-    })
+    .map((entry) => ({ entry, score: scoreEntry(entry.path, q, entry.isDirectory) }))
+    .sort((a, b) => b.score - a.score)
+    .map((scored) => scored.entry)
     .slice(0, limit);
+};
+
+export const searchFiles = async (
+  query: string,
+  limit = 60,
+  workspacePath?: string | null,
+): Promise<DirEntry[]> => {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const workspace = await canonicalWorkspace(workspacePath);
+  // AbortSignal kept around the whole call so the WS route can drop us on
+  // disconnect. fd's child process gets SIGKILL via the handler in fd-search.
+  const ac = new AbortController();
+  if (isFdAvailable()) {
+    const result = await fdSearch(trimmed, workspace, ac.signal);
+    if (result !== "unavailable") {
+      return result.map((entry) => toEntry(basename(entry.path), entry.path, entry.isDirectory, workspace));
+    }
+  }
+  // `scoreEntry` lowercases internally; hand it the raw query and let it
+  // handle case folding so fd/BFS paths agree on what counts as a match.
+  return bfsFallbackSearch(trimmed, workspace, limit);
 };

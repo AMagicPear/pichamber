@@ -193,6 +193,7 @@ const send = (streamingBehavior?: "steer" | "followUp") => {
 
 const abort = () => ws?.send({ type: "abort", restorePending: true });
 const restorePending = () => ws?.send({ type: "restore_pending" });
+const compact = () => ws?.send({ type: "compact" });
 
 const respondToExtension = (
   response:
@@ -283,6 +284,7 @@ export const useConversationSession = () => {
     activity,
     busy,
     canSend,
+    compact,
     connect,
     connected,
     disconnect,

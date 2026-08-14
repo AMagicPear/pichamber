@@ -2,7 +2,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expandFileRefs } from "./file-refs";
 import {
   canonicalPathInWorkspace,
   canonicalWorkspace,
@@ -47,24 +46,3 @@ describe("workspace containment", () => {
   });
 });
 
-describe("file references", () => {
-  test("expands files relative to the session cwd", async () => {
-    const workspace = await tempRoot();
-    await writeFile(join(workspace, "note.txt"), "hello");
-    const result = await expandFileRefs("Read @note.txt", workspace);
-    expect(result.text).toContain("hello");
-  });
-
-  test("does not follow references outside the session cwd", async () => {
-    const root = await tempRoot();
-    const workspace = join(root, "workspace");
-    const outside = join(root, "outside.txt");
-    await mkdir(workspace);
-    await writeFile(outside, "secret");
-    await symlink(outside, join(workspace, "escape.txt"));
-    expect(await expandFileRefs("Read @escape.txt", workspace)).toEqual({
-      text: "Read @escape.txt",
-      images: [],
-    });
-  });
-});

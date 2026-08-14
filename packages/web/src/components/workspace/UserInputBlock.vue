@@ -3,9 +3,9 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentActivity, ModelDescriptor, PendingMessages, SlashCommandInfo } from "@pichamber/shared";
 import { computed, nextTick, ref } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
-import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
 import MicIcon from "@/assets/icons/Mic.svg";
 import SendIcon from "@/assets/icons/SendPlane2.svg";
+import StackIcon from "@/assets/icons/Stack.svg";
 import StopIcon from "@/assets/icons/Stop.svg";
 import TargetIcon from "@/assets/icons/Target.svg";
 import IconButton from "@/components/IconButton.vue";
@@ -18,6 +18,7 @@ const draft = defineModel<string | undefined>({ required: true });
 const emit = defineEmits<{
   send: [behavior?: "steer" | "followUp"];
   abort: [];
+  compact: [];
   restorePending: [];
   selectModel: [model: ModelDescriptor];
   selectThinkingLevel: [level: ThinkingLevel];
@@ -81,22 +82,46 @@ const insertAtCursor = (text: string) => {
   }
 };
 
+/** One regex for an open `@`/`/` trigger at a token boundary: group 1 is the
+ *  leading whitespace (empty at line start), group 2 the trigger char, group 3
+ *  the query — bare, or the quoted `@"path with spaces"` form that mirrors
+ *  `CombinedAutocompleteProvider.extractAtPrefix`. `triggerStart` is the index
+ *  of the trigger char, which `replaceTrigger` uses to splice the pick in. */
+const TRIGGER_RE = /(^|\s)([@/])((?:"[^"]*"?)|[^\s]*)$/;
+
+const parseTrigger = (before: string) => {
+  const m = TRIGGER_RE.exec(before);
+  if (!m) return null;
+  const raw = m[3] ?? "";
+  const query = raw.startsWith('"') ? raw.slice(1).replace(/"$/, "") : raw;
+  return {
+    kind: m[2] === "@" ? ("files" as const) : ("commands" as const),
+    query,
+    triggerStart: m.index + (m[1]?.length ?? 0),
+  };
+};
+
 const detectTrigger = () => {
   const el = inputEl.value;
   if (!el) {
     shelfMode.value = null;
     return;
   }
-  const before = el.value.slice(0, el.selectionStart);
-  const m = /(^|\s)([@/])([^\s]*)$/.exec(before);
-  if (m) {
-    shelfMode.value = m[2] === "@" ? "files" : "commands";
-    shelfQuery.value = m[3] ?? "";
+  const trigger = parseTrigger(el.value.slice(0, el.selectionStart));
+  if (trigger) {
+    shelfMode.value = trigger.kind;
+    shelfQuery.value = trigger.query;
   } else shelfMode.value = null;
 };
 
+// Wrap with `"…"` when the path contains whitespace, matching the official
+// TUI's `CombinedAutocompleteProvider.buildCompletionValue` (paths-with-spaces
+// are emitted as `@"…"`, otherwise the trailing space would split the token).
+const atFileToken = (relativePath: string): string =>
+  /\s/.test(relativePath) ? `@"${relativePath}"` : `@${relativePath}`;
+
 const onPickFile = (relativePath: string) => {
-  replaceTrigger(`@${relativePath} `);
+  replaceTrigger(`${atFileToken(relativePath)} `);
 };
 
 const onPickCommand = (command: SlashCommandInfo) => {
@@ -111,9 +136,8 @@ const replaceTrigger = (replacement: string) => {
     draft.value = current + replacement;
     return;
   }
-  const before = el.value.slice(0, el.selectionStart);
-  const m = /(^|\s)([@/])([^\s]*)$/.exec(before);
-  const triggerIndex = m ? m.index + m[1]!.length : el.selectionStart;
+  const trigger = parseTrigger(el.value.slice(0, el.selectionStart));
+  const triggerIndex = trigger ? trigger.triggerStart : el.selectionStart;
   draft.value = el.value.slice(0, triggerIndex) + replacement + el.value.slice(el.selectionStart);
   nextTick(() => {
     el.focus();
@@ -144,8 +168,14 @@ const activityText = computed(() => {
   }
 });
 
-const aboveWidgets = computed(() => Object.values(props.extensionWidgets).filter((widget) => widget.placement === "aboveEditor"));
-const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter((widget) => widget.placement === "belowEditor"));
+/** Widgets keyed by the extension's widget key so Vue's reconciliation
+ *  survives `extensionWidgets` reorderings without remounting each panel. */
+const aboveWidgets = computed(() =>
+  Object.entries(props.extensionWidgets).filter(([, widget]) => widget.placement === "aboveEditor"),
+);
+const belowWidgets = computed(() =>
+  Object.entries(props.extensionWidgets).filter(([, widget]) => widget.placement === "belowEditor"),
+);
 </script>
 
 <template>
@@ -159,7 +189,7 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
         @select-file="onPickFile"
         @select-command="onPickCommand"
       />
-      <div v-for="(widget, index) in aboveWidgets" :key="`above:${index}`" class="composer__widget">
+      <div v-for="([key, widget]) in aboveWidgets" :key="`above:${key}`" class="composer__widget">
         <span v-for="(line, lineIndex) in widget.lines" :key="lineIndex">{{ line }}</span>
       </div>
       <textarea
@@ -181,7 +211,7 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
         </div>
         <button type="button" @click="emit('restorePending')">Restore all</button>
       </div>
-      <div v-for="(widget, index) in belowWidgets" :key="`below:${index}`" class="composer__widget">
+      <div v-for="([key, widget]) in belowWidgets" :key="`below:${key}`" class="composer__widget">
         <span v-for="(line, lineIndex) in widget.lines" :key="lineIndex">{{ line }}</span>
       </div>
       <div class="composer__footer">
@@ -191,7 +221,9 @@ const belowWidgets = computed(() => Object.values(props.extensionWidgets).filter
               <AddCircleIcon />
             </IconButton>
           </div>
-          <IconButton size="compact" label="Expand composer" disabled><FullscreenIcon /></IconButton>
+          <!-- Compact works at any time: the SDK's compact() aborts the
+               current turn first (same as Pi's /compact), then summarizes. -->
+          <IconButton size="compact" label="Compact context" @click="emit('compact')"><StackIcon /></IconButton>
           <IconButton size="compact" label="Goal mode" disabled><TargetIcon /></IconButton>
         </div>
         <div class="composer__footer-trailing">

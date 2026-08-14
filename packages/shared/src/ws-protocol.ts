@@ -100,6 +100,18 @@ export type LiveItem =
       /** pi 会话条目 id；重建时按它匹配以保持 id 稳定（custom 消息重建
        *  时会新建对象，无法像普通消息那样按对象身份匹配）。 */
       entryId?: string;
+    }
+  | {
+      id: string;
+      kind: "compaction";
+      phase: "committed";
+      /** LLM 生成的上下文压缩摘要。 */
+      summary: string;
+      /** 压缩前的 token 数。 */
+      tokensBefore: number;
+      timestamp: number;
+      /** pi 会话条目 id，语义同 custom.entryId。 */
+      entryId?: string;
     };
 
 /** Slim model reference the server emits and accepts on the wire.
@@ -199,6 +211,7 @@ export type ClientMessage =
   | { type: "prompt"; message: string; streamingBehavior?: "steer" | "followUp" }
   | { type: "abort"; restorePending?: boolean }
   | { type: "restore_pending" }
+  | { type: "compact"; customInstructions?: string }
   | { type: "set_model"; provider: string; modelId: string }
   | { type: "set_thinking_level"; level: ThinkingLevel }
   | { type: "resync" }

@@ -6,6 +6,8 @@ import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
 import { messageImages, messageText } from "./messageContent";
+import { parseSkillBlock } from "./skillBlock";
+import SkillBlockChip from "./SkillBlockChip.vue";
 import { workspace } from "@/stores/workspace";
 
 const props = defineProps<{
@@ -115,6 +117,24 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
     images,
   });
 };
+
+/** Returns the parsed skill block when the user message is the canonical
+ *  shape pi produces from `/skill:name` expansion, otherwise null.
+ *  pi appends the skill's body wrapped in `<skill ...>...</skill>`; without
+ *  this check the markdown renderer treats it as malformed HTML and clips
+ *  the message on the inner `<table>`/`<tr>` tags. */
+type SkillBlockShape = { name: string; location: string; userMessage?: string };
+const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["message"]): SkillBlockShape | null => {
+  const text = messageText(message);
+  if (!text) return null;
+  // Avoid the full regex probe on every keystroke for every message; the
+  // shape always starts with the literal "<skill ". message.content is also
+  // validated as a string above, so a substring check is enough.
+  if (!text.startsWith("<skill ")) return null;
+  const parsed = parseSkillBlock(text);
+  if (!parsed) return null;
+  return { name: parsed.name, location: parsed.location, userMessage: parsed.userMessage };
+};
 </script>
 
 <template>
@@ -123,8 +143,29 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
       <template v-for="item in items" :key="item.id">
         <article v-if="item.kind === 'user'" class="conversation-message conversation-message--user">
           <div class="conversation-message__user">
+            <!-- When the user message starts with a pi-expanded skill block,
+                 collapse the body to a chip so the markdown renderer doesn't
+                 see an HTML-shaped blob (its sanitizer would clip on the
+                 inner `<table>` tags and the user ends up staring at raw
+                 XML). Any trailing text the user appended after the
+                 `/skill:name` command is rendered normally. -->
+            <template v-if="skillBlockFor(item.message)">
+              <SkillBlockChip
+                :name="skillBlockFor(item.message)!.name"
+                :location="skillBlockFor(item.message)!.location"
+              />
+              <MarkdownRender
+                v-if="skillBlockFor(item.message)!.userMessage"
+                class="markdown-chat"
+                mode="chat"
+                :content="skillBlockFor(item.message)!.userMessage!"
+                :final="true"
+                :fade="false"
+                :viewport-priority="false"
+              />
+            </template>
             <MarkdownRender
-              v-if="messageText(item.message)"
+              v-else-if="messageText(item.message)"
               class="markdown-chat"
               mode="chat"
               :content="messageText(item.message)"
@@ -144,6 +185,22 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
         </article>
         <AssistantMessage v-else-if="item.kind === 'assistant'" :message="item.message" :final="item.phase === 'committed'" />
         <ToolResultMessage v-else-if="item.kind === 'tool'" :detail="toolDetail(item)" />
+        <article v-else-if="item.kind === 'compaction'" class="conversation-message conversation-message--compaction">
+          <div class="compaction-summary">
+            <div class="compaction-summary__header">
+              <span class="compaction-summary__label">[compaction]</span>
+              <span class="compaction-summary__meta">Compacted from {{ item.tokensBefore.toLocaleString() }} tokens</span>
+            </div>
+            <MarkdownRender
+              class="markdown-chat"
+              mode="chat"
+              :content="item.summary"
+              :final="true"
+              :fade="false"
+              :viewport-priority="false"
+            />
+          </div>
+        </article>
       </template>
     </div>
   </div>
@@ -162,6 +219,27 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
 .conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
+
+/* Compaction summary block: a quiet inset card between messages, mirroring
+   the TUI's CompactionSummaryMessage (same surface as custom messages). */
+.conversation-message--compaction { content-visibility: auto; contain-intrinsic-size: auto 120px; }
+.compaction-summary {
+  padding: 12px 16px;
+  border: 1px solid var(--ui-border-subtle);
+  border-left: 3px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+}
+.compaction-summary__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.compaction-summary__label { font-weight: 700; color: var(--ui-text); }
+.compaction-summary__meta { color: var(--ui-text-tertiary); font-size: 12px; }
 .conversation-message__user { display: grid; width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid var(--ui-border-subtle); border-radius: 12px 12px 4px; background: var(--ui-surface-muted); }
 
 /* Force the bubble to actually honor its 85% cap when the content
