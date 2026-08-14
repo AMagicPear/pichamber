@@ -4,12 +4,21 @@ import IconButton from "@/components/IconButton.vue";
 import SplitPane from "@/components/layout/SplitPane.vue";
 import Modal from "@/components/layout/Modal.vue";
 import SettingsView from "@/components/modals/SettingsView.vue";
-import { ui } from "@/stores/ui";
 import ContextPanel from "@/components/panels/ContextPanel.vue";
+import FilesPanel from "@/components/panels/FilesPanel.vue";
+import GitPanel from "@/components/panels/GitPanel.vue";
+import { ui } from "@/stores/ui";
 import SessionHeader from "@/components/panels/SessionHeader.vue";
 import SessionSidebar from "@/components/panels/SessionSidebar.vue";
 import TerminalPanel from "@/components/panels/TerminalPanel.vue";
 import { RouterView } from "vue-router";
+import { computed, KeepAlive } from "vue";
+
+const rightPanel = computed(() => ({
+  git: GitPanel,
+  files: FilesPanel,
+  context: ContextPanel,
+})[ui.activeRightPanel]);
 </script>
 
 <template>
@@ -46,7 +55,9 @@ import { RouterView } from "vue-router";
               </template>
 
               <template #sidebar>
-                <ContextPanel />
+                <KeepAlive>
+                  <component :is="rightPanel" :key="ui.activeRightPanel" />
+                </KeepAlive>
               </template>
             </SplitPane>
           </div>
@@ -66,7 +77,7 @@ import { RouterView } from "vue-router";
 :root {
   --ui-text: #171717;
   --ui-text-strong: #242320;
-  --ui-text-muted: #77736c;
+  --ui-text-muted: #76746d;
   --ui-surface: #fff;
   --ui-surface-subtle: #fafaf7;
   --ui-surface-muted: #f7f6f2;
@@ -94,6 +105,7 @@ import { RouterView } from "vue-router";
   --ui-error-hover: rgb(168 56 56 / 12%);
   --ui-overlay: rgb(0 0 0 / 45%);
   --ui-focus: #3978d4;
+  --ui-panel-active: #8a735b;
   --ui-shadow-raised: 0 8px 24px rgb(35 32 27 / 10%);
   --ui-shadow-control: 0 1px 2px rgb(36 33 28 / 18%);
   --ui-duration-fast: 120ms;
@@ -133,6 +145,7 @@ import { RouterView } from "vue-router";
   --ui-error-hover: rgb(224 170 170 / 10%);
   --ui-overlay: rgb(0 0 0 / 62%);
   --ui-focus: #78a9ed;
+  --ui-panel-active: #c4aa88;
   --ui-shadow-raised: 0 10px 28px rgb(0 0 0 / 32%);
   --ui-shadow-control: 0 1px 2px rgb(0 0 0 / 28%);
 }
@@ -216,11 +229,42 @@ button {
   height: 100%;
 }
 
+/* Shared full-height empty state for the independent right-side panels. */
+.right-panel__pane {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.right-panel__empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 32px 16px;
+  text-align: center;
+}
+.right-panel__empty > svg {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 14px;
+  color: var(--ui-text-muted);
+}
+.right-panel__empty p { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+.right-panel__empty span { color: var(--ui-text-muted); font-size: 12px; }
+
 .app-shell__sidebar-toggle {
   position: absolute;
   top: 11px;
   left: 11px;
   z-index: 10;
+}
+.app-shell .app-shell__sidebar-toggle.is-pressed {
+  color: inherit;
 }
 
 .workspace {

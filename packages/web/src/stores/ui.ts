@@ -2,6 +2,7 @@ import { reactive } from "vue";
 import { persistedState } from "./persisted";
 
 export type SplitMode = "bottom" | "left" | "right";
+export type RightPanel = "git" | "files" | "context";
 
 export interface PanelState {
   open: boolean;
@@ -32,13 +33,14 @@ const clampSize = (mode: SplitMode, size: number): number => {
   return Math.min(max, Math.max(min, size));
 };
 
-type StoredUi = { panels: PanelsState; maximized: Record<SplitMode, boolean> };
+type StoredUi = { panels: PanelsState; maximized: Record<SplitMode, boolean>; activeRightPanel: RightPanel };
 
 const defaultUi = (): StoredUi => ({
   panels: Object.fromEntries(
     SPLIT_MODES.map((mode) => [mode, { ...DEFAULT_PANELS[mode] }]),
   ) as PanelsState,
   maximized: { bottom: false, left: false, right: false },
+  activeRightPanel: "files",
 });
 
 /** Validate + clamp whatever survived in storage, falling back to defaults. */
@@ -62,7 +64,10 @@ const hydrate = (raw: Partial<StoredUi>): StoredUi => {
       if (typeof raw.maximized[mode] === "boolean") maximized[mode] = raw.maximized[mode];
     }
   }
-  return { panels, maximized };
+  const activeRightPanel: RightPanel = raw.activeRightPanel === "git" || raw.activeRightPanel === "context"
+    ? raw.activeRightPanel
+    : "files";
+  return { panels, maximized, activeRightPanel };
 };
 
 const stored = persistedState<StoredUi>(STORAGE_KEY, defaultUi(), hydrate);
@@ -70,9 +75,18 @@ const stored = persistedState<StoredUi>(STORAGE_KEY, defaultUi(), hydrate);
 export const ui = reactive({
   panels: stored.panels,
   maximized: stored.maximized,
+  activeRightPanel: stored.activeRightPanel,
   settingsOpen: false,
   toggle(mode: SplitMode) {
     ui.panels[mode].open = !ui.panels[mode].open;
+  },
+  selectRightPanel(panel: RightPanel) {
+    if (ui.panels.right.open && ui.activeRightPanel === panel) {
+      ui.panels.right.open = false;
+      return;
+    }
+    ui.activeRightPanel = panel;
+    ui.panels.right.open = true;
   },
   setSize(mode: SplitMode, size: number) {
     ui.panels[mode].size = clampSize(mode, size);

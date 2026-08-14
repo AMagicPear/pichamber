@@ -26,7 +26,11 @@ withDefaults(
   <button
     type="button"
     class="icon-button"
-    :class="[`icon-button--${size}`, tone && `icon-button--tone-${tone}`]"
+    :class="[
+      `icon-button--${size}`,
+      { 'is-pressed': pressed === true },
+      tone && `icon-button--tone-${tone}`,
+    ]"
     :aria-label="label"
     :title="label"
     :aria-pressed="pressed"
@@ -52,6 +56,7 @@ withDefaults(
   transition:
     background-color var(--ui-duration-fast) var(--ui-ease-standard),
     box-shadow var(--ui-duration-fast) var(--ui-ease-standard),
+    color var(--ui-duration-fast) var(--ui-ease-standard),
     transform 80ms ease;
 }
 .icon-button--compact {
@@ -79,6 +84,9 @@ withDefaults(
 }
 .icon-button:active:not(:disabled) {
   transform: scale(0.94);
+}
+.icon-button.is-pressed {
+  color: var(--ui-panel-active);
 }
 .icon-button:disabled {
   cursor: default;

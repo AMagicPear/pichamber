@@ -1,216 +1,137 @@
 <script setup lang="ts">
-/**
- * Right-side context panel. Hosts the git / files / context tabs.
- *
- * Switching tabs uses Transition + KeepAlive. This means:
- *   - FileTree keeps its expanded/loaded state when you tab away and back.
- *   - No re-fetch on tab switch (the FileTree instance is cached).
- *   - No vertical "jump" because each pane fills the same body container.
- *
- * Only the `files` tab has real data; git and context are placeholders
- * for now.
- */
-import { computed, ref } from "vue";
-import FileListIcon from "@/assets/icons/FileList2.svg";
-import FolderIcon from "@/assets/icons/Folder.svg";
-import GitBranchIcon from "@/assets/icons/GitBranch.svg";
-import ContextPane from "@/components/workspace/ContextPane.vue";
-import FilesPane from "@/components/workspace/FilesPane.vue";
-import GitPane from "@/components/workspace/GitPane.vue";
+import { computed } from "vue";
+import type { LastAssistantUsage, SessionStatsView } from "@pichamber/shared";
+import { useConversationSession } from "@/composables/useConversationSession";
 
-const tabs = [
-  {
-    id: "git",
-    label: "git",
-    icon: GitBranchIcon,
-    component: GitPane,
-  },
-  {
-    id: "files",
-    label: "files",
-    icon: FolderIcon,
-    component: FilesPane,
-  },
-  {
-    id: "context",
-    label: "context",
-    icon: FileListIcon,
-    component: ContextPane,
-  },
-] as const;
+const { stats } = useConversationSession();
 
-type Tab = (typeof tabs)[number]["id"];
+const view = computed<SessionStatsView | undefined>(() => stats.value);
 
-const activeTab = ref<Tab>("files");
-const activeTabConfig = computed(() => tabs.find((tab) => tab.id === activeTab.value)!);
+/** Distinguishes "no model loaded yet" from a populated zero state. The
+ *  empty state copy ("Send a message to start…") is friendlier than a wall
+ *  of zeros and dashes. */
+const hasData = computed(
+  () =>
+    !!view.value &&
+    (!!view.value.model || view.value.messages.total > 0 || !!view.value.modified),
+);
+
+const numberFormat = new Intl.NumberFormat("en-US");
+const usageRows = computed(() => {
+  const usage: LastAssistantUsage = view.value?.lastAssistant ?? {
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+  };
+  // Order matches the openchamber reference; reasoning sits between output
+  // and cacheRead so the eye scans the production tokens first, then the
+  // billing-relevant cache buckets.
+  return [
+    { label: "Input", value: usage.input },
+    { label: "Output", value: usage.output },
+    { label: "Reasoning", value: usage.reasoning },
+    { label: "Cache Read", value: usage.cacheRead },
+    { label: "Cache Write", value: usage.cacheWrite },
+  ];
+});
+
+const formatTokens = (n: number) => numberFormat.format(n);
+
+/** "OpenCode Zen / hy3-free" — keep the provider subtle and the model id
+ *  crisp, mirroring how the model selector surfaces them. */
+const modelTitle = computed(() => {
+  const m = view.value?.model;
+  if (!m) return "";
+  return m.name && m.name !== m.id ? `${m.provider} / ${m.name}` : `${m.provider} / ${m.id}`;
+});
 </script>
 
 <template>
-  <aside class="context-panel">
-    <nav class="context-panel__tabs" role="tablist">
-      <button v-for="tab in tabs" :key="tab.id" type="button" role="tab" :aria-selected="activeTab === tab.id"
-        :class="{ 'is-active': activeTab === tab.id }" @click="activeTab = tab.id">
-        <component :is="tab.icon" /><span>{{ tab.label }}</span>
-      </button>
-    </nav>
-
-    <div class="context-panel__body">
-      <Transition name="context-pane" mode="out-in">
-        <KeepAlive>
-          <component :is="activeTabConfig.component" :key="activeTab" />
-        </KeepAlive>
-      </Transition>
+  <div class="right-panel__pane context-pane" role="tabpanel" aria-label="context">
+    <div v-if="!hasData" class="context-pane__empty">
+      <p>Context</p>
+      <span>Send a message to see live token usage and session stats.</span>
     </div>
-  </aside>
+
+    <div v-else class="context-pane__body">
+      <header class="context-pane__header">
+        <div class="context-pane__model" :title="modelTitle || undefined">
+          <span class="context-pane__model-provider">{{ view?.model?.provider ?? "" }}</span>
+          <span v-if="view?.model" class="context-pane__model-sep">/</span>
+          <span class="context-pane__model-id">{{ view?.model?.id ?? "" }}</span>
+        </div>
+        <div v-if="view?.modified" class="context-pane__date">{{ view.modified }}</div>
+      </header>
+
+      <section class="context-pane__section">
+        <h3 class="context-pane__heading">Context</h3>
+        <div class="context-pane__stat">
+          <span class="context-pane__value">{{ view?.context.tokensText ?? "—" }}</span>
+          <span class="context-pane__sub">{{ view?.context.percent ?? "—" }} used</span>
+        </div>
+        <div
+          v-if="view?.context.contextWindow && view.context.tokens != null"
+          class="context-pane__bar"
+          role="progressbar"
+          :aria-valuenow="view.context.tokens"
+          :aria-valuemin="0"
+          :aria-valuemax="view.context.contextWindow"
+        >
+          <div
+            class="context-pane__bar-fill"
+            :style="{ width: `${Math.min(100, (view.context.tokens / view.context.contextWindow) * 100)}%` }"
+          />
+        </div>
+      </section>
+
+      <section class="context-pane__section">
+        <h3 class="context-pane__heading">Messages</h3>
+        <div class="context-pane__stat">
+          <span class="context-pane__value">{{ formatTokens(view?.messages.total ?? 0) }}</span>
+        </div>
+        <div class="context-pane__row">
+          <span class="context-pane__row-label">User</span>
+          <span class="context-pane__row-value">{{ formatTokens(view?.messages.user ?? 0) }}</span>
+        </div>
+        <div class="context-pane__row">
+          <span class="context-pane__row-label">Assistant</span>
+          <span class="context-pane__row-value">{{ formatTokens(view?.messages.assistant ?? 0) }}</span>
+        </div>
+      </section>
+
+      <section class="context-pane__section">
+        <h3 class="context-pane__heading">Cost</h3>
+        <div class="context-pane__stat">
+          <span class="context-pane__value">{{ view?.cost.value ?? "$0.00" }}</span>
+        </div>
+      </section>
+
+      <section class="context-pane__section">
+        <h3 class="context-pane__heading">Last Assistant Message</h3>
+        <div v-for="row in usageRows" :key="row.label" class="context-pane__row">
+          <span class="context-pane__row-label">{{ row.label }}</span>
+          <span class="context-pane__row-value">{{ formatTokens(row.value) }}</span>
+        </div>
+      </section>
+
+      <section class="context-pane__section">
+        <h3 class="context-pane__heading">Cache Hit</h3>
+        <div class="context-pane__stat">
+          <span class="context-pane__value">{{ view?.cacheHit ?? "0.0%" }}</span>
+        </div>
+      </section>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.context-panel {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  color: var(--ui-text);
-  /* Container queries let the tab strip decide on its own when labels
-     no longer fit — no JS needed. Threshold sits a hair above the
-     right-pane min (200px) so labels still show at the very minimum. */
-  container-type: inline-size;
-  container-name: right-panel;
-}
-
-/* ── Tabs ─────────────────────────────────────────────────────────── */
-/* Compact pill-style tab strip. Height ~36px to match the openchamber
-   reference; inactive tabs are quiet, active one gets a soft border. */
-.context-panel__tabs {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  flex: 0 0 32px;
-  margin: 11px 8px 0;
-  padding: 3px;
-  border-radius: 10px;
-  background: var(--ui-surface-subtle);
-  transition: margin 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.context-panel__tabs button {
-  display: inline-flex;
-  flex: 1 1 0;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  color: var(--ui-text-muted);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 120ms ease,
-    border-color 120ms ease,
-    color 120ms ease,
-    padding 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    gap 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.context-panel__tabs button:hover {
-  background: var(--ui-surface-hover);
-  color: var(--ui-text-strong);
-}
-
-.context-panel__tabs button:focus-visible {
-  outline: 2px solid #3978d4;
-  outline-offset: 1px;
-}
-
-.context-panel__tabs button svg {
-  width: 16px;
-  height: 16px;
-}
-
-.context-panel__tabs .is-active {
-  border-color: var(--ui-border);
-  background: var(--ui-surface);
-  color: var(--ui-text-strong);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
-}
-
-.context-panel__tabs .is-active:hover {
+.context-pane {
   background: var(--ui-surface);
 }
 
-.context-panel__tabs button>span {
-  max-width: 100px;
-  overflow: hidden;
-  white-space: nowrap;
-  transition:
-    max-width 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 100ms ease;
-}
-
-@container right-panel (max-width: 220px) {
-  .context-panel__tabs {
-    margin-inline: 6px;
-  }
-
-  .context-panel__tabs button {
-    padding: 0;
-    gap: 0;
-  }
-
-  .context-panel__tabs button>span {
-    max-width: 0;
-    opacity: 0;
-  }
-}
-
-/* ── Body & panes ──────────────────────────────────────────────────── */
-.context-panel__body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-.context-pane-enter-active,
-.context-pane-leave-active {
-  transition:
-    opacity 90ms ease,
-    transform 100ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.context-pane-enter-from,
-.context-pane-leave-to {
-  opacity: 0;
-  transform: translateY(2px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-
-  .context-panel__tabs,
-  .context-panel__tabs button,
-  .context-panel__tabs button>span,
-  .context-pane-enter-active,
-  .context-pane-leave-active {
-    transition: none;
-  }
-}
-</style>
-
-<!-- 下面的这些样式是被三个子页面共用的 不要scoped -->
-<style>
-.context-panel__pane {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.context-panel__empty {
+.context-pane__empty {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -220,21 +141,135 @@ const activeTabConfig = computed(() => tabs.find((tab) => tab.id === activeTab.v
   text-align: center;
 }
 
-.context-panel__empty>svg {
-  width: 24px;
-  height: 24px;
-  margin-bottom: 14px;
-  color: #777;
-}
-
-.context-panel__empty p {
+.context-pane__empty p {
   margin: 0 0 6px;
   font-size: 14px;
   font-weight: 600;
+  color: var(--ui-text-strong);
 }
 
-.context-panel__empty span {
-  color: #777;
+.context-pane__empty span {
+  color: var(--ui-text-muted);
   font-size: 12px;
+}
+
+.context-pane__body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 16px 20px;
+  overflow-y: auto;
+}
+
+.context-pane__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+.context-pane__model {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ui-text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-pane__model-provider {
+  color: var(--ui-text-strong);
+}
+
+.context-pane__model-sep {
+  color: #b9b9b9;
+}
+
+.context-pane__model-id {
+  color: var(--ui-text-muted);
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12.5px;
+}
+
+.context-pane__date {
+  color: var(--ui-text-muted);
+  font-size: 11.5px;
+}
+
+.context-pane__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.context-pane__heading {
+  margin: 0 0 4px;
+  color: var(--ui-text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.context-pane__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.context-pane__value {
+  color: var(--ui-text-strong);
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.context-pane__sub {
+  color: var(--ui-text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.context-pane__bar {
+  height: 4px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--ui-surface-selected);
+  overflow: hidden;
+}
+
+.context-pane__bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #b4b4b4, #6f6f6f);
+  transition: width 200ms ease;
+}
+
+.context-pane__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 1px 0;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+.context-pane__row-label {
+  color: var(--ui-text-muted);
+}
+
+.context-pane__row-value {
+  color: var(--ui-text-strong);
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
 }
 </style>

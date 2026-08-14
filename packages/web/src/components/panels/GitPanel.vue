@@ -118,8 +118,8 @@ watch(() => workspace.cwd, load);
 </script>
 
 <template>
-  <div class="context-panel__pane" role="tabpanel" aria-label="git">
-    <div v-if="!status && error" class="context-panel__empty">
+  <div class="right-panel__pane" role="tabpanel" aria-label="git">
+    <div v-if="!status && error" class="right-panel__empty">
       <GitBranchIcon />
       <p>This directory is not a Git repository</p>
       <span>{{ error }}</span>
@@ -208,20 +208,19 @@ watch(() => workspace.cwd, load);
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
-  padding: 8px 10px 10px;
-  gap: 10px;
+  padding: 10px 10px 12px;
+  gap: 12px;
   /* Container query so the diff area can drop its 120px min-height
      when the pane is short; without it, the min-height pushes the
      diff-view past its section's allocated size and bleeds into the
      commit block below. */
-  container-type: size;
-  container-name: git-pane;
   /* Last-resort scroll: when the combined intrinsic height of branch
      + changes + diff + commit can't fit (long change list + tiny
      pane), the whole pane scrolls instead of letting flex children
      visually overlap. */
-  overflow: auto;
+  overflow: hidden;
 }
 
 /* ── Branch bar ───────────────────────────────────────────────────── */
@@ -251,7 +250,7 @@ watch(() => workspace.cwd, load);
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
-  color: #777;
+  color: var(--ui-text-muted);
 }
 
 /* ── Section frames ───────────────────────────────────────────────── */
@@ -264,9 +263,21 @@ watch(() => workspace.cwd, load);
      rest is reachable via the pane's own scroll. */
   overflow: hidden;
 }
+.git-pane__section:not(.git-pane__section--diff):not(.git-pane__section--commit) {
+  flex: 0 1 auto;
+}
 
 .git-pane__section--diff {
-  flex: 1 1 0;
+  flex: 0 1 auto;
+}
+.git-pane__section--diff :deep(.diff-view) {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 72px;
+  max-height: 360px;
+}
+.git-pane__section--diff .git-pane__diff-empty {
+  min-height: 72px;
 }
 
 .git-pane__section--commit {
@@ -306,6 +317,8 @@ watch(() => workspace.cwd, load);
 
 /* ── Changes list ────────────────────────────────────────────────── */
 .git-pane__list {
+  max-height: 30vh;
+  overflow-y: auto;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -400,7 +413,7 @@ watch(() => workspace.cwd, load);
   justify-content: center;
   border-radius: 3px;
   background: transparent;
-  color: #777;
+  color: var(--ui-text-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 700;
@@ -429,12 +442,12 @@ watch(() => workspace.cwd, load);
   /* Same scroll-box look as DiffView's .diff-view, so the empty state
      fills the slot the same way the populated diff would. */
   flex: 1 1 0;
-  min-height: 120px;
+  min-height: 0;
   margin: 0;
   padding: 24px 12px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  background: var(--ui-surface-subtle);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--ui-text-muted);
   font-size: 13px;
   text-align: center;
@@ -452,7 +465,7 @@ watch(() => workspace.cwd, load);
   box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
+  border-radius: 5px;
   outline: 0;
   resize: none;
   color: inherit;
@@ -479,8 +492,8 @@ watch(() => workspace.cwd, load);
 .git-pane__btn {
   height: 30px;
   padding: 0 14px;
-  border: 1px solid #dedbd4;
-  border-radius: 8px;
+  border: 0;
+  border-radius: 5px;
   background: var(--ui-surface-hover);
   color: var(--ui-text-strong);
   font: inherit;
@@ -504,17 +517,4 @@ watch(() => workspace.cwd, load);
   opacity: 0.5;
 }
 
-/* When the pane is shorter than the combined intrinsic height of
-   branch + changes + diff + commit, drop the 120px min on the diff
-   area so the section shrinks to whatever space is left instead of
-   pushing past its allocation and bleeding into the commit block
-   below. The threshold (400px) sits comfortably above the no-diff
-   floor of ~360px, so transitions between the two modes aren't
-   noticeable. */
-@container git-pane (max-height: 400px) {
-  .diff-view,
-  .git-pane__diff-empty {
-    min-height: 0;
-  }
-}
 </style>

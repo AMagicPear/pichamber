@@ -174,11 +174,17 @@ const handleStyle = computed(() => {
     height 180ms ease;
 }
 .split-pane__content {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 var(--split-w, 280px);
   width: var(--split-w, 280px);
   height: 100%;
   min-width: var(--split-w, 280px);
   overflow: hidden;
+}
+.split-pane__content > * {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .split-pane--left > .split-pane__panel,
 .split-pane--right > .split-pane__panel {

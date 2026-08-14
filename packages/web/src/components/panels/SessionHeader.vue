@@ -2,20 +2,24 @@
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
 import GlobalIcon from "@/assets/icons/Global.svg";
 import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
-import LayoutRightIcon from "@/assets/icons/LayoutRight.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalBoxIcon from "@/assets/icons/TerminalBox.svg";
+import FileListIcon from "@/assets/icons/FileList2.svg";
+import FolderIcon from "@/assets/icons/Folder.svg";
+import GitBranchIcon from "@/assets/icons/GitBranch.svg";
 import IconButton from "@/components/IconButton.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import ProviderQuotaPanel from "@/components/workspace/ProviderQuotaPanel.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { usePopover } from "@/composables/usePopover";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { getGitStatus } from "@/api/client";
 import { ui } from "@/stores/ui";
 import { workspace } from "@/stores/workspace";
 
 const { availableModels } = useConversationSession();
+const gitBranch = ref<string | null>(null);
 
 /** At least one quoted provider is configured when the Pi SDK reports a
  *  provider that the server registry also supports. Loads the supported
@@ -27,7 +31,13 @@ const hasQuotedProvider = computed(() => {
 
 onMounted(() => {
   void loadQuotaProviders();
+  void loadGitBranch();
 });
+
+const loadGitBranch = async () => {
+  gitBranch.value = (await getGitStatus(workspace.sessionId).catch(() => null))?.branch ?? null;
+};
+watch(() => [workspace.sessionId, workspace.cwd], loadGitBranch);
 
 const root = ref<HTMLElement | null>(null);
 const { open, style, toggle } = usePopover({
@@ -51,7 +61,13 @@ const onProvidersClick = () => {
     <div class="session-header__leading">
       <div class="session-header__title">
           <h1 :title="workspace.sessionName ?? undefined">{{ workspace.sessionName }}</h1>
-          <p :title="workspace.cwd ?? undefined">{{ workspace.cwd }}</p>
+          <div class="session-header__path-row">
+            <p :title="workspace.cwd ?? undefined">{{ workspace.cwd }}</p>
+            <span v-if="gitBranch" class="session-header__branch" :title="`Git branch: ${gitBranch}`">
+              <GitBranchIcon />
+              {{ gitBranch }}
+            </span>
+          </div>
       </div>
     </div>
 
@@ -80,12 +96,20 @@ const onProvidersClick = () => {
       </IconButton>
       <IconButton label="Web" disabled><GlobalIcon /></IconButton>
       <IconButton
-        label="Toggle right sidebar"
-        :pressed="ui.panels.right.open"
-        @click="ui.toggle('right')"
-      >
-        <LayoutRightIcon />
-      </IconButton>
+        label="Git panel"
+        :pressed="ui.panels.right.open && ui.activeRightPanel === 'git'"
+        @click="ui.selectRightPanel('git')"
+      ><GitBranchIcon /></IconButton>
+      <IconButton
+        label="Files panel"
+        :pressed="ui.panels.right.open && ui.activeRightPanel === 'files'"
+        @click="ui.selectRightPanel('files')"
+      ><FolderIcon /></IconButton>
+      <IconButton
+        label="Context panel"
+        :pressed="ui.panels.right.open && ui.activeRightPanel === 'context'"
+        @click="ui.selectRightPanel('context')"
+      ><FileListIcon /></IconButton>
       <IconButton label="Account" disabled><AiAgentIcon class="account-icon" /></IconButton>
     </nav>
   </header>
@@ -119,6 +143,28 @@ const onProvidersClick = () => {
 .session-header h1,
 .session-header p {
   margin: 0;
+}
+.session-header__path-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.session-header__branch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-header__branch svg {
+  width: 12px;
+  height: 12px;
 }
 .session-header h1 {
   overflow: hidden;
