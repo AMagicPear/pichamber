@@ -48,6 +48,13 @@
   font-feature-settings: "kern", "liga", "calt";
 }
 
+/* Nested list items get their own renderer and otherwise reset body text to
+ * markstream's 1rem default. Keep them at the chat scale. */
+.markdown-chat .markdown-renderer {
+  --ms-text-body: 14px;
+  --ms-leading-body: 1.6;
+}
+
 /* `text-wrap: pretty` keeps paragraphs from ending on a single short
  * word — the only "article rhythm" we want in chat. No `text-align:
  * justify`: justified CJK / mixed text stretches the spaces between

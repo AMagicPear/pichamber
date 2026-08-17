@@ -27,6 +27,21 @@ export const messageText = (message?: AgentMessage): string => {
     .join("\n\n");
 };
 
+/** 工具执行结果（live 阶段的 partialResult / 结束 result）是 pi 的
+ *  `{content, details}` 封套，结构与 message 相同，取文本直接复用
+ *  messageText；字符串结果原样返回；只有未知形状才退回 JSON（便于排查
+ *  新工具时看到原始结构）。空 content（如 bash 启动时的占位更新）返回
+ *  空串——不把封套本身显示出来。 */
+export const toolResultText = (result: unknown): string => {
+  if (typeof result === "string") return result;
+  if (result && typeof result === "object") {
+    const record = result as Record<string, unknown>;
+    if ("content" in record) return messageText(result as AgentMessage);
+    return JSON.stringify(result, null, 2);
+  }
+  return "";
+};
+
 /** Concatenated thinking parts (collapsed behind a "Thinking" detail). */export const thinkingText = (message?: AgentMessage): string =>
   partsOf(message)
     .map((part) =>

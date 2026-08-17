@@ -64,6 +64,9 @@ export type LiveToolExecution = Pick<ToolExecutionStartEvent, "toolCallId" | "to
   result?: ToolExecutionUpdateEvent["partialResult"] | ToolExecutionEndEvent["result"];
   isError?: ToolExecutionEndEvent["isError"];
   running: boolean;
+  /** 工具开始执行的时刻（ms）。live 条目在 tool_execution_start 写入，
+   *  客户端用它校准 timeout 倒计时；历史重建的 committed 条目没有此字段。 */
+  startedAt?: number;
 };
 
 /** 一条统一的消息条目：回复、工具执行都按实际发生顺序排在同一个列表里。

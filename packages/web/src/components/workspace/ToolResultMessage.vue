@@ -19,6 +19,9 @@ defineProps<{
       :label="detail.label"
       :preview="detail.preview"
       :path="detail.path"
+      :timeout="detail.timeout"
+      :running="detail.running"
+      :started-at="detail.startedAt"
       :body="detail.body"
     />
   </article>

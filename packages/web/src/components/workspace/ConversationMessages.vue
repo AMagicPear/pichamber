@@ -5,7 +5,7 @@ import type { LiveItem } from "@pichamber/shared";
 import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
-import { messageImages, messageText } from "./messageContent";
+import { messageImages, messageText, toolResultText } from "./messageContent";
 import { parseSkillBlock } from "./skillBlock";
 import SkillBlockChip from "./SkillBlockChip.vue";
 import { workspace } from "@/stores/workspace";
@@ -102,20 +102,30 @@ watch(
 const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationToolDetail => {
   const { tool, message } = item;
   const messageMeta = message as { toolName?: unknown; isError?: unknown } | undefined;
+  // 提交后 message 是权威输出；live 阶段 tool.result 是 pi 的 `{content,
+  // details}` 进度封套——取文本而非序列化整个 JSON，实时显示才能和提交后一致。
   const output = message
     ? messageText(message) || JSON.stringify(message, null, 2)
-    : JSON.stringify(tool.result === undefined ? tool.args : tool.result, null, 2);
+    : tool.result !== undefined
+      ? toolResultText(tool.result)
+      : "";
   // 读图片时 message 里有 image part；live 阶段没有 message，partialResult
   // 只是占位文字，所以图片只在提交后出现。
   const images = message ? messageImages(message) : [];
-  return conversationToolDetail({
-    toolName: tool.toolName || (typeof messageMeta?.toolName === "string" ? messageMeta.toolName : ""),
-    args: tool.args,
-    output,
-    isError: messageMeta?.isError === true || tool.isError === true,
-    fallbackPreview: messageText(message) || JSON.stringify(tool.args),
-    images,
-  });
+  // 计时只对正在运行的命令有意义：live + running 才标 running，startedAt
+  // 由服务端在 tool_execution_start 写入，倒计时按它校准（重连/中途渲染也准）。
+  return {
+    ...conversationToolDetail({
+      toolName: tool.toolName || (typeof messageMeta?.toolName === "string" ? messageMeta.toolName : ""),
+      args: tool.args,
+      output,
+      isError: messageMeta?.isError === true || tool.isError === true,
+      fallbackPreview: messageText(message) || JSON.stringify(tool.args),
+      images,
+    }),
+    running: item.phase === "live" && tool.running,
+    startedAt: tool.startedAt,
+  };
 };
 
 /** Returns the parsed skill block when the user message is the canonical
@@ -230,7 +240,7 @@ const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["messag
   border-radius: 10px;
   background: var(--ui-surface-muted);
   color: var(--ui-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 .compaction-summary__header {
   display: flex;

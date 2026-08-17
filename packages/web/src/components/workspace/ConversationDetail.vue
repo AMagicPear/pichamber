@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import MarkdownRender from "markstream-vue";
-import { computed, ref, watch, type Component } from "vue";
+import { computed, onBeforeUnmount, ref, watch, type Component } from "vue";
 import FolderIcon from "@/assets/icons/Folder.svg";
 import FileTextIcon from "@/assets/icons/FileText.svg";
-import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
 import FilePathLabel from "@/components/FilePathLabel.vue";
 import CodeView from "./CodeView.vue";
@@ -17,6 +16,12 @@ const props = defineProps<{
   preview?: string;
   /** Full file path — rendered filename-first via FilePathLabel. */
   path?: string;
+  /** 显式 timeout（秒），bash 行尾的小胶囊。 */
+  timeout?: number;
+  /** 命令是否正在运行：live 条目显示已运行秒数；历史重建不显示耗时。 */
+  running?: boolean;
+  /** 工具开始执行的时刻（ms）；倒计时按它校准，不随渲染时机漂移。 */
+  startedAt?: number;
   /** Body shape — the dispatcher picks a renderer from `body.kind`. */
   body: ToolBody;
   /** Auto-expand while true (caller flips it when streaming starts) and
@@ -36,6 +41,41 @@ watch(
   (now) => { expanded.value = !!now; },
   { immediate: true },
 );
+
+// bash 执行计时：timeout 是固定上限，第二个数字是从 startedAt 起算的已运行
+// 秒数。仅在运行时刷新；结束时先取一次当前时间再停表，重连/延迟渲染也准。
+const now = ref(Date.now());
+let ticker: ReturnType<typeof setInterval> | undefined;
+watch(
+  () => props.running === true && props.timeout !== undefined && props.startedAt !== undefined,
+  (active) => {
+    now.value = Date.now();
+    if (ticker) {
+      clearInterval(ticker);
+      ticker = undefined;
+    }
+    if (active) {
+      now.value = Date.now();
+      ticker = setInterval(() => {
+        now.value = Date.now();
+      }, 1000);
+    }
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  if (ticker) clearInterval(ticker);
+});
+
+const remaining = computed(() => {
+  if (props.timeout === undefined) return undefined;
+  return Math.ceil(props.timeout);
+});
+
+const elapsed = computed(() => {
+  if (props.startedAt === undefined) return undefined;
+  return Math.max(0, Math.floor((now.value - props.startedAt) / 1000));
+});
 
 // Per-kind content text for the structured lists — a one-line muted summary
 // shown above the entries so a user scanning the message log can tell apart
@@ -73,6 +113,13 @@ const showNotes = computed(() => {
         class="conversation-detail__preview conversation-detail__preview--plain"
         v-show="!expanded || !hidePreviewOnExpand"
       >{{ preview }}</span>
+      <span
+        v-if="remaining !== undefined"
+        class="conversation-detail__timeout"
+        :title="`Timeout ${timeout}s; running for ${elapsed ?? 0}s`"
+      >
+        <template v-if="elapsed !== undefined">{{ elapsed }}s / </template>{{ remaining }}s
+      </span>
     </button>
     <div class="conversation-detail__body">
       <div class="conversation-detail__body-inner">
@@ -100,13 +147,7 @@ const showNotes = computed(() => {
           :content="body.content"
           :fileName="body.fileName"
         />
-        <div v-else-if="body.kind === 'text'" class="conversation-detail__text">
-          <div class="conversation-detail__text-header" aria-hidden="true">
-            <TerminalIcon class="conversation-detail__text-icon" />
-            <span>Output</span>
-          </div>
-          <pre class="conversation-detail__text-pre">{{ body.content }}</pre>
-        </div>
+        <pre v-else-if="body.kind === 'text'" class="conversation-detail__text">{{ body.content }}</pre>
         <div v-else-if="body.kind === 'ls'" class="conversation-detail__list">
           <div v-if="entriesHeading" class="conversation-detail__list-heading">{{ entriesHeading }}</div>
           <ul v-if="body.entries.length > 0" class="conversation-detail__list-items">
@@ -229,6 +270,19 @@ const showNotes = computed(() => {
 .conversation-detail__preview--plain {
   color: var(--ui-text-muted);
 }
+/* bash 行尾的 timeout 胶囊：mono + 圆角描边，复用 match-line 的视觉词汇；
+ * flex: none 不参与省略号截断，长命令被省略号吃掉时它仍完整可见。 */
+.conversation-detail__timeout {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 999px;
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
 .conversation-detail__markdown {
   margin: 0;
   color: var(--ui-text-muted);
@@ -254,45 +308,22 @@ const showNotes = computed(() => {
   object-fit: contain;
 }
 
-/* Plain text (bash / unknown tools): scrollable code box. Long paths and
- * shell output stay readable; horizontal scroll kicks in for over-long
- * lines instead of breaking them mid-token via overflow-wrap: anywhere. */
+/* Plain text (bash / unknown tools / JSON fallback): bare monospace output —
+ * no box, the expanded body's left border anchors it. Auto-wrap at the
+ * container edge (pre-wrap keeps newlines + indentation); long unbroken
+ * tokens (JSON values, paths, URLs) break via overflow-wrap so nothing
+ * forces horizontal scroll. Only vertical scrolling remains for long
+ * outputs. */
 .conversation-detail__text {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  background: var(--ui-surface-subtle);
-}
-.conversation-detail__text-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--ui-border-subtle);
-  color: var(--ui-text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-.conversation-detail__text-icon {
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
-}
-.conversation-detail__text-pre {
   margin: 0;
-  padding: 10px 12px;
   overflow: auto;
   max-height: 420px;
   color: var(--ui-text);
   font-family: var(--ui-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 12.5px;
   line-height: 1.55;
-  white-space: pre;        /* preserve newlines; let the box scroll horizontally */
-  overflow-wrap: normal;
+  white-space: pre-wrap;   /* preserve newlines, wrap at the container edge */
+  overflow-wrap: break-word; /* break only when a token can't fit on its own line */
   word-break: normal;
 }
 

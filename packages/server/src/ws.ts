@@ -501,6 +501,7 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
             toolName: event.toolName,
             args: event.args,
             running: true,
+            startedAt: Date.now(),
           },
         };
         state.items.push(item);
@@ -577,6 +578,13 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       case "entry_appended": {
         const isModelEntry =
           event.entry.type === "model_change" || event.entry.type === "thinking_level_change";
+        // Session entries are the persistence boundary: anything Pi appends
+        // to the transcript must reach the conversation via reconciliation,
+        // never as a transient toast. This is especially important for the
+        // compaction entry, which may be appended after compaction_end.
+        if (!isModelEntry && event.entry.type === "compaction") {
+          if (reconcile(channel, session, false)) broadcastSnapshot();
+        }
         // Pi emits several synchronous events for one model switch. Queue
         // one snapshot for the whole mutation instead of broadcasting the
         // same model inventory once per entry.

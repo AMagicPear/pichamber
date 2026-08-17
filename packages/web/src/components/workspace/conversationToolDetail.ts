@@ -17,6 +17,12 @@ export type ConversationToolDetail = {
   icon?: Component | string;
   /** Full file path — rendered with filename-first styling. */
   path?: string;
+  /** 显式执行时长限制（bash 传了 timeout 参数时才有），渲染成行尾小胶囊。 */
+  timeout?: number;
+  /** 命令是否正在运行：运行中胶囊显示剩余秒数倒计时，结束后显示 timeout 原值。 */
+  running?: boolean;
+  /** 工具开始执行的时刻（ms），live 条目才有；倒计时按它校准。 */
+  startedAt?: number;
   isError: boolean;
 };
 
@@ -38,6 +44,12 @@ const recordValue = (args: unknown, key: "command" | "path") => {
   const record = args as Record<string, unknown>;
   const value = key === "path" ? record.path ?? record.file_path : record.command;
   return typeof value === "string" ? value : undefined;
+};
+
+const recordNumber = (args: unknown, key: string) => {
+  if (!args || typeof args !== "object") return undefined;
+  const value = (args as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 };
 
 const fileToolIcon = (toolName: string): Component | string =>
@@ -67,6 +79,7 @@ export const conversationToolDetail = ({
       preview: command ?? inline(fallbackPreview),
       body: toolBody({ toolName, args, output, isError }),
       icon: TerminalIcon,
+      timeout: recordNumber(args, "timeout"),
       isError: failed,
     };
   }
