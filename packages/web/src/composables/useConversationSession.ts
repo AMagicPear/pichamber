@@ -71,10 +71,14 @@ watch(model, (next) => {
 const thinking = ref<ThinkingState>({ level: "off", availableLevels: ["off"] });
 /** Pre-formatted Context-pane view; the server is the source of truth. */
 const stats = ref<SessionStatsView | undefined>();
-/** Most recent server-pushed error message (transport / invalid model /
- *  invalid thinking level / catastrophic prompt failure). Cleared when
- *  the user dismisses it, the next prompt sends, or the session drops. */
-const lastError = ref<string | null>(null);
+/** Push a transport / model / thinking / catastrophic-prompt error onto the
+ *  shared toast queue. The toast auto-dismisses after 5s and can be closed
+ *  manually, matching the lifecycle of extension notifications. */
+const pushErrorToast = (message: string) => {
+  const id = `error-${crypto.randomUUID()}`;
+  extensionUi.notifications.push({ id, message, type: "error" });
+  setTimeout(() => dismissNotification(id), 5_000);
+};
 
 let ws: WsHandle | null = null;
 let activeSessionId: string | null = null;
@@ -174,7 +178,7 @@ const onMessage = (message: ServerMessage) => {
   } else if (message.type === "draft_restore") {
     draft.value = [...message.messages, draft.value?.trim()].filter(Boolean).join("\n\n");
   } else if (message.type === "error") {
-    lastError.value = message.error;
+    pushErrorToast(message.error);
   }
 };
 
@@ -182,7 +186,7 @@ const onStatus = (status: WsStatus) => {
   if (status.type === "closed") {
     connected.value = false;
   } else if (status.type === "error") {
-    lastError.value = status.error;
+    pushErrorToast(status.error);
   }
 };
 
@@ -193,8 +197,8 @@ const canSend = computed(
 const send = (streamingBehavior?: "steer" | "followUp") => {
   const text = draft.value?.trim();
   if (!canSend.value || !ws || !text) return;
-  // Clear any previous error so the toast doesn't linger into the next turn.
-  lastError.value = null;
+  // Dismiss any lingering error toasts so they don't pile up across turns.
+  extensionUi.notifications = extensionUi.notifications.filter((n) => n.type !== "error");
   ws.send({ type: "prompt", message: text, streamingBehavior });
   draft.value = undefined;
 };
@@ -230,10 +234,6 @@ const setThinkingLevel = (level: ThinkingLevel) => {
   ws?.send({ type: "set_thinking_level", level });
 };
 
-const dismissError = () => {
-  lastError.value = null;
-};
-
 const disconnect = () => {
   ws?.close();
   ws = null;
@@ -254,7 +254,6 @@ const disconnect = () => {
   availableModels.value = [];
   thinking.value = { level: "off", availableLevels: ["off"] };
   stats.value = undefined;
-  lastError.value = null;
   lastSeq = 0;
   resyncPending = false;
 };
@@ -266,7 +265,7 @@ const connect = (sessionId: string) => {
   try {
     ws = connectSessionWs(sessionId, onMessage, onStatus);
   } catch (error) {
-    lastError.value = toMessage(error);
+    pushErrorToast(toMessage(error));
   }
 };
 
@@ -296,11 +295,9 @@ export const useConversationSession = () => {
     connect,
     connected,
     disconnect,
-    dismissError,
     dismissNotification,
     draft,
     items,
-    lastError,
     model,
     pending,
     resources,
