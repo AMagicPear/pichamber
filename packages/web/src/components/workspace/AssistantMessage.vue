@@ -16,6 +16,8 @@ const props = defineProps<{
   message: AgentMessage;
   /** False while the assistant is still streaming. */
   final?: boolean;
+  /** Friendly model name resolved from the current model registry. */
+  modelName?: string;
 }>();
 
 const error = computed(() => {
@@ -29,7 +31,7 @@ const error = computed(() => {
   return { reason: stopReason, message: text || `Assistant turn ${stopReason}` };
 });
 
-const label = computed(() => asAssistant(props.message)?.model ?? "Assistant");
+const label = computed(() => props.modelName ?? asAssistant(props.message)?.model ?? "Assistant");
 const provider = computed(() => asAssistant(props.message)?.provider ?? "");
 const modelId = computed(() => asAssistant(props.message)?.model ?? "");
 const text = computed(() => messageText(props.message));

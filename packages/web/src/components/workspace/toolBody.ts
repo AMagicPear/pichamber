@@ -7,7 +7,7 @@
  * preview of the row still live in `conversationToolDetail.ts` — this module
  * is only about the expanded body.
  */
-import { displayPath, parseApplyPatch, patchOpsSummary, toolDiff } from "./toolDiff";
+import { applyPatchDiff, displayPath, isFileTool, stringArg, toolDiff } from "./toolDiff";
 
 /** 单张图片附件，data 是 base64（不含前缀），由渲染层补 data: URL。 */
 export type ToolImage = { data: string; mimeType: string };
@@ -78,56 +78,6 @@ const buildPathsBody = (output: string): Extract<ToolBody, { kind: "paths" }> =>
   return { kind: "paths", paths: lines.filter((p) => p.length > 0).map(displayPath), notes };
 };
 
-/** apply_patch 的 PatchOp → 简易 unified diff（无 @@ hunk，靠 +/- 前缀渲染）。 */
-const patchOpToDiff = (
-  path: string,
-  lines: { kind: "add" | "del" | "ctx"; text?: string }[],
-): string => {
-  const out: string[] = [`diff --git a/${path} b/${path}`];
-  for (const l of lines) {
-    if (l.kind === "add") out.push(`+${l.text ?? ""}`);
-    else if (l.kind === "del") out.push(`-${l.text ?? ""}`);
-    else out.push(` ${l.text ?? ""}`);
-  }
-  return out.join("\n");
-};
-
-const buildApplyPatchDiff = (args: BodyInput["args"]): string | undefined => {
-  if (!args || typeof args !== "object") return undefined;
-  const input = (args as { input?: unknown }).input;
-  if (typeof input !== "string") return undefined;
-  const ops = parseApplyPatch(input);
-  if (!ops || ops.length === 0) return undefined;
-  const parts: string[] = [];
-  for (const op of ops) {
-    const display = op.moveTo ?? op.path;
-    if (op.type === "add") {
-      const adds = op.lines
-        .filter((l): l is { kind: "add"; text: string } => l.kind === "add")
-        .map((l) => ({ kind: "add" as const, text: l.text }));
-      parts.push(patchOpToDiff(display, adds));
-    } else if (op.type === "delete") {
-      parts.push(`diff --git a/${op.path} b/${op.path}\n--- a/${op.path}\n+++ /dev/null`);
-    } else {
-      const flat = op.lines
-        .filter((l): l is { kind: "add" | "del" | "ctx"; text: string } => l.kind !== "sep")
-        .map((l) => ({ kind: l.kind, text: l.text }));
-      parts.push(patchOpToDiff(display, flat));
-    }
-  }
-  return parts.join("\n");
-};
-
-const recordValue = (args: BodyInput["args"], key: "command" | "path") => {
-  if (!args || typeof args !== "object") return undefined;
-  const record = args as Record<string, unknown>;
-  const value = key === "path" ? record.path ?? record.file_path : record.command;
-  return typeof value === "string" ? value : undefined;
-};
-
-const isFileTool = (toolName: string) =>
-  toolName === "read" || toolName === "write" || toolName === "edit";
-
 /** Decide which body renderer to use for a given tool. Returns one of the
  *  `ToolBody` shapes; the caller passes it straight to `<ConversationDetail>`. */
 export const toolBody = ({
@@ -138,7 +88,7 @@ export const toolBody = ({
   images,
 }: BodyInput): ToolBody => {
   const failed = isError === true;
-  const path = recordValue(args, "path");
+  const path = stringArg(args, "path");
 
   if (isFileTool(toolName) && path) {
     const relative = displayPath(path);
@@ -157,10 +107,7 @@ export const toolBody = ({
   }
 
   if (toolName === "apply_patch") {
-    // preview 行已经在 conversationToolDetail 里用过 patchOpsSummary，
-    // 这里不再重复计算。
-    void patchOpsSummary;
-    const patch = buildApplyPatchDiff(args);
+    const patch = applyPatchDiff((args as { input?: unknown }).input);
     if (!failed && patch) return { kind: "diff", patch };
     return { kind: "text", content: output };
   }

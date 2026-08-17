@@ -63,7 +63,7 @@ watch(
 
 <template>
   <section class="conversation" :class="{ 'conversation--active': hasConversation }">
-    <ConversationMessages v-if="hasConversation" :items="items" />
+    <ConversationMessages v-if="hasConversation" :items="items" :available-models="availableModels" />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <UserInputBlock

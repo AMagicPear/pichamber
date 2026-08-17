@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import MarkdownRender from "markstream-vue";
-import type { LiveItem } from "@pichamber/shared";
+import type { LiveItem, ModelDescriptor } from "@pichamber/shared";
 import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
 import { messageImages, messageText, toolResultText } from "./messageContent";
 import { parseSkillBlock } from "./skillBlock";
 import SkillBlockChip from "./SkillBlockChip.vue";
+import { modelDisplayName } from "./modelDisplay";
 import { workspace } from "@/stores/workspace";
 
 const props = defineProps<{
   items: LiveItem[];
+  availableModels?: ModelDescriptor[];
 }>();
 
 /* ── Scroll anchoring (event-driven, following the StackBlitz
@@ -128,6 +130,12 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
   };
 };
 
+const modelNameFor = (message: Extract<LiveItem, { kind: "assistant" }>["message"]): string | undefined => {
+  if (message.role !== "assistant") return undefined;
+  const model = message as { provider?: unknown; model?: unknown };
+  return modelDisplayName(props.availableModels, model.provider, model.model);
+};
+
 /** Returns the parsed skill block when the user message is the canonical
  *  shape pi produces from `/skill:name` expansion, otherwise null.
  *  pi appends the skill's body wrapped in `<skill ...>...</skill>`; without
@@ -193,7 +201,12 @@ const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["messag
             </div>
           </div>
         </article>
-        <AssistantMessage v-else-if="item.kind === 'assistant'" :message="item.message" :final="item.phase === 'committed'" />
+        <AssistantMessage
+          v-else-if="item.kind === 'assistant'"
+          :message="item.message"
+          :final="item.phase === 'committed'"
+          :model-name="modelNameFor(item.message)"
+        />
         <ToolResultMessage v-else-if="item.kind === 'tool'" :detail="toolDetail(item)" />
         <article v-else-if="item.kind === 'compaction'" class="conversation-message conversation-message--compaction">
           <div class="compaction-summary">
