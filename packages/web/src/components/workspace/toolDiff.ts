@@ -12,14 +12,11 @@
  */
 
 import { workspace } from "@/stores/workspace";
-import { stripParent } from "@pichamber/shared";
 
-/** Strip the workspace prefix so in-workspace files read as relative paths.
- *  Cross-platform: a Windows cwd (`C:\Users\foo`) strips off both `\` and
- *  `/` children, so tool result rows look the same on either OS. */
+/** Strip the workspace prefix so in-workspace files read as relative paths. */
 export const displayPath = (path: string): string => {
   const cwd = workspace.cwd;
-  return cwd ? stripParent(cwd, path) ?? path : path;
+  return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
 };
 
 type Args = Record<string, unknown> | undefined;
@@ -79,7 +76,7 @@ type PatchLine =
   | { kind: "add"; text: string }
   | { kind: "del"; text: string }
   | { kind: "ctx"; text: string };
-type PatchOp = {
+export type PatchOp = {
   type: "add" | "delete" | "update";
   path: string;
   moveTo?: string;
@@ -87,7 +84,7 @@ type PatchOp = {
 };
 
 /** 解析 Codex 风格 apply_patch 文本（pi-apply-patch 扩展的语法）。 */
-const parseApplyPatch = (input: string): PatchOp[] | undefined => {
+export const parseApplyPatch = (input: string): PatchOp[] | undefined => {
   const lines = input.replace(/\r\n/g, "\n").split("\n");
   if (lines[0]?.trim() !== "*** Begin Patch") return undefined;
   const ops: PatchOp[] = [];

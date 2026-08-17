@@ -19,10 +19,7 @@ defineProps<{
       :label="detail.label"
       :preview="detail.preview"
       :path="detail.path"
-      :content="detail.content"
-      :diff="detail.diff"
-      :codeFileName="detail.codeFileName"
-      :images="detail.images"
+      :body="detail.body"
     />
   </article>
 </template>

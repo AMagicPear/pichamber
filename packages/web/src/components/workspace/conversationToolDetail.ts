@@ -4,28 +4,20 @@ import FileEditIcon from "@/assets/icons/FileEdit.svg";
 import FileTextIcon from "@/assets/icons/FileText.svg";
 import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import { inline } from "./messageContent";
-import { displayPath, patchOpsSummary, toolDiff } from "./toolDiff";
-
-/** 单张图片附件，data 是 base64（不含前缀），由渲染层补 data: URL。 */
-export type ToolImage = { data: string; mimeType: string };
+import { displayPath, patchOpsSummary } from "./toolDiff";
+import { type ToolBody, type ToolImage, toolBody } from "./toolBody";
 
 export type ConversationToolDetail = {
   label: string;
   /** Collapsed single-line preview (plain text for bash/ls/thinking). */
   preview?: string;
-  content: string;
+  /** Body shape; consumed by `<ConversationDetail>` for the expanded area. */
+  body: ToolBody;
   /** Fixed icon for file tools — read/edit/write each have their own. */
   icon?: Component | string;
   /** Full file path — rendered with filename-first styling. */
   path?: string;
   isError: boolean;
-  /** Unified diff of the actual edits (edit/write/apply_patch) — rendered
-   *  with DiffView instead of the plain summary text. */
-  diff?: string;
-  /** read 工具的结果渲染为文件视图（行号+高亮）。 */
-  codeFileName?: string;
-  /** read 工具读取图片时的图片附件。存在时跳过 code view 改渲染为缩略图。 */
-  images?: ToolImage[];
 };
 
 type ToolDetailInput = {
@@ -73,7 +65,7 @@ export const conversationToolDetail = ({
     return {
       label: failed ? errorLabel("Shell Command") : "Shell Command",
       preview: command ?? inline(fallbackPreview),
-      content: output,
+      body: toolBody({ toolName, args, output, isError }),
       icon: TerminalIcon,
       isError: failed,
     };
@@ -82,22 +74,13 @@ export const conversationToolDetail = ({
   const path = recordValue(args, "path");
   if (isFileTool(toolName) && path) {
     const relative = displayPath(path);
-    // read 工具读取图片时，结果里只有 "Read image file [mime]" 这行占位文字，
-    // 真正的图在 image part 里。检测到图片附件时不要把占位文字当文件内容渲染。
-    const hasImages = !failed && toolName === "read" && !!images && images.length > 0;
     return {
       label: failed ? errorLabel(toolName) : fileLabel(toolName),
       // 失败也保留路径：让用户知道是哪个文件操作失败。
       path: relative,
-      content: output,
+      body: toolBody({ toolName, args, output, isError, images }),
       icon: fileToolIcon(toolName),
       isError: failed,
-      // 成功时把真实编辑渲染成 diff（摘要文本被 DiffView 替代）。
-      diff: failed ? undefined : toolDiff(toolName, args),
-      // read 的结果就是文件内容：渲染成带行号/高亮的文件视图；
-      // 失败时直接显示纯文本错误；图片结果优先用图片渲染。
-      codeFileName: !failed && toolName === "read" && !hasImages ? relative : undefined,
-      images: hasImages ? images : undefined,
     };
   }
 
@@ -106,10 +89,9 @@ export const conversationToolDetail = ({
     return {
       label: failed ? errorLabel(toolName) : "Apply Patch",
       preview: summary ?? inline(fallbackPreview),
-      content: output,
+      body: toolBody({ toolName, args, output, isError }),
       icon: FileEditIcon,
       isError: failed,
-      // apply_patch 的 diff 渲染暂时放弃（多文件解析不理想），先恢复摘要文本。
     };
   }
 
@@ -118,7 +100,7 @@ export const conversationToolDetail = ({
     return {
       label: failed ? errorLabel("ls") : path ? "List Directory" : "List Files",
       preview: relative ?? inline(fallbackPreview),
-      content: output,
+      body: toolBody({ toolName, args, output, isError }),
       isError: failed,
     };
   }
@@ -126,7 +108,7 @@ export const conversationToolDetail = ({
   return {
     label: failed ? errorLabel(toolName) : toolName || "Tool",
     preview: inline(fallbackPreview),
-    content: output,
+    body: toolBody({ toolName, args, output, isError }),
     isError: failed,
   };
 };
