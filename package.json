@@ -1,6 +1,6 @@
 {
   "name": "@amagicpear/pichamber",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "A browser-based workspace for the Pi Coding Agent",
   "license": "MIT",
   "type": "module",
@@ -57,17 +57,17 @@
     "package.json"
   ],
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.82.1",
+    "@earendil-works/pi-coding-agent": "^0.84.2",
     "bun-pty": "^0.4.10"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
     "@types/node": "^26.2.0",
-    "concurrently": "^10.0.4",
-    "oxlint": "~1.77.0",
+    "concurrently": "^10.0.5",
+    "oxlint": "~1.78.0",
     "typescript": "~7.0.2",
     "typescript6": "npm:@typescript/typescript6@^6.0.2",
-    "vue-tsc": "^3.3.9"
+    "vue-tsc": "^3.3.10"
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"
