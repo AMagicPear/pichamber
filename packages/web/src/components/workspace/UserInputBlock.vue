@@ -56,6 +56,10 @@ const onKeydown = (event: KeyboardEvent) => {
     return;
   }
   if (event.key === "Enter" && !event.shiftKey) {
+    // Enter is also used to confirm an IME candidate. Do not submit while
+    // composition is active; otherwise the IME writes the draft back after
+    // the send handler clears it.
+    if (event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     if (shelfMode.value) shelf.value?.choose();
     else emit("send", props.busy ? (event.altKey ? "followUp" : submitMode.value) : undefined);
