@@ -31,7 +31,8 @@ type QuotaAdapter = {
   path: string;
   baseUrl?: string | (() => string);
   headers?: Record<string, string>;
-  parse: (payload: unknown) => QuotaWindow[];
+  currency?: string;
+  parse: (payload: unknown, currency?: string) => QuotaWindow[];
 };
 
 const matchAdapter = (providerId: string, apiType: string | undefined): QuotaAdapter | undefined => {
@@ -67,7 +68,11 @@ const fetchQuota = async (
     });
     if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
     const payload = (await response.json()) as unknown;
-    const result: ProviderQuota = { provider: providerId, windows: adapter.parse(payload), fetchedAt: now };
+    const result: ProviderQuota = {
+      provider: providerId,
+      windows: adapter.parse(payload, adapter.currency),
+      fetchedAt: now,
+    };
     cache.set(cacheKey, { expiresAt: now + MINUTE_MS, result });
     return result;
   } catch (error) {
@@ -116,17 +121,48 @@ const parseMiniMax = (payload: unknown): QuotaWindow[] => {
   return windows;
 };
 
-const parseDeepSeek = (payload: unknown): QuotaWindow[] => {
-  const root = payload as { is_available?: boolean; balance_infos?: Array<{ currency?: string; total_balance?: string }> };
-  if (root.is_available === false) throw new Error("DeepSeek account not available");
-  const primary = (Array.isArray(root.balance_infos) ? root.balance_infos : [])[0];
-  if (!primary) throw new Error("DeepSeek balance response empty");
+const parseBalance = (
+  payload: unknown,
+  opts: { currencyKey?: string; balanceKey?: string; label?: string; currency?: string } = {},
+): QuotaWindow[] => {
+  const root = payload as {
+    is_available?: boolean;
+    currency?: string;
+    balance?: string;
+    balance_infos?: Array<{ currency?: string; total_balance?: string; balance?: string }>;
+    data?: { available_balance?: string; voucher_balance?: string; cash_balance?: string; currency?: string };
+  };
+  if (root.is_available === false) throw new Error("Account not available");
 
-  const total = Number(primary.total_balance);
-  if (!Number.isFinite(total)) throw new Error("DeepSeek balance unparseable");
+  const currency =
+    opts.currency ??
+    (opts.currencyKey
+      ? ((root as Record<string, unknown>)[opts.currencyKey] as string | undefined)
+      : (root.currency ?? root.data?.currency ?? root.balance_infos?.[0]?.currency));
+  const balance = opts.balanceKey
+    ? ((root as Record<string, unknown>)[opts.balanceKey] as string | undefined)
+    : (root.balance ?? root.data?.available_balance ?? root.balance_infos?.[0]?.total_balance ??
+        root.balance_infos?.[0]?.balance);
 
-  return [{ label: `Balance (${primary.currency ?? "USD"})`, utilization: 0, resetsAt: 0, display: total.toFixed(2) }];
+  const total = Number(balance);
+  if (!Number.isFinite(total)) throw new Error("Balance unparseable");
+
+  return [
+    {
+      label: opts.label ?? `Balance (${currency ?? "USD"})`,
+      utilization: 0,
+      resetsAt: 0,
+      display: total.toFixed(2),
+      limit: total,
+      unit: currency,
+    },
+  ];
 };
+
+const parseDeepSeek = (payload: unknown): QuotaWindow[] => parseBalance(payload, { label: "Balance" });
+
+const parseMoonshot = (payload: unknown, currency = "USD"): QuotaWindow[] =>
+  parseBalance(payload, { label: "Balance", currency });
 
 const parseOpenAiUsage = (payload: unknown): QuotaWindow[] => {
   const root = payload as {
@@ -145,13 +181,16 @@ const parseOpenAiUsage = (payload: unknown): QuotaWindow[] => {
   }
 
   const resetsAt = sub.weekly_window_start ? Date.parse(sub.weekly_window_start) + 7 * 86_400_000 : 0;
-  const unit = root.unit === "USD" ? "USD" : "";
+  const unit = root.unit === "USD" ? "USD" : undefined;
 
   return [
     {
-      label: `Weekly${unit ? ` (${unit})` : ""}`,
+      label: "Weekly",
       utilization: limit > 0 ? clamp01(used / limit) : 0,
       resetsAt,
+      used,
+      limit,
+      unit,
     },
   ];
 };
@@ -171,6 +210,22 @@ const adapters: QuotaAdapter[] = [
     baseUrl: () => process.env.PICHAMBER_DEEPSEEK_BASE ?? "https://api.deepseek.com",
     path: "/user/balance",
     parse: parseDeepSeek,
+  },
+  {
+    name: "Moonshot",
+    providerIds: ["moonshotai-cn"],
+    baseUrl: () => process.env.PICHAMBER_MOONSHOT_CN_BASE ?? "https://api.moonshot.cn/v1",
+    path: "/users/me/balance",
+    currency: "CNY",
+    parse: parseMoonshot,
+  },
+  {
+    name: "Moonshot",
+    providerIds: ["moonshotai", "moonshot-ai", "moonshot"],
+    baseUrl: () => process.env.PICHAMBER_MOONSHOT_BASE ?? "https://api.moonshot.ai/v1",
+    path: "/users/me/balance",
+    currency: "USD",
+    parse: parseMoonshot,
   },
   {
     name: "OpenAI",

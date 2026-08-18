@@ -147,6 +147,12 @@ export type QuotaWindow = {
    *  "utilization of a window" (DeepSeek's balance), the panel shows
    *  this string instead of a progress bar. */
   display?: string;
+  /** Amount consumed in this window, when the upstream API reports it. */
+  used?: number;
+  /** Amount that defines the window limit, when known. */
+  limit?: number;
+  /** Unit for `used` and `limit` (e.g. "USD", "CNY", "tokens"). */
+  unit?: string;
 };
 
 /** Successful quota snapshot for a provider. */

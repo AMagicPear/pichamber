@@ -4,7 +4,7 @@ import { fetchProviderQuota } from "@/api/client";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
 import { workspace } from "@/stores/workspace";
-import type { ModelDescriptor, ProviderDescriptor, ProviderQuota } from "@pichamber/shared";
+import type { ModelDescriptor, ProviderDescriptor, ProviderQuota, QuotaWindow } from "@pichamber/shared";
 import ProviderLogo from "./ProviderLogo";
 
 const props = defineProps<{ open: boolean }>();
@@ -92,13 +92,19 @@ const formatReset = (ms: number) => {
 
 const tone = (utilization: number) =>
   utilization > 0.85 ? "danger" : utilization > 0.6 ? "warn" : "ok";
+
+const hasBar = (window: QuotaWindow) =>
+  !window.display && window.utilization > 0 && window.resetsAt > 0;
+
+const formatNumber = (n: number) =>
+  Number.isInteger(n) ? n.toString() : n.toFixed(2);
 </script>
 
 <template>
   <div class="quota-panel">
     <header class="quota-panel__head">
       <div class="quota-panel__title">
-        <span>Provider usage</span>
+        <span>Usage & balance</span>
       </div>
       <button type="button" class="quota-panel__refresh" :disabled="loading" @click="refresh">
         {{ loading ? "…" : "Refresh" }}
@@ -123,23 +129,31 @@ const tone = (utilization: number) =>
             v-for="window in quotaFor(provider.id)?.windows ?? []"
             :key="window.label"
             class="quota"
-            :class="window.display ? 'quota--display' : 'quota--bar'"
-            :data-tone="window.display ? undefined : tone(window.utilization)"
+            :class="{ 'quota--bar': hasBar(window) }"
+            :data-tone="hasBar(window) ? tone(window.utilization) : undefined"
           >
-            <template v-if="window.display">
+            <div class="quota__main">
               <span class="quota__label">{{ window.label }}</span>
-              <span class="quota__value">{{ window.display }}</span>
-            </template>
-            <template v-else>
-              <div class="quota__line">
-                <span class="quota__label">{{ window.label }}</span>
-                <span class="quota__percent">{{ Math.round(window.utilization * 100) }}%</span>
-              </div>
-              <div class="quota__track" role="progressbar" :aria-valuenow="Math.round(window.utilization * 100)" aria-valuemin="0" aria-valuemax="100">
-                <div class="quota__fill" :style="{ width: `${Math.round(window.utilization * 100)}%` }" />
-              </div>
-              <span class="quota__reset">resets in {{ formatReset(window.resetsAt) }}</span>
-            </template>
+              <span class="quota__value">
+                <template v-if="window.display">
+                  {{ window.display }}
+                  <span v-if="window.unit" class="quota__unit">{{ window.unit }}</span>
+                </template>
+                <template v-else-if="typeof window.used === 'number' && typeof window.limit === 'number'">
+                  {{ formatNumber(window.used) }} / {{ formatNumber(window.limit) }}
+                  <span v-if="window.unit" class="quota__unit">{{ window.unit }}</span>
+                </template>
+                <template v-if="!window.display && window.utilization > 0">
+                  <span class="quota__percent" :class="{ 'quota__percent--padded': typeof window.used === 'number' }">
+                    {{ Math.round(window.utilization * 100) }}%
+                  </span>
+                </template>
+              </span>
+            </div>
+            <div v-if="hasBar(window)" class="quota__track" role="progressbar" :aria-valuenow="Math.round(window.utilization * 100)" aria-valuemin="0" aria-valuemax="100">
+              <div class="quota__fill" :style="{ width: `${Math.round(window.utilization * 100)}%` }" />
+            </div>
+            <span v-if="hasBar(window)" class="quota__reset">resets in {{ formatReset(window.resetsAt) }}</span>
           </div>
         </div>
       </section>
@@ -176,17 +190,18 @@ const tone = (utilization: number) =>
 .provider__name { overflow: hidden; color: var(--ui-text-strong); font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .provider__status { margin-left: auto; overflow: hidden; color: var(--ui-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .provider__status--error { color: var(--ui-error-strong); }
-.provider__metrics { display: flex; flex-direction: column; gap: 8px; margin: 9px 0 0 23px; }
-.quota--display { display: flex; align-items: baseline; justify-content: space-between; min-height: 20px; }
-.quota--bar { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
-.quota__line { display: flex; align-items: baseline; justify-content: space-between; }
+.provider__metrics { display: flex; flex-direction: column; gap: 7px; margin: 9px 0 0 23px; }
+.quota { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.quota__main { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .quota__label { color: var(--ui-text-muted); font-weight: 500; }
-.quota__value { color: var(--ui-text-strong); font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.quota__value { color: var(--ui-text-strong); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 500; }
+.quota__unit { color: var(--ui-text-muted); font-weight: 400; }
+.quota__percent { color: var(--ui-text-strong); font-variant-numeric: tabular-nums; font-weight: 500; }
+.quota__percent--padded { margin-left: 4px; }
 .quota__track { height: 4px; overflow: hidden; border-radius: 2px; background: var(--ui-surface-subtle); }
 .quota__fill { height: 100%; border-radius: inherit; background: var(--ui-extension-fg); transition: width var(--ui-duration-fast) var(--ui-ease-standard); }
 .quota--bar[data-tone="warn"] .quota__fill { background: var(--ui-prompt-fg); }
 .quota--bar[data-tone="danger"] .quota__fill { background: var(--ui-error-strong); }
-.quota__percent { color: var(--ui-text-strong); font-variant-numeric: tabular-nums; }
 .quota__reset { color: var(--ui-text-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
-@media (max-width: 320px) { .quota { margin-left: 0; } }
+@media (max-width: 320px) { .provider__metrics { margin-left: 0; } }
 </style>

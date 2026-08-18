@@ -75,15 +75,15 @@ const onProvidersClick = () => {
       <div ref="root" class="providers-trigger">
         <IconButton
           class="providers-button"
-          label="Token plan usage"
-          :title="hasQuotedProvider ? 'View token plan usage' : 'No supported providers configured'"
+          label="Usage & balance"
+          :title="hasQuotedProvider ? 'View usage & balance' : 'No supported providers configured'"
           :pressed="open"
           :disabled="!hasQuotedProvider"
           @click="onProvidersClick"
         >
           <StackIcon />
         </IconButton>
-        <MenuPanel :open="open" :style="style" :width="280" aria-label="Token plan usage">
+        <MenuPanel :open="open" :style="style" :width="280" aria-label="Usage & balance">
           <ProviderQuotaPanel :open="open" />
         </MenuPanel>
       </div>

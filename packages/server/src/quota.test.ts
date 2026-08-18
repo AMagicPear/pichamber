@@ -7,6 +7,7 @@ describe("RPC quota providers", () => {
       listQuotaProvidersForModels([
         { provider: "minimax-cn" },
         { provider: "deepseek" },
+        { provider: "moonshotai-cn" },
         { provider: "openai" },
         { provider: "custom-openai-proxy" },
         { provider: "minimax-cn" },
@@ -14,6 +15,7 @@ describe("RPC quota providers", () => {
     ).toEqual([
       { id: "minimax-cn", name: "MiniMax" },
       { id: "deepseek", name: "DeepSeek" },
+      { id: "moonshotai-cn", name: "Moonshot" },
       { id: "openai", name: "OpenAI" },
     ]);
   });
