@@ -54,9 +54,11 @@ const fetchQuota = async (
   providerId: string,
   baseUrl: string,
   apiKey: string,
+  cacheScope: string,
 ): Promise<ProviderQuota> => {
   const now = nowMs();
-  const cached = cache.get(providerId);
+  const cacheKey = `${cacheScope}\0${providerId}\0${baseUrl}`;
+  const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > now) return cached.result;
 
   try {
@@ -66,11 +68,11 @@ const fetchQuota = async (
     if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
     const payload = (await response.json()) as unknown;
     const result: ProviderQuota = { provider: providerId, windows: adapter.parse(payload), fetchedAt: now };
-    cache.set(providerId, { expiresAt: now + MINUTE_MS, result });
+    cache.set(cacheKey, { expiresAt: now + MINUTE_MS, result });
     return result;
   } catch (error) {
     const result: ProviderQuota = { provider: providerId, error: toMessage(error), fetchedAt: now };
-    cache.set(providerId, { expiresAt: now + MINUTE_MS, result });
+    cache.set(cacheKey, { expiresAt: now + MINUTE_MS, result });
     return result;
   }
 };
@@ -225,6 +227,7 @@ export const getProviderQuotaWithApiKey = (
   apiKey: string | undefined,
   apiType?: string,
   baseUrl?: string,
+  cacheScope = "global",
 ): Promise<ProviderQuota> => {
   const adapter = matchAdapter(providerId, apiType);
   if (!adapter) {
@@ -246,7 +249,7 @@ export const getProviderQuotaWithApiKey = (
       fetchedAt: nowMs(),
     });
   }
-  return fetchQuota(adapter, providerId, resolvedBaseUrl, apiKey);
+  return fetchQuota(adapter, providerId, resolvedBaseUrl, apiKey, cacheScope);
 };
 
 export const getProviderQuota = (providerId: string, session: AgentSession): Promise<ProviderQuota> => {
@@ -257,6 +260,7 @@ export const getProviderQuota = (providerId: string, session: AgentSession): Pro
       apiKey,
       providerApiType(session, providerId),
       providerBaseUrl(session, providerId),
+      session.sessionId,
     );
   })();
 };

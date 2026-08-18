@@ -76,9 +76,13 @@ const persistSnapshot = async (snapshot: WritableServerSettings, version: number
 };
 
 const loadServerSettings = async () => {
+  const version = saveVersion;
   try {
-    serverSettings.value = await fetchServerSettings();
-    serverSettingsError.value = null;
+    const loaded = await fetchServerSettings();
+    if (version === saveVersion) {
+      serverSettings.value = loaded;
+      serverSettingsError.value = null;
+    }
   } catch (error) {
     serverSettingsError.value = toMessage(error);
   } finally {

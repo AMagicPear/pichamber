@@ -1,30 +1,18 @@
-import type { ModelInfo } from "@earendil-works/pi-coding-agent";
 import type { ModelDescriptor, ThinkingState } from "@pichamber/shared";
-import type { SessionRuntime, RuntimeModelDescriptor } from "./runtime";
-import { providerName } from "./providers";
+import type { RuntimeModelInfo, SessionRuntime, RuntimeModelDescriptor } from "./runtime";
 
 /** Wrap the runtime's `ModelInfo` rows in the slim wire descriptor
  *  (provider name + display name). */
-const toDescriptor = (model: ModelInfo, providerLabel: string): ModelDescriptor => ({
+const toDescriptor = (model: RuntimeModelInfo, providerLabel: string): ModelDescriptor => ({
   provider: model.provider,
   providerName: providerLabel,
   id: model.id,
-  // ModelInfo doesn't carry a display name. The runtime's current-model
-  // descriptor carries one (when available) and we layer it on top in
-  // `getEffectiveModelDescriptor` below.
-  name: model.id,
+  name: model.name || model.id,
   reasoning: model.reasoning,
 });
 
-/** Resolve a human-friendly provider label. SDK runtimes carry the full
- *  registry so we use Pi's display names; RPC runtimes fall back to
- *  whatever the runtime mirrored (typically the id). */
-const labelProvider = (runtime: SessionRuntime, providerId: string): string => {
-  if (runtime.type === "sdk" && runtime.agentSession) {
-    return providerName(runtime.agentSession, providerId);
-  }
-  return runtime.getProviderName(providerId) || providerId;
-};
+const labelProvider = (runtime: SessionRuntime, providerId: string): string =>
+  runtime.getProviderName(providerId) || providerId;
 
 export const listAvailableModels = async (
   runtime: SessionRuntime,
@@ -41,9 +29,13 @@ export const getEffectiveModelDescriptor = async (
   const availableModels = await listAvailableModels(runtime);
   const current: RuntimeModelDescriptor | undefined = runtime.getCurrentModel();
   if (!current) return { model: undefined, availableModels };
-  const match = availableModels.find(
+  const matchIndex = availableModels.findIndex(
     (m) => m.provider === current.provider && m.id === current.id,
   );
+  if (matchIndex !== -1 && current.name) {
+    availableModels[matchIndex] = { ...availableModels[matchIndex]!, name: current.name };
+  }
+  const match = matchIndex === -1 ? undefined : availableModels[matchIndex];
   return {
     model: match ?? {
       provider: current.provider,

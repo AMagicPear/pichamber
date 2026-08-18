@@ -253,7 +253,7 @@ const server = Bun.serve({
               fetchedAt: Date.now(),
             });
           }
-          return Response.json(await getProviderQuotaWithApiKey(provider, apiKey));
+          return Response.json(await getProviderQuotaWithApiKey(provider, apiKey, undefined, undefined, runtime.sessionId));
         } catch (err) {
           return Response.json({ error: toMessage(err) }, { status: 500 });
         }

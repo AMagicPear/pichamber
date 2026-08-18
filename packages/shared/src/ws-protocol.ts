@@ -54,6 +54,8 @@ export type RuntimeResources = {
   tools: RuntimeToolInfo[];
   extensions: ExtensionInfo[];
   diagnostics: Array<{ path: string; error: string }>;
+  /** False when the active runtime cannot enumerate extension/tool resources. */
+  extensionInventoryAvailable: boolean;
 };
 
 type ToolExecutionStartEvent = Extract<AgentSessionEvent, { type: "tool_execution_start" }>;

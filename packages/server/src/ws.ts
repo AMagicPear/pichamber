@@ -146,7 +146,13 @@ const initialModelState = (): Pick<
     lastAssistant: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
     cacheHit: "0.0%",
   },
-  resources: { commands: [], tools: [], extensions: [], diagnostics: [] },
+  resources: {
+    commands: [],
+    tools: [],
+    extensions: [],
+    diagnostics: [],
+    extensionInventoryAvailable: false,
+  },
 });
 
 /** Cheap shallow diff on the fields the client actually renders. Skips the
@@ -217,7 +223,7 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
     busy,
     activity,
     pending,
-    canRestorePending: channel.runtime.type !== "rpc",
+    canRestorePending: channel.runtime.supportsQueueRestore,
     items,
     model,
     availableModels,
@@ -457,6 +463,33 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
     broadcastState(channel, fields);
   };
 
+  /** Coalesce message-end stats refreshes. RPC stats need two subprocess
+   * roundtrips, so concurrent refreshes can otherwise return out of order and
+   * overwrite newer state. */
+  let statsRefreshRunning = false;
+  let statsRefreshPending = false;
+  const queueStatsRefresh = () => {
+    statsRefreshPending = true;
+    if (statsRefreshRunning) return;
+    statsRefreshRunning = true;
+    void (async () => {
+      while (statsRefreshPending) {
+        statsRefreshPending = false;
+        try {
+          const stats = await computeSessionStatsView(runtime);
+          if (statsChanged(channel.state.stats, stats)) {
+            channel.state.stats = stats;
+            broadcastState(channel, { stats });
+          }
+        } catch (error) {
+          console.error("Failed to refresh session stats", sessionId, error);
+        }
+      }
+      statsRefreshRunning = false;
+      if (statsRefreshPending) queueStatsRefresh();
+    })();
+  };
+
   channel.unsubscribe = runtime.subscribe((event) => {
     const state = channel.state;
     switch (event.type) {
@@ -560,12 +593,7 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
             broadcastItem(item);
           }
         }
-        void computeSessionStatsView(runtime).then((stats) => {
-          if (statsChanged(state.stats, stats)) {
-            state.stats = stats;
-            broadcastState(channel, { stats });
-          }
-        });
+        queueStatsRefresh();
         break;
       }
       case "tool_execution_start": {
@@ -665,8 +693,6 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
       }
     }
   });
-  // 订阅前先对齐一次，保证首个连接的 snapshot 就带完整历史。
-  void reconcile(channel, true);
   channelsBySession.set(sessionId, channel);
 
   // Cross-process extension UI bridge. The SDK backend wires this up
@@ -686,19 +712,25 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
       unsubUi();
     };
   }
-  // 与 TUI/RPC 相同：先安装 listener，再 await extension binding，这样
-  // session_start 产生的自定义消息/UI 请求不会丢失，首个 snapshot 也能带命令。
-  channel.ready = Promise.resolve()
-    .then(() => runtime.bindExtensions(channel.uiBridge.context))
-    .then(async () => {
-      channel.state.resources = await snapshotResources(runtime);
-    })
-    .catch((error) => {
+  // Reconcile before the first socket snapshot. This awaits RPC's
+  // get_entries roundtrip instead of racing it against `open()`.
+  channel.ready = (async () => {
+    try {
+      await reconcile(channel, true);
+    } catch (error) {
+      console.error("Failed to reconcile session", sessionId, error);
+    }
+    try {
+      await runtime.bindExtensions(channel.uiBridge.context);
+    } catch (error) {
       console.error("Failed to bind extensions", sessionId, error);
-      void snapshotResources(runtime).then((resources) => {
-        channel.state.resources = resources;
-      });
-    });
+    }
+    try {
+      channel.state.resources = await snapshotResources(runtime);
+    } catch (error) {
+      console.error("Failed to snapshot resources", sessionId, error);
+    }
+  })();
   return channel;
 };
 
@@ -721,6 +753,7 @@ const detachListener = (sessionId: string, ws: BunWS) => {
 export const closeSessionSockets = (sessionId: string) => {
   const channel = channelsBySession.get(sessionId);
   if (!channel) return Promise.resolve();
+  channel.uiBridge.cancelPending();
   channel.unsubscribe();
   channelsBySession.delete(sessionId);
   for (const ws of channel.sockets) {
@@ -838,7 +871,7 @@ export const sessionWsHandler: WsHandler = {
         return;
       }
       case "restore_pending": {
-        if (runtime.type === "rpc") {
+        if (!runtime.supportsQueueRestore) {
           sendError(bunWS, "Restoring pending messages is not supported by the external Pi runtime");
           return;
         }

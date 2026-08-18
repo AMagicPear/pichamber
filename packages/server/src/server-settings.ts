@@ -12,7 +12,8 @@
  * updates before calling `save()`, so every write is a complete snapshot and
  * a setting change is immediately observable by newly opened sessions.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
 import { homedir } from "node:os";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
@@ -76,7 +77,9 @@ export const saveServerSettings = (next: Partial<ServerSettings>): ServerSetting
   cache = merged;
   const path = settingsPath();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(merged, null, 2));
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  writeFileSync(temporaryPath, JSON.stringify(merged, null, 2));
+  renameSync(temporaryPath, path);
   return merged;
 };
 

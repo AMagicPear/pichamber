@@ -19,7 +19,6 @@ import { existsSync } from "node:fs";
 import {
   type AgentSessionEvent,
   type ExtensionUIContext,
-  type ModelInfo,
   type RpcExtensionUIRequest,
   type RpcExtensionUIResponse,
   type SessionEntry,
@@ -29,6 +28,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
   type RuntimeClearedQueue,
   type RuntimeModelDescriptor,
+  type RuntimeModelInfo,
   type RuntimePromptOptions,
   type RuntimeResources,
   type SessionRuntime,
@@ -492,6 +492,9 @@ export const createRpcSessionRuntime = async ({
     get isCompacting() {
       return isCompacting;
     },
+    get supportsQueueRestore() {
+      return false;
+    },
     get thinkingLevel(): ThinkingLevel {
       return thinkingLevel;
     },
@@ -537,23 +540,15 @@ export const createRpcSessionRuntime = async ({
       const followUp = pendingFollowUp;
       pendingSteering = [];
       pendingFollowUp = [];
-      // Tell the subprocess to clear its own queue by aborting without
-      // restoring — the SDK keeps the messages on the agent side, the
-      // RPC subprocess mirrors that via abort. We can't faithfully
-      // replicate clearQueue() without a dedicated RPC command, but
-      // abort() drops the queue in practice (Pi's abort RPC clears the
-      // pending steering/follow-up tracking).
-      client
-        .send({ type: "abort" })
-        .catch(() => {
-          /* ignore — we'll surface real errors on the next prompt */
-        });
+      // The public RPC protocol cannot clear its remote queue without
+      // aborting. `restore_pending` is disabled for this runtime, and the
+      // WebSocket abort path performs exactly one explicit abort afterwards.
       return { steering, followUp };
     },
 
-    async getAvailableModels(): Promise<ModelInfo[]> {
+    async getAvailableModels(): Promise<RuntimeModelInfo[]> {
       const data = (await send({ type: "get_available_models" })) as
-        | { models?: ModelInfo[] }
+        | { models?: RuntimeModelInfo[] }
         | undefined;
       return data?.models ?? [];
     },
@@ -599,9 +594,7 @@ export const createRpcSessionRuntime = async ({
     },
 
     async getResources(): Promise<RuntimeResources> {
-      // Only commands are exposed by the JSONL protocol. Tools and
-      // extensions return empty lists so the Settings pane degrades
-      // gracefully instead of crashing.
+      // RPC exposes slash commands but not the extension/tool inventory.
       const commands = (await send({ type: "get_commands" })) as
         | { commands?: RuntimeResources["commands"] }
         | undefined;
@@ -610,6 +603,7 @@ export const createRpcSessionRuntime = async ({
         tools: [],
         extensions: [],
         diagnostics: [],
+        extensionInventoryAvailable: false,
       };
     },
 

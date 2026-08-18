@@ -10,7 +10,6 @@ import {
   type AgentSession,
   type AgentSessionEvent,
   type ExtensionUIContext,
-  type ModelInfo,
   type SessionEntry,
   type SessionInfo,
   type SessionManager,
@@ -22,6 +21,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type {
   RuntimeClearedQueue,
   RuntimeModelDescriptor,
+  RuntimeModelInfo,
   RuntimePromptOptions,
   RuntimeResources,
   SessionRuntime,
@@ -45,7 +45,7 @@ const modelDescriptorFromAgentSession = (
   };
 };
 
-const modelInfoFromAgentSession = (session: AgentSession): ModelInfo[] => {
+const modelInfoFromAgentSession = (session: AgentSession): RuntimeModelInfo[] => {
   // The SDK's `getAvailableSnapshot()` returns Model<Api>[] which is
   // structurally a superset of ModelInfo; we project to the wire shape.
   try {
@@ -53,6 +53,7 @@ const modelInfoFromAgentSession = (session: AgentSession): ModelInfo[] => {
     return models.map((model) => ({
       provider: model.provider,
       id: model.id,
+      name: model.name,
       contextWindow: model.contextWindow ?? 0,
       reasoning: Boolean(model.reasoning),
     }));
@@ -84,6 +85,7 @@ const snapshotResources = (session: AgentSession): RuntimeResources => {
         tools: [...extension.tools.keys()],
       })),
     diagnostics: result.errors,
+    extensionInventoryAvailable: true,
   };
 };
 
@@ -133,6 +135,9 @@ export const createSdkSessionRuntime = async (
     get isCompacting(): boolean {
       return session.isCompacting;
     },
+    get supportsQueueRestore(): boolean {
+      return true;
+    },
     get thinkingLevel(): ThinkingLevel {
       return session.thinkingLevel;
     },
@@ -173,7 +178,7 @@ export const createSdkSessionRuntime = async (
       return session.clearQueue();
     },
 
-    getAvailableModels(): Promise<ModelInfo[]> {
+    getAvailableModels(): Promise<RuntimeModelInfo[]> {
       return Promise.resolve(modelInfoFromAgentSession(session));
     },
     getAvailableThinkingLevels(): ThinkingLevel[] {

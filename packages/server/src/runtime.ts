@@ -56,6 +56,7 @@ export type RuntimeResources = {
   tools: RuntimeToolInfo[];
   extensions: RuntimeExtensionInfo[];
   diagnostics: RuntimeDiagnostics;
+  extensionInventoryAvailable: boolean;
 };
 
 /** Slim descriptor the wire ships. `name` and `providerName` come from
@@ -69,6 +70,10 @@ export type RuntimeModelDescriptor = {
   reasoning: boolean;
   contextWindow: number;
 };
+
+/** Model rows used for selection. Pi's public RPC type omits `name`, but
+ * SDK snapshots and newer RPC builds can provide it, so retain it when present. */
+export type RuntimeModelInfo = ModelInfo & { name?: string };
 
 export type RuntimePromptOptions = {
   /** When streaming, how to queue the message: "steer" or "followUp". */
@@ -96,6 +101,8 @@ export interface SessionRuntime {
   readonly sessionFile: string | undefined;
   readonly isStreaming: boolean;
   readonly isCompacting: boolean;
+  /** Whether queued messages can be removed without interrupting a live run. */
+  readonly supportsQueueRestore: boolean;
   /** Current thinking level. Mirrored from `thinking_level_changed`
    *  events so the WS layer can read it synchronously when broadcasting
    *  state frames. */
@@ -103,7 +110,7 @@ export interface SessionRuntime {
 
   /** Tear down the runtime. Idempotent. After dispose, no further calls
    *  (including event subscribers) are valid. */
-  dispose(): void;
+  dispose(): void | Promise<void>;
 
   /** Subscribe to events. Returns an unsubscribe function. */
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
@@ -121,9 +128,9 @@ export interface SessionRuntime {
 
   // ── State queries ─────────────────────────────────────────────────
 
-  /** Resolved to a `ModelInfo` from the SDK or to a row from
+  /** Resolved to a `RuntimeModelInfo` from the SDK or to a row from
    *  `RpcClient.getAvailableModels()` — both share the same wire shape. */
-  getAvailableModels(): Promise<ModelInfo[]>;
+  getAvailableModels(): Promise<RuntimeModelInfo[]>;
   /** Sync wrapper used by the WS layer so a state broadcast can include
    *  the levels without an async hop. Cached at construction and
    *  refreshed on model switches. */
@@ -147,10 +154,8 @@ export interface SessionRuntime {
 
   // ── Resource snapshots (Settings → Extensions) ──────────────────
 
-  /** Fetch commands/tools/extensions/diagnostics. The RPC runtime only
-   *  has access to slash commands via `getCommands()`; tools and
-   *  extensions are returned as best-effort empty arrays when not
-   *  available through the protocol. */
+  /** Fetch commands/tools/extensions/diagnostics. RPC exposes slash commands
+   *  but not an extension inventory, which is marked explicitly in the result. */
   getResources(): Promise<RuntimeResources>;
 
   // ── Conversation / stats ─────────────────────────────────────────
@@ -200,7 +205,7 @@ export interface SessionRuntime {
 
 // ─── Factory ──────────────────────────────────────────────────────────
 
-import { getServerSettings, resolveExternalPi } from "./server-settings";
+import { getServerSettings } from "./server-settings";
 import { createSdkSessionRuntime } from "./sdk-session-runtime";
 import { createRpcSessionRuntime } from "./rpc-session-runtime";
 
@@ -214,7 +219,7 @@ export type CreateRuntimeOptions = {
 /** Decide which backend to use based on the resolved server settings. */
 export const pickRuntimeType = (): SessionRuntimeType => {
   const settings = getServerSettings();
-  return settings.useExternalPi && resolveExternalPi() ? "rpc" : "sdk";
+  return settings.useExternalPi ? "rpc" : "sdk";
 };
 
 export const createSessionRuntime = async (

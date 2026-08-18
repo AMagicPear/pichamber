@@ -19,6 +19,13 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 const sessionFileLookup = new Map<string, string>();
 const activeSessions = new Map<string, SessionRuntime>();
+const openingSessions = new Map<string, Promise<SessionRuntime | null>>();
+
+const removeRuntime = (runtime: SessionRuntime) => {
+  for (const [id, active] of activeSessions) {
+    if (active === runtime) activeSessions.delete(id);
+  }
+};
 
 const getSessionFileWithId = async (id: string): Promise<string | null> => {
   let sessionFile = sessionFileLookup.get(id);
@@ -44,18 +51,23 @@ export const listAllSessions = async (): Promise<SessionInfo[]> => {
 export const getSession = async (id: string): Promise<SessionRuntime | null> => {
   const cached = activeSessions.get(id);
   if (cached) return cached;
-  const sessionFile = await getSessionFileWithId(id);
-  if (!sessionFile) return null;
-  const runtime = await createSessionRuntime({ cwd: await resolveSessionCwd(sessionFile), sessionFile });
-  if (runtime.sessionId !== id) {
-    // The runtime reports its own id (RPC sub-mode may assign a fresh
-    // id on switch); trust whichever the runtime actually opened and
-    // re-key the cache by that id so subsequent lookups match.
-    activeSessions.set(runtime.sessionId, runtime);
+  const opening = openingSessions.get(id);
+  if (opening) return opening;
+
+  const create = (async () => {
+    const sessionFile = await getSessionFileWithId(id);
+    if (!sessionFile) return null;
+    const runtime = await createSessionRuntime({ cwd: await resolveSessionCwd(sessionFile), sessionFile });
+    activeSessions.set(id, runtime);
+    if (runtime.sessionId !== id) activeSessions.set(runtime.sessionId, runtime);
     return runtime;
+  })();
+  openingSessions.set(id, create);
+  try {
+    return await create;
+  } finally {
+    openingSessions.delete(id);
   }
-  activeSessions.set(id, runtime);
-  return runtime;
 };
 
 /** Open an existing session file. The runtime decides which cwd to
@@ -87,8 +99,8 @@ export { conversationItems };
 export const deactivateSession = async (id: string) => {
   const runtime = activeSessions.get(id);
   if (!runtime) return;
-  runtime.dispose();
-  activeSessions.delete(id);
+  await runtime.dispose();
+  removeRuntime(runtime);
 };
 
 /** Same delete flow as before, but works on whichever runtime the
@@ -99,8 +111,8 @@ export const deleteSession = async (
 ): Promise<{ ok: boolean; method: "trash" | "unlink" | "inmemory"; error?: string }> => {
   const session = activeSessions.get(id);
   if (session) {
-    session.dispose();
-    activeSessions.delete(id);
+    await session.dispose();
+    removeRuntime(session);
   }
   const sessionPath = session?.sessionFile ?? sessionFileLookup.get(id);
   if (!sessionPath) {

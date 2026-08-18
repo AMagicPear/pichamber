@@ -253,7 +253,10 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
               </article>
             </div>
 
-            <div v-if="resources.extensions.length" class="extension-list">
+            <div v-if="!resources.extensionInventoryAvailable" class="extension-empty">
+              This Pi runtime does not expose its extension inventory.
+            </div>
+            <div v-else-if="resources.extensions.length" class="extension-list">
               <article v-for="extension in resources.extensions" :key="extension.path" class="extension-card">
                 <header>
                   <div>
@@ -286,7 +289,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
               <label class="settings-option">
                 <input
                   :checked="serverSettings.settings.value.useExternalPi"
-                  :disabled="serverSettings.saving.value"
+                  :disabled="serverSettings.saving.value || !serverSettings.loaded.value"
                   type="checkbox"
                   @change="(event) => {
                     const target = event.target as HTMLInputElement;
@@ -318,7 +321,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
                   type="text"
                   spellcheck="false"
                   :placeholder="runtimePathPlaceholder"
-                  :disabled="serverSettings.saving.value || !serverSettings.settings.value.useExternalPi"
+                  :disabled="serverSettings.saving.value || !serverSettings.loaded.value || !serverSettings.settings.value.useExternalPi"
                   @blur="() => void commitRuntimeSettings()"
                   @keydown.enter="(event) => {
                     (event.target as HTMLInputElement).blur();

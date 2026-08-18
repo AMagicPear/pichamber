@@ -34,6 +34,7 @@ const resources = ref<RuntimeResources>({
   tools: [],
   extensions: [],
   diagnostics: [],
+  extensionInventoryAvailable: false,
 });
 const extensionUi = reactive({
   dialog: null as
@@ -246,7 +247,13 @@ const disconnect = () => {
   activity.value = { phase: "idle" };
   pending.value = { steering: [], followUp: [] };
   canRestorePending.value = true;
-  resources.value = { commands: [], tools: [], extensions: [], diagnostics: [] };
+  resources.value = {
+    commands: [],
+    tools: [],
+    extensions: [],
+    diagnostics: [],
+    extensionInventoryAvailable: false,
+  };
   extensionUi.dialog = null;
   extensionDialogQueue.splice(0);
   extensionUi.notifications.splice(0);
