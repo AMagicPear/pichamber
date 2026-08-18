@@ -36,12 +36,30 @@ const escapedFromLock = ref(false);
 let lastScrollTop = 0;
 let ignoreScrollTop: number | undefined;
 let contentObserver: ResizeObserver | null = null;
+let scrollFrame: number | undefined;
+let viewportResizeTimer: ReturnType<typeof setTimeout> | undefined;
 
 const scrollToBottom = () => {
   const el = scroller.value;
   if (!el) return;
   ignoreScrollTop = el.scrollHeight;
   el.scrollTop = el.scrollHeight;
+};
+
+const scheduleScrollToBottom = () => {
+  if (scrollFrame !== undefined) return;
+  scrollFrame = window.requestAnimationFrame(() => {
+    scrollFrame = undefined;
+    if (stickToBottom.value) scrollToBottom();
+  });
+};
+
+const onViewportResize = () => {
+  if (viewportResizeTimer !== undefined) clearTimeout(viewportResizeTimer);
+  viewportResizeTimer = setTimeout(() => {
+    viewportResizeTimer = undefined;
+    scheduleScrollToBottom();
+  }, 120);
 };
 
 const onScroll = () => {
@@ -75,27 +93,37 @@ const onWheel = (e: WheelEvent) => {
 onMounted(() => {
   const target = content.value;
   if (!target) return;
+  window.addEventListener("resize", onViewportResize);
   contentObserver = new ResizeObserver(() => {
+    // Browser resizing changes every message's wrapping. Defer the one
+    // anchor correction until resize settles instead of forcing layout on
+    // every intermediate width.
+    if (viewportResizeTimer !== undefined) return;
     const el = scroller.value;
     if (!el) return;
     // The browser can overscroll past the target; snap it back.
     if (el.scrollTop > el.scrollHeight - el.clientHeight) {
       el.scrollTop = el.scrollHeight - el.clientHeight;
     }
-    if (stickToBottom.value) scrollToBottom();
+    if (stickToBottom.value) scheduleScrollToBottom();
   });
   // Fires once immediately with the initial size, covering the first paint.
   contentObserver.observe(target);
 });
 
-onBeforeUnmount(() => contentObserver?.disconnect());
+onBeforeUnmount(() => {
+  contentObserver?.disconnect();
+  window.removeEventListener("resize", onViewportResize);
+  if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame);
+  if (viewportResizeTimer !== undefined) clearTimeout(viewportResizeTimer);
+});
 
 watch(
   () => workspace.sessionId,
   () => {
     stickToBottom.value = true;
     escapedFromLock.value = false;
-    scrollToBottom();
+    scheduleScrollToBottom();
   },
   { immediate: true },
 );

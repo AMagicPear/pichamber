@@ -88,7 +88,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: #292827;
+  color: var(--ui-text-strong);
   font-size: 15px;
   font-weight: 700;
 }
