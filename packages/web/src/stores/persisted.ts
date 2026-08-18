@@ -24,17 +24,21 @@ export const persistedState = <T extends object>(
   }
 
   const state = reactive(initial) as T;
+  const persist = () => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(key, JSON.stringify(state));
+    } catch {
+      /* quota / privacy-mode errors */
+    }
+  };
   watch(
     state,
-    (value) => {
-      if (typeof window === "undefined") return;
-      try {
-        window.localStorage.setItem(key, JSON.stringify(value));
-      } catch {
-        /* quota / privacy-mode errors */
-      }
-    },
-    { deep: true },
+    persist,
+    { deep: true, flush: "sync" },
   );
+  // A synchronous watch covers ordinary mutations. This final write covers
+  // a browser reload that happens immediately after a control change.
+  if (typeof window !== "undefined") window.addEventListener("pagehide", persist);
   return state;
 };

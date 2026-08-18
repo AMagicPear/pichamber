@@ -1,0 +1,239 @@
+/**
+ * Session runtime abstraction.
+ *
+ * The web layer talks to a per-session runtime over a single `subscribe`
+ * stream plus a small set of imperative methods (prompt/abort/compact/…).
+ * Two implementations live behind this interface:
+ *
+ *   • `SdkSessionRuntime` (default) — drives Pi's bundled `AgentSession`
+ *     in-process. Reuses everything in `core/`.
+ *   • `RpcSessionRuntime` — spawns a user-installed `pi --mode rpc` and
+ *     proxies the same surface through the JSONL protocol described in
+ *     `docs/rpc.md`.
+ *
+ * The runtime covers only agent concerns (prompts, events, model,
+ * thinking level, session state, extension UI). Files, Git, and PTY are
+ * server services and never reach into the runtime — that boundary is
+ * what lets both backends coexist behind one WebSocket protocol.
+ */
+import type {
+  AgentSession,
+  AgentSessionEvent,
+  ExtensionUIContext,
+  ModelInfo,
+  RpcExtensionUIRequest,
+  RpcExtensionUIResponse,
+  SessionEntry,
+  SessionInfo,
+  SessionStats,
+  SlashCommandInfo,
+  SourceInfo,
+} from "@earendil-works/pi-coding-agent";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+
+export type { AgentSessionEvent, SourceInfo };
+
+export type SessionRuntimeType = "sdk" | "rpc";
+
+export type RuntimeToolInfo = {
+  name: string;
+  description: string;
+  sourceInfo: SourceInfo;
+  active: boolean;
+};
+
+export type RuntimeExtensionInfo = {
+  path: string;
+  sourceInfo: SourceInfo;
+  commands: string[];
+  tools: string[];
+};
+
+export type RuntimeDiagnostics = Array<{ path: string; error: string }>;
+
+export type RuntimeResources = {
+  commands: SlashCommandInfo[];
+  tools: RuntimeToolInfo[];
+  extensions: RuntimeExtensionInfo[];
+  diagnostics: RuntimeDiagnostics;
+};
+
+/** Slim descriptor the wire ships. `name` and `providerName` come from
+ *  Pi's provider/model registry; we mirror them through the runtime so
+ *  the RPC backend can still surface user-friendly labels. */
+export type RuntimeModelDescriptor = {
+  provider: string;
+  providerName: string;
+  id: string;
+  name: string;
+  reasoning: boolean;
+  contextWindow: number;
+};
+
+export type RuntimePromptOptions = {
+  /** When streaming, how to queue the message: "steer" or "followUp". */
+  streamingBehavior?: "steer" | "followUp";
+};
+
+export type RuntimeClearedQueue = {
+  steering: string[];
+  followUp: string[];
+};
+
+/**
+ * Single per-session runtime. Both backends construct this once per
+ * active session and dispose it when the last client drops (see
+ * `session.ts:deactivateSession`). All implementations must emit
+ * `agent_settled` whenever the session returns to idle so the WS layer
+ * can flush queued messages and refresh stats.
+ */
+export interface SessionRuntime {
+  readonly type: SessionRuntimeType;
+  readonly sessionId: string;
+  /** Effective working directory of the session. */
+  readonly cwd: string;
+  /** Persisted session file, when available. */
+  readonly sessionFile: string | undefined;
+  readonly isStreaming: boolean;
+  readonly isCompacting: boolean;
+  /** Current thinking level. Mirrored from `thinking_level_changed`
+   *  events so the WS layer can read it synchronously when broadcasting
+   *  state frames. */
+  readonly thinkingLevel: ThinkingLevel;
+
+  /** Tear down the runtime. Idempotent. After dispose, no further calls
+   *  (including event subscribers) are valid. */
+  dispose(): void;
+
+  /** Subscribe to events. Returns an unsubscribe function. */
+  subscribe(listener: (event: AgentSessionEvent) => void): () => void;
+
+  // ── Agent actions ────────────────────────────────────────────────
+
+  prompt(message: string, options?: RuntimePromptOptions): Promise<void>;
+  steer(message: string): Promise<void>;
+  followUp(message: string): Promise<void>;
+  abort(): Promise<void>;
+  compact(customInstructions?: string): Promise<unknown>;
+  setModel(provider: string, modelId: string): Promise<void>;
+  setThinkingLevel(level: ThinkingLevel): Promise<void>;
+  clearQueue(): RuntimeClearedQueue;
+
+  // ── State queries ─────────────────────────────────────────────────
+
+  /** Resolved to a `ModelInfo` from the SDK or to a row from
+   *  `RpcClient.getAvailableModels()` — both share the same wire shape. */
+  getAvailableModels(): Promise<ModelInfo[]>;
+  /** Sync wrapper used by the WS layer so a state broadcast can include
+   *  the levels without an async hop. Cached at construction and
+   *  refreshed on model switches. */
+  getAvailableThinkingLevels(): ThinkingLevel[];
+  getActiveToolNames(): string[];
+
+  /** `providerName` falls back to `providerId` when the runtime has no
+   *  provider registry (RPC mode). `providerApiType` is only used by
+   *  quota adapters; RPC mode returns `undefined`. */
+  getProviderName(providerId: string): string;
+  getProviderBaseUrl(providerId: string): string | undefined;
+  getProviderApiType(providerId: string): string | undefined;
+  /** Resolve one provider credential from the runtime that owns it. RPC
+   * runtimes invoke their external Pi binary, so callers never fall back to
+   * credentials from the bundled SDK. */
+  getProviderApiKey?(providerId: string): Promise<string | undefined>;
+
+  /** Currently active model. `name` and `providerName` may fall back to
+   *  ids if the registry has no friendly label. */
+  getCurrentModel(): RuntimeModelDescriptor | undefined;
+
+  // ── Resource snapshots (Settings → Extensions) ──────────────────
+
+  /** Fetch commands/tools/extensions/diagnostics. The RPC runtime only
+   *  has access to slash commands via `getCommands()`; tools and
+   *  extensions are returned as best-effort empty arrays when not
+   *  available through the protocol. */
+  getResources(): Promise<RuntimeResources>;
+
+  // ── Conversation / stats ─────────────────────────────────────────
+
+  /** Ordered session entries on the active branch. SDK uses
+   *  `SessionManager.buildContextEntries()`; RPC uses `getEntries()`
+   *  and converts the JSONL shape to the in-memory `SessionEntry`. */
+  buildConversationEntries(): Promise<SessionEntry[]>;
+
+  /** Cached session stats; SDK uses `getSessionStats()`, RPC uses the
+   *  same call through the JSONL protocol. */
+  getSessionStats(): Promise<SessionStats>;
+
+  /** Wire-format session info used by `listAllSessions`. The SDK
+   *  implementation just forwards the SessionInfo list; RPC returns the
+   *  active session (other sessions live in the SDK's `SessionManager`,
+   *  so we expose them separately when listing). */
+  getSessionInfo(): Promise<SessionInfo | null>;
+
+  // ── Extensions ──────────────────────────────────────────────────
+
+  /** Bind extensions with the given UI context. Mirrors Pi's
+   *  `AgentSession.bindExtensions({ uiContext, mode: "rpc" })`. */
+  bindExtensions(uiContext: ExtensionUIContext): Promise<void>;
+
+  /** SDK-only escape hatch. Carries the underlying `AgentSession` so
+   *  quota, persistence, and tests can reach the model registry without
+   *  bloating the public interface. RPC runtimes always leave this
+   *  undefined. The caller is expected to narrow on `type === "sdk"`. */
+  readonly agentSession?: AgentSession;
+
+  /** RPC-only bridge: subscribe to extension UI requests emitted by
+   *  the subprocess. The SDK backend handles this internally via
+   *  `bindExtensions`; RPC runtimes need a cross-process bridge
+   *  because extensions run in the subprocess and their `ctx.ui.*`
+   *  calls surface as `extension_ui_request` JSON lines on stdout. */
+  subscribeExtensionUiRequests?(
+    listener: (request: RpcExtensionUIRequest) => void,
+  ): () => void;
+
+  /** RPC-only bridge: write an `extension_ui_response` back to the
+   *  subprocess's stdin. Required so dialog methods can resolve; the
+   *  SDK backend doesn't need it because `bindExtensions` handles the
+   *  round-trip internally. */
+  sendExtensionUiResponse?(response: RpcExtensionUIResponse): void;
+}
+
+// ─── Factory ──────────────────────────────────────────────────────────
+
+import { getServerSettings, resolveExternalPi } from "./server-settings";
+import { createSdkSessionRuntime } from "./sdk-session-runtime";
+import { createRpcSessionRuntime } from "./rpc-session-runtime";
+
+export type CreateRuntimeOptions = {
+  cwd: string;
+  /** Pre-created session file path when switching to an existing
+   *  session; `undefined` to start a brand-new session. */
+  sessionFile?: string;
+};
+
+/** Decide which backend to use based on the resolved server settings. */
+export const pickRuntimeType = (): SessionRuntimeType => {
+  const settings = getServerSettings();
+  return settings.useExternalPi && resolveExternalPi() ? "rpc" : "sdk";
+};
+
+export const createSessionRuntime = async (
+  options: CreateRuntimeOptions,
+): Promise<SessionRuntime> => {
+  const type = pickRuntimeType();
+  if (type === "rpc") {
+    return createRpcSessionRuntime(options);
+  }
+  return createSdkSessionRuntime(options);
+};
+
+/** For tests that need to force a particular backend regardless of
+ *  server settings. Production code should always go through
+ *  `createSessionRuntime`. */
+export const createSessionRuntimeAs = async (
+  type: SessionRuntimeType,
+  options: CreateRuntimeOptions,
+): Promise<SessionRuntime> => {
+  if (type === "rpc") return createRpcSessionRuntime(options);
+  return createSdkSessionRuntime(options);
+};

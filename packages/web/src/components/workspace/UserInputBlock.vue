@@ -29,6 +29,7 @@ const props = defineProps<{
   busy: boolean;
   activity: AgentActivity;
   pending: PendingMessages;
+  canRestorePending: boolean;
   commands: SlashCommandInfo[];
   extensionStatuses: Record<string, string>;
   extensionWidgets: Record<string, { lines: string[]; placement: "aboveEditor" | "belowEditor" }>;
@@ -213,7 +214,7 @@ const belowWidgets = computed(() =>
         <div v-for="(message, index) in pending.followUp" :key="`follow:${index}:${message}`">
           <span>Follow up</span><p>{{ message }}</p>
         </div>
-        <button type="button" @click="emit('restorePending')">Restore all</button>
+        <button v-if="canRestorePending" type="button" @click="emit('restorePending')">Restore all</button>
       </div>
       <div v-for="([key, widget]) in belowWidgets" :key="`below:${key}`" class="composer__widget">
         <span v-for="(line, lineIndex) in widget.lines" :key="lineIndex">{{ line }}</span>

@@ -1,5 +1,15 @@
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import type { RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
+/**
+ * Session WebSocket handler.
+ *
+ * Owns one `SessionChannel` per active session. Every channel has a
+ * single subscription against the runtime's event stream (works for
+ * both SDK and RPC backends) plus the list of connected client sockets.
+ *
+ * The wire protocol is identical to the SDK-only implementation:
+ * snapshot on connect, item/state broadcasts thereafter, and UI
+ * requests proxied through the extension bridge.
+ */
+import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
 import type {
   LiveItem,
   AgentActivity,
@@ -11,21 +21,32 @@ import type {
   ThinkingState,
 } from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
-import { computeSessionStatsView } from "./context";
 import { toMessage } from "./error";
 import { createUiBridge, type UiBridge } from "./extension-ui";
+import { computeSessionStatsView } from "./context";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
-import { conversationItems, deactivateSession, getConversationEntries, getSession } from "./session";
+import { conversationItems } from "./conversation";
+import { deactivateSession, getSession } from "./session";
+import type { SessionRuntime } from "./runtime";
 import type { SessionWsData, WsHandler } from "./index";
 
 type BunWS = ServerWebSocket<SessionWsData>;
 
 type AssistantItem = Extract<LiveItem, { kind: "assistant" }>;
 
+/** Durable extension UI state. Unlike notifications and dialogs, these UI
+ * setters describe current state and must survive an RPC process emitting
+ * them before a browser socket has attached. */
+type ExtensionUiState = {
+  statuses: Record<string, string>;
+  widgets: Record<string, { lines: string[]; placement: "aboveEditor" | "belowEditor" }>;
+  title?: string;
+};
+
 /**
  * 统一 item 流状态：所有会话内容（回复/工具执行）按实际发生顺序排在同一个
- * 列表里，id 铸造后终生不变；权威状态（session manager）只在 agent_settled
- * 时对齐一次（compaction/分支导航/重试后重建，按对象身份保持 id）。
+ * 列表里，id 铸造后终生不变；权威状态（runtime）只在 agent_settled
+ * 时对齐一次（compaction/分支导航/重试后重建）。
  */
 type ChannelState = {
   items: LiveItem[];
@@ -54,11 +75,15 @@ type SessionChannel = {
   state: ChannelState;
   /** 扩展 UI 桥：插件 ui.* 调用经 WS 转发，等前端应答。 */
   uiBridge: UiBridge;
+  /** Current durable extension UI state, replayed to each newly connected client. */
+  extensionUi: ExtensionUiState;
   /** Re-snapshot model + thinking state and broadcast to all sockets. */
   queueModelStateBroadcast: () => void;
   ready: Promise<void>;
   /** Messages submitted while compaction is running; flushed on compaction_end. */
   compactionQueue: CompactionQueuedMessage[];
+  /** Runtime backing this channel — captured for the reconcile/stats helpers. */
+  runtime: SessionRuntime;
 };
 
 /** A message held while compaction is running, mirroring the TUI's
@@ -69,7 +94,6 @@ type CompactionQueuedMessage = {
   mode: "steer" | "followUp";
 };
 
-// sessionId → one shared SDK listener plus all subscribed sockets.
 const channelsBySession = new Map<string, SessionChannel>();
 
 /** Broadcast a `state` frame to a channel's sockets, bumping `seq` first.
@@ -125,81 +149,6 @@ const initialModelState = (): Pick<
   resources: { commands: [], tools: [], extensions: [], diagnostics: [] },
 });
 
-const snapshotResources = (session: AgentSession): RuntimeResources => {
-  const result = session.resourceLoader.getExtensions();
-  const activeTools = new Set(result.runtime.getActiveTools());
-  // Mirror the TUI's `enableSkillCommands` setting: the SDK's `getCommands()`
-  // unconditionally emits skill entries (`skill:*`), so the interactive TUI
-  // filters them out before they reach the autocomplete dropdown. Do the same
-  // here so /settings toggles the shelf's skills in pichamber.
-  const commands = session.settingsManager.getEnableSkillCommands()
-    ? result.runtime.getCommands()
-    : result.runtime.getCommands().filter((command) => command.source !== "skill");
-  return {
-    commands,
-    tools: result.runtime.getAllTools().map((tool) => ({
-      name: tool.name,
-      description: tool.description ?? "",
-      active: activeTools.has(tool.name),
-      sourceInfo: tool.sourceInfo,
-    })),
-    extensions: result.extensions
-      .filter((extension) => !extension.hidden)
-      .map((extension) => ({
-        path: extension.path,
-        sourceInfo: extension.sourceInfo,
-        commands: [...extension.commands.keys()],
-        tools: [...extension.tools.keys()],
-      })),
-    diagnostics: result.errors,
-  };
-};
-
-/** 把权威条目重建为 item 列表；无变化的场合（settle 时内容一致）跳过快照广播。 */
-const reconcile = (channel: SessionChannel, session: AgentSession, keepLive: boolean) => {
-  const state = channel.state;
-  const rebuilt = conversationItems(
-    session,
-    state.items.filter((item) => item.phase === "committed"),
-  );
-  const live = keepLive ? state.items.filter((item) => item.phase === "live") : [];
-  const next = [...rebuilt, ...live];
-  const changed =
-    next.length !== state.items.length ||
-    next.some((item, i) => {
-      const prevItem = state.items[i];
-      if (!prevItem) return true;
-      // compaction 条目没有 message 字段，内容不可变，只比较 id/phase。
-      return (
-        prevItem.id !== item.id ||
-        prevItem.phase !== item.phase ||
-        (prevItem.kind !== "compaction" &&
-          item.kind !== "compaction" &&
-          prevItem.message !== item.message)
-      );
-    });
-  state.items = next;
-  return changed;
-};
-
-const snapshotMessage = (channel: SessionChannel): ServerMessage => {
-  const { seq, busy, activity, pending, items, model, availableModels, thinking, stats, resources } =
-    channel.state;
-  return {
-    type: "snapshot",
-    seq,
-    busy,
-    activity,
-    pending,
-    items,
-    model,
-    availableModels,
-    thinking,
-    stats,
-    resources,
-  };
-};
-
 /** Cheap shallow diff on the fields the client actually renders. Skips the
  *  broadcast when nothing visible changed, so idle ticks don't wake the UI. */
 const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean => {
@@ -221,16 +170,163 @@ const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean =
   return false;
 };
 
-/** 扫描最后一个 custom_message 条目（自定义消息在 emit 前已持久化）。 */
-const lastCustomEntry = (session: AgentSession) => {
-  const entries = getConversationEntries(session);
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i]?.type === "custom_message") return entries[i];
-  }
-  return undefined;
+/** Pull the conversation entries through the runtime. RPC mode hits the
+ *  subprocess once; SDK mode reuses the in-memory session manager. */
+const fetchEntries = (runtime: SessionRuntime) => runtime.buildConversationEntries();
+
+/** `reconcile` rebuilds the item list against the authoritative runtime
+ *  state. New items keep their client-side ids; unmatched ones mint
+ *  `e:<entryId>` so reconnects stay stable. */
+const reconcile = async (
+  channel: SessionChannel,
+  keepLive: boolean,
+): Promise<boolean> => {
+  const state = channel.state;
+  const entries = await fetchEntries(channel.runtime);
+  const rebuilt = conversationItems(entries, state.items.filter((item) => item.phase === "committed"));
+  const live = keepLive ? state.items.filter((item) => item.phase === "live") : [];
+  const next = [...rebuilt, ...live];
+  const changed =
+    next.length !== state.items.length ||
+    next.some((item, i) => {
+      const prevItem = state.items[i];
+      if (!prevItem) return true;
+      return (
+        prevItem.id !== item.id ||
+        prevItem.phase !== item.phase ||
+        (prevItem.kind !== "compaction" &&
+          item.kind !== "compaction" &&
+          prevItem.message !== item.message)
+      );
+    });
+  state.items = next;
+  return changed;
 };
 
-const attachListener = (sessionId: string, session: AgentSession): SessionChannel => {
+/** Build the runtime-relative snapshot of resources. Both backends
+ *  expose the same `getResources()` interface, so we don't branch here. */
+const snapshotResources = async (runtime: SessionRuntime): Promise<RuntimeResources> =>
+  runtime.getResources();
+
+const snapshotMessage = (channel: SessionChannel): ServerMessage => {
+  const { seq, busy, activity, pending, items, model, availableModels, thinking, stats, resources } =
+    channel.state;
+  return {
+    type: "snapshot",
+    seq,
+    busy,
+    activity,
+    pending,
+    canRestorePending: channel.runtime.type !== "rpc",
+    items,
+    model,
+    availableModels,
+    thinking,
+    stats,
+    resources,
+  };
+};
+
+/** Store the extension operations whose meaning is "set current value".
+ * Notifications and dialogs are intentionally not retained: replaying either
+ * one on reconnect would produce duplicate toasts or prompts. */
+const applyExtensionUiRequest = (state: ExtensionUiState, request: RpcExtensionUIRequest) => {
+  if (request.method === "setStatus") {
+    if (request.statusText) state.statuses[request.statusKey] = request.statusText;
+    else delete state.statuses[request.statusKey];
+  } else if (request.method === "setWidget") {
+    if (request.widgetLines) {
+      state.widgets[request.widgetKey] = {
+        lines: request.widgetLines,
+        placement: request.widgetPlacement ?? "aboveEditor",
+      };
+    } else delete state.widgets[request.widgetKey];
+  } else if (request.method === "setTitle") {
+    state.title = request.title;
+  }
+};
+
+/** Send the durable extension UI snapshot to one socket. This is separate
+ * from the session snapshot because extension UI is event-shaped in the
+ * public protocol, while the client already applies these setters idempotently. */
+const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
+  const send = (request: RpcExtensionUIRequest) => {
+    if (socket.readyState === 1) {
+      socket.send(JSON.stringify({ type: "ui_request", request } satisfies ServerMessage));
+    }
+  };
+  for (const [statusKey, statusText] of Object.entries(channel.extensionUi.statuses)) {
+    send({
+      type: "extension_ui_request",
+      id: crypto.randomUUID(),
+      method: "setStatus",
+      statusKey,
+      statusText,
+    });
+  }
+  for (const [widgetKey, widget] of Object.entries(channel.extensionUi.widgets)) {
+    send({
+      type: "extension_ui_request",
+      id: crypto.randomUUID(),
+      method: "setWidget",
+      widgetKey,
+      widgetLines: widget.lines,
+      widgetPlacement: widget.placement,
+    });
+  }
+  if (channel.extensionUi.title !== undefined) {
+    send({
+      type: "extension_ui_request",
+      id: crypto.randomUUID(),
+      method: "setTitle",
+      title: channel.extensionUi.title,
+    });
+  }
+};
+
+/** External Pi's RPC mode uses its terminal theme when extensions build UI
+ * labels, so `ctx.ui.*` strings can carry ANSI color codes. Web clients need
+ * the semantic text only; normalize every textual UI field at this boundary
+ * so SDK and RPC runtimes render identically. */
+const stripExtensionUiAnsi = (request: RpcExtensionUIRequest): RpcExtensionUIRequest => {
+  const strip = (text: string) => Bun.stripANSI(text);
+  switch (request.method) {
+    case "select":
+      return { ...request, title: strip(request.title), options: request.options.map(strip) };
+    case "confirm":
+      return { ...request, title: strip(request.title), message: strip(request.message) };
+    case "input":
+      return {
+        ...request,
+        title: strip(request.title),
+        placeholder: request.placeholder === undefined ? undefined : strip(request.placeholder),
+      };
+    case "editor":
+      return {
+        ...request,
+        title: strip(request.title),
+        prefill: request.prefill === undefined ? undefined : strip(request.prefill),
+      };
+    case "notify":
+      return { ...request, message: strip(request.message) };
+    case "setStatus":
+      return {
+        ...request,
+        statusText: request.statusText === undefined ? undefined : strip(request.statusText),
+      };
+    case "setWidget":
+      return {
+        ...request,
+        widgetLines: request.widgetLines?.map(strip),
+      };
+    case "setTitle":
+      return { ...request, title: strip(request.title) };
+    case "set_editor_text":
+      return { ...request, text: strip(request.text) };
+  }
+};
+
+const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChannel => {
   const existing = channelsBySession.get(sessionId);
   if (existing) return existing;
 
@@ -240,28 +336,25 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     modelStateBroadcastQueued = true;
     queueMicrotask(() => {
       modelStateBroadcastQueued = false;
-      getEffectiveModelDescriptor(session)
-        .then(({ model, availableModels }) => {
-          const channel = channelsBySession.get(sessionId);
-          if (!channel) return;
+      void (async () => {
+        const channel = channelsBySession.get(sessionId);
+        if (!channel) return;
+        try {
+          const { model, availableModels } = await getEffectiveModelDescriptor(runtime);
           channel.state.model = model;
           channel.state.availableModels = availableModels;
-          channel.state.thinking = getThinkingState(session);
-          // Model/thinking switches also change `contextUsage.contextWindow`,
-          // so the Context pane's percentage needs a fresh recompute in the
-          // same broadcast.
-          const stats = computeSessionStatsView(session);
-          channel.state.stats = stats;
+          channel.state.thinking = getThinkingState(runtime);
+          channel.state.stats = await computeSessionStatsView(runtime);
           broadcastState(channel, {
             model,
             availableModels,
             thinking: channel.state.thinking,
-            stats,
+            stats: channel.state.stats,
           });
-        })
-        .catch((error) => {
+        } catch (error) {
           console.error("Failed to snapshot model state", sessionId, error);
-        });
+        }
+      })();
     });
   };
 
@@ -282,7 +375,9 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     queueModelStateBroadcast,
     ready: Promise.resolve(),
     compactionQueue: [],
-    uiBridge: createUiBridge((request) => broadcast({ type: "ui_request", request })),
+    extensionUi: { statuses: {}, widgets: {} },
+    uiBridge: createUiBridge((request) => broadcastUiRequest(request)),
+    runtime,
   };
   const broadcast = (msg: ServerMessage) => {
     const payload = JSON.stringify(msg);
@@ -298,21 +393,23 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     channel.state.seq += 1;
     broadcast(snapshotMessage(channel));
   };
+  const broadcastUiRequest = (request: RpcExtensionUIRequest) => {
+    const normalized = stripExtensionUiAnsi(request);
+    applyExtensionUiRequest(channel.extensionUi, normalized);
+    broadcast({ type: "ui_request", request: normalized });
+  };
 
   /** Common settlement shape shared by `compaction_end` and `agent_settled`:
    *  reset busy/activity/streaming, rebuild items against the authoritative
-   *  session manager, refresh stats + resources, and broadcast the new
-   *  state. Compaction additionally surfaces SDK errors as toasts and
-   *  flushes its message queue before settling. */
-  const settleChannel = (options?: { errorMessage?: string; flushQueue?: boolean }) => {
+   *  runtime, refresh stats + resources, and broadcast the new state.
+   *  Compaction additionally surfaces SDK errors as toasts and flushes its
+   *  message queue before settling. */
+  const settleChannel = async (options?: { errorMessage?: string; flushQueue?: boolean }) => {
     const state = channel.state;
     state.busy = false;
     state.activity = { phase: "idle" };
     state.streaming = undefined;
 
-    // Compaction failure toast: SDK emits compaction_end before rejecting,
-    // so the client sees one consistent message; aborted compactions leave
-    // errorMessage undefined and stay silent.
     if (options?.errorMessage) {
       broadcast({
         type: "ui_request",
@@ -326,31 +423,21 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       } satisfies ServerMessage);
     }
 
-    // Flush messages submitted while compaction ran, mirroring the TUI's
-    // flushCompactionQueue: the first message restarts the conversation
-    // as a fresh prompt (agent is idle post-compaction, so the original
-    // streamingBehavior is meaningless), the rest queue as steer/followUp.
-    // Extension commands were already executed immediately when received.
     if (options?.flushQueue && channel.compactionQueue.length > 0) {
       const [first, ...rest] = channel.compactionQueue;
       channel.compactionQueue = [];
-      session.prompt(first.text).catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
+      runtime
+        .prompt(first.text)
+        .catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
       for (const m of rest) {
-        const submit = m.mode === "followUp" ? session.followUp(m.text) : session.steer(m.text);
+        const submit = m.mode === "followUp" ? runtime.followUp(m.text) : runtime.steer(m.text);
         submit.catch((err: unknown) => console.error("flush queued message failed", sessionId, err));
       }
     }
 
-    if (reconcile(channel, session, false)) broadcastSnapshot();
-    const settledStats = computeSessionStatsView(session);
-    state.resources = snapshotResources(session);
-    // Read busy/activity at broadcast time (the flush above may have
-    // synchronously fired agent_start which already flipped them back to
-    // true/thinking). Without this we'd broadcast a stale "idle" frame and
-    // the client would briefly flicker between idle and thinking.
-    // Also include pending so the composer queue refreshes after the flush
-    // drained compactionQueue — otherwise it shows the old (now-empty)
-    // list until the SDK's queue_update arrives.
+    if (await reconcile(channel, false)) broadcastSnapshot();
+    const settledStats = await computeSessionStatsView(runtime);
+    state.resources = await snapshotResources(runtime);
     const fields: {
       busy: boolean;
       activity: AgentActivity;
@@ -370,7 +457,7 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
     broadcastState(channel, fields);
   };
 
-  channel.unsubscribe = session.subscribe((event) => {
+  channel.unsubscribe = runtime.subscribe((event) => {
     const state = channel.state;
     switch (event.type) {
       case "agent_start": {
@@ -381,8 +468,6 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       }
       case "message_start": {
         const { role } = event.message;
-        // busy 只在真正的 agent 回合置位（回合必然以 user/assistant 消息开始）；
-        // 纯扩展命令（custom 消息）不经过 agent 回合，也不会收到 agent_settled。
         if ((role === "user" || role === "assistant") && !state.busy) {
           state.busy = true;
           broadcastState(channel, { busy: true });
@@ -409,7 +494,6 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
           state.streaming = item;
           broadcastItem(item);
         } else if (role === "custom") {
-          // 插件自定义消息（扩展 sendMessage）也进会话流，前端可按需渲染。
           const item: LiveItem = {
             id: `c-${++state.customCount}`,
             kind: "custom",
@@ -432,7 +516,6 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         const message = event.message;
         const { role } = message;
         if (role === "user") {
-          // user 消息 message_start/end 紧邻发射，扫描最后一个 live user item 即可
           for (let i = state.items.length - 1; i >= 0; i--) {
             const item = state.items[i];
             if (item.kind === "user" && item.phase === "live") {
@@ -443,8 +526,6 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
             }
           }
         } else if (role === "assistant") {
-          // 用 FIFO 匹配而非 streaming 指针：abort 后迟到 message_end 可能
-          // 落在新 run 已开始的时刻，streaming 已被新消息占用。
           const item = state.items.find(
             (i): i is Extract<LiveItem, { kind: "assistant" }> =>
               i.kind === "assistant" && i.phase === "live",
@@ -466,27 +547,25 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
             }
           }
         } else if (role === "custom") {
-          // 自定义消息在 emit 前已持久化（sendCustomMessage 先
-          // appendCustomMessageEntry），同步扫描即可拿到条目 id。
-          const entry = lastCustomEntry(session);
           const item = state.items.find((i) => i.kind === "custom" && i.phase === "live");
           if (item?.kind === "custom") {
             item.message = message;
             item.phase = "committed";
-            if (entry) item.entryId = entry.id;
+            // RPC doesn't emit entry_appended for custom messages; SDK
+            // does and the entry id is stashed in entry_appended below.
+            // We can't fetch the entry id synchronously here without
+            // another roundtrip, so leave entryId empty for RPC and
+            // accept that custom-message id stability across reconnects
+            // may rely on order rather than entryId.
             broadcastItem(item);
           }
         }
-        // Stats refresh: pi appends the entry to the session manager just
-        // before emitting this event, so the new totals (including the
-        // freshly-closed assistant turn's usage) are visible immediately.
-        // `message_start` doesn't touch totals, so we don't need to
-        // recompute there.
-        const stats = computeSessionStatsView(session);
-        if (statsChanged(state.stats, stats)) {
-          state.stats = stats;
-          broadcastState(channel, { stats });
-        }
+        void computeSessionStatsView(runtime).then((stats) => {
+          if (statsChanged(state.stats, stats)) {
+            state.stats = stats;
+            broadcastState(channel, { stats });
+          }
+        });
         break;
       }
       case "tool_execution_start": {
@@ -542,20 +621,14 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
       case "compaction_start": {
         state.busy = true;
         state.activity = { phase: "compacting" };
-        // Defensive: if the SDK ever skipped an agent_settled on the way
-        // to compaction_start (e.g. nested compaction), drop the streaming
-        // pointer so late message_updates can't mutate an aborted item.
         state.streaming = undefined;
-        // A fresh compaction must not inherit a stale queue.
         channel.compactionQueue = [];
         broadcastState(channel, { busy: true, activity: state.activity });
         break;
       }
       case "compaction_end": {
-        // Failure text (Nothing to compact / Already compacted / 摘要生成
-        // 失败等) 走右下角 toast；aborted（Esc 中断）errorMessage undefined。
         const errorMessage = (event as { errorMessage?: unknown }).errorMessage;
-        settleChannel({
+        void settleChannel({
           errorMessage: typeof errorMessage === "string" && errorMessage ? errorMessage : undefined,
           flushQueue: true,
         });
@@ -572,46 +645,59 @@ const attachListener = (sessionId: string, session: AgentSession): SessionChanne
         break;
       }
       case "agent_settled": {
-        settleChannel();
+        void settleChannel();
         break;
       }
       case "entry_appended": {
         const isModelEntry =
           event.entry.type === "model_change" || event.entry.type === "thinking_level_change";
-        // Session entries are the persistence boundary: anything Pi appends
-        // to the transcript must reach the conversation via reconciliation,
-        // never as a transient toast. This is especially important for the
-        // compaction entry, which may be appended after compaction_end.
         if (!isModelEntry && event.entry.type === "compaction") {
-          if (reconcile(channel, session, false)) broadcastSnapshot();
+          void reconcile(channel, false).then((changed) => {
+            if (changed) broadcastSnapshot();
+          });
         }
-        // Pi emits several synchronous events for one model switch. Queue
-        // one snapshot for the whole mutation instead of broadcasting the
-        // same model inventory once per entry.
         if (isModelEntry) queueModelStateBroadcast();
         break;
       }
       case "thinking_level_changed": {
-        // Keep the client in sync when Pi clamps a requested level without a
-        // separate entry visible to the transcript.
         queueModelStateBroadcast();
         break;
       }
     }
   });
   // 订阅前先对齐一次，保证首个连接的 snapshot 就带完整历史。
-  reconcile(channel, session, true);
+  void reconcile(channel, true);
   channelsBySession.set(sessionId, channel);
+
+  // Cross-process extension UI bridge. The SDK backend wires this up
+  // itself inside `bindExtensions`; the RPC backend runs extensions
+  // inside the subprocess and surfaces `ctx.ui.*` calls as
+  // `extension_ui_request` frames on its stdout. Forward them to the
+  // browser through the channel's existing `ui_request` broadcast so
+  // dialogs, status bars, notifications, and widget updates reach
+  // the UI just like they do against an in-process AgentSession.
+  if (runtime.subscribeExtensionUiRequests) {
+    const unsubUi = runtime.subscribeExtensionUiRequests((request) => {
+      broadcastUiRequest(request);
+    });
+    const previousUnsub = channel.unsubscribe;
+    channel.unsubscribe = () => {
+      previousUnsub();
+      unsubUi();
+    };
+  }
   // 与 TUI/RPC 相同：先安装 listener，再 await extension binding，这样
   // session_start 产生的自定义消息/UI 请求不会丢失，首个 snapshot 也能带命令。
   channel.ready = Promise.resolve()
-    .then(() => session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" }))
-    .then(() => {
-      channel.state.resources = snapshotResources(session);
+    .then(() => runtime.bindExtensions(channel.uiBridge.context))
+    .then(async () => {
+      channel.state.resources = await snapshotResources(runtime);
     })
     .catch((error) => {
       console.error("Failed to bind extensions", sessionId, error);
-      channel.state.resources = snapshotResources(session);
+      void snapshotResources(runtime).then((resources) => {
+        channel.state.resources = resources;
+      });
     });
   return channel;
 };
@@ -623,7 +709,6 @@ const detachListener = (sessionId: string, ws: BunWS) => {
   if (channel.sockets.size !== 0) return;
   void channel.ready.then(() => {
     if (channelsBySession.get(sessionId) !== channel || channel.sockets.size !== 0) return;
-    // 没有客户端在场了：取消挂起的扩展 UI 对话框，避免插件永久等待。
     channel.uiBridge.cancelPending();
     channel.unsubscribe();
     channelsBySession.delete(sessionId);
@@ -657,7 +742,7 @@ export const sessionWsHandler: WsHandler = {
     const bunWS = ws as BunWS;
     const { sessionId } = bunWS.data;
     bunWS.data.closed = false;
-    const session = await getSession(sessionId);
+    const runtime = await getSession(sessionId);
     if (bunWS.data.closed) {
       if (!channelsBySession.has(sessionId)) {
         deactivateSession(sessionId).catch((error) => {
@@ -666,27 +751,26 @@ export const sessionWsHandler: WsHandler = {
       }
       return;
     }
-    if (!session) {
+    if (!runtime) {
       sendError(bunWS, "session not found");
       bunWS.close();
       return;
     }
-    const channel = attachListener(sessionId, session);
+    const channel = attachListener(sessionId, runtime);
     channel.sockets.add(bunWS);
     bunWS.data.attached = true;
     await channel.ready;
     if (bunWS.data.closed || !bunWS.data.attached) return;
     try {
-      const { model, availableModels } = await getEffectiveModelDescriptor(session);
+      const { model, availableModels } = await getEffectiveModelDescriptor(runtime);
       channel.state.model = model;
       channel.state.availableModels = availableModels;
-      channel.state.thinking = getThinkingState(session);
-      // Seed the Context pane's view before the first snapshot. Computed
-      // after the model is known so the contextWindow is accurate.
-      channel.state.stats = computeSessionStatsView(session);
+      channel.state.thinking = getThinkingState(runtime);
+      channel.state.stats = await computeSessionStatsView(runtime);
     } catch (error) {
       console.error("Failed to load model snapshot", sessionId, error);
     }
+    replayExtensionUiState(channel, bunWS);
     bunWS.send(JSON.stringify(snapshotMessage(channel)));
   },
   async message(ws, message) {
@@ -706,9 +790,9 @@ export const sessionWsHandler: WsHandler = {
     }
     const input = msg as { type?: unknown; [k: string]: unknown };
     const { sessionId } = bunWS.data;
-    const session = await getSession(sessionId);
+    const runtime = await getSession(sessionId);
     if (bunWS.data.closed) return;
-    if (!session) {
+    if (!runtime) {
       sendError(bunWS, "session not found");
       return;
     }
@@ -718,23 +802,15 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "prompt message must be a string");
           return;
         }
-        // Forward user text verbatim. `@path` references stay literal — the
-        // model reaches the file via the `read` tool, matching the official
-        // interactive TUI's behavior.
         if (bunWS.data.closed) return;
         const streamingBehavior =
           input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
             ? input.streamingBehavior
-            : session.isStreaming
+            : runtime.isStreaming
               ? "steer"
               : undefined;
-        // Compaction aborts the running agent first, so `isStreaming` is false
-        // while a summary is being generated. Sending now would start a fresh
-        // turn racing the summary LLM call. Mirror the TUI: queue non-command
-        // messages until compaction_end, but let extension commands (any
-        // `/...`) execute immediately — the SDK routes those itself.
         const channel = channelsBySession.get(sessionId);
-        if (session.isCompacting && channel) {
+        if (runtime.isCompacting && channel) {
           if (!input.message.startsWith("/")) {
             channel.compactionQueue.push({
               text: input.message,
@@ -742,27 +818,31 @@ export const sessionWsHandler: WsHandler = {
             });
             broadcastState(channel, { pending: pendingWithQueue(channel) });
           } else {
-            session.prompt(input.message).catch((err: unknown) => sendError(bunWS, toMessage(err)));
+            runtime
+              .prompt(input.message)
+              .catch((err: unknown) => sendError(bunWS, toMessage(err)));
           }
           return;
         }
-        // Fire-and-forget: prompt() runs until the retry/queue drains; events
-        // flow back via subscribe().
-        session
-          .prompt(input.message, (streamingBehavior ? { streamingBehavior } : {}))
+        runtime
+          .prompt(input.message, streamingBehavior ? { streamingBehavior } : {})
           .finally(() => {
             const channel = channelsBySession.get(sessionId);
             if (!channel) return;
-            channel.state.resources = snapshotResources(session);
-            broadcastState(channel, { resources: channel.state.resources });
+            void snapshotResources(runtime).then((resources) => {
+              channel.state.resources = resources;
+              broadcastState(channel, { resources });
+            });
           })
-          .catch((err: unknown) =>
-            sendError(bunWS, toMessage(err)),
-          );
+          .catch((err: unknown) => sendError(bunWS, toMessage(err)));
         return;
       }
       case "restore_pending": {
-        const restored = session.clearQueue();
+        if (runtime.type === "rpc") {
+          sendError(bunWS, "Restoring pending messages is not supported by the external Pi runtime");
+          return;
+        }
+        const restored = runtime.clearQueue();
         const messages = [...restored.steering, ...restored.followUp];
         if (messages.length > 0 && bunWS.readyState === 1) {
           bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
@@ -771,28 +851,22 @@ export const sessionWsHandler: WsHandler = {
       }
       case "abort": {
         if (input.restorePending !== false) {
-          const restored = session.clearQueue();
+          const restored = runtime.clearQueue();
           const messages = [...restored.steering, ...restored.followUp];
           if (messages.length > 0 && bunWS.readyState === 1) {
             bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
           }
         }
-        session.abort().catch((error) => sendError(bunWS, toMessage(error)));
+        runtime.abort().catch((error) => sendError(bunWS, toMessage(error)));
         return;
       }
       case "compact": {
-        // Manual compaction. The SDK's compact() aborts the current agent
-        // turn first (same as Pi's /compact), then summarizes older entries
-        // into a compaction summary. compaction_start/compaction_end events
-        // flow back via subscribe() and drive the activity indicator.
         const customInstructions =
           typeof input.customInstructions === "string" && input.customInstructions.trim()
             ? input.customInstructions.trim()
             : undefined;
-        session
+        runtime
           .compact(customInstructions)
-          // 失败已由 compaction_end 的 errorMessage 统一 toast（SDK 在
-          // reject 前必先 emit compaction_end），这里只留日志兑底。
           .catch((err: unknown) => console.error("compact failed", sessionId, toMessage(err)));
         return;
       }
@@ -801,15 +875,8 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "set_model requires provider+modelId strings");
           return;
         }
-        const target = session.modelRuntime.getModel(input.provider, input.modelId);
-        if (!target) {
-          sendError(bunWS, `Unknown model: ${input.provider}/${input.modelId}`);
-          return;
-        }
         try {
-          await session.setModel(target);
-          // setModel only emits events when the thinking level also changes;
-          // broadcast unconditionally so the selector UI updates either way.
+          await runtime.setModel(input.provider, input.modelId);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
@@ -821,13 +888,8 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "set_thinking_level requires a level string");
           return;
         }
-        // setThinkingLevel is a synchronous clamp; it just throws
-        // (TypeError) for unsupported levels — which we surface as an
-        // error frame.
         try {
-          session.setThinkingLevel(input.level as Parameters<typeof session.setThinkingLevel>[0]);
-          // Same reasoning as set_model: clamped-to-same-value calls emit
-          // nothing, so broadcast explicitly.
+          await runtime.setThinkingLevel(input.level as Parameters<typeof runtime.setThinkingLevel>[0]);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
@@ -835,13 +897,11 @@ export const sessionWsHandler: WsHandler = {
         return;
       }
       case "resync": {
-        // 客户端检测到 seq 间隙：给这个 socket 单独补发当前权威快照。
         const channel = channelsBySession.get(sessionId);
         if (channel && bunWS.readyState === 1) bunWS.send(JSON.stringify(snapshotMessage(channel)));
         return;
       }
       case "ui_response": {
-        // 扩展 UI 应答：派发给挂起的对话框。
         const response = input.response as unknown;
         if (
           !response ||
@@ -851,12 +911,18 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "ui_response requires an id");
           return;
         }
-        channelsBySession.get(sessionId)?.uiBridge.handleResponse(response as RpcExtensionUIResponse);
+        const cast = response as RpcExtensionUIResponse;
+        // SDK: resolves the pending dialog in the in-process bridge.
+        // RPC: writes the response back to the subprocess's stdin so
+        // its own UI context resolves the matching dialog.
+        const channel = channelsBySession.get(sessionId);
+        if (channel) {
+          channel.uiBridge.handleResponse(cast);
+          runtime.sendExtensionUiResponse?.(cast);
+        }
         return;
       }
       default:
-        // Unknown message types are ignored so clients can probe
-        // forward-compat features without the server crashing them.
         return;
     }
   },

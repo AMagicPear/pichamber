@@ -40,6 +40,7 @@ const {
   abort,
   activity,
   busy,
+  canRestorePending,
   compact,
   pending,
   resources,
@@ -72,6 +73,7 @@ watch(
       :busy="busy"
       :activity="activity"
       :pending="pending"
+      :can-restore-pending="canRestorePending"
       :commands="resources.commands"
       :extension-statuses="extensionUi.statuses"
       :extension-widgets="extensionUi.widgets"

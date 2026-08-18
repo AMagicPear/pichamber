@@ -22,10 +22,21 @@ import {
 } from "./pty";
 import { closeSessionSockets, sessionWsHandler } from "./ws";
 import { browseProjectDirectories } from "./projects";
-import { getProviderQuota, listQuotaProviders } from "./quota";
+import {
+  getProviderQuota,
+  getProviderQuotaWithApiKey,
+  listQuotaProviders,
+  listQuotaProvidersForModels,
+} from "./quota";
 import { getSession } from "./session";
 import { toMessage } from "./error";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./workspace";
+import {
+  describeExternalPi,
+  getServerSettings,
+  saveServerSettings,
+  type ServerSettings,
+} from "./server-settings";
 
 const hostname = process.env.PICHAMBER_HOST || "127.0.0.1";
 const configuredPort = Number(process.env.PICHAMBER_PORT || 3000);
@@ -178,6 +189,18 @@ const server = Bun.serve({
         });
       },
     },
+    "/api/settings/server": {
+      GET: () =>
+        Response.json({
+          ...getServerSettings(),
+          externalPi: describeExternalPi(),
+        }),
+      PUT: async (req) => {
+        const body = (await req.json().catch(() => ({}))) as Partial<ServerSettings>;
+        const saved = saveServerSettings(body);
+        return Response.json({ ...saved, externalPi: describeExternalPi() });
+      },
+    },
     "/api/sessions/:id": {
       DELETE: async (req) => {
         await closeSessionSockets(req.params.id);
@@ -201,9 +224,12 @@ const server = Bun.serve({
       GET: async (req) => {
         const sessionId = new URL(req.url).searchParams.get("sessionId");
         if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
-        const session = await getSession(sessionId);
-        if (!session) return Response.json({ error: "session not found" }, { status: 404 });
-        return Response.json({ providers: listQuotaProviders(session) });
+        const runtime = await getSession(sessionId);
+        if (!runtime) return Response.json({ error: "session not found" }, { status: 404 });
+        if (runtime.type === "sdk" && runtime.agentSession) {
+          return Response.json({ providers: listQuotaProviders(runtime.agentSession) });
+        }
+        return Response.json({ providers: listQuotaProvidersForModels(await runtime.getAvailableModels()) });
       },
     },
     "/api/quota/:provider": {
@@ -214,9 +240,20 @@ const server = Bun.serve({
           return Response.json({ error: "sessionId required" }, { status: 400 });
         }
         try {
-          const session = await getSession(sessionId);
-          if (!session) return Response.json({ error: "session not found" }, { status: 404 });
-          return Response.json(await getProviderQuota(provider, session));
+          const runtime = await getSession(sessionId);
+          if (!runtime) return Response.json({ error: "session not found" }, { status: 404 });
+          if (runtime.type === "sdk" && runtime.agentSession) {
+            return Response.json(await getProviderQuota(provider, runtime.agentSession));
+          }
+          const apiKey = await runtime.getProviderApiKey?.(provider);
+          if (!apiKey) {
+            return Response.json({
+              provider,
+              error: `No API key configured for ${provider} in the external Pi runtime`,
+              fetchedAt: Date.now(),
+            });
+          }
+          return Response.json(await getProviderQuotaWithApiKey(provider, apiKey));
         } catch (err) {
           return Response.json({ error: toMessage(err) }, { status: 500 });
         }

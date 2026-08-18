@@ -28,6 +28,7 @@ const items = ref<LiveItem[]>([]);
 const busy = ref(false);
 const activity = ref<AgentActivity>({ phase: "idle" });
 const pending = ref<PendingMessages>({ steering: [], followUp: [] });
+const canRestorePending = ref(true);
 const resources = ref<RuntimeResources>({
   commands: [],
   tools: [],
@@ -124,6 +125,7 @@ const onMessage = (message: ServerMessage) => {
     busy.value = message.busy;
     activity.value = message.activity;
     pending.value = message.pending;
+    canRestorePending.value = message.canRestorePending;
     lastSeq = message.seq;
     applyModelState(message);
     resources.value = message.resources;
@@ -243,6 +245,7 @@ const disconnect = () => {
   busy.value = false;
   activity.value = { phase: "idle" };
   pending.value = { steering: [], followUp: [] };
+  canRestorePending.value = true;
   resources.value = { commands: [], tools: [], extensions: [], diagnostics: [] };
   extensionUi.dialog = null;
   extensionDialogQueue.splice(0);
@@ -290,6 +293,7 @@ export const useConversationSession = () => {
     abort,
     activity,
     busy,
+    canRestorePending,
     canSend,
     compact,
     connect,

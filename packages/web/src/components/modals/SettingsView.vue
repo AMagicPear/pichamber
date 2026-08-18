@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, toRef, watch } from "vue";
 import SplitPane from "@/components/layout/SplitPane.vue";
 import IconButton from "@/components/IconButton.vue";
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
@@ -24,10 +24,13 @@ import SearchIcon from "@/assets/icons/Search.svg";
 import ServerIcon from "@/assets/icons/Server.svg";
 import SlashCommands2Icon from "@/assets/icons/SlashCommands2.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
+import TerminalIcon from "@/assets/icons/Terminal.svg";
 import { McpIcon } from "@/components/McpIcon";
 import { settings } from "@/stores/settings";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { useTheme } from "@/composables/useTheme";
+import { useServerSettings } from "@/stores/server-settings";
+import { persistedState } from "@/stores/persisted";
 
 defineOptions({ name: "SettingsView" });
 
@@ -60,13 +63,25 @@ const navItems: NavItem[] = [
   { key: "usage", label: "Usage", icon: BarChart2Icon },
   { key: "skills-installed", label: "Skills", icon: BookOpenIcon },
   { key: "skills-catalog", label: "Skills Catalog", icon: BookIcon },
+  { key: "runtime", label: "Runtime", icon: TerminalIcon, enabled: true },
 ];
 
-const activeKey = ref<string>("appearance");
+type SettingsViewState = { activeKey: string; size: number };
+const settingsView = persistedState<SettingsViewState>("pichamber.settings-view.v1", {
+  activeKey: "appearance",
+  size: 216,
+}, (raw) => ({
+  activeKey: navItems.some((item) => item.key === raw.activeKey) ? raw.activeKey! : "appearance",
+  size: typeof raw.size === "number" && Number.isFinite(raw.size)
+    ? Math.min(280, Math.max(176, raw.size))
+    : 216,
+}));
+const activeKey = toRef(settingsView, "activeKey");
 const searchQuery = ref("");
-const settingsSize = ref(216);
+const settingsSize = toRef(settingsView, "size");
 const { resources } = useConversationSession();
 const { preference: themePreference, options: themeOptions, setTheme } = useTheme();
+const serverSettings = useServerSettings();
 
 const visibleNavItems = computed(() =>
   navItems.filter((item) =>
@@ -76,6 +91,65 @@ const visibleNavItems = computed(() =>
 
 const selectItem = (key: string) => {
   activeKey.value = key;
+};
+
+// Load server-side runtime settings when the runtime panel opens.
+// The dialog mounts the SettingsView as a singleton, so we trigger the
+// fetch from the script setup block on first activation rather than
+// per-mount: the first click that hits the Runtime tab will pay the
+// network round-trip, every subsequent click reads from cache.
+const ensureRuntimeLoaded = () => {
+  if (activeKey.value === "runtime" && !serverSettings.loaded.value) {
+    void serverSettings.load();
+  }
+};
+watch(activeKey, ensureRuntimeLoaded, { immediate: true });
+
+// Local mirror of the path so the input doesn't fight server-side
+// normalisation. We commit on blur / enter via `commitRuntimeSettings`.
+const runtimePathDraft = ref("");
+watch(
+  () => serverSettings.settings.value.externalPiPath,
+  (next) => {
+    runtimePathDraft.value = next;
+  },
+  { immediate: true },
+);
+
+// The server resolves the configured path against $PATH. When the
+// user leaves the field blank we still surface what the server will
+// actually spawn, so the hint reads "uses /Users/foo/.bun/bin/pi"
+// rather than a bare "pi" that the browser can't render meaningfully.
+const externalPi = computed(() => serverSettings.settings.value.externalPi);
+const runtimePathPlaceholder = computed(() => {
+  const resolved = externalPi.value.resolved;
+  if (resolved) return resolved;
+  return serverSettings.settings.value.useExternalPi ? "/usr/local/bin/pi" : "pi";
+});
+
+const runtimePathMissing = computed(() => {
+  const ext = externalPi.value;
+  return ext.configured && ext.resolved === null;
+});
+
+const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.value.useExternalPi) => {
+  const next = {
+    useExternalPi,
+    externalPiPath: runtimePathDraft.value.trim(),
+  };
+  // No-op when the local draft already matches the server view.
+  if (
+    next.useExternalPi === serverSettings.settings.value.useExternalPi &&
+    next.externalPiPath === serverSettings.settings.value.externalPiPath
+  ) {
+    return;
+  }
+  try {
+    await serverSettings.save(next);
+  } catch {
+    // Errors are surfaced via `serverSettings.error`; no need to
+    // rethrow here because the UI shows the message inline.
+  }
 };
 </script>
 
@@ -198,6 +272,78 @@ const selectItem = (key: string) => {
             <div v-else class="extension-empty">
               No extensions are loaded for this session.
             </div>
+          </template>
+
+          <template v-else-if="activeKey === 'runtime'">
+            <header class="settings-page__heading">
+              <h1>Runtime</h1>
+              <p>Choose which Pi build serves new sessions.</p>
+            </header>
+
+            <section class="settings-group">
+              <h2>Pi executable</h2>
+
+              <label class="settings-option">
+                <input
+                  :checked="serverSettings.settings.value.useExternalPi"
+                  :disabled="serverSettings.saving.value"
+                  type="checkbox"
+                  @change="(event) => {
+                    const target = event.target as HTMLInputElement;
+                    void commitRuntimeSettings(target.checked);
+                  }"
+                />
+                <span>
+                  <strong>Use external Pi executable</strong>
+                  <small>
+                    When enabled, pichamber spawns <code>pi --mode rpc</code> for every
+                    new session instead of using the bundled SDK. The subprocess is
+                    launched with the path below; leaving the field empty resolves
+                    <code>pi</code> on <code>$PATH</code>.
+                  </small>
+                </span>
+              </label>
+
+              <label class="settings-option settings-option--inline">
+                <span>
+                  <strong>Path</strong>
+                  <small>
+                    Absolute path to a <code>pi</code> binary, or a bare name to
+                    resolve via <code>$PATH</code>. Changes apply to sessions opened
+                    after the save.
+                  </small>
+                </span>
+                <input
+                  v-model="runtimePathDraft"
+                  type="text"
+                  spellcheck="false"
+                  :placeholder="runtimePathPlaceholder"
+                  :disabled="serverSettings.saving.value || !serverSettings.settings.value.useExternalPi"
+                  @blur="() => void commitRuntimeSettings()"
+                  @keydown.enter="(event) => {
+                    (event.target as HTMLInputElement).blur();
+                  }"
+                />
+              </label>
+
+              <p
+                v-if="serverSettings.error.value"
+                class="settings-page__error"
+                role="alert"
+              >
+                {{ serverSettings.error.value }}
+              </p>
+              <p v-else-if="runtimePathMissing" class="settings-page__error" role="alert">
+                Couldn't find <code>{{ externalPi.rawPath || "pi" }}</code> on
+                <code>$PATH</code>. Enter an absolute path or install
+                <code>pi</code> and restart the server.
+              </p>
+              <p v-else-if="serverSettings.settings.value.useExternalPi" class="settings-page__hint">
+                Sessions open a fresh
+                <code>{{ externalPi.resolved }}</code>
+                subprocess. Files, Git, and PTY still run as pichamber services.
+              </p>
+            </section>
           </template>
         </div>
       </section>
@@ -435,4 +581,58 @@ const selectItem = (key: string) => {
 .extension-card p,
 .extension-empty { margin: 0; color: var(--ui-text-muted); font-size: 12px; }
 .extension-empty { max-width: 720px; padding: 20px 0; border-top: 1px solid var(--ui-border-subtle); }
+
+.settings-option--inline {
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+}
+.settings-option--inline > span {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.settings-option--inline input[type="text"] {
+  flex: 1 1 280px;
+  max-width: 420px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: var(--ui-surface);
+  color: inherit;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+.settings-option--inline input[type="text"]:focus {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+.settings-option--inline input[type="text"]:disabled {
+  opacity: 0.55;
+}
+.settings-page__error {
+  max-width: 720px;
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--ui-error-strong);
+  border-radius: 4px;
+  background: var(--ui-error-bg);
+  color: var(--ui-error-fg);
+  font-size: 12px;
+}
+.settings-page__hint {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+.settings-page__hint code,
+.settings-option code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--ui-surface-selected);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
 </style>

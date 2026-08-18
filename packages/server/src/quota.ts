@@ -1,4 +1,4 @@
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import type { AgentSession, ModelInfo } from "@earendil-works/pi-coding-agent";
 import type { ProviderDescriptor, ProviderQuota, QuotaWindow } from "@pichamber/shared";
 import { toMessage } from "./error";
 import { providerApiType, providerBaseUrl, providerName } from "./providers";
@@ -19,28 +19,21 @@ import { providerApiType, providerBaseUrl, providerName } from "./providers";
 // Resolution order: a provider matching a specific adapter wins; otherwise
 // the first api-type adapter whose `apiTypes` includes the provider's model
 // api is used. Providers matched by neither are unsupported.
+//
+// SDK runtimes provide the full registry, including generic provider API
+// metadata. RPC runtimes expose configured model providers only, so their
+// quota surface is limited to adapters that can be selected by provider id.
 
 type QuotaAdapter = {
-  /** Human label used when the provider name is unavailable. */
   name: string;
-  /** Exact Pi provider ids this adapter serves (well-known providers). */
   providerIds?: string[];
-  /** Fallback: model `api` types this adapter can handle generically. */
   apiTypes?: string[];
-  /** Endpoint path on the provider's baseUrl. */
   path: string;
-  /** Optional host override — used when the quota endpoint lives on a
-   *  different host than the chat API (e.g. MiniMax's chat API is
-   *  `/anthropic`-scoped but its token-plan endpoint is on the bare host). */
   baseUrl?: string | (() => string);
-  /** Extra headers beyond `Authorization: Bearer`. */
   headers?: Record<string, string>;
-  /** Extract windows from the upstream JSON. Throws → `{ error }` quota. */
   parse: (payload: unknown) => QuotaWindow[];
 };
 
-/** Match a provider to an adapter. Specific adapters take priority over
- *  api-type fallbacks. */
 const matchAdapter = (providerId: string, apiType: string | undefined): QuotaAdapter | undefined => {
   const specific = adapters.find((adapter) => adapter.providerIds?.includes(providerId));
   if (specific) return specific;
@@ -50,35 +43,21 @@ const matchAdapter = (providerId: string, apiType: string | undefined): QuotaAda
   return undefined;
 };
 
-// ─── Parsers ────────────────────────────────────────────────────────────
-
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 const nowMs = Date.now;
 const MINUTE_MS = 60_000;
 
-/** Shared cache: providers are rate-limited upstream and the UI doesn't
- *  need sub-minute freshness. */
 const cache = new Map<string, { expiresAt: number; result: ProviderQuota }>();
 
-/** Shared executor: resolve the key, call the endpoint, parse, cache.
- *  Every adapter goes through this so none re-implement the request/error/
- *  TTL dance. */
 const fetchQuota = async (
   adapter: QuotaAdapter,
   providerId: string,
   baseUrl: string,
-  session: AgentSession,
+  apiKey: string,
 ): Promise<ProviderQuota> => {
   const now = nowMs();
   const cached = cache.get(providerId);
   if (cached && cached.expiresAt > now) return cached.result;
-
-  const apiKey = (await session.modelRuntime.getAuth(providerId))?.auth.apiKey;
-  if (!apiKey) {
-    const result: ProviderQuota = { provider: providerId, error: `No API key configured for ${providerId}`, fetchedAt: now };
-    cache.set(providerId, { expiresAt: now + MINUTE_MS, result });
-    return result;
-  }
 
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}${adapter.path}`, {
@@ -96,11 +75,12 @@ const fetchQuota = async (
   }
 };
 
-// ─── MiniMax ────────────────────────────────────────────────────────────
+const noApiKey = (provider: string): ProviderQuota => ({
+  provider,
+  error: `No API key configured for ${provider}`,
+  fetchedAt: nowMs(),
+});
 
-/** MiniMax Token Plan: `remaining_percent` per window (utilization =
- *  100 − remaining) and absolute `*_time` ms timestamps. Chat models live
- *  under the `general` bucket. */
 const parseMiniMax = (payload: unknown): QuotaWindow[] => {
   const root = payload as { model_remains?: unknown; base_resp?: { status_code?: number; status_msg?: string } };
   if (root.base_resp?.status_code !== 0) {
@@ -134,10 +114,6 @@ const parseMiniMax = (payload: unknown): QuotaWindow[] => {
   return windows;
 };
 
-// ─── DeepSeek ───────────────────────────────────────────────────────────
-
-/** DeepSeek is pay-as-you-go: a plain balance, no rolling window. One
- *  window with `display` (no bar) so the panel shows the amount. */
 const parseDeepSeek = (payload: unknown): QuotaWindow[] => {
   const root = payload as { is_available?: boolean; balance_infos?: Array<{ currency?: string; total_balance?: string }> };
   if (root.is_available === false) throw new Error("DeepSeek account not available");
@@ -150,12 +126,6 @@ const parseDeepSeek = (payload: unknown): QuotaWindow[] => {
   return [{ label: `Balance (${primary.currency ?? "USD"})`, utilization: 0, resetsAt: 0, display: total.toFixed(2) }];
 };
 
-// ─── OpenAI-compatible subscription (generic fallback) ──────────────────
-
-/** Many OpenAI-compatible gateways expose a subscription/usage endpoint
- *  shaped like OpenAI's `/v1/usage` — a USD cap + usage snapshot. This is
- *  the generic adapter that lets arbitrary proxies (which we never name in
- *  code) surface their quota automatically. */
 const parseOpenAiUsage = (payload: unknown): QuotaWindow[] => {
   const root = payload as {
     subscription?: {
@@ -184,11 +154,6 @@ const parseOpenAiUsage = (payload: unknown): QuotaWindow[] => {
   ];
 };
 
-// ─── Adapter registry ───────────────────────────────────────────────────
-
-/** Ordered registry. Specific adapters (with `providerIds`) are matched
- *  first; the api-type fallback adapter is last so it only picks up
- *  providers none of the specific ones claimed. */
 const adapters: QuotaAdapter[] = [
   {
     name: "MiniMax",
@@ -201,12 +166,17 @@ const adapters: QuotaAdapter[] = [
   {
     name: "DeepSeek",
     providerIds: ["deepseek"],
+    baseUrl: () => process.env.PICHAMBER_DEEPSEEK_BASE ?? "https://api.deepseek.com",
     path: "/user/balance",
     parse: parseDeepSeek,
   },
-  // Generic fallback: any OpenAI-compatible provider (self-hosted proxies,
-  // private gateways like a personal SUDA-MKT deployment) that supports the
-  // /usage endpoint. Matched by model `api` type, not by name.
+  {
+    name: "OpenAI",
+    providerIds: ["openai"],
+    baseUrl: "https://api.openai.com/v1",
+    path: "/usage",
+    parse: parseOpenAiUsage,
+  },
   {
     name: "OpenAI-compatible",
     apiTypes: ["openai-completions", "openai-responses"],
@@ -215,10 +185,10 @@ const adapters: QuotaAdapter[] = [
   },
 ];
 
-/** Provider id → adapter (resolved lazily). */
-const adapterFor = (session: AgentSession, providerId: string): QuotaAdapter | undefined =>
-  matchAdapter(providerId, providerApiType(session, providerId));
-
+/** Quota requires the SDK's `modelRuntime` for auth + provider metadata.
+ *  RPC runtimes don't expose either, so the quota surface degrades to
+ *  an empty list. The HTTP layer short-circuits before calling these
+ *  helpers for non-SDK sessions. */
 export const listQuotaProviders = (session: AgentSession): ProviderDescriptor[] =>
   session.modelRuntime
     .getProviders()
@@ -229,8 +199,34 @@ export const listQuotaProviders = (session: AgentSession): ProviderDescriptor[] 
     )
     .map((provider) => ({ id: provider.id, name: providerName(session, provider.id) }));
 
-export const getProviderQuota = (providerId: string, session: AgentSession): Promise<ProviderQuota> => {
-  const adapter = adapterFor(session, providerId);
+/** RPC only exposes configured models, not provider registry metadata. Limit
+ * its quota menu to adapters we can identify from a provider id alone; generic
+ * OpenAI-compatible proxies still require SDK-only base-url/API metadata. */
+export const listQuotaProvidersForModels = (
+  models: Iterable<Pick<ModelInfo, "provider">>,
+): ProviderDescriptor[] => {
+  const seen = new Set<string>();
+  const providers: ProviderDescriptor[] = [];
+  for (const model of models) {
+    if (seen.has(model.provider)) continue;
+    const adapter = matchAdapter(model.provider, undefined);
+    if (!adapter) continue;
+    seen.add(model.provider);
+    providers.push({ id: model.provider, name: adapter.name });
+  }
+  return providers;
+};
+
+/** Query a supported quota endpoint with a credential resolved by the owning
+ * runtime. RPC callers supply a key printed by their external Pi executable;
+ * SDK callers retain their direct ModelRuntime path below. */
+export const getProviderQuotaWithApiKey = (
+  providerId: string,
+  apiKey: string | undefined,
+  apiType?: string,
+  baseUrl?: string,
+): Promise<ProviderQuota> => {
+  const adapter = matchAdapter(providerId, apiType);
   if (!adapter) {
     return Promise.resolve({
       provider: providerId,
@@ -238,19 +234,31 @@ export const getProviderQuota = (providerId: string, session: AgentSession): Pro
       fetchedAt: nowMs(),
     });
   }
-  const baseUrl =
+  if (!apiKey) return Promise.resolve(noApiKey(providerId));
+  const resolvedBaseUrl =
     typeof adapter.baseUrl === "function"
       ? adapter.baseUrl()
-      : (adapter.baseUrl ?? providerBaseUrl(session, providerId));
-  if (!baseUrl) {
+      : (adapter.baseUrl ?? baseUrl);
+  if (!resolvedBaseUrl) {
     return Promise.resolve({
       provider: providerId,
       error: `Provider ${providerId} has no baseUrl`,
       fetchedAt: nowMs(),
     });
   }
-  return fetchQuota(adapter, providerId, baseUrl, session);
+  return fetchQuota(adapter, providerId, resolvedBaseUrl, apiKey);
 };
 
-/** Drop cached entries (used by tests / when auth changes). */
+export const getProviderQuota = (providerId: string, session: AgentSession): Promise<ProviderQuota> => {
+  return (async () => {
+    const apiKey = (await session.modelRuntime.getAuth(providerId))?.auth.apiKey;
+    return getProviderQuotaWithApiKey(
+      providerId,
+      apiKey,
+      providerApiType(session, providerId),
+      providerBaseUrl(session, providerId),
+    );
+  })();
+};
+
 export const clearQuotaCache = () => cache.clear();
