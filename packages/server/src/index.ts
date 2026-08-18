@@ -21,6 +21,7 @@ import {
   writePty,
 } from "./pty";
 import { closeSessionSockets, sessionWsHandler } from "./ws";
+import { refreshSessionModelState } from "./ws";
 import { browseProjectDirectories } from "./projects";
 import {
   getProviderQuota,
@@ -37,6 +38,18 @@ import {
   saveServerSettings,
   type ServerSettings,
 } from "./server-settings";
+import {
+  getPiBehaviorSettings,
+  listPiProviders,
+  removePiProviderCredential,
+  setPiProviderApiKey,
+  updatePiBehaviorSettings,
+} from "./pi-config";
+import {
+  installPiExtensionSource,
+  listPiExtensionSources,
+  removePiExtensionSource,
+} from "./pi-extensions";
 
 const hostname = process.env.PICHAMBER_HOST || "127.0.0.1";
 const configuredPort = Number(process.env.PICHAMBER_PORT || 3000);
@@ -99,6 +112,15 @@ const requestCwd = async (sessionId?: string | null) => {
   const cwd = await getSessionCwd(sessionId);
   if (!cwd) throw new WorkspaceError("Session not found", 404);
   return canonicalWorkspace(cwd);
+};
+
+const getSdkSession = async (sessionId: string) => {
+  const runtime = await getSession(sessionId);
+  if (!runtime) return { error: "session not found", status: 404 } as const;
+  if (!runtime.agentSession) {
+    return { error: "This setting requires the bundled Pi runtime", status: 409 } as const;
+  }
+  return { session: runtime.agentSession } as const;
 };
 
 const ptyWsHandler: WsHandler = {
@@ -199,6 +221,115 @@ const server = Bun.serve({
         const body = (await req.json().catch(() => ({}))) as Partial<ServerSettings>;
         const saved = saveServerSettings(body);
         return Response.json({ ...saved, externalPi: describeExternalPi() });
+      },
+    },
+    "/api/pi/providers": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        const result = await getSdkSession(sessionId);
+        if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+        return Response.json({ providers: listPiProviders(result.session) });
+      },
+    },
+    "/api/pi/providers/:provider/credential": {
+      PUT: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        const body = (await req.json().catch(() => ({}))) as { apiKey?: unknown };
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        if (typeof body.apiKey !== "string" || !body.apiKey.trim()) {
+          return Response.json({ error: "apiKey required" }, { status: 400 });
+        }
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const providers = await setPiProviderApiKey(result.session, req.params.provider, body.apiKey.trim());
+          refreshSessionModelState(sessionId);
+          return Response.json({ providers });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+      DELETE: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const providers = await removePiProviderCredential(result.session, req.params.provider);
+          refreshSessionModelState(sessionId);
+          return Response.json({ providers });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/behavior": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        const result = await getSdkSession(sessionId);
+        if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+        return Response.json(getPiBehaviorSettings(result.session));
+      },
+      PUT: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const update = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+          return Response.json(await updatePiBehaviorSettings(result.session, update));
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/extensions": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        const result = await getSdkSession(sessionId);
+        if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+        const cwd = await getSessionCwd(sessionId);
+        if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
+        return Response.json({ sources: listPiExtensionSources(result.session, cwd) });
+      },
+      POST: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        const body = (await req.json().catch(() => ({}))) as { source?: unknown; scope?: unknown };
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        if (typeof body.source !== "string" || !body.source.trim()) {
+          return Response.json({ error: "source required" }, { status: 400 });
+        }
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const cwd = await getSessionCwd(sessionId);
+          if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
+          const sources = await installPiExtensionSource(result.session, cwd, body.source.trim(), body.scope === "project");
+          return Response.json({ sources });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+      DELETE: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        const body = (await req.json().catch(() => ({}))) as { source?: unknown; scope?: unknown };
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        if (typeof body.source !== "string" || !body.source.trim()) {
+          return Response.json({ error: "source required" }, { status: 400 });
+        }
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const cwd = await getSessionCwd(sessionId);
+          if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
+          const sources = await removePiExtensionSource(result.session, cwd, body.source.trim(), body.scope === "project");
+          return Response.json({ sources });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
       },
     },
     "/api/sessions/:id": {

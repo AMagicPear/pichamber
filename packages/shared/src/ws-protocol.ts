@@ -173,6 +173,41 @@ export type ProviderDescriptor = {
   name: string;
 };
 
+/** Credential-safe provider view for the Settings screen. Keys and OAuth
+ * tokens never leave the server; this only describes Pi's resolved status. */
+export type PiProviderSettings = {
+  id: string;
+  name: string;
+  api?: string;
+  baseUrl?: string;
+  modelCount: number;
+  auth: {
+    configured: boolean;
+    supportsApiKey: boolean;
+    canRemove: boolean;
+    source?: string;
+    label?: string;
+  };
+};
+
+/** Runtime behavior settings backed by Pi's SettingsManager setters. */
+export type PiBehaviorSettings = {
+  autoCompaction: boolean;
+  autoRetry: boolean;
+  steeringMode: "all" | "one-at-a-time";
+  followUpMode: "all" | "one-at-a-time";
+  transport: "auto" | "sse" | "websocket" | "websocket-cached";
+  httpIdleTimeoutMs: number;
+};
+
+/** A package or local source configured through Pi's package manager. */
+export type PiExtensionSource = {
+  source: string;
+  scope: "user" | "project";
+  filtered: boolean;
+  installedPath?: string;
+};
+
 export type ThinkingState = {
   level: ThinkingLevel;
   /** Levels the current model accepts. The server re-evaluates on model change. */

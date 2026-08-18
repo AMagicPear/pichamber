@@ -10,6 +10,9 @@ import type {
   ListResult,
   ProviderQuota,
   ProviderDescriptor,
+  PiBehaviorSettings,
+  PiExtensionSource,
+  PiProviderSettings,
   PtyStartOptions,
   PtyStartResult,
   SearchResult,
@@ -152,3 +155,61 @@ export const updateServerSettings = (next: Partial<ServerSettings>) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(next),
   }).then((r) => jsonOrThrow<ServerSettings>(r));
+
+// ─── Pi SDK configuration ───────────────────────────────────────────
+
+export const fetchPiProviders = (sessionId: string) =>
+  fetch(`${BASE}/pi/providers?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
+    jsonOrThrow<{ providers: PiProviderSettings[] }>(r),
+  );
+
+export const setPiProviderApiKey = (sessionId: string, provider: string, apiKey: string) =>
+  fetch(`${BASE}/pi/providers/${encodeURIComponent(provider)}/credential?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apiKey }),
+  }).then((r) => jsonOrThrow<{ providers: PiProviderSettings[] }>(r));
+
+export const removePiProviderCredential = (sessionId: string, provider: string) =>
+  fetch(`${BASE}/pi/providers/${encodeURIComponent(provider)}/credential?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  }).then((r) => jsonOrThrow<{ providers: PiProviderSettings[] }>(r));
+
+export const fetchPiBehavior = (sessionId: string) =>
+  fetch(`${BASE}/pi/behavior?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
+    jsonOrThrow<PiBehaviorSettings>(r),
+  );
+
+export const updatePiBehavior = (sessionId: string, next: Partial<PiBehaviorSettings>) =>
+  fetch(`${BASE}/pi/behavior?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(next),
+  }).then((r) => jsonOrThrow<PiBehaviorSettings>(r));
+
+export const fetchPiExtensionSources = (sessionId: string) =>
+  fetch(`${BASE}/pi/extensions?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
+    jsonOrThrow<{ sources: PiExtensionSource[] }>(r),
+  );
+
+export const installPiExtensionSource = (
+  sessionId: string,
+  source: string,
+  scope: "user" | "project",
+) =>
+  fetch(`${BASE}/pi/extensions?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, scope }),
+  }).then((r) => jsonOrThrow<{ sources: PiExtensionSource[] }>(r));
+
+export const removePiExtensionSource = (
+  sessionId: string,
+  source: string,
+  scope: "user" | "project",
+) =>
+  fetch(`${BASE}/pi/extensions?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, scope }),
+  }).then((r) => jsonOrThrow<{ sources: PiExtensionSource[] }>(r));

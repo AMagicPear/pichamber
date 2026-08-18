@@ -765,6 +765,11 @@ export const closeSessionSockets = (sessionId: string) => {
   return channel.ready;
 };
 
+/** Recompute model inventory after a server-side credential mutation. */
+export const refreshSessionModelState = (sessionId: string) => {
+  channelsBySession.get(sessionId)?.queueModelStateBroadcast();
+};
+
 const sendError = (ws: BunWS, error: string) => {
   const msg: ServerMessage = { type: "error", error };
   if (ws.readyState === 1) ws.send(JSON.stringify(msg));

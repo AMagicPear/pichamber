@@ -31,6 +31,12 @@ import { useConversationSession } from "@/composables/useConversationSession";
 import { useTheme } from "@/composables/useTheme";
 import { useServerSettings } from "@/stores/server-settings";
 import { persistedState } from "@/stores/persisted";
+import PiBehaviorSettings from "@/components/modals/PiBehaviorSettings.vue";
+import PiProvidersSettings from "@/components/modals/PiProvidersSettings.vue";
+import SettingsGroup from "@/components/modals/SettingsGroup.vue";
+import SettingsOption from "@/components/modals/SettingsOption.vue";
+import SettingsPageHeader from "@/components/modals/SettingsPageHeader.vue";
+import PiExtensionSources from "@/components/modals/PiExtensionSources.vue";
 
 defineOptions({ name: "SettingsView" });
 
@@ -55,11 +61,11 @@ const navItems: NavItem[] = [
   { key: "projects", label: "Projects", icon: FoldersIcon },
   { key: "remote-instances", label: "Remote Instances", icon: ServerIcon },
   { key: "agents", label: "Agents", icon: AiAgentIcon },
-  { key: "behavior", label: "Behavior", icon: BrainIcon },
+  { key: "behavior", label: "Behavior", icon: BrainIcon, enabled: true },
   { key: "commands", label: "Commands", icon: SlashCommands2Icon },
   { key: "mcp", label: "MCP", icon: McpIcon },
   { key: "extensions", label: "Extensions", icon: CodeBoxIcon, enabled: true },
-  { key: "providers", label: "Providers", icon: CloudIcon },
+  { key: "providers", label: "Providers", icon: CloudIcon, enabled: true },
   { key: "usage", label: "Usage", icon: BarChart2Icon },
   { key: "skills-installed", label: "Skills", icon: BookOpenIcon },
   { key: "skills-catalog", label: "Skills Catalog", icon: BookIcon },
@@ -201,13 +207,9 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
 
         <div class="settings-page__body">
           <template v-if="activeKey === 'appearance'">
-            <header class="settings-page__heading">
-              <h1>Appearance</h1>
-              <p>Choose how Pichamber looks on this device.</p>
-            </header>
+            <SettingsPageHeader title="Appearance" description="Choose how Pichamber looks on this device." />
 
-            <section class="settings-group">
-              <h2>Theme</h2>
+            <SettingsGroup title="Theme">
               <div class="theme-options" role="radiogroup" aria-label="Theme">
                 <button
                   v-for="option in themeOptions"
@@ -222,29 +224,19 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
                   <span><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
                 </button>
               </div>
-            </section>
+            </SettingsGroup>
           </template>
 
           <template v-else-if="activeKey === 'sessions'">
-            <header class="settings-page__heading">
-              <h1>Sessions</h1>
-              <p>Control which sessions appear in the sidebar.</p>
-            </header>
+            <SettingsPageHeader title="Sessions" description="Control which sessions appear in the sidebar." />
 
-            <label class="settings-option">
+            <SettingsOption title="Hide temporary sessions" description="Hide sessions under /tmp and macOS temporary folders.">
               <input v-model="settings.hideTemporarySessions" type="checkbox" />
-              <span>
-                <strong>Hide temporary sessions</strong>
-                <small>Hide sessions under /tmp and macOS temporary folders.</small>
-              </span>
-            </label>
+            </SettingsOption>
           </template>
 
           <template v-else-if="activeKey === 'extensions'">
-            <header class="settings-page__heading">
-              <h1>Extensions</h1>
-              <p>Resources loaded by Pi for the active session.</p>
-            </header>
+            <SettingsPageHeader title="Extensions" description="Resources loaded by Pi for the active session." />
 
             <div v-if="resources.diagnostics.length" class="extension-diagnostics">
               <article v-for="diagnostic in resources.diagnostics" :key="`${diagnostic.path}:${diagnostic.error}`">
@@ -275,18 +267,21 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
             <div v-else class="extension-empty">
               No extensions are loaded for this session.
             </div>
+            <PiExtensionSources />
           </template>
 
+          <PiProvidersSettings v-else-if="activeKey === 'providers'" />
+
+          <PiBehaviorSettings v-else-if="activeKey === 'behavior'" />
+
           <template v-else-if="activeKey === 'runtime'">
-            <header class="settings-page__heading">
-              <h1>Runtime</h1>
-              <p>Choose which Pi build serves new sessions.</p>
-            </header>
+            <SettingsPageHeader title="Runtime" description="Choose which Pi build serves new sessions." />
 
-            <section class="settings-group">
-              <h2>Pi executable</h2>
-
-              <label class="settings-option">
+            <SettingsGroup title="Pi executable">
+              <SettingsOption
+                title="Use external Pi executable"
+                description="Spawn pi --mode rpc for new sessions instead of the bundled SDK."
+              >
                 <input
                   :checked="serverSettings.settings.value.useExternalPi"
                   :disabled="serverSettings.saving.value || !serverSettings.loaded.value"
@@ -296,26 +291,13 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
                     void commitRuntimeSettings(target.checked);
                   }"
                 />
-                <span>
-                  <strong>Use external Pi executable</strong>
-                  <small>
-                    When enabled, pichamber spawns <code>pi --mode rpc</code> for every
-                    new session instead of using the bundled SDK. The subprocess is
-                    launched with the path below; leaving the field empty resolves
-                    <code>pi</code> on <code>$PATH</code>.
-                  </small>
-                </span>
-              </label>
+              </SettingsOption>
 
-              <label class="settings-option settings-option--inline">
-                <span>
-                  <strong>Path</strong>
-                  <small>
-                    Absolute path to a <code>pi</code> binary, or a bare name to
-                    resolve via <code>$PATH</code>. Changes apply to sessions opened
-                    after the save.
-                  </small>
-                </span>
+              <SettingsOption
+                inline
+                title="Path"
+                description="Absolute path to pi, or a bare name resolved through $PATH."
+              >
                 <input
                   v-model="runtimePathDraft"
                   type="text"
@@ -327,7 +309,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
                     (event.target as HTMLInputElement).blur();
                   }"
                 />
-              </label>
+              </SettingsOption>
 
               <p
                 v-if="serverSettings.error.value"
@@ -346,7 +328,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
                 <code>{{ externalPi.resolved }}</code>
                 subprocess. Files, Git, and PTY still run as pichamber services.
               </p>
-            </section>
+            </SettingsGroup>
           </template>
         </div>
       </section>
@@ -466,51 +448,6 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
   padding: 24px 32px;
   overflow-y: auto;
 }
-.settings-option {
-  display: flex;
-  max-width: 560px;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 14px 0;
-  color: var(--ui-text-strong);
-  cursor: pointer;
-}
-.settings-option input {
-  width: 16px;
-  height: 16px;
-  margin: 2px 0 0;
-  accent-color: var(--ui-text-strong);
-}
-.settings-option span {
-  display: grid;
-  gap: 4px;
-}
-.settings-option strong {
-  font-weight: 500;
-}
-.settings-option small {
-  color: var(--ui-text-muted);
-  font-size: 12px;
-}
-.settings-page__heading {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 22px;
-}
-.settings-page__heading h1 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-.settings-page__heading p {
-  margin: 0;
-  color: var(--ui-text-muted);
-  font-size: 14px;
-}
-.settings-group { display: grid; max-width: 720px; gap: 10px; }
-.settings-group h2 { margin: 0; color: var(--ui-text-muted); font-size: 12px; font-weight: 500; }
 .theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .theme-options > button { display: grid; min-width: 0; gap: 9px; padding: 10px; border: 1px solid var(--ui-border-subtle); border-radius: 8px; background: var(--ui-surface); text-align: left; transition: border-color var(--ui-duration-fast) var(--ui-ease-standard), background-color var(--ui-duration-fast) var(--ui-ease-standard); }
 .theme-options > button:hover { background: var(--ui-surface-hover); }
@@ -585,16 +522,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
 .extension-empty { margin: 0; color: var(--ui-text-muted); font-size: 12px; }
 .extension-empty { max-width: 720px; padding: 20px 0; border-top: 1px solid var(--ui-border-subtle); }
 
-.settings-option--inline {
-  align-items: center;
-  gap: 16px;
-  padding: 10px 0;
-}
-.settings-option--inline > span {
-  flex: 1 1 0;
-  min-width: 0;
-}
-.settings-option--inline input[type="text"] {
+.settings-option--inline :deep(input[type="text"]) {
   flex: 1 1 280px;
   max-width: 420px;
   height: 30px;
@@ -606,13 +534,6 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
   font: inherit;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
-}
-.settings-option--inline input[type="text"]:focus {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: 1px;
-}
-.settings-option--inline input[type="text"]:disabled {
-  opacity: 0.55;
 }
 .settings-page__error {
   max-width: 720px;
