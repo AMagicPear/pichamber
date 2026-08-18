@@ -83,7 +83,7 @@ const choose = () => {
 .project-picker__path button,
 .project-picker__path input { height: 34px; border: 0; border-bottom: 1px solid var(--ui-border-subtle); border-radius: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; transition: border-color var(--ui-duration-fast) var(--ui-ease-standard), color var(--ui-duration-fast) var(--ui-ease-standard), transform var(--ui-duration-fast) var(--ui-ease-emphasized); }
 .project-picker__path button { border-bottom-color: transparent; background: transparent; }
-.project-picker__path input { min-width: 0; padding: 0 9px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.project-picker__path input { min-width: 0; padding: 0 9px; font-family: var(--ui-font-mono); }
 .project-picker__path button { display: inline-flex; align-items: center; justify-content: center; padding: 0; cursor: pointer; }
 .project-picker__path button:hover:not(:disabled) { color: var(--ui-text-strong); transform: translateY(-1px); }
 .project-picker__path button:active:not(:disabled) { transform: translateY(0); }

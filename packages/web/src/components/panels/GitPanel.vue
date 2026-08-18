@@ -119,7 +119,7 @@ watch(() => workspace.cwd, load);
 
 <template>
   <div class="right-panel__pane" role="tabpanel" aria-label="git">
-    <div v-if="!status && error" class="right-panel__empty">
+    <div v-if="!status && error" class="ui-empty-state">
       <GitBranchIcon />
       <p>This directory is not a Git repository</p>
       <span>{{ error }}</span>
@@ -141,7 +141,7 @@ watch(() => workspace.cwd, load);
       <!-- Changes section -->
       <section class="git-pane__section">
         <header class="git-pane__section-header">
-          <h3 class="git-pane__section-title">
+          <h3 class="git-pane__section-title ui-section-title">
             Changes
             <span v-if="hasChanges" class="git-pane__count">{{ status?.changes.length }}</span>
           </h3>
@@ -155,7 +155,7 @@ watch(() => workspace.cwd, load);
               :title="change.staged ? 'Unstage' : 'Stage'" @click="toggleStaged(change)">
               <PlusIcon />
             </button>
-            <button type="button" class="git-pane__file" :title="change.path" @click="select(change)">
+            <button type="button" class="git-pane__file ui-list-row" :title="change.path" @click="select(change)">
               <span class="git-pane__badge" :title="badgeTitle(change)">{{ badge(change) }}</span>
               <FilePathLabel class="git-pane__file-label" :path="change.path" />
             </button>
@@ -168,7 +168,7 @@ watch(() => workspace.cwd, load);
       <!-- Diff preview -->
       <section class="git-pane__section git-pane__section--diff">
         <header class="git-pane__section-header">
-          <h3 class="git-pane__section-title">Diff</h3>
+          <h3 class="git-pane__section-title ui-section-title">Diff</h3>
         </header>
         <DiffView v-if="diff" :patch="diff" />
         <p v-else-if="diffError" class="git-pane__diff-empty git-pane__diff-empty--error">
@@ -185,12 +185,12 @@ watch(() => workspace.cwd, load);
            matching openchamber's "Commit" block. -->
       <section class="git-pane__section git-pane__section--commit">
         <header class="git-pane__section-header">
-          <h3 class="git-pane__section-title">
+          <h3 class="git-pane__section-title ui-section-title">
             Commit
             <span v-if="!hasStaged" class="git-pane__hint">Stage files to enable commit.</span>
           </h3>
         </header>
-        <textarea v-model="commitMsg" class="git-pane__commit-input" placeholder="Commit message" rows="3"
+        <textarea v-model="commitMsg" class="git-pane__commit-input ui-input" placeholder="Commit message" rows="3"
           @keydown.ctrl.enter="commit" />
         <div class="git-pane__commit-actions">
           <button type="button" class="git-pane__btn git-pane__btn--primary"
@@ -212,15 +212,10 @@ watch(() => workspace.cwd, load);
   min-height: 0;
   padding: 10px 10px 12px;
   gap: 12px;
-  /* Container query so the diff area can drop its 120px min-height
-     when the pane is short; without it, the min-height pushes the
-     diff-view past its section's allocated size and bleeds into the
-     commit block below. */
-  /* Last-resort scroll: when the combined intrinsic height of branch
-     + changes + diff + commit can't fit (long change list + tiny
-     pane), the whole pane scrolls instead of letting flex children
-     visually overlap. */
-  overflow: hidden;
+  /* Auto-scroll only when the pane is too short for the minimum
+   * content (branch + changes + diff + commit). Normally each section
+   * scrolls internally, so the pane itself has no scrollbar. */
+  overflow: auto;
 }
 
 /* ── Branch bar ───────────────────────────────────────────────────── */
@@ -268,16 +263,27 @@ watch(() => workspace.cwd, load);
 }
 
 .git-pane__section--diff {
-  flex: 0 1 auto;
+  /* The diff section absorbs the leftover vertical space so the diff
+   * view is constrained by the pane rather than by its own content. */
+  flex: 1 1 0;
+  min-height: 120px;
 }
 .git-pane__section--diff :deep(.diff-view) {
-  flex: 0 0 auto;
+  /* Fill the section and scroll internally; do not let the patch
+   * surface decide the section height. */
+  flex: 1 1 0;
+  min-height: 0;
   height: auto;
-  min-height: 72px;
-  max-height: 360px;
+  max-height: none;
+  overflow: auto;
 }
 .git-pane__section--diff .git-pane__diff-empty {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
   min-height: 72px;
+  margin: 0;
 }
 
 .git-pane__section--commit {
@@ -297,22 +303,22 @@ watch(() => workspace.cwd, load);
   display: inline-flex;
   align-items: baseline;
   gap: 6px;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ui-text);
 }
 
 .git-pane__count {
   color: var(--ui-text-muted);
   font-size: 12px;
   font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .git-pane__hint {
   color: var(--ui-text-muted);
   font-size: 12px;
   font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 /* ── Changes list ────────────────────────────────────────────────── */
@@ -332,7 +338,7 @@ watch(() => workspace.cwd, load);
   display: flex;
   align-items: center;
   gap: 1px;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-md);
   transition: background-color 120ms ease;
 }
 
@@ -379,21 +385,10 @@ watch(() => workspace.cwd, load);
 /* File row: badge + icon + path, sitting on the same baseline as the
    stage toggle so the whole row reads as one unit. */
 .git-pane__file {
-  display: flex;
   flex: 1 1 auto;
   min-width: 0;
-  align-items: center;
   gap: 7px;
-  height: 28px;
   padding: 0 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
 }
 
 .git-pane__file:focus-visible,
@@ -414,7 +409,7 @@ watch(() => workspace.cwd, load);
   border-radius: 3px;
   background: transparent;
   color: var(--ui-text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--ui-font-mono);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -461,26 +456,10 @@ watch(() => workspace.cwd, load);
 
 /* ── Commit ──────────────────────────────────────────────────────── */
 .git-pane__commit-input {
-  width: 100%;
   box-sizing: border-box;
+  min-height: 72px;
   padding: 10px 12px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 5px;
-  outline: 0;
   resize: none;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-  background: var(--ui-surface);
-  transition: border-color var(--ui-duration-fast) var(--ui-ease-standard);
-}
-
-.git-pane__commit-input:focus {
-  border-color: var(--ui-border-focus);
-}
-
-.git-pane__commit-input::placeholder {
-  color: var(--ui-text-muted);
 }
 
 .git-pane__commit-actions {

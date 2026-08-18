@@ -1,0 +1,40 @@
+/* Standard centered empty state: icon + title + hint.
+ * Used by right-side panels and standalone empty views. */
+.ui-empty-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.ui-empty-state > svg {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 14px;
+  color: var(--ui-text-muted);
+}
+
+.ui-empty-state > p {
+  margin: 0 0 6px;
+  color: var(--ui-text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ui-empty-state > span {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+/* Font utilities for one-off overrides. */
+.ui-font-sans {
+  font-family: var(--ui-font-sans);
+}
+
+.ui-font-mono {
+  font-family: var(--ui-font-mono);
+}

@@ -160,13 +160,7 @@ body,
 body {
   color: var(--ui-text);
   background: var(--ui-surface);
-  font-family:
-    Inter,
-    ui-sans-serif,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--ui-font-sans);
   font-size: 14px;
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
@@ -237,26 +231,8 @@ button {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--ui-surface);
 }
-.right-panel__empty {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100%;
-  padding: 32px 16px;
-  text-align: center;
-}
-.right-panel__empty > svg {
-  width: 24px;
-  height: 24px;
-  margin-bottom: 14px;
-  color: var(--ui-text-muted);
-}
-.right-panel__empty p { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
-.right-panel__empty span { color: var(--ui-text-muted); font-size: 12px; }
-
 .app-shell__sidebar-toggle {
   position: absolute;
   top: 11px;

@@ -1,0 +1,75 @@
+/* Shared panel primitives so Git / Files / Context / Terminal side panels
+ * read as one cohesive surface instead of slightly different implementations. */
+
+/* Standard panel header: title on the left, actions on the right.
+ * Used by panels that don't embed their own toolbar. */
+.ui-panel-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+
+.ui-panel-header__title {
+  margin: 0;
+  color: var(--ui-text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Section title used inside panel bodies (Context, Git, etc.). */
+.ui-section-title {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Standard list row used by Git file list and FileTree.
+ * Height/radius/spacing come from tokens so a change propagates. */
+.ui-list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ui-row-height);
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--ui-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
+}
+
+.ui-list-row:hover {
+  background: var(--ui-surface-hover);
+}
+
+/* Standard input/search control. */
+.ui-input {
+  width: 100%;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--ui-duration-fast) var(--ui-ease-standard);
+}
+
+.ui-input:focus {
+  border-color: var(--ui-border-focus);
+  outline: none;
+}
+
+.ui-input::placeholder {
+  color: var(--ui-text-muted);
+}

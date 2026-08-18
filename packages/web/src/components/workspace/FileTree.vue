@@ -47,7 +47,7 @@ const FileTreeNode = defineComponent({
         <li class="file-tree__item">
           <button
             type="button"
-            class="file-tree__row"
+            class="file-tree__row ui-list-row"
             aria-expanded={props.entry.isDirectory ? expanded.value : undefined}
             onClick={toggle}
           >
@@ -178,7 +178,7 @@ export default defineComponent({
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--ui-border-subtle);
 }
 .file-tree__search {
@@ -186,11 +186,11 @@ export default defineComponent({
   flex: 1;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  height: var(--ui-input-height);
   min-width: 0;
   padding: 0 10px;
   border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--ui-radius-lg);
   background: var(--ui-surface-subtle);
   transition: border-color var(--ui-duration-fast) var(--ui-ease-standard), background-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
@@ -291,24 +291,11 @@ export default defineComponent({
   position: relative;
 }
 .file-tree__row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
   width: 100%;
-  min-height: 28px;
+  gap: 7px;
   padding: 3px 10px 3px 6px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
-}
-.file-tree__row:hover {
-  background: var(--ui-surface-hover);
+  border-radius: var(--ui-radius-md);
+  font-size: 13px;
 }
 .file-tree__row:focus-visible {
   outline: 2px solid var(--ui-focus);

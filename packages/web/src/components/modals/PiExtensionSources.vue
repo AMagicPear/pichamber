@@ -105,7 +105,7 @@ watch(() => workspace.sessionId, load, { immediate: true });
 .extension-sources__list { border-top: 1px solid var(--ui-border-subtle); }
 .extension-sources__row { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--ui-border-subtle); }
 .extension-sources__row div { display: grid; min-width: 0; gap: 2px; }
-.extension-sources__row strong { overflow: hidden; color: var(--ui-text-strong); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.extension-sources__row strong { overflow: hidden; color: var(--ui-text-strong); font-family: var(--ui-font-mono); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .extension-sources__row small { overflow: hidden; color: var(--ui-text-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .extension-sources__add { width: 100%; flex-wrap: wrap; } .extension-sources__add input { flex: 1 1 100%; width: 100%; } }
 </style>

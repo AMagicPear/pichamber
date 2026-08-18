@@ -197,7 +197,7 @@ defineExpose({ move, choose });
 .composer-shelf__query {
   max-width: 55%;
   overflow: hidden;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--ui-font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

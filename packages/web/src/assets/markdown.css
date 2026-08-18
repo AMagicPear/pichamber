@@ -36,6 +36,7 @@
   --table-border: var(--ui-border);
   --table-header-bg: var(--ui-table-header-bg);
   color: var(--ui-text);
+  font-family: var(--ui-font-sans);
   /* Aggressive break for long URLs / file paths in mixed CJK+Latin user
    * messages — `overflow-wrap: anywhere` alone still leaves unbroken runs
    * (the user message bubble in the wild has long paths that exceed a

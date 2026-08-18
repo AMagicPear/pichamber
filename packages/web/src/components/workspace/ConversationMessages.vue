@@ -181,13 +181,25 @@ const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["messag
   if (!parsed) return null;
   return { name: parsed.name, location: parsed.location, userMessage: parsed.userMessage };
 };
+
+/** Pre-compute skill-block parsing once per user message so the template
+ *  doesn't run the regex multiple times for the same item. */
+const userSkillBlocks = computed(() => {
+  const map = new Map<string, SkillBlockShape | null>();
+  for (const item of props.items) {
+    if (item.kind === "user" && item.message) {
+      map.set(item.id, skillBlockFor(item.message));
+    }
+  }
+  return map;
+});
 </script>
 
 <template>
   <div ref="scroller" class="conversation__messages scroll-fade-bottom" @scroll="onScroll" @wheel="onWheel">
     <div ref="content" class="conversation__content">
       <template v-for="item in items" :key="item.id">
-        <article v-if="item.kind === 'user'" class="conversation-message conversation-message--user">
+        <article v-if="item.kind === 'user'" v-memo="[item]" class="conversation-message conversation-message--user">
           <div class="conversation-message__user">
             <!-- When the user message starts with a pi-expanded skill block,
                  collapse the body to a chip so the markdown renderer doesn't
@@ -195,16 +207,16 @@ const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["messag
                  inner `<table>` tags and the user ends up staring at raw
                  XML). Any trailing text the user appended after the
                  `/skill:name` command is rendered normally. -->
-            <template v-if="skillBlockFor(item.message)">
+            <template v-if="userSkillBlocks.get(item.id)">
               <SkillBlockChip
-                :name="skillBlockFor(item.message)!.name"
-                :location="skillBlockFor(item.message)!.location"
+                :name="userSkillBlocks.get(item.id)!.name"
+                :location="userSkillBlocks.get(item.id)!.location"
               />
               <MarkdownRender
-                v-if="skillBlockFor(item.message)!.userMessage"
+                v-if="userSkillBlocks.get(item.id)!.userMessage"
                 class="markdown-chat"
                 mode="chat"
-                :content="skillBlockFor(item.message)!.userMessage!"
+                :content="userSkillBlocks.get(item.id)!.userMessage!"
                 :final="true"
                 :fade="false"
                 :viewport-priority="false"
@@ -225,6 +237,8 @@ const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["messag
                 :key="i"
                 :src="`data:${img.mimeType};base64,${img.data}`"
                 alt="Attached image"
+                loading="lazy"
+                decoding="async"
               />
             </div>
           </div>
@@ -235,8 +249,8 @@ const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["messag
           :final="item.phase === 'committed'"
           :model-name="modelNameFor(item.message)"
         />
-        <ToolResultMessage v-else-if="item.kind === 'tool'" :detail="toolDetail(item)" />
-        <article v-else-if="item.kind === 'compaction'" class="conversation-message conversation-message--compaction">
+        <ToolResultMessage v-else-if="item.kind === 'tool'" v-memo="[item]" :detail="toolDetail(item)" />
+        <article v-else-if="item.kind === 'compaction'" v-memo="[item]" class="conversation-message conversation-message--compaction">
           <div class="compaction-summary">
             <div class="compaction-summary__header">
               <span class="compaction-summary__label">[compaction]</span>

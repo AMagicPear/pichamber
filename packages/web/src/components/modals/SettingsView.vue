@@ -515,7 +515,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
   border-radius: 4px;
   background: var(--ui-extension-bg);
   color: var(--ui-extension-fg);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--ui-font-mono);
   font-size: 11px;
 }
 .extension-card p,
@@ -532,7 +532,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
   background: var(--ui-surface);
   color: inherit;
   font: inherit;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--ui-font-mono);
   font-size: 13px;
 }
 .settings-page__error {
@@ -556,7 +556,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
   padding: 1px 4px;
   border-radius: 3px;
   background: var(--ui-surface-selected);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--ui-font-mono);
   font-size: 11px;
 }
 </style>

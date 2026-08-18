@@ -139,6 +139,8 @@ const showNotes = computed(() => {
             :key="i"
             :src="`data:${img.mimeType};base64,${img.data}`"
             alt="Read image"
+            loading="lazy"
+            decoding="async"
           />
         </div>
         <CodeView
@@ -278,7 +280,7 @@ const showNotes = computed(() => {
   border: 1px solid var(--ui-border-subtle);
   border-radius: 999px;
   color: var(--ui-text-muted);
-  font-family: var(--ui-font-mono, ui-monospace, monospace);
+  font-family: var(--ui-font-mono);
   font-size: 11px;
   line-height: 1.5;
   white-space: nowrap;
@@ -319,7 +321,7 @@ const showNotes = computed(() => {
   overflow: auto;
   max-height: 420px;
   color: var(--ui-text);
-  font-family: var(--ui-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--ui-font-mono);
   font-size: 12.5px;
   line-height: 1.55;
   white-space: pre-wrap;   /* preserve newlines, wrap at the container edge */
@@ -410,7 +412,7 @@ const showNotes = computed(() => {
   border: 1px solid var(--ui-border-subtle);
   border-radius: 999px;
   color: var(--ui-text-muted);
-  font-family: var(--ui-font-mono, ui-monospace, monospace);
+  font-family: var(--ui-font-mono);
   font-size: 11px;
   text-align: center;
 }
@@ -420,7 +422,7 @@ const showNotes = computed(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ui-text-secondary);
-  font-family: var(--ui-font-mono, ui-monospace, monospace);
+  font-family: var(--ui-font-mono);
   font-size: 12.5px;
 }
 .conversation-detail__list-empty,

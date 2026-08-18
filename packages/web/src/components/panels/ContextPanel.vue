@@ -50,7 +50,7 @@ const modelTitle = computed(() => {
 
 <template>
   <div class="right-panel__pane context-pane" role="tabpanel" aria-label="context">
-    <div v-if="!hasData" class="context-pane__empty">
+    <div v-if="!hasData" class="ui-empty-state">
       <p>Context</p>
       <span>Send a message to see live token usage and session stats.</span>
     </div>
@@ -66,7 +66,7 @@ const modelTitle = computed(() => {
       </header>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading">Context</h3>
+        <h3 class="context-pane__heading ui-section-title">Context</h3>
         <div class="context-pane__stat">
           <span class="context-pane__value">{{ view?.context.tokensText ?? "—" }}</span>
           <span class="context-pane__sub">{{ view?.context.percent ?? "—" }} used</span>
@@ -87,7 +87,7 @@ const modelTitle = computed(() => {
       </section>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading">Messages</h3>
+        <h3 class="context-pane__heading ui-section-title">Messages</h3>
         <div class="context-pane__stat">
           <span class="context-pane__value">{{ formatTokens(view?.messages.total ?? 0) }}</span>
         </div>
@@ -102,14 +102,14 @@ const modelTitle = computed(() => {
       </section>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading">Cost</h3>
+        <h3 class="context-pane__heading ui-section-title">Cost</h3>
         <div class="context-pane__stat">
           <span class="context-pane__value">{{ view?.cost.value ?? "$0.00" }}</span>
         </div>
       </section>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading">Last Assistant Message</h3>
+        <h3 class="context-pane__heading ui-section-title">Last Assistant Message</h3>
         <div v-for="row in usageRows" :key="row.label" class="context-pane__row">
           <span class="context-pane__row-label">{{ row.label }}</span>
           <span class="context-pane__row-value">{{ formatTokens(row.value) }}</span>
@@ -117,7 +117,7 @@ const modelTitle = computed(() => {
       </section>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading">Cache Hit</h3>
+        <h3 class="context-pane__heading ui-section-title">Cache Hit</h3>
         <div class="context-pane__stat">
           <span class="context-pane__value">{{ view?.cacheHit ?? "0.0%" }}</span>
         </div>
@@ -127,32 +127,6 @@ const modelTitle = computed(() => {
 </template>
 
 <style scoped>
-.context-pane {
-  background: var(--ui-surface);
-}
-
-.context-pane__empty {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 16px;
-  text-align: center;
-}
-
-.context-pane__empty p {
-  margin: 0 0 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ui-text-strong);
-}
-
-.context-pane__empty span {
-  color: var(--ui-text-muted);
-  font-size: 12px;
-}
-
 .context-pane__body {
   display: flex;
   flex-direction: column;
@@ -191,8 +165,7 @@ const modelTitle = computed(() => {
 
 .context-pane__model-id {
   color: var(--ui-text-muted);
-  font-family:
-    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--ui-font-mono);
   font-size: 12.5px;
 }
 
@@ -208,12 +181,7 @@ const modelTitle = computed(() => {
 }
 
 .context-pane__heading {
-  margin: 0 0 4px;
-  color: var(--ui-text-muted);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 
 .context-pane__stat {
@@ -224,8 +192,7 @@ const modelTitle = computed(() => {
 
 .context-pane__value {
   color: var(--ui-text-strong);
-  font-family:
-    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--ui-font-mono);
   font-size: 16px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -267,8 +234,7 @@ const modelTitle = computed(() => {
 
 .context-pane__row-value {
   color: var(--ui-text-strong);
-  font-family:
-    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--ui-font-mono);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }

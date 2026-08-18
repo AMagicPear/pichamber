@@ -1,0 +1,64 @@
+/* Central font tokens so every surface (inputs, chat bubbles, Markdown,
+ * code, side panels) resolves to the same cross-platform stack. The stack
+ * puts system fonts first for Latin glyphs, then explicit Chinese fallbacks
+ * so Windows / Linux render CJK as cleanly as macOS. */
+:root {
+  --ui-font-sans:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    "Noto Sans SC",
+    "Noto Sans CJK SC",
+    "WenQuanYi Micro Hei",
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol";
+
+  --ui-font-mono:
+    ui-monospace,
+    SFMono-Regular,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    "Noto Sans Mono CJK SC",
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei",
+    monospace;
+
+  /* Shared shape / spacing tokens so panels, lists and inputs stay visually
+   * consistent without each component inventing its own radii or sizing. */
+  --ui-radius-sm: 5px;
+  --ui-radius-md: 6px;
+  --ui-radius-lg: 8px;
+  --ui-radius-xl: 10px;
+  --ui-row-height: 28px;
+  --ui-input-height: 32px;
+}
+
+/* Force markstream-vue to use the same typeface as the rest of the app.
+ * The library defines these on `.markstream-vue`, so the override must live
+ * on the same selector to win the specificity race. */
+.markstream-vue {
+  --ms-font-sans: var(--ui-font-sans);
+  --markstream-code-font-family: var(--ui-font-mono);
+}
+
+/* Form controls should inherit the app typeface by default; components that
+ * need a monospace face (paths, code, tokens) override explicitly. */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+}
