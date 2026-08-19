@@ -13,7 +13,7 @@
  * 与 `package.json` 复制为 `~/.pi/agent/extensions/pichamber-<id>/`；扩展
  * 自包含、无第三方运行时依赖，所以这两个文件就够。
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { PiBuiltinExtension } from "@pichamber/shared";
@@ -26,7 +26,7 @@ export type BuiltinExtensionDef = {
   sourceDir: string;
 };
 
-/** Source root for bundled extensions: `packages/server/src/../../builtin-extensions`. */
+/** Source root for bundled extensions: `packages/builtin-extensions`. */
 const BUILTIN_EXTENSIONS_ROOT = join(import.meta.dir, "..", "..", "..", "builtin-extensions");
 
 /** Every built-in extension pichamber ships. Add new ones here to have them
@@ -47,7 +47,7 @@ const installedDirName = (id: string) => `pichamber-${id}`;
 /** Files copied from a built-in source into the user's extensions folder. */
 const SOURCE_FILES = ["index.ts", "package.json"] as const;
 
-const extensionsRoot = () => join(getAgentDir(), "extensions");
+const extensionsRoot = (agentDir = getAgentDir()) => join(agentDir, "extensions");
 
 const readVersion = (dir: string): string => {
   const packageJson = join(dir, "package.json");
@@ -61,40 +61,41 @@ const readVersion = (dir: string): string => {
 };
 
 /** Installed path for a built-in extension id (may not exist). */
-export const installedExtensionPath = (id: string): string =>
-  join(extensionsRoot(), installedDirName(id));
+export const installedExtensionPath = (id: string, agentDir?: string): string =>
+  join(extensionsRoot(agentDir), installedDirName(id));
 
 /** Whether a built-in extension's folder currently exists in the agent dir. */
-const isInstalled = (id: string): boolean => existsSync(installedExtensionPath(id));
+const isInstalled = (id: string, agentDir?: string): boolean => existsSync(installedExtensionPath(id, agentDir));
 
 /** Copy a built-in's source files into the user's extensions folder.
- *  Idempotent: replaces a stale install when the bundled version differs. */
-export const installBuiltinExtension = (def: BuiltinExtensionDef): void => {
-  const target = installedExtensionPath(def.id);
-  const bundledVersion = readVersion(def.sourceDir);
-  if (isInstalled(def.id) && readVersion(target) === bundledVersion) return;
+ *  Configure is deliberately also an update: a user clicking it always gets
+ *  the files bundled by the current pichamber build. */
+export const installBuiltinExtension = (def: BuiltinExtensionDef, agentDir?: string): void => {
+  const sources = SOURCE_FILES.map((file) => join(def.sourceDir, file));
+  const missing = sources.find((file) => !existsSync(file));
+  if (missing) throw new Error(`Built-in extension ${def.id} is missing ${missing}`);
 
+  const target = installedExtensionPath(def.id, agentDir);
   rmSync(target, { recursive: true, force: true });
   mkdirSync(target, { recursive: true });
-  for (const file of SOURCE_FILES) {
-    const from = join(def.sourceDir, file);
-    if (existsSync(from)) cpSync(from, join(target, file));
+  for (const [index, file] of SOURCE_FILES.entries()) {
+    copyFileSync(sources[index]!, join(target, file));
   }
 };
 
 /** Remove a built-in's folder from the user's extensions folder. */
-export const removeBuiltinExtension = (def: BuiltinExtensionDef): void => {
-  rmSync(installedExtensionPath(def.id), { recursive: true, force: true });
+export const removeBuiltinExtension = (def: BuiltinExtensionDef, agentDir?: string): void => {
+  rmSync(installedExtensionPath(def.id, agentDir), { recursive: true, force: true });
 };
 
 /** Overview for the Settings UI: every built-in with its installed state. */
-export const listBuiltinExtensions = (): PiBuiltinExtension[] =>
+export const listBuiltinExtensions = (agentDir?: string): PiBuiltinExtension[] =>
   builtinExtensions.map((def) => ({
     id: def.id,
     name: def.name,
     description: def.description,
     version: readVersion(def.sourceDir),
-    installed: isInstalled(def.id),
+    installed: isInstalled(def.id, agentDir),
   }));
 
 /** Look up a built-in definition by id, throwing on unknown ids. */

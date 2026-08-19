@@ -64,8 +64,8 @@ describe("parseArkAfpUsage", () => {
 });
 
 describe("getProviderQuotaWithApiKey", () => {
-  test("adapters with a custom fetch do not block on a missing Bearer apiKey", async () => {
-    // ark-agent-plan has adapter.fetch = fetchVolcengine (HMAC, not Bearer).
+  test("self-managed adapters do not block on a missing Bearer apiKey", async () => {
+    // ark-agent-plan uses Volcengine HMAC rather than a provider Bearer key.
     // Without VOLC_ACCESS_KEY_ID set, the custom fetcher surfaces its own
     // error instead of the generic "No API key configured" early return.
     const prevAk = process.env.VOLC_ACCESS_KEY_ID;

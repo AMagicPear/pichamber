@@ -7,7 +7,7 @@
  *
  * 这个扩展自包含、无第三方运行时依赖（只 import 类型 + WebCrypto/fetch），
  * 因此同时适用于：
- *   • pichamber 内置（启动时同步到 ~/.pi/agent/extensions/）
+ *   • pichamber Settings → Extensions 手动 Configure 后
  *   • 在任意地方直接运行 `pi` 时（自动发现加载）
  *
  * 模型列表通过管控面 API `ListArkAgentPlanModel` 动态拉取（HMAC-SHA256 签名，
@@ -98,6 +98,7 @@ const volcOpenApi = async (action: string): Promise<Record<string, unknown>> => 
       Authorization: authorization,
     },
     body: "",
+    signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} ${response.statusText}`);
@@ -157,14 +158,17 @@ const fetchAgentPlanModels = async (): Promise<ReturnType<typeof toModel>[]> => 
 
 // ─── Provider 注册 ─────────────────────────────────────────────────────
 
-export default function (pi: ExtensionAPI): void {
+export default async function (pi: ExtensionAPI): Promise<void> {
   const config: ProviderConfig = {
     name: PROVIDER_NAME,
     baseUrl: INFERENCE_BASE,
     apiKey: `\${${INFERENCE_KEY_ENV}}`,
     api: API,
     headers: { Authorization: `Bearer \${${INFERENCE_KEY_ENV}}` },
-    models: FALLBACK_MODELS,
+    // Load once while Pi initializes the extension. This gives every new
+    // session a complete catalog before pichamber snapshots available models;
+    // fetchAgentPlanModels falls back locally when AK/SK is unavailable.
+    models: await fetchAgentPlanModels(),
     refreshModels: async () => fetchAgentPlanModels(),
   };
   pi.registerProvider(PROVIDER_ID, config);

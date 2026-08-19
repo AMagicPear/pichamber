@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   getBuiltinExtension,
@@ -22,26 +23,29 @@ describe("builtin extensions", () => {
 
   test("install / list / remove round-trip", () => {
     const def = getBuiltinExtension("ark-agent-plan");
-    // Clean any prior state.
-    removeBuiltinExtension(def);
+    const agentDir = mkdtempSync(join(tmpdir(), "pichamber-builtin-extension-"));
+    try {
+      expect(listBuiltinExtensions(agentDir).find((e) => e.id === "ark-agent-plan")?.installed).toBe(false);
 
-    expect(listBuiltinExtensions().find((e) => e.id === "ark-agent-plan")?.installed).toBe(false);
+      installBuiltinExtension(def, agentDir);
+      const installed = listBuiltinExtensions(agentDir).find((e) => e.id === "ark-agent-plan");
+      expect(installed?.installed).toBe(true);
+      const target = installedExtensionPath(def.id, agentDir);
+      expect(existsSync(join(target, "index.ts"))).toBe(true);
+      expect(existsSync(join(target, "package.json"))).toBe(true);
+      expect(readFileSync(join(target, "package.json"), "utf8")).toContain("ark-agent-plan");
 
-    installBuiltinExtension(def);
-    const installed = listBuiltinExtensions().find((e) => e.id === "ark-agent-plan");
-    expect(installed?.installed).toBe(true);
-    // Files actually landed in the agent dir.
-    const target = installedExtensionPath(def.id);
-    expect(existsSync(join(target, "index.ts"))).toBe(true);
-    expect(existsSync(join(target, "package.json"))).toBe(true);
-    expect(readFileSync(join(target, "package.json"), "utf8")).toContain("ark-agent-plan");
+      // Configure is also an explicit update, even when the version is unchanged.
+      writeFileSync(join(target, "index.ts"), "stale extension");
+      installBuiltinExtension(def, agentDir);
+      expect(readFileSync(join(target, "index.ts"), "utf8")).not.toBe("stale extension");
 
-    // Idempotent: re-install doesn't error.
-    installBuiltinExtension(def);
-
-    removeBuiltinExtension(def);
-    expect(listBuiltinExtensions().find((e) => e.id === "ark-agent-plan")?.installed).toBe(false);
-    expect(existsSync(installedExtensionPath(def.id))).toBe(false);
+      removeBuiltinExtension(def, agentDir);
+      expect(listBuiltinExtensions(agentDir).find((e) => e.id === "ark-agent-plan")?.installed).toBe(false);
+      expect(existsSync(installedExtensionPath(def.id, agentDir))).toBe(false);
+    } finally {
+      rmSync(agentDir, { recursive: true, force: true });
+    }
   });
 
   test("extension source exists under the bundled extensions root", () => {

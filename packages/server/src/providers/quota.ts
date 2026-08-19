@@ -33,12 +33,10 @@ type QuotaAdapter = {
   headers?: Record<string, string>;
   currency?: string;
   parse: (payload: unknown, currency?: string) => QuotaWindow[];
-  /** Custom fetch override — used when a provider needs a non-Bearer
-   *  auth scheme (e.g. Volcengine HMAC-SHA256 signed requests).
-   *  When provided, the generic `fetchQuota` helper delegates entirely
-   *  to this function; `path` / `baseUrl` / `headers` are still available
-   *  for the custom fetcher to reference if it wants. */
-  fetch?: (adapter: QuotaAdapter, apiKey: string, baseUrl: string) => Promise<unknown>;
+  auth?:
+    | { kind: "bearer" }
+    /** The adapter owns authentication and does not use Pi's provider key. */
+    | { kind: "self-managed"; fetch: () => Promise<unknown> };
 };
 
 const matchAdapter = (providerId: string, apiType: string | undefined): QuotaAdapter | undefined => {
@@ -69,8 +67,8 @@ const fetchQuota = async (
   if (cached && cached.expiresAt > now) return cached.result;
 
   try {
-    const payload = adapter.fetch
-      ? await adapter.fetch(adapter, apiKey, baseUrl)
+    const payload = adapter.auth?.kind === "self-managed"
+      ? await adapter.auth.fetch()
       : await fetchBearer(adapter, baseUrl, apiKey);
     const result: ProviderQuota = {
       provider: providerId,
@@ -413,7 +411,7 @@ const adapters: QuotaAdapter[] = [
     providerIds: ["ark-agent-plan"],
     path: "/",
     parse: parseArkAfpUsage,
-    fetch: (_adapter) => fetchVolcengine("GetAFPUsage"),
+    auth: { kind: "self-managed", fetch: () => fetchVolcengine("GetAFPUsage") },
   },
   {
     name: "MiniMax",
@@ -511,14 +509,12 @@ export const getProviderQuotaWithApiKey = (
       fetchedAt: nowMs(),
     });
   }
-  // Adapters with a custom `fetch` handle their own auth (e.g. Volcengine
-  // HMAC-SHA256 signed requests), so an empty apiKey is fine for them.
-  if (!apiKey && !adapter.fetch) return Promise.resolve(noApiKey(providerId));
+  if (!apiKey && adapter.auth?.kind !== "self-managed") return Promise.resolve(noApiKey(providerId));
   const resolvedBaseUrl =
     typeof adapter.baseUrl === "function"
       ? adapter.baseUrl()
       : (adapter.baseUrl ?? baseUrl);
-  if (!resolvedBaseUrl && !adapter.fetch) {
+  if (!resolvedBaseUrl && adapter.auth?.kind !== "self-managed") {
     return Promise.resolve({
       provider: providerId,
       error: `Provider ${providerId} has no baseUrl`,
@@ -532,10 +528,9 @@ export const getProviderQuota = (providerId: string, session: AgentSession): Pro
   return (async () => {
     const apiType = providerApiType(session, providerId);
     const adapter = matchAdapter(providerId, apiType);
-    // Adapters with a custom `fetch` handle their own auth (e.g. Volcengine
-    // HMAC-SHA256) — don't block on resolving the provider's Bearer apiKey,
-    // which is a separate concern and may legitimately be unset.
-    const apiKey = adapter?.fetch
+    // Self-managed adapters (Volcengine HMAC) don't use the provider's
+    // inference key, so resolving it must not block quota retrieval.
+    const apiKey = adapter?.auth?.kind === "self-managed"
       ? ""
       : (await session.modelRuntime.getAuth(providerId))?.auth.apiKey;
     return getProviderQuotaWithApiKey(
