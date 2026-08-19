@@ -236,7 +236,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
           </template>
 
           <template v-else-if="activeKey === 'extensions'">
-            <SettingsPageHeader title="Extensions" description="Built-ins pichamber ships, package sources Pi was told to load, and what ended up loaded for this session." />
+            <SettingsPageHeader title="Extensions" description="Manage Pi extensions and inspect the active session." />
             <ExtensionsManager />
           </template>
 

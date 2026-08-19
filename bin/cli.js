@@ -239,8 +239,8 @@ program.command("logs").option("-f, --follow", "follow log output").option("-n, 
   await showLogs(Number(program.opts().port), Number(options.lines), options.follow);
 });
 
-program.command("serve").option("--host <host>", "bind address", "127.0.0.1").option("--no-open", "do not open a browser").description("Run the server in the foreground").action(async (options) => {
-  await runServe({ port: Number(program.opts().port), host: options.host, openBrowser: !options.noOpen });
+program.command("serve").option("--host <host>", "bind address", "127.0.0.1").description("Run the server in the foreground").action(async (options) => {
+  await runServe({ port: Number(program.opts().port), host: options.host });
 });
 
 export const runCli = () => {

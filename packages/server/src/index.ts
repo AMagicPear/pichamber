@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
 import { listDirectory, searchFiles } from "./services/fs";
 import { commit, getDiff, getStatus, stagePaths, unstagePaths } from "./services/git";
@@ -329,11 +329,16 @@ const server = Bun.serve({
           const sources = runtime.agentSession
             ? listPiExtensionSources(runtime.agentSession, cwd)
             : [];
+          const builtins = listBuiltinExtensions();
           const overview: ExtensionsOverview = {
-            builtins: listBuiltinExtensions(),
+            builtins,
             sources,
             loaded: resources.extensions.map((e) => {
+              const builtinMatch = builtins.find(
+                (b) => e.path === installedExtensionPath(b.id) || e.path.startsWith(`${installedExtensionPath(b.id)}/`),
+              );
               const entry: LoadedExtensionInfo = {
+                label: builtinMatch?.name ?? (e.sourceInfo.source === "auto" ? basename(dirname(e.path)) : e.sourceInfo.source),
                 path: e.path,
                 source: e.sourceInfo.source,
                 scope: e.sourceInfo.scope,
@@ -341,10 +346,6 @@ const server = Bun.serve({
                 commands: e.commands,
                 tools: e.tools,
               };
-              // Mark the entry if it lives inside a pichamber built-in's install folder.
-              const builtinMatch = listBuiltinExtensions().find(
-                (b) => e.path === installedExtensionPath(b.id) || e.path.startsWith(`${installedExtensionPath(b.id)}/`),
-              );
               if (builtinMatch) entry.builtinId = builtinMatch.id;
               return entry;
             }),

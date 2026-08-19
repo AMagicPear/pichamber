@@ -226,6 +226,8 @@ export type PiBuiltinExtension = {
 
 /** A single extension that the active Pi runtime currently loaded for this session. */
 export type LoadedExtensionInfo = {
+  /** Server-computed label for the settings UI. */
+  label: string;
   /** Absolute path to the extension file or its package directory. */
   path: string;
   /** Origin label: the source string (e.g. `npm:foo`, a git URL, or a local path). */

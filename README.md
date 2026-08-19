@@ -17,8 +17,9 @@ the current directory, and opens it in your browser. Later invocations reuse the
 same server.
 
 ```sh
-pichamber ../another-project  # open another workspace
-pichamber --no-open           # print the session URL only
+pichamber open                # open the current workspace
+pichamber open ../another-project
+pichamber --json open         # print the session URL as JSON without opening a browser
 pichamber status              # inspect the background server
 pichamber logs -f             # follow server logs
 pichamber stop                # stop it cleanly
