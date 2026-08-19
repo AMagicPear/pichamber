@@ -205,7 +205,7 @@ export interface SessionRuntime {
 
 // ─── Factory ──────────────────────────────────────────────────────────
 
-import { getServerSettings } from "./server-settings";
+import { getServerSettings } from "../settings/server-settings";
 import { createSdkSessionRuntime } from "./sdk-session-runtime";
 import { createRpcSessionRuntime } from "./rpc-session-runtime";
 

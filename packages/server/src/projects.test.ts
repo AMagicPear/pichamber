@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { browseProjectDirectories } from "./projects";
+import { browseProjectDirectories } from "./services/projects";
 
 const roots: string[] = [];
 afterEach(async () => {

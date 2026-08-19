@@ -1,6 +1,6 @@
 import type { AgentSession, ModelInfo } from "@earendil-works/pi-coding-agent";
 import type { ProviderDescriptor, ProviderQuota, QuotaWindow } from "@pichamber/shared";
-import { toMessage } from "./error";
+import { toMessage } from "../error";
 import { providerApiType, providerBaseUrl, providerName } from "./providers";
 
 // ─── Quota adapter model ───────────────────────────────────────────────

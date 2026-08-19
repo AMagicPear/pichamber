@@ -26,7 +26,7 @@ import type {
   RuntimeResources,
   SessionRuntime,
 } from "./runtime";
-import { providerName } from "./providers";
+import { providerName } from "../providers/providers";
 import { getLastAssistantUsage } from "@earendil-works/pi-coding-agent";
 
 const modelDescriptorFromAgentSession = (

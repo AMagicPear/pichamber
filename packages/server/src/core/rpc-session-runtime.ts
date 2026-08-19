@@ -33,7 +33,7 @@ import {
   type RuntimeResources,
   type SessionRuntime,
 } from "./runtime";
-import { resolveExternalPi } from "./server-settings";
+import { resolveExternalPi } from "../settings/server-settings";
 import { SessionManager as SessionManagerCtor } from "@earendil-works/pi-coding-agent";
 
 type RpcPayload = Record<string, unknown> & { type: string };

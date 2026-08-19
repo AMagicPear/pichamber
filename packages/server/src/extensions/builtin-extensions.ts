@@ -27,7 +27,7 @@ export type BuiltinExtensionDef = {
 };
 
 /** Source root for bundled extensions: `packages/server/src/../../builtin-extensions`. */
-const BUILTIN_EXTENSIONS_ROOT = join(import.meta.dir, "..", "..", "builtin-extensions");
+const BUILTIN_EXTENSIONS_ROOT = join(import.meta.dir, "..", "..", "..", "builtin-extensions");
 
 /** Every built-in extension pichamber ships. Add new ones here to have them
  *  listed and configured by the same machinery. */

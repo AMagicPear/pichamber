@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { fdSearch, isFdAvailable, resetFdPathCache } from "./fd-search";
+import { fdSearch, isFdAvailable, resetFdPathCache } from "./services/fd-search";
 
 const roots: string[] = [];
 const tempRoot = async () => {

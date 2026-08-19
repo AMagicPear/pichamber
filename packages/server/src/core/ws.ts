@@ -21,14 +21,47 @@ import type {
   ThinkingState,
 } from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
-import { toMessage } from "./error";
-import { createUiBridge, type UiBridge } from "./extension-ui";
+import { toMessage } from "../error";
+import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
 import { computeSessionStatsView } from "./context";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { conversationItems } from "./conversation";
 import { deactivateSession, getSession } from "./session";
 import type { SessionRuntime } from "./runtime";
-import type { SessionWsData, WsHandler } from "./index";
+
+// ─── WebSocket protocol multiplexing types ─────────────────────────────
+//
+// Bun's `websocket` callbacks receive (ws, message) — the data payload is
+// always reachable via `ws.data`. At upgrade time the server attaches the
+// matching handler to `ws.data.handler`, and the multiplex code just
+// forwards. Adding a new protocol means writing one `WsHandler` and
+// attaching it on upgrade.
+
+/** Shape of a per-socket protocol handler. */
+export type WsHandler = {
+  open(ws: ServerWebSocket<WsData>): void | Promise<void>;
+  message(ws: ServerWebSocket<WsData>, message: string | Buffer): void | Promise<void>;
+  close(ws: ServerWebSocket<WsData>): void;
+};
+
+/** PTY data: protocol tag + handler + the ptyId open/close need. */
+export type PtyWsData = {
+  protocol: "pty";
+  handler: WsHandler;
+  ptyId: string;
+  unsub?: () => void;
+};
+
+/** AI session data: protocol tag + handler + the sessionId. */
+export type SessionWsData = {
+  protocol: "session";
+  handler: WsHandler;
+  sessionId: string;
+  closed?: boolean;
+  attached?: boolean;
+};
+
+export type WsData = PtyWsData | SessionWsData;
 
 type BunWS = ServerWebSocket<SessionWsData>;
 

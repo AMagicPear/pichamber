@@ -1,15 +1,14 @@
-import type { ServerWebSocket } from "bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
-import { listDirectory, searchFiles } from "./fs";
-import { commit, getDiff, getStatus, stagePaths, unstagePaths } from "./git";
+import { listDirectory, searchFiles } from "./services/fs";
+import { commit, getDiff, getStatus, stagePaths, unstagePaths } from "./services/git";
 import {
   createSessionWithCwd,
   deleteSession,
   getSessionCwd,
   listAllSessions,
-} from "./session";
+} from "./core/session";
 import {
   hasPty,
   resizePty,
@@ -19,43 +18,44 @@ import {
   subscribePty,
   subscribePtyExit,
   writePty,
-} from "./pty";
-import { closeSessionSockets, sessionWsHandler } from "./ws";
-import { refreshSessionModelState } from "./ws";
-import { browseProjectDirectories } from "./projects";
+} from "./services/pty";
+import { closeSessionSockets, sessionWsHandler } from "./core/ws";
+import { refreshSessionModelState } from "./core/ws";
+import { type PtyWsData, type SessionWsData, type WsData, type WsHandler } from "./core/ws";
+import { browseProjectDirectories } from "./services/projects";
 import {
   getProviderQuota,
   getProviderQuotaWithApiKey,
   listQuotaProviders,
   listQuotaProvidersForModels,
-} from "./quota";
-import { getSession } from "./session";
+} from "./providers/quota";
+import { getSession } from "./core/session";
 import { toMessage } from "./error";
-import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./workspace";
+import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./services/workspace";
 import {
   describeExternalPi,
   getServerSettings,
   saveServerSettings,
   type ServerSettings,
-} from "./server-settings";
+} from "./settings/server-settings";
 import {
   getPiBehaviorSettings,
   listPiProviders,
   removePiProviderCredential,
   setPiProviderApiKey,
   updatePiBehaviorSettings,
-} from "./pi-config";
+} from "./settings/pi-config";
 import {
   installPiExtensionSource,
   listPiExtensionSources,
   removePiExtensionSource,
-} from "./pi-extensions";
+} from "./extensions/pi-extensions";
 import {
   getBuiltinExtension,
   installBuiltinExtension,
   listBuiltinExtensions,
   removeBuiltinExtension,
-} from "./builtin-extensions";
+} from "./extensions/builtin-extensions";
 
 const hostname = process.env.PICHAMBER_HOST || "127.0.0.1";
 const configuredPort = Number(process.env.PICHAMBER_PORT || 3000);
@@ -73,33 +73,9 @@ const startedAt = new Date().toISOString();
 // always reachable via `ws.data`. We use that: at upgrade time we attach
 // the matching handler to `ws.data.handler`, and the multiplex code below
 // just forwards. Adding a new protocol means writing one `WsHandler` and
-// attaching it on upgrade — no edits to the multiplex code.
-
-export type WsHandler = {
-  open(ws: ServerWebSocket<WsData>): void | Promise<void>;
-  message(ws: ServerWebSocket<WsData>, message: string | Buffer): void | Promise<void>;
-  close(ws: ServerWebSocket<WsData>): void;
-};
-
-// PTY data: the protocol tag + handler + the ptyId open/close need.
-export type PtyWsData = {
-  protocol: "pty";
-  handler: WsHandler;
-  ptyId: string;
-  unsub?: () => void;
-};
-
-// AI session data: the protocol tag + handler + the sessionId.
-export type SessionWsData = {
-  protocol: "session";
-  handler: WsHandler;
-  sessionId: string;
-  closed?: boolean;
-  attached?: boolean;
-};
-
-export type WsData = PtyWsData | SessionWsData;
-
+// attaching it on upgrade — no edits to the multiplex code. The protocol
+// types (`WsHandler`, `PtyWsData`, `SessionWsData`, `WsData`) live in
+// `ws.ts`, which owns the WS protocol surface.
 /** Map a filesystem error to an HTTP response. */
 const fsErrorResponse = (err: unknown): Response => {
   if (err instanceof WorkspaceError) {

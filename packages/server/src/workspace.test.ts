@@ -7,7 +7,7 @@ import {
   canonicalWorkspace,
   isWithinWorkspace,
   WorkspaceError,
-} from "./workspace";
+} from "./services/workspace";
 
 const roots: string[] = [];
 afterEach(async () => {

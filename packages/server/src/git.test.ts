@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseStatus } from "./git";
+import { parseStatus } from "./services/git";
 
 describe("parseStatus", () => {
   test("keeps complex paths verbatim", () => {
