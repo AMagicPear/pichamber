@@ -33,6 +33,12 @@ type QuotaAdapter = {
   headers?: Record<string, string>;
   currency?: string;
   parse: (payload: unknown, currency?: string) => QuotaWindow[];
+  /** Custom fetch override — used when a provider needs a non-Bearer
+   *  auth scheme (e.g. Volcengine HMAC-SHA256 signed requests).
+   *  When provided, the generic `fetchQuota` helper delegates entirely
+   *  to this function; `path` / `baseUrl` / `headers` are still available
+   *  for the custom fetcher to reference if it wants. */
+  fetch?: (adapter: QuotaAdapter, apiKey: string, baseUrl: string) => Promise<unknown>;
 };
 
 const matchAdapter = (providerId: string, apiType: string | undefined): QuotaAdapter | undefined => {
@@ -63,11 +69,9 @@ const fetchQuota = async (
   if (cached && cached.expiresAt > now) return cached.result;
 
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}${adapter.path}`, {
-      headers: { Authorization: `Bearer ${apiKey}`, ...adapter.headers },
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    const payload = (await response.json()) as unknown;
+    const payload = adapter.fetch
+      ? await adapter.fetch(adapter, apiKey, baseUrl)
+      : await fetchBearer(adapter, baseUrl, apiKey);
     const result: ProviderQuota = {
       provider: providerId,
       windows: adapter.parse(payload, adapter.currency),
@@ -80,6 +84,14 @@ const fetchQuota = async (
     cache.set(cacheKey, { expiresAt: now + MINUTE_MS, result });
     return result;
   }
+};
+
+const fetchBearer = async (adapter: QuotaAdapter, baseUrl: string, apiKey: string): Promise<unknown> => {
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}${adapter.path}`, {
+    headers: { Authorization: `Bearer ${apiKey}`, ...adapter.headers },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  return response.json();
 };
 
 const noApiKey = (provider: string): ProviderQuota => ({
@@ -164,6 +176,183 @@ const parseDeepSeek = (payload: unknown): QuotaWindow[] => parseBalance(payload,
 const parseMoonshot = (payload: unknown, currency = "USD"): QuotaWindow[] =>
   parseBalance(payload, { label: "Balance", currency });
 
+// ─── Volcengine Ark Agent Plan (HMAC-SHA256 signed) ──────────────────
+//
+// 火山方舟管控面 API 使用火山引擎统一签名算法 (HMAC-SHA256, AWS SigV4 风格)。
+// GetAFPUsage 返回 5h / Daily / Weekly / Monthly 四个 AFP 额度窗口。
+//
+// AK/SK 通过环境变量 PICHAMBER_VOLC_ACCESS_KEY_ID / PICHAMBER_VOLC_SECRET_ACCESS_KEY 提供。
+// 个人版套餐的推理 API Key（Bearer Token）无法调用管控面接口。
+
+const VOLC_SERVICE = "ark";
+const VOLC_REGION = "cn-beijing";
+const VOLC_HOST = "ark.cn-beijing.volces.com";
+const VOLC_VERSION = "2024-01-01";
+
+const hex = (bytes: Uint8Array) =>
+  Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+
+const sha256 = async (data: string | Uint8Array): Promise<string> => {
+  const buf = typeof data === "string" ? new TextEncoder().encode(data) : data;
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", buf.buffer as ArrayBuffer));
+  return hex(digest);
+};
+
+const hmacSha256 = async (key: Uint8Array, data: string): Promise<Uint8Array> => {
+  const cryptoKey = await crypto.subtle.importKey(
+    "raw",
+    key.buffer as ArrayBuffer,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(data));
+  return new Uint8Array(sig);
+};
+
+/** Volcengine HMAC-SHA256 signature (compatible with AWS SigV4). */
+const volcSign = async (opts: {
+  accessKeyId: string;
+  secretAccessKey: string;
+  method: string;
+  path: string;
+  query: string;
+  host: string;
+  payload: string;
+  service: string;
+  region: string;
+  date: Date;
+}): Promise<{ authorization: string; xDate: string; xContentSha256: string }> => {
+  const { accessKeyId, secretAccessKey, method, path, query, host, payload, service, region, date } = opts;
+
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const dateStr = `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}`;
+  const xDate = `${dateStr}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
+
+  const payloadHash = await sha256(payload);
+
+  const canonicalHeaders = `host:${host}\nx-content-sha256:${payloadHash}\nx-date:${xDate}\n`;
+  const signedHeaders = "host;x-content-sha256;x-date";
+
+  const canonicalRequest = [
+    method,
+    path,
+    query,
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join("\n");
+
+  const credentialScope = `${dateStr}/${region}/${service}/request`;
+  const stringToSign = [
+    "HMAC-SHA256",
+    xDate,
+    credentialScope,
+    await sha256(canonicalRequest),
+  ].join("\n");
+
+  const kDate = await hmacSha256(new TextEncoder().encode(secretAccessKey), dateStr);
+  const kRegion = await hmacSha256(kDate, region);
+  const kService = await hmacSha256(kRegion, service);
+  const kSigning = await hmacSha256(kService, "request");
+  const signature = hex(new Uint8Array(await hmacSha256(kSigning, stringToSign)));
+
+  const authorization = `HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return { authorization, xDate, xContentSha256: payloadHash };
+};
+
+const fetchVolcengine = async (
+  action: string,
+  body: Record<string, unknown>,
+): Promise<unknown> => {
+  const accessKeyId = process.env.PICHAMBER_VOLC_ACCESS_KEY_ID ?? process.env.VOLC_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.PICHAMBER_VOLC_SECRET_ACCESS_KEY ?? process.env.VOLC_SECRET_ACCESS_KEY;
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error("Volcengine AK/SK not configured (set PICHAMBER_VOLC_ACCESS_KEY_ID / PICHAMBER_VOLC_SECRET_ACCESS_KEY)");
+  }
+
+  const query = `Action=${action}&Version=${VOLC_VERSION}`;
+  const payload = JSON.stringify(body);
+
+  const { authorization, xDate, xContentSha256 } = await volcSign({
+    accessKeyId,
+    secretAccessKey,
+    method: "POST",
+    path: "/",
+    query,
+    host: VOLC_HOST,
+    payload,
+    service: VOLC_SERVICE,
+    region: VOLC_REGION,
+    date: new Date(),
+  });
+
+  const response = await fetch(`https://${VOLC_HOST}/?${query}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=UTF-8",
+      "X-Date": xDate,
+      "X-Content-Sha256": xContentSha256,
+      Authorization: authorization,
+    },
+    body: payload,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`HTTP ${response.status} ${response.statusText}: ${text.slice(0, 200)}`);
+  }
+
+  const data = (await response.json()) as { ResponseMetadata?: { Error?: { Code?: string; Message?: string } }; Result?: unknown };
+  if (data.ResponseMetadata?.Error) {
+    throw new Error(`${data.ResponseMetadata.Error.Code ?? "VolcengineError"}: ${data.ResponseMetadata.Error.Message ?? "unknown error"}`);
+  }
+  return data.Result ?? {};
+};
+
+const parseArkAfpUsage = (payload: unknown): QuotaWindow[] => {
+  const root = payload as {
+    PlanType?: string;
+    AFPFiveHour?: { Quota?: number; Used?: number; ResetTime?: number };
+    AFPDaily?: { Quota?: number; Used?: number; ResetTime?: number };
+    AFPWeekly?: { Quota?: number; Used?: number; ResetTime?: number };
+    AFPMonthly?: { Quota?: number; Used?: number; ResetTime?: number };
+  };
+
+  const window = (
+    label: string,
+    data: { Quota?: number; Used?: number; ResetTime?: number } | undefined,
+  ): QuotaWindow | undefined => {
+    if (!data) return undefined;
+    const quota = Number(data.Quota);
+    const used = Number(data.Used);
+    const resetsAt = Number(data.ResetTime);
+    if (!Number.isFinite(quota) || !Number.isFinite(used)) return undefined;
+    return {
+      label,
+      utilization: quota > 0 ? clamp01(used / quota) : 0,
+      resetsAt: Number.isFinite(resetsAt) ? resetsAt : 0,
+      used,
+      limit: quota,
+      unit: "AFP",
+    };
+  };
+
+  const windows: QuotaWindow[] = [];
+  const fiveHour = window("5h", root.AFPFiveHour);
+  if (fiveHour) windows.push(fiveHour);
+  const daily = window("Daily", root.AFPDaily);
+  if (daily) windows.push(daily);
+  const weekly = window("Weekly", root.AFPWeekly);
+  if (weekly) windows.push(weekly);
+  const monthly = window("Monthly", root.AFPMonthly);
+  if (monthly) windows.push(monthly);
+
+  if (windows.length === 0) throw new Error("GetAFPUsage response has no window data");
+  return windows;
+};
+
 const parseOpenAiUsage = (payload: unknown): QuotaWindow[] => {
   const root = payload as {
     subscription?: {
@@ -196,6 +385,13 @@ const parseOpenAiUsage = (payload: unknown): QuotaWindow[] => {
 };
 
 const adapters: QuotaAdapter[] = [
+  {
+    name: "Ark Agent Plan",
+    providerIds: ["ark-agent-plan"],
+    path: "/",
+    parse: parseArkAfpUsage,
+    fetch: (adapter) => fetchVolcengine("GetAFPUsage", {}),
+  },
   {
     name: "MiniMax",
     providerIds: ["minimax-cn"],
@@ -321,3 +517,6 @@ export const getProviderQuota = (providerId: string, session: AgentSession): Pro
 };
 
 export const clearQuotaCache = () => cache.clear();
+
+// ─── Test helpers (exported for unit tests only) ──────────────────────
+export { parseArkAfpUsage };
