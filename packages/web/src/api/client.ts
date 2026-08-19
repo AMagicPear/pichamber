@@ -14,6 +14,7 @@ import type {
   PiBuiltinExtension,
   PiExtensionSource,
   PiProviderSettings,
+  ExtensionsOverview,
   PtyStartOptions,
   PtyStartResult,
   SearchResult,
@@ -226,3 +227,9 @@ export const setPiBuiltinExtension = (sessionId: string, id: string, install: bo
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ install }),
   }).then((r) => jsonOrThrow<{ builtins: PiBuiltinExtension[] }>(r));
+
+/** Unified snapshot: pichamber built-ins + Pi package sources + currently loaded extensions. */
+export const fetchPiExtensionsOverview = (sessionId: string) =>
+  fetch(`${BASE}/pi/extensions/overview?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
+    jsonOrThrow<ExtensionsOverview>(r),
+  );

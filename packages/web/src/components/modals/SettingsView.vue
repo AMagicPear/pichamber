@@ -36,8 +36,7 @@ import PiProvidersSettings from "@/components/modals/PiProvidersSettings.vue";
 import SettingsGroup from "@/components/modals/SettingsGroup.vue";
 import SettingsOption from "@/components/modals/SettingsOption.vue";
 import SettingsPageHeader from "@/components/modals/SettingsPageHeader.vue";
-import PiExtensionSources from "@/components/modals/PiExtensionSources.vue";
-import PiBuiltinExtensions from "@/components/modals/PiBuiltinExtensions.vue";
+import ExtensionsManager from "@/components/modals/ExtensionsManager.vue";
 
 defineOptions({ name: "SettingsView" });
 
@@ -237,39 +236,8 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
           </template>
 
           <template v-else-if="activeKey === 'extensions'">
-            <SettingsPageHeader title="Extensions" description="Resources loaded by Pi for the active session." />
-
-            <div v-if="resources.diagnostics.length" class="extension-diagnostics">
-              <article v-for="diagnostic in resources.diagnostics" :key="`${diagnostic.path}:${diagnostic.error}`">
-                <strong>{{ diagnostic.path }}</strong>
-                <span>{{ diagnostic.error }}</span>
-              </article>
-            </div>
-
-            <div v-if="!resources.extensionInventoryAvailable" class="extension-empty">
-              This Pi runtime does not expose its extension inventory.
-            </div>
-            <div v-else-if="resources.extensions.length" class="extension-list">
-              <article v-for="extension in resources.extensions" :key="extension.path" class="extension-card">
-                <header>
-                  <div>
-                    <strong>{{ extension.sourceInfo.source }}</strong>
-                    <span>{{ extension.sourceInfo.scope }}</span>
-                  </div>
-                  <small :title="extension.path">{{ extension.path }}</small>
-                </header>
-                <div v-if="extension.commands.length || extension.tools.length" class="extension-card__resources">
-                  <span v-for="command in extension.commands" :key="`command:${command}`">/{{ command }}</span>
-                  <span v-for="tool in extension.tools" :key="`tool:${tool}`">{{ tool }}</span>
-                </div>
-                <p v-else>No commands or tools registered.</p>
-              </article>
-            </div>
-            <div v-else class="extension-empty">
-              No extensions are loaded for this session.
-            </div>
-            <PiBuiltinExtensions />
-            <PiExtensionSources />
+            <SettingsPageHeader title="Extensions" description="Built-ins pichamber ships, package sources Pi was told to load, and what ended up loaded for this session." />
+            <ExtensionsManager />
           </template>
 
           <PiProvidersSettings v-else-if="activeKey === 'providers'" />
@@ -470,59 +438,6 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
 .theme-options__preview.is-system::before { background: linear-gradient(135deg, #efede7 0 49.5%, #2a2a27 50%); }
 .theme-options__preview.is-system i { background: linear-gradient(135deg, #d5d1c8 0 49.5%, #565550 50%); }
 @media (max-width: 700px) { .theme-options { grid-template-columns: 1fr; } }
-.extension-diagnostics,
-.extension-list {
-  display: grid;
-  max-width: 720px;
-  gap: 8px;
-}
-.extension-diagnostics { margin-bottom: 16px; }
-.extension-diagnostics article {
-  display: grid;
-  gap: 3px;
-  padding: 10px 12px;
-  border-left: 3px solid var(--ui-error-strong);
-  border-radius: 4px;
-  background: var(--ui-error-bg);
-  color: var(--ui-error-fg);
-  font-size: 12px;
-}
-.extension-diagnostics strong { overflow-wrap: anywhere; font-weight: 600; }
-.extension-card {
-  display: grid;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 7px;
-}
-.extension-card header {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.extension-card header div { display: flex; align-items: center; gap: 7px; }
-.extension-card header strong { font-size: 13px; font-weight: 600; }
-.extension-card header span,
-.extension-card header small {
-  color: var(--ui-text-muted);
-  font-size: 11px;
-}
-.extension-card header span { padding: 2px 5px; border-radius: 4px; background: var(--ui-surface-selected); }
-.extension-card header small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.extension-card__resources { display: flex; flex-wrap: wrap; gap: 5px; }
-.extension-card__resources span {
-  padding: 3px 6px;
-  border-radius: 4px;
-  background: var(--ui-extension-bg);
-  color: var(--ui-extension-fg);
-  font-family: var(--ui-font-mono);
-  font-size: 11px;
-}
-.extension-card p,
-.extension-empty { margin: 0; color: var(--ui-text-muted); font-size: 12px; }
-.extension-empty { max-width: 720px; padding: 20px 0; border-top: 1px solid var(--ui-border-subtle); }
 
 .settings-option--inline :deep(input[type="text"]) {
   flex: 1 1 280px;

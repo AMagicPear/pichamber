@@ -38,6 +38,7 @@ import {
   saveServerSettings,
   type ServerSettings,
 } from "./settings/server-settings";
+import type { ExtensionsOverview, LoadedExtensionInfo } from "@pichamber/shared";
 import {
   getPiBehaviorSettings,
   listPiProviders,
@@ -53,6 +54,7 @@ import {
 import {
   getBuiltinExtension,
   installBuiltinExtension,
+  installedExtensionPath,
   listBuiltinExtensions,
   removeBuiltinExtension,
 } from "./extensions/builtin-extensions";
@@ -309,6 +311,47 @@ const server = Bun.serve({
           if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
           const sources = await removePiExtensionSource(result.session, cwd, body.source.trim(), body.scope === "project");
           return Response.json({ sources });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/extensions/overview": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        try {
+          const runtime = await getSession(sessionId);
+          if (!runtime) return Response.json({ error: "session not found" }, { status: 404 });
+          const cwd = await getSessionCwd(sessionId);
+          if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
+          const resources = await runtime.getResources();
+          const sources = runtime.agentSession
+            ? listPiExtensionSources(runtime.agentSession, cwd)
+            : [];
+          const overview: ExtensionsOverview = {
+            builtins: listBuiltinExtensions(),
+            sources,
+            loaded: resources.extensions.map((e) => {
+              const entry: LoadedExtensionInfo = {
+                path: e.path,
+                source: e.sourceInfo.source,
+                scope: e.sourceInfo.scope,
+                origin: e.sourceInfo.origin,
+                commands: e.commands,
+                tools: e.tools,
+              };
+              // Mark the entry if it lives inside a pichamber built-in's install folder.
+              const builtinMatch = listBuiltinExtensions().find(
+                (b) => e.path === installedExtensionPath(b.id) || e.path.startsWith(`${installedExtensionPath(b.id)}/`),
+              );
+              if (builtinMatch) entry.builtinId = builtinMatch.id;
+              return entry;
+            }),
+            diagnostics: resources.diagnostics,
+            inventoryAvailable: resources.extensionInventoryAvailable,
+          };
+          return Response.json(overview);
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 400 });
         }

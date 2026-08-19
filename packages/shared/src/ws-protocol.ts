@@ -224,6 +224,31 @@ export type PiBuiltinExtension = {
   installed: boolean;
 };
 
+/** A single extension that the active Pi runtime currently loaded for this session. */
+export type LoadedExtensionInfo = {
+  /** Absolute path to the extension file or its package directory. */
+  path: string;
+  /** Origin label: the source string (e.g. `npm:foo`, a git URL, or a local path). */
+  source: string;
+  scope: "user" | "project" | "temporary";
+  origin: "package" | "top-level";
+  commands: string[];
+  tools: string[];
+  /** When this loaded entry is one of pichamber's built-ins, its id (e.g. `ark-agent-plan`). */
+  builtinId?: string;
+};
+
+/** Unified snapshot of all extension state for one session: built-ins pichamber ships, package
+ *  sources Pi was told to load, the extensions that ended up loaded, and any load errors. */
+export type ExtensionsOverview = {
+  builtins: PiBuiltinExtension[];
+  sources: PiExtensionSource[];
+  loaded: LoadedExtensionInfo[];
+  diagnostics: Array<{ path: string; error: string }>;
+  /** False when the active runtime cannot enumerate extension inventory (e.g. external RPC). */
+  inventoryAvailable: boolean;
+};
+
 export type ThinkingState = {
   level: ThinkingLevel;
   /** Levels the current model accepts. The server re-evaluates on model change. */
