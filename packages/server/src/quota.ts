@@ -178,16 +178,26 @@ const parseMoonshot = (payload: unknown, currency = "USD"): QuotaWindow[] =>
 
 // ─── Volcengine Ark Agent Plan (HMAC-SHA256 signed) ──────────────────
 //
-// 火山方舟管控面 API 使用火山引擎统一签名算法 (HMAC-SHA256, AWS SigV4 风格)。
-// GetAFPUsage 返回 5h / Daily / Weekly / Monthly 四个 AFP 额度窗口。
+// 火山方舟管控面 API 使用火山引擎签名算法（AWS SigV4 的火山变体）。
+// GetAFPUsage 返回 5h / Weekly / Monthly 三个 AFP 额度窗口（AFPDaily 被
+// 控制台隐藏，跳过）。
 //
-// AK/SK 通过环境变量 PICHAMBER_VOLC_ACCESS_KEY_ID / PICHAMBER_VOLC_SECRET_ACCESS_KEY 提供。
+// 两处与标准 SigV4 的致命差异（照 cc-switch / 官方 java demo）：
+//   1. canonical headers 与 SignedHeaders 用固定顺序
+//      `host;x-date;x-content-sha256;content-type`（不按字母序）；
+//   2. algorithm 串 `HMAC-SHA256`（无 AWS4 前缀）、credential scope 结尾
+//      `request`、签名密钥 kDate=HMAC(SK, date)（SK 不加 AWS4 前缀）。
+// canonical query 仍按 key 字母序；service=`ark`、POST、空 body。
+//
+// AK/SK 通过环境变量 VOLC_ACCESS_KEY_ID / VOLC_SECRET_ACCESS_KEY 提供。
 // 个人版套餐的推理 API Key（Bearer Token）无法调用管控面接口。
 
 const VOLC_SERVICE = "ark";
 const VOLC_REGION = "cn-beijing";
-const VOLC_HOST = "ark.cn-beijing.volces.com";
+const VOLC_HOST = "open.volcengineapi.com";
 const VOLC_VERSION = "2024-01-01";
+const VOLC_CONTENT_TYPE = "application/json; charset=utf-8";
+const VOLC_SIGNED_HEADERS = "host;x-date;x-content-sha256;content-type";
 
 const hex = (bytes: Uint8Array) =>
   Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -210,40 +220,59 @@ const hmacSha256 = async (key: Uint8Array, data: string): Promise<Uint8Array> =>
   return new Uint8Array(sig);
 };
 
-/** Volcengine HMAC-SHA256 signature (compatible with AWS SigV4). */
+const volcUriEncode = (input: string): string =>
+  encodeURIComponent(input)
+    .replace(/%7E/g, "~")
+    .replace(/%2F/g, "/")
+    .replace(/%3A/g, ":")
+    .replace(/%2C/g, ",")
+    .replace(/%5B/g, "[")
+    .replace(/%5D/g, "]");
+
+/** 构造按 key 字母序排序的 canonical query string（同签名与 URL）。 */
+const volcCanonicalQuery = (action: string, region: string): string => {
+  const pairs = [
+    ["Action", action],
+    ["Region", region],
+    ["Version", VOLC_VERSION],
+  ].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return pairs.map(([k, v]) => `${volcUriEncode(k)}=${volcUriEncode(v)}`).join("&");
+};
+
+/** Volcengine HMAC-SHA256 signature (SigV4 variant). */
 const volcSign = async (opts: {
   accessKeyId: string;
   secretAccessKey: string;
-  method: string;
-  path: string;
-  query: string;
-  host: string;
-  payload: string;
-  service: string;
   region: string;
+  canonicalQuery: string;
+  body: string;
   date: Date;
 }): Promise<{ authorization: string; xDate: string; xContentSha256: string }> => {
-  const { accessKeyId, secretAccessKey, method, path, query, host, payload, service, region, date } = opts;
+  const { accessKeyId, secretAccessKey, region, canonicalQuery, body, date } = opts;
 
   const pad = (n: number) => n.toString().padStart(2, "0");
-  const dateStr = `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}`;
-  const xDate = `${dateStr}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
+  const shortDate = `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}`;
+  const xDate = `${shortDate}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
 
-  const payloadHash = await sha256(payload);
+  const payloadHash = await sha256(body);
 
-  const canonicalHeaders = `host:${host}\nx-content-sha256:${payloadHash}\nx-date:${xDate}\n`;
-  const signedHeaders = "host;x-content-sha256;x-date";
+  // 火山特有固定顺序（不按字母序）。
+  const canonicalHeaders =
+    `host:${VOLC_HOST}\n` +
+    `x-date:${xDate}\n` +
+    `x-content-sha256:${payloadHash}\n` +
+    `content-type:${VOLC_CONTENT_TYPE}\n`;
 
   const canonicalRequest = [
-    method,
-    path,
-    query,
+    "POST",
+    "/",
+    canonicalQuery,
     canonicalHeaders,
-    signedHeaders,
+    VOLC_SIGNED_HEADERS,
     payloadHash,
   ].join("\n");
 
-  const credentialScope = `${dateStr}/${region}/${service}/request`;
+  const credentialScope = `${shortDate}/${region}/${VOLC_SERVICE}/request`;
   const stringToSign = [
     "HMAC-SHA256",
     xDate,
@@ -251,52 +280,49 @@ const volcSign = async (opts: {
     await sha256(canonicalRequest),
   ].join("\n");
 
-  const kDate = await hmacSha256(new TextEncoder().encode(secretAccessKey), dateStr);
+  const kDate = await hmacSha256(new TextEncoder().encode(secretAccessKey), shortDate);
   const kRegion = await hmacSha256(kDate, region);
-  const kService = await hmacSha256(kRegion, service);
+  const kService = await hmacSha256(kRegion, VOLC_SERVICE);
   const kSigning = await hmacSha256(kService, "request");
-  const signature = hex(new Uint8Array(await hmacSha256(kSigning, stringToSign)));
+  const signature = hex(await hmacSha256(kSigning, stringToSign));
 
-  const authorization = `HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+  const authorization =
+    `HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, ` +
+    `SignedHeaders=${VOLC_SIGNED_HEADERS}, Signature=${signature}`;
 
   return { authorization, xDate, xContentSha256: payloadHash };
 };
 
 const fetchVolcengine = async (
   action: string,
-  body: Record<string, unknown>,
 ): Promise<unknown> => {
-  const accessKeyId = process.env.PICHAMBER_VOLC_ACCESS_KEY_ID ?? process.env.VOLC_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.PICHAMBER_VOLC_SECRET_ACCESS_KEY ?? process.env.VOLC_SECRET_ACCESS_KEY;
+  const accessKeyId = process.env.VOLC_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.VOLC_SECRET_ACCESS_KEY;
   if (!accessKeyId || !secretAccessKey) {
-    throw new Error("Volcengine AK/SK not configured (set PICHAMBER_VOLC_ACCESS_KEY_ID / PICHAMBER_VOLC_SECRET_ACCESS_KEY)");
+    throw new Error("Volcengine AK/SK not configured (set VOLC_ACCESS_KEY_ID / VOLC_SECRET_ACCESS_KEY)");
   }
 
-  const query = `Action=${action}&Version=${VOLC_VERSION}`;
-  const payload = JSON.stringify(body);
+  const region = VOLC_REGION;
+  const canonicalQuery = volcCanonicalQuery(action, region);
 
   const { authorization, xDate, xContentSha256 } = await volcSign({
     accessKeyId,
     secretAccessKey,
-    method: "POST",
-    path: "/",
-    query,
-    host: VOLC_HOST,
-    payload,
-    service: VOLC_SERVICE,
-    region: VOLC_REGION,
+    region,
+    canonicalQuery,
+    body: "",
     date: new Date(),
   });
 
-  const response = await fetch(`https://${VOLC_HOST}/?${query}`, {
+  const response = await fetch(`https://${VOLC_HOST}/?${canonicalQuery}`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json; charset=UTF-8",
+      "Content-Type": VOLC_CONTENT_TYPE,
       "X-Date": xDate,
       "X-Content-Sha256": xContentSha256,
       Authorization: authorization,
     },
-    body: payload,
+    body: "",
   });
 
   if (!response.ok) {
@@ -315,7 +341,6 @@ const parseArkAfpUsage = (payload: unknown): QuotaWindow[] => {
   const root = payload as {
     PlanType?: string;
     AFPFiveHour?: { Quota?: number; Used?: number; ResetTime?: number };
-    AFPDaily?: { Quota?: number; Used?: number; ResetTime?: number };
     AFPWeekly?: { Quota?: number; Used?: number; ResetTime?: number };
     AFPMonthly?: { Quota?: number; Used?: number; ResetTime?: number };
   };
@@ -328,10 +353,10 @@ const parseArkAfpUsage = (payload: unknown): QuotaWindow[] => {
     const quota = Number(data.Quota);
     const used = Number(data.Used);
     const resetsAt = Number(data.ResetTime);
-    if (!Number.isFinite(quota) || !Number.isFinite(used)) return undefined;
+    if (!Number.isFinite(quota) || !Number.isFinite(used) || quota <= 0) return undefined;
     return {
       label,
-      utilization: quota > 0 ? clamp01(used / quota) : 0,
+      utilization: clamp01(used / quota),
       resetsAt: Number.isFinite(resetsAt) ? resetsAt : 0,
       used,
       limit: quota,
@@ -342,8 +367,6 @@ const parseArkAfpUsage = (payload: unknown): QuotaWindow[] => {
   const windows: QuotaWindow[] = [];
   const fiveHour = window("5h", root.AFPFiveHour);
   if (fiveHour) windows.push(fiveHour);
-  const daily = window("Daily", root.AFPDaily);
-  if (daily) windows.push(daily);
   const weekly = window("Weekly", root.AFPWeekly);
   if (weekly) windows.push(weekly);
   const monthly = window("Monthly", root.AFPMonthly);
@@ -390,7 +413,7 @@ const adapters: QuotaAdapter[] = [
     providerIds: ["ark-agent-plan"],
     path: "/",
     parse: parseArkAfpUsage,
-    fetch: (adapter) => fetchVolcengine("GetAFPUsage", {}),
+    fetch: (adapter) => fetchVolcengine("GetAFPUsage"),
   },
   {
     name: "MiniMax",

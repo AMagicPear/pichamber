@@ -24,29 +24,38 @@ describe("RPC quota providers", () => {
 });
 
 describe("parseArkAfpUsage", () => {
-  test("parses all four AFP windows", () => {
+  test("parses 5h / Weekly / Monthly, skipping AFPDaily", () => {
+    // 真实 GetAFPUsage 响应（实测 2026-08-19）：AFPDaily 被控制台隐藏，应跳过。
     const payload = {
-      PlanType: "Large",
-      AFPFiveHour: { Quota: 50.0, Used: 12.5, SubscribeTime: 1778788800000, ResetTime: 1778806800000 },
-      AFPDaily: { Quota: 100.0, Used: 22.5, SubscribeTime: 1778716800000, ResetTime: 1778803200000 },
-      AFPWeekly: { Quota: 500.0, Used: 150.0, SubscribeTime: 1778457600000, ResetTime: 1779062400000 },
-      AFPMonthly: { Quota: 2000.0, Used: 850.5, SubscribeTime: 1777939200000, ResetTime: 1780531200000 },
+      PlanType: "medium",
+      AFPFiveHour: { Quota: 10000, Used: 1665.9303, SubscribeTime: 1787113844000, ResetTime: 1787131844000 },
+      AFPDaily: { Quota: 50000, Used: 0, SubscribeTime: 1787068800000, ResetTime: 1787155200000 },
+      AFPWeekly: { Quota: 35000, Used: 1665.9303, SubscribeTime: 1786896000000, ResetTime: 1787500800000 },
+      AFPMonthly: { Quota: 100000, Used: 1665.9303, SubscribeTime: 1787113181000, ResetTime: 1789833599000 },
     };
     const windows = parseArkAfpUsage(payload);
-    expect(windows).toHaveLength(4);
+    expect(windows).toHaveLength(3);
     expect(windows[0]).toEqual({
       label: "5h",
-      utilization: 0.25,
-      resetsAt: 1778806800000,
-      used: 12.5,
-      limit: 50.0,
+      utilization: 1665.9303 / 10000,
+      resetsAt: 1787131844000,
+      used: 1665.9303,
+      limit: 10000,
       unit: "AFP",
     });
-    expect(windows[1].label).toBe("Daily");
-    expect(windows[1].utilization).toBeCloseTo(0.225);
-    expect(windows[2].label).toBe("Weekly");
-    expect(windows[3].label).toBe("Monthly");
-    expect(windows[3].used).toBe(850.5);
+    expect(windows[1].label).toBe("Weekly");
+    expect(windows[1].utilization).toBeCloseTo(1665.9303 / 35000);
+    expect(windows[2].label).toBe("Monthly");
+    expect(windows[2].used).toBe(1665.9303);
+  });
+
+  test("skips windows with zero or missing quota", () => {
+    const payload = {
+      AFPFiveHour: { Quota: 0, Used: 0 },
+      AFPWeekly: { Quota: 0, Used: 0 },
+      AFPMonthly: { Quota: 0, Used: 0 },
+    };
+    expect(() => parseArkAfpUsage(payload)).toThrow("no window data");
   });
 
   test("throws on empty response", () => {
