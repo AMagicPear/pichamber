@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { listQuotaProvidersForModels, parseArkAfpUsage } from "./quota";
+import { getProviderQuotaWithApiKey, listQuotaProvidersForModels, parseArkAfpUsage } from "./quota";
 
 describe("RPC quota providers", () => {
   test("lists only adapters with provider-id-only endpoint resolution", () => {
@@ -60,5 +60,32 @@ describe("parseArkAfpUsage", () => {
 
   test("throws on empty response", () => {
     expect(() => parseArkAfpUsage({})).toThrow("no window data");
+  });
+});
+
+describe("getProviderQuotaWithApiKey", () => {
+  test("adapters with a custom fetch do not block on a missing Bearer apiKey", async () => {
+    // ark-agent-plan has adapter.fetch = fetchVolcengine (HMAC, not Bearer).
+    // Without VOLC_ACCESS_KEY_ID set, the custom fetcher surfaces its own
+    // error instead of the generic "No API key configured" early return.
+    const prevAk = process.env.VOLC_ACCESS_KEY_ID;
+    const prevSk = process.env.VOLC_SECRET_ACCESS_KEY;
+    delete process.env.VOLC_ACCESS_KEY_ID;
+    delete process.env.VOLC_SECRET_ACCESS_KEY;
+    try {
+      const result = await getProviderQuotaWithApiKey("ark-agent-plan", "");
+      expect(result.provider).toBe("ark-agent-plan");
+      // Either an error from the missing AK/SK, or a successful fetch -- but
+      // never the generic "No API key configured for ..." early return.
+      expect(result.error ?? "").not.toStartWith("No API key configured");
+    } finally {
+      if (prevAk !== undefined) process.env.VOLC_ACCESS_KEY_ID = prevAk;
+      if (prevSk !== undefined) process.env.VOLC_SECRET_ACCESS_KEY = prevSk;
+    }
+  });
+
+  test("Bearer adapters without an apiKey return the standard no-key error", async () => {
+    const result = await getProviderQuotaWithApiKey("deepseek", undefined);
+    expect(result.error).toStartWith("No API key configured");
   });
 });

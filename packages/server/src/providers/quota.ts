@@ -511,28 +511,37 @@ export const getProviderQuotaWithApiKey = (
       fetchedAt: nowMs(),
     });
   }
-  if (!apiKey) return Promise.resolve(noApiKey(providerId));
+  // Adapters with a custom `fetch` handle their own auth (e.g. Volcengine
+  // HMAC-SHA256 signed requests), so an empty apiKey is fine for them.
+  if (!apiKey && !adapter.fetch) return Promise.resolve(noApiKey(providerId));
   const resolvedBaseUrl =
     typeof adapter.baseUrl === "function"
       ? adapter.baseUrl()
       : (adapter.baseUrl ?? baseUrl);
-  if (!resolvedBaseUrl) {
+  if (!resolvedBaseUrl && !adapter.fetch) {
     return Promise.resolve({
       provider: providerId,
       error: `Provider ${providerId} has no baseUrl`,
       fetchedAt: nowMs(),
     });
   }
-  return fetchQuota(adapter, providerId, resolvedBaseUrl, apiKey, cacheScope);
+  return fetchQuota(adapter, providerId, resolvedBaseUrl ?? "", apiKey ?? "", cacheScope);
 };
 
 export const getProviderQuota = (providerId: string, session: AgentSession): Promise<ProviderQuota> => {
   return (async () => {
-    const apiKey = (await session.modelRuntime.getAuth(providerId))?.auth.apiKey;
+    const apiType = providerApiType(session, providerId);
+    const adapter = matchAdapter(providerId, apiType);
+    // Adapters with a custom `fetch` handle their own auth (e.g. Volcengine
+    // HMAC-SHA256) — don't block on resolving the provider's Bearer apiKey,
+    // which is a separate concern and may legitimately be unset.
+    const apiKey = adapter?.fetch
+      ? ""
+      : (await session.modelRuntime.getAuth(providerId))?.auth.apiKey;
     return getProviderQuotaWithApiKey(
       providerId,
       apiKey,
-      providerApiType(session, providerId),
+      apiType,
       providerBaseUrl(session, providerId),
       session.sessionId,
     );
