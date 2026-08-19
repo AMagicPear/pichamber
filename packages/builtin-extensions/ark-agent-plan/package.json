@@ -1,0 +1,14 @@
+{
+  "name": "@pichamber/builtin-ark-agent-plan",
+  "version": "0.1.0",
+  "description": "Registers Volcengine Ark Agent Plan as a pi provider (dynamic model list via ListArkAgentPlanModel).",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

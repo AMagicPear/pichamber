@@ -11,6 +11,7 @@ import type {
   ProviderQuota,
   ProviderDescriptor,
   PiBehaviorSettings,
+  PiBuiltinExtension,
   PiExtensionSource,
   PiProviderSettings,
   PtyStartOptions,
@@ -213,3 +214,15 @@ export const removePiExtensionSource = (
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source, scope }),
   }).then((r) => jsonOrThrow<{ sources: PiExtensionSource[] }>(r));
+
+export const fetchPiBuiltinExtensions = () =>
+  fetch(`${BASE}/pi/extensions/builtins`).then((r) =>
+    jsonOrThrow<{ builtins: PiBuiltinExtension[] }>(r),
+  );
+
+export const setPiBuiltinExtension = (sessionId: string, id: string, install: boolean) =>
+  fetch(`${BASE}/pi/extensions/builtins/${encodeURIComponent(id)}?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ install }),
+  }).then((r) => jsonOrThrow<{ builtins: PiBuiltinExtension[] }>(r));

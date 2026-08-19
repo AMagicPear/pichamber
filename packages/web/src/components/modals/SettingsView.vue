@@ -37,6 +37,7 @@ import SettingsGroup from "@/components/modals/SettingsGroup.vue";
 import SettingsOption from "@/components/modals/SettingsOption.vue";
 import SettingsPageHeader from "@/components/modals/SettingsPageHeader.vue";
 import PiExtensionSources from "@/components/modals/PiExtensionSources.vue";
+import PiBuiltinExtensions from "@/components/modals/PiBuiltinExtensions.vue";
 
 defineOptions({ name: "SettingsView" });
 
@@ -267,6 +268,7 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
             <div v-else class="extension-empty">
               No extensions are loaded for this session.
             </div>
+            <PiBuiltinExtensions />
             <PiExtensionSources />
           </template>
 

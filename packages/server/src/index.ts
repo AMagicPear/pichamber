@@ -50,6 +50,12 @@ import {
   listPiExtensionSources,
   removePiExtensionSource,
 } from "./pi-extensions";
+import {
+  getBuiltinExtension,
+  installBuiltinExtension,
+  listBuiltinExtensions,
+  removeBuiltinExtension,
+} from "./builtin-extensions";
 
 const hostname = process.env.PICHAMBER_HOST || "127.0.0.1";
 const configuredPort = Number(process.env.PICHAMBER_PORT || 3000);
@@ -327,6 +333,34 @@ const server = Bun.serve({
           if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
           const sources = await removePiExtensionSource(result.session, cwd, body.source.trim(), body.scope === "project");
           return Response.json({ sources });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/extensions/builtins": {
+      GET: () => Response.json({ builtins: listBuiltinExtensions() }),
+    },
+    "/api/pi/extensions/builtins/:id": {
+      PUT: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        const body = (await req.json().catch(() => ({}))) as { install?: unknown };
+        if (typeof body.install !== "boolean") {
+          return Response.json({ error: "install (boolean) required" }, { status: 400 });
+        }
+        try {
+          const def = getBuiltinExtension(req.params.id);
+          if (body.install) installBuiltinExtension(def);
+          else removeBuiltinExtension(def);
+
+          // 配置后重新加载当前 SDK 会话，让新扩展立即生效并刷新资源快照。
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) {
+            return Response.json({ builtins: listBuiltinExtensions() });
+          }
+          await result.session.reload();
+          return Response.json({ builtins: listBuiltinExtensions() });
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 400 });
         }

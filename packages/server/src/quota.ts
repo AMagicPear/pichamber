@@ -413,7 +413,7 @@ const adapters: QuotaAdapter[] = [
     providerIds: ["ark-agent-plan"],
     path: "/",
     parse: parseArkAfpUsage,
-    fetch: (adapter) => fetchVolcengine("GetAFPUsage"),
+    fetch: (_adapter) => fetchVolcengine("GetAFPUsage"),
   },
   {
     name: "MiniMax",

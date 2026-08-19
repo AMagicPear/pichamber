@@ -214,6 +214,16 @@ export type PiExtensionSource = {
   installedPath?: string;
 };
 
+/** One pichamber-shipped built-in extension (e.g. Ark Agent Plan). */
+export type PiBuiltinExtension = {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  /** Whether its folder currently exists under `~/.pi/agent/extensions/`. */
+  installed: boolean;
+};
+
 export type ThinkingState = {
   level: ThinkingLevel;
   /** Levels the current model accepts. The server re-evaluates on model change. */
