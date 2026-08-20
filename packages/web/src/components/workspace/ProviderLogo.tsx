@@ -1,5 +1,5 @@
 import { computed, defineComponent, h, ref, watch, type PropType } from "vue";
-import BrainAi3Icon from "@/assets/icons/BrainAi3.svg";
+import fallbackLogo from "@/assets/provider-logos/fallback.svg?url";
 
 type LogoState = "local" | "remote" | "none";
 
@@ -87,6 +87,9 @@ export default defineComponent({
     });
     const localSrc = computed(() => localSourceFor(props.providerId, props.modelId));
     const remoteId = computed(() => candidates.value[0] ?? null);
+    // Never pull the provider's logo remotely unless it couldn't be found
+    // in the bundled set; when all resolution fails, show the bundled
+    // models.dev fallback mark instead of a generic brain icon.
     const state = ref<LogoState>(localSrc.value ? "local" : remoteId.value ? "remote" : "none");
 
     watch(
@@ -103,29 +106,21 @@ export default defineComponent({
     const src = computed(() => {
       if (state.value === "local") return localSrc.value;
       if (state.value === "remote" && remoteId.value) return `https://models.dev/logos/${remoteId.value}.svg`;
-      return null;
+      return fallbackLogo;
     });
 
     return () =>
-      src.value
-        ? h("img", {
-            src: src.value,
-            alt: props.alt || `${props.providerId} logo`,
-            class: ["provider-logo", "provider-logo--image", props.class],
-            width: props.size,
-            height: props.size,
-            style: { display: "block", objectFit: "contain" },
-            loading: "eager",
-            decoding: "async",
-            draggable: false,
-            onError,
-          })
-        : h(BrainAi3Icon, {
-            class: ["provider-logo", "provider-logo--fallback", props.class],
-            width: props.size,
-            height: props.size,
-            style: { display: "block" },
-            "aria-label": props.alt || `${props.providerId || "model"} logo`,
-          });
+      h("img", {
+        src: src.value,
+        alt: props.alt || `${props.providerId || "model"} logo`,
+        class: ["provider-logo", "provider-logo--image", props.class],
+        width: props.size,
+        height: props.size,
+        style: { display: "block", objectFit: "contain" },
+        loading: "eager",
+        decoding: "async",
+        draggable: false,
+        onError,
+      });
   },
 });
