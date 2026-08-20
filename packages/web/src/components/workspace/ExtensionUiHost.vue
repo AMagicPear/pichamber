@@ -169,7 +169,7 @@ const confirm = (confirmed: boolean) => {
   background: var(--ui-surface);
 }
 .extension-dialog input:focus,
-.extension-dialog textarea:focus { border-color: #9eabb9; box-shadow: 0 0 0 2px rgb(91 119 149 / 12%); }
+.extension-dialog textarea:focus { border-color: var(--ui-border-focus); box-shadow: 0 0 0 2px rgb(168 146 116 / 12%); }
 .extension-dialog__options { display: grid; gap: 3px; }
 .extension-dialog__options button {
   min-height: 31px;

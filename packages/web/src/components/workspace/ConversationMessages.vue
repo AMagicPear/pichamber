@@ -302,11 +302,11 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
    pane doesn't relayout everything. Cheap, native, no height bookkeeping;
    expanded tool details survive remounts, which is a free bonus. */
 .conversation-message { width: 100%; max-width: var(--conversation-content-width); min-width: 0; margin: 0 auto; padding: 0 clamp(12px, 2.5vw, var(--conversation-inline-gutter)); color: var(--ui-text); content-visibility: auto; contain-intrinsic-size: auto 96px; }
-.conversation-message + .conversation-message { margin-top: 28px; }
+.conversation-message + .conversation-message { margin-top: 24px; }
 .conversation-message--assistant + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }
-.conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
-.conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
+.conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 24px; }
+.conversation-message--assistant-error + .conversation-message { margin-top: 24px; }
 
 /* User-side timestamp footer: tucked to the right edge under the
  * right-anchored bubble so it reads as a quiet metadata note, not

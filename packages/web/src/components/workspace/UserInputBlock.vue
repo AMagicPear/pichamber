@@ -460,7 +460,7 @@ const placeholder = computed(() => {
   color: var(--ui-text-muted);
   font-size: 11px;
 }
-.composer__queue > div span { color: #4f6478; font-weight: 600; }
+.composer__queue > div span { color: var(--ui-status-text); font-weight: 600; }
 .composer__queue > div p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .composer__queue > button {
   justify-self: end;
@@ -543,7 +543,7 @@ const placeholder = computed(() => {
 }
 .composer__mode button.is-active {
   background: var(--ui-surface);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+  box-shadow: var(--ui-shadow-control);
   color: var(--ui-text-strong);
 }
 

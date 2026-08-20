@@ -242,7 +242,7 @@ export default defineComponent({
   color: var(--ui-text-strong);
 }
 .file-tree__search-clear:focus-visible {
-  outline: 2px solid #3978d4;
+  outline: 2px solid var(--ui-focus);
   outline-offset: 1px;
 }
 .file-tree__search-clear svg {

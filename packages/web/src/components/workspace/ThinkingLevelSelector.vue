@@ -70,8 +70,8 @@ const onSelect = (next: ThinkingLevel) => {
       :open="open"
       :style="{
         ...style,
-        '--menu-item-active-bg': 'rgb(113 141 40 / 14%)',
-        '--menu-item-active-color': '#4f631c',
+        '--menu-item-active-bg': 'var(--ui-accent-soft)',
+        '--menu-item-active-color': 'var(--ui-accent-text)',
       }"
       role="listbox"
     >
@@ -109,16 +109,20 @@ const onSelect = (next: ThinkingLevel) => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--ui-text-muted);
+  color: var(--ui-thinking-text);
   font: inherit;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard);
+  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard), color var(--ui-duration-fast) var(--ui-ease-standard);
 }
 .thinking-selector__trigger:hover {
   background: var(--ui-surface-hover);
   color: var(--ui-text-strong);
+}
+.thinking-selector__trigger[aria-expanded="true"] {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
 }
 .thinking-selector__icon {
   width: 15px;

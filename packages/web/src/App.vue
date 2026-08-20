@@ -96,8 +96,8 @@ const rightPanel = computed(() => ({
   --ui-border-focus: #bcb8ae;
   --ui-primary: #35332f;
   --ui-primary-hover: #242320;
-  --ui-extension-bg: #e8edf4;
-  --ui-extension-fg: #455c79;
+  --ui-extension-bg: #eee9df;
+  --ui-extension-fg: #6e604f;
   --ui-skill-bg: #e8f0e7;
   --ui-skill-fg: #476548;
   --ui-prompt-bg: #f2eade;
@@ -112,8 +112,12 @@ const rightPanel = computed(() => ({
   --ui-error-strong: #a83838;
   --ui-error-hover: rgb(168 56 56 / 12%);
   --ui-overlay: rgb(0 0 0 / 45%);
-  --ui-focus: #3978d4;
+  --ui-focus: #a89274;
   --ui-panel-active: #8a735b;
+  --ui-accent-soft: rgb(168 146 116 / 16%);
+  --ui-accent-text: #765f45;
+  --ui-status-text: #8a735b;
+  --ui-thinking-text: #8a8062;
   --ui-shadow-raised: 0 8px 24px rgb(35 32 27 / 10%);
   --ui-shadow-control: 0 1px 2px rgb(36 33 28 / 18%);
   --ui-duration-fast: 120ms;
@@ -136,8 +140,8 @@ const rightPanel = computed(() => ({
   --ui-border-focus: #67645d;
   --ui-primary: #e6e2da;
   --ui-primary-hover: #f5f2ec;
-  --ui-extension-bg: #252b31;
-  --ui-extension-fg: #8996a3;
+  --ui-extension-bg: #302d28;
+  --ui-extension-fg: #b4a58f;
   --ui-skill-bg: #252e27;
   --ui-skill-fg: #879b88;
   --ui-prompt-bg: #302a23;
@@ -152,8 +156,12 @@ const rightPanel = computed(() => ({
   --ui-error-strong: #e0aaaa;
   --ui-error-hover: rgb(224 170 170 / 10%);
   --ui-overlay: rgb(0 0 0 / 62%);
-  --ui-focus: #78a9ed;
+  --ui-focus: #c4aa88;
   --ui-panel-active: #c4aa88;
+  --ui-accent-soft: rgb(196 170 136 / 18%);
+  --ui-accent-text: #d2b991;
+  --ui-status-text: #c4aa88;
+  --ui-thinking-text: #b9aa7b;
   --ui-shadow-raised: 0 10px 28px rgb(0 0 0 / 32%);
   --ui-shadow-control: 0 1px 2px rgb(0 0 0 / 28%);
 }

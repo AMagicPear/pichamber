@@ -764,7 +764,7 @@ watch(() => workspace.cwd, () => {
 }
 
 .git-pane__row.is-staged .git-pane__stage-toggle {
-  color: #3978d4;
+  color: var(--ui-focus);
 }
 
 .git-pane__file {
@@ -777,7 +777,7 @@ watch(() => workspace.cwd, () => {
 .git-pane__file:focus-visible,
 .git-pane__stage-toggle:focus-visible,
 .git-pane__discard:focus-visible {
-  outline: 2px solid #3978d4;
+  outline: 2px solid var(--ui-focus);
   outline-offset: -2px;
 }
 

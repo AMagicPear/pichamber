@@ -8,7 +8,7 @@
  * applied to slot content. Open state and fixed-position math live in
  * `usePopover`; the item's accent color can be overridden per menu via the
  * `--menu-item-active-bg` / `--menu-item-active-color` CSS custom
- * properties (defaults to the blue interactive color).
+ * properties (defaults to the warm theme accent).
  */
 defineProps<{
   open: boolean;
@@ -80,8 +80,8 @@ defineProps<{
   background: var(--ui-surface-hover);
 }
 .menu-panel :deep(.menu-item.is-active) {
-  background: var(--menu-item-active-bg, rgb(57 120 212 / 12%));
-  color: var(--menu-item-active-color, #1f3a6b);
+  background: var(--menu-item-active-bg, var(--ui-accent-soft));
+  color: var(--menu-item-active-color, var(--ui-accent-text));
 }
 .menu-panel :deep(.menu-item:focus-visible) {
   outline: 2px solid var(--ui-focus);

@@ -110,11 +110,11 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
 .conversation-message__details + .conversation-message__content {
   margin-top: 12px;
 }
-.conversation-message__content + .conversation-message__details {
-  margin-top: 12px;
-}
 .conversation-message__content :deep(.conversation-code-block) {
   margin-block: 12px;
+}
+.conversation-message__content {
+  --ms-flow-paragraph-y: 0px;
 }
 
 /* Error variant: red accent on the model name and the message so failed

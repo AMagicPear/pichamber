@@ -247,7 +247,7 @@ onMounted(load);
 .extension-manager__active-row header small { flex-shrink: 0; }
 .extension-manager__path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .extension-manager__resources { display: flex; flex-wrap: wrap; gap: 4px; }
-.extension-manager__resources code { padding: 2px 5px; border-radius: 4px; background: var(--ui-extension-bg, var(--ui-surface-selected)); color: var(--ui-extension-fg, var(--ui-text-muted)); font-size: 10px; overflow-wrap: anywhere; }
+.extension-manager__resources code { padding: 2px 5px; border-radius: 4px; background: var(--ui-accent-soft); color: var(--ui-accent-text); font-size: 10px; overflow-wrap: anywhere; }
 .extension-manager__add { display: flex; align-items: center; gap: 5px; }
 .extension-manager__add input { width: 220px; min-width: 0; }
 .extension-manager__add select { min-width: 82px !important; }
