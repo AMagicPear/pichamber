@@ -13,13 +13,13 @@ import ProviderQuotaPanel from "@/components/workspace/ProviderQuotaPanel.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { usePopover } from "@/composables/usePopover";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
-import { computed, onMounted, ref, watch } from "vue";
-import { getGitStatus } from "@/api/client";
+import { computed, onMounted, ref } from "vue";
+import { activeGitBranch, loadGitBranch } from "@/stores/git";
 import { ui } from "@/stores/ui";
 import { workspace } from "@/stores/workspace";
 
 const { availableModels } = useConversationSession();
-const gitBranch = ref<string | null>(null);
+const gitBranch = activeGitBranch;
 
 /** At least one quoted provider is configured when the Pi SDK reports a
  *  provider that the server registry also supports. Loads the supported
@@ -33,11 +33,6 @@ onMounted(() => {
   void loadQuotaProviders();
   void loadGitBranch();
 });
-
-const loadGitBranch = async () => {
-  gitBranch.value = (await getGitStatus(workspace.sessionId).catch(() => null))?.branch ?? null;
-};
-watch(() => [workspace.sessionId, workspace.cwd], loadGitBranch);
 
 const root = ref<HTMLElement | null>(null);
 const { open, style, toggle } = usePopover({

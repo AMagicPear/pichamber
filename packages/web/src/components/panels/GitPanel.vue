@@ -38,6 +38,7 @@ import FilePathLabel from "@/components/FilePathLabel.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 import { workspace } from "@/stores/workspace";
+import { setGitBranch } from "@/stores/git";
 
 type SyncKind = "pull" | "push" | "stash" | "stash-pop" | "stash-drop" | "init" | "checkout";
 
@@ -100,6 +101,7 @@ const loadStatus = async (): Promise<void> => {
   try {
     const next = await getGitStatus(workspace.sessionId);
     status.value = next;
+    setGitBranch(next.branch);
     statusError.value = null;
     if (selected.value) {
       const match = next.changes.find((c) => c.path === selected.value?.path);
@@ -222,6 +224,7 @@ const runSync = async <T>(kind: SyncKind, op: () => Promise<T>): Promise<T | und
 const doInit = () =>
   runSync("init", () => initGitRepo(workspace.sessionId).then((next) => {
     status.value = next;
+    setGitBranch(next.branch);
     void loadBranches();
     void loadStashes();
   }));
