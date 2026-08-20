@@ -25,10 +25,10 @@ onMounted(async () => {
       <div class="about">
         <AppLogo :width="64" :height="64" />
         <div class="about__titles">
-          <h2>pichamber</h2>
+          <h2>Pi Chamber</h2>
           <div class="about__meta">
-            <p>pichamber version {{ APP_VERSION }}</p>
-            <p v-if="piVersion">pi version {{ piVersion }}</p>
+            <p>Pi Chamber v{{ APP_VERSION }}</p>
+            <p v-if="piVersion">Pi v{{ piVersion }}</p>
           </div>
         </div>
         <div class="about__links">
@@ -41,7 +41,7 @@ onMounted(async () => {
             <span>GitHub</span>
           </a>
         </div>
-        <p class="about__made-with">Made with love for the community</p>
+        <p class="about__made-with">Made by Perry with love for u 🧡</p>
         <IconButton class="about__close" label="Close" size="compact" @click="emit('close')">
           <CloseIcon />
         </IconButton>
