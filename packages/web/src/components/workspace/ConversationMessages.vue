@@ -308,9 +308,12 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
 .conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
 
-/* Per-message timestamp footer. Right-aligned under user bubbles, left-
-   aligned under assistant/tool responses. Color tracks the muted footer
-   vocabulary so it reads as metadata, not content. */
+/* Per-message timestamp footer. Tucked to the right/trailing edge so
+ * both user and assistant timestamps share one alignment — it reads as
+ * a quiet metadata note under the message, not content. Color tracks the
+ * muted footer vocabulary. The user override below right-aligns under
+ * the right-anchored bubble; assistant rows pick up text-align:right in
+ * AssistantMessage.vue alongside the same rule. */
 .conversation-message__timestamp {
   margin: 6px 0 0;
   color: var(--ui-text-muted);

@@ -145,12 +145,15 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
 }
 
 /* Timestamp footer lives under both committed and error variants so
- * timestamps align with the message body, not the author line. The same
- * rule in ConversationMessages.vue styles user-side timestamps. */
+ * timestamps align with the message body, not the author line. Right-
+ * aligned so it tucks to the trailing edge, matching the user-side
+ * timestamp rule in ConversationMessages.vue — one consistent edge for
+ * the whole thread instead of alternating sides. */
 .conversation-message__timestamp {
   margin: 8px 0 0;
   color: var(--ui-text-muted);
   font-size: 11px;
   line-height: 1.4;
+  text-align: right;
 }
 </style>
