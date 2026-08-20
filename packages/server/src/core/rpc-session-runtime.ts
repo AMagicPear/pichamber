@@ -20,6 +20,7 @@ import { existsSync } from "node:fs";
 import {
   type AgentSessionEvent,
   type ExtensionUIContext,
+  type JsonAgentSessionEvent,
   type RpcExtensionUIRequest,
   type RpcExtensionUIResponse,
   type SessionEntry,
@@ -36,6 +37,7 @@ import {
 } from "./runtime";
 import { resolveExternalPi } from "../settings/server-settings";
 import { SessionManager as SessionManagerCtor } from "@earendil-works/pi-coding-agent";
+import { RpcMessageStream } from "./rpc-message-stream";
 
 type RpcPayload = Record<string, unknown> & { type: string };
 
@@ -94,6 +96,7 @@ class RpcProcessClient {
     { resolve: (value: RpcResponse) => void; reject: (reason: Error) => void }
   >();
   private eventListeners = new Set<(event: AgentSessionEvent) => void>();
+  private messageStream = new RpcMessageStream();
   private uiListeners = new Set<(request: RpcExtensionUIRequest) => void>();
   /** UI requests emitted before any listener subscribed (the subprocess
    *  emits status/widget calls during `bindExtensions`, which runs in
@@ -313,11 +316,10 @@ class RpcProcessClient {
       return;
     }
 
-    // Treat everything else as an event. RPC emits `message_update`
-    // with the cumulative `message` field preserved (only the inner
-    // `assistantMessageEvent.partial` snapshot is stripped, which the
-    // WS layer never reads). Forward the event as-is.
-    const event = data as AgentSessionEvent;
+    // RPC message_update frames are delta-only. Restore the cumulative
+    // AgentSessionEvent shape promised by SessionRuntime before forwarding.
+    const event = this.messageStream.normalize(data as JsonAgentSessionEvent);
+    if (!event) return;
     for (const listener of this.eventListeners) listener(event);
   }
 }

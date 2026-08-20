@@ -160,8 +160,8 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
   };
 };
 
-const modelNameFor = (message: Extract<LiveItem, { kind: "assistant" }>["message"]): string | undefined => {
-  if (message.role !== "assistant") return undefined;
+const modelNameFor = (message: Extract<LiveItem, { kind: "assistant" }>["message"] | undefined): string | undefined => {
+  if (message?.role !== "assistant") return undefined;
   const model = message as { provider?: unknown; model?: unknown };
   return modelDisplayName(props.availableModels, model.provider, model.model);
 };
@@ -265,7 +265,7 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
           <p v-if="props.showTimestamps" class="conversation-message__timestamp">{{ formatLocalTimestamp(item.message) }}</p>
         </article>
         <AssistantMessage
-          v-else-if="item.kind === 'assistant'"
+          v-else-if="item.kind === 'assistant' && item.message"
           :message="item.message"
           :final="item.phase === 'committed'"
           :model-name="modelNameFor(item.message)"

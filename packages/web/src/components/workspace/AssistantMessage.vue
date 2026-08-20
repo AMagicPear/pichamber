@@ -9,11 +9,11 @@ import ProviderLogo from "./ProviderLogo";
 import { inline, messageText, thinkingStreaming as thinkingStreamingOf, thinkingText } from "./messageContent";
 
 /** 从 AgentMessage union 里取 assistant 消息（pi-ai 类型带真实字段）。 */
-const asAssistant = (message: AgentMessage): AssistantMessage | undefined =>
-  message.role === "assistant" ? (message as AssistantMessage) : undefined;
+const asAssistant = (message: AgentMessage | undefined): AssistantMessage | undefined =>
+  message?.role === "assistant" ? (message as AssistantMessage) : undefined;
 
 const props = defineProps<{
-  message: AgentMessage;
+  message?: AgentMessage;
   /** False while the assistant is still streaming. */
   final?: boolean;
   /** Friendly model name resolved from the current model registry. */

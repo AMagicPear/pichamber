@@ -23,6 +23,7 @@ import type {
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
 import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
+import { displayWidgetLines } from "../extensions/widget-lines";
 import { computeSessionStatsView } from "./context";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { conversationItems } from "./conversation";
@@ -362,9 +363,12 @@ const stripExtensionUiAnsi = (request: RpcExtensionUIRequest): RpcExtensionUIReq
         statusText: request.statusText === undefined ? undefined : strip(request.statusText),
       };
     case "setWidget":
+      const widgetLines = request.widgetLines
+        ? displayWidgetLines(request.widgetLines.map(strip))
+        : undefined;
       return {
         ...request,
-        widgetLines: request.widgetLines?.map(strip),
+        widgetLines: widgetLines?.length ? widgetLines : undefined,
       };
     case "setTitle":
       return { ...request, title: strip(request.title) };
