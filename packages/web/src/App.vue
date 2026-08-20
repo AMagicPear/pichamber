@@ -3,21 +3,29 @@ import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
 import IconButton from "@/components/IconButton.vue";
 import SplitPane from "@/components/layout/SplitPane.vue";
 import Modal from "@/components/layout/Modal.vue";
-import SettingsView from "@/components/modals/SettingsView.vue";
-import ContextPanel from "@/components/panels/ContextPanel.vue";
-import FilesPanel from "@/components/panels/FilesPanel.vue";
-import GitPanel from "@/components/panels/GitPanel.vue";
 import { ui } from "@/stores/ui";
 import SessionHeader from "@/components/panels/SessionHeader.vue";
 import SessionSidebar from "@/components/panels/SessionSidebar.vue";
-import TerminalPanel from "@/components/panels/TerminalPanel.vue";
 import { RouterView } from "vue-router";
-import { computed, KeepAlive } from "vue";
+import { computed, defineAsyncComponent, KeepAlive } from "vue";
+
+// On-demand panels and modal: their heavy deps (diff viewer, terminal/ghostty
+// WASM, the full settings surface) are split into lazy chunks and only fetched
+// when the panel is actually opened, instead of paying for them on first paint.
+const SettingsModal = defineAsyncComponent(
+  () => import("@/components/modals/SettingsView.vue"),
+);
+const AsyncTerminalPanel = defineAsyncComponent(
+  () => import("@/components/panels/TerminalPanel.vue"),
+);
+const AsyncGitPanel = defineAsyncComponent(() => import("@/components/panels/GitPanel.vue"));
+const AsyncFilesPanel = defineAsyncComponent(() => import("@/components/panels/FilesPanel.vue"));
+const AsyncContextPanel = defineAsyncComponent(() => import("@/components/panels/ContextPanel.vue"));
 
 const rightPanel = computed(() => ({
-  git: GitPanel,
-  files: FilesPanel,
-  context: ContextPanel,
+  git: AsyncGitPanel,
+  files: AsyncFilesPanel,
+  context: AsyncContextPanel,
 })[ui.activeRightPanel]);
 </script>
 
@@ -49,7 +57,7 @@ const rightPanel = computed(() => ({
                     <RouterView />
                   </template>
                   <template #sidebar>
-                    <TerminalPanel />
+                    <AsyncTerminalPanel />
                   </template>
                 </SplitPane>
               </template>
@@ -67,7 +75,7 @@ const rightPanel = computed(() => ({
 
     <Modal :show="ui.settingsOpen" @close="ui.settingsOpen = false">
       <template #body>
-        <SettingsView @close="ui.settingsOpen = false" />
+        <SettingsModal @close="ui.settingsOpen = false" />
       </template>
     </Modal>
   </div>
