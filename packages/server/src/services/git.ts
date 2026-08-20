@@ -6,10 +6,18 @@
  * workspace-relative and git itself handles containment.
  *
  * The client never has to parse porcelain output: the server turns
- * `git status` into a structured GitChange list and hands diffs back as
- * text, keeping status codes and quoting rules server-side.
+ * `git status` into a structured GitChange list, hands diffs back as
+ * text, and parses branch/stash listings into typed records — keeping
+ * status codes, quoting rules, and ref-format quirks server-side.
  */
-import type { GitChange, GitStatus } from "@pichamber/shared";
+import type {
+  GitBranch,
+  GitBranchList,
+  GitChange,
+  GitStash,
+  GitStashList,
+  GitStatus,
+} from "@pichamber/shared";
 import { getWorkspace } from "./workspace";
 import { WorkspaceError } from "./workspace";
 
@@ -93,6 +101,59 @@ export const parseStatus = (stdout: string): GitStatus => {
   return { branch, changes };
 };
 
+/** Parse `git for-each-ref` output for `listBranches`. Format string
+ *  produces `HEAD|name|upstream|track|committerdate:short|refname`, one
+ *  record per line. We keep `refname` so we can tell local refs
+ *  (`refs/heads/*`) apart from remote-tracking refs (`refs/remotes/*`)
+ *  without guessing from the short name. Track codes from
+ *  `%(upstream:track)`: "" (no upstream), "ahead N", "behind N",
+ *  "ahead N, behind M" — kept as a raw string so the client can render. */
+export const parseBranchList = (stdout: string): GitBranchList => {
+  const branches: GitBranch[] = [];
+  let current: string | null = null;
+
+  for (const line of stdout.split("\n")) {
+    if (!line) continue;
+    const [head, name = "", upstream = "", track = "", date = "", refname = ""] = line.split("|");
+    if (!name || !refname) continue;
+    const isCurrent = head === "*";
+    if (isCurrent) current = name;
+    branches.push({
+      name,
+      current: isCurrent,
+      upstream: upstream || null,
+      track,
+      date,
+      remote: refname.startsWith("refs/remotes/"),
+    });
+  }
+
+  return { current, branches };
+};
+
+/** Parse `git stash list --format=...` output. We use a record separator
+ *  of `@@` (literal) inside the format string so the on-the-wire line
+ *  itself can't contain it: stash messages are user-authored and may
+ *  contain newlines / pipes. */
+export const parseStashList = (stdout: string): GitStashList => {
+  const stashes: GitStash[] = [];
+  for (const line of stdout.split("\n")) {
+    if (!line) continue;
+    const sep = line.indexOf("@@");
+    if (sep < 0) continue;
+    const ref = line.slice(0, sep);
+    const message = line.slice(sep + 2);
+    const match = /^stash@\{(\d+)\}$/.exec(ref);
+    if (!match) continue;
+    stashes.push({
+      index: Number(match[1]),
+      ref,
+      message,
+    });
+  }
+  return { stashes };
+};
+
 export const getStatus = async (cwd?: string): Promise<GitStatus> => {
   const result = await runGit(cwd, ["status", "--porcelain=v1", "-z", "-b"]);
   assertOk(result);
@@ -118,6 +179,44 @@ export const unstagePaths = async (cwd: string | undefined, paths: string[]): Pr
   assertOk(result);
 };
 
+/** Throw away changes for a list of paths. The decision tree:
+ *  - untracked files: deleted via `rm` (git can't help — they're not in
+ *    the index).
+ *  - tracked files (modified/staged/added/deleted/renamed): reverted to
+ *    HEAD via `git checkout HEAD --`, which clears both staged and
+ *    worktree edits in one shot.
+ *  The caller passes paths from a single `GitStatus` snapshot; we re-read
+ *  status here to classify them, accepting one extra git call so the UI
+ *  can fire a single "discard" intent regardless of change type. */
+export const discardPaths = async (cwd: string | undefined, paths: string[]): Promise<void> => {
+  if (paths.length === 0) return;
+  const status = await getStatus(cwd);
+  const statusByPath = new Map(status.changes.map((c) => [c.path, c]));
+
+  const tracked: string[] = [];
+  const untracked: string[] = [];
+  for (const path of paths) {
+    if (statusByPath.get(path)?.status === "untracked") untracked.push(path);
+    else tracked.push(path);
+  }
+
+  if (tracked.length > 0) {
+    const result = await runGit(cwd, ["checkout", "HEAD", "--", ...tracked]);
+    assertOk(result);
+  }
+  if (untracked.length > 0) {
+    const proc = Bun.spawn(["rm", "-f", "--", ...untracked], {
+      cwd: resolveCwd(cwd),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+    if (code !== 0) {
+      throw new WorkspaceError(stderr.trim() || "Failed to delete untracked files", 400);
+    }
+  }
+};
+
 export const commit = async (cwd: string | undefined, message: string): Promise<void> => {
   if (!message.trim()) {
     throw new WorkspaceError("Commit message is required", 400);
@@ -126,4 +225,84 @@ export const commit = async (cwd: string | undefined, message: string): Promise<
   // newlines; passing it as one argv element keeps multi-line messages safe.
   const result = await runGit(cwd, ["commit", "-m", message]);
   assertOk(result);
+};
+
+/** Initialise a repo in the workspace. We deliberately don't pass
+ *  `--initial-branch`: the flag (>=2.28) is recent, and `git init` already
+ *  honours the user's `init.defaultBranch` config. Naming the default is
+ *  a project choice, not ours. */
+export const init = async (cwd: string | undefined): Promise<void> => {
+  const result = await runGit(cwd, ["init"]);
+  assertOk(result);
+};
+
+/** List all branches. `git branch -a` includes both local and remote
+ *  refs (the latter as `remotes/origin/foo`); we normalise the prefix
+ *  in `parseBranchList`. */
+export const listBranches = async (cwd: string | undefined): Promise<GitBranchList> => {
+  const result = await runGit(cwd, [
+    "for-each-ref",
+    "--format=%(HEAD)|%(refname:short)|%(upstream:short)|%(upstream:track)|%(committerdate:short)|%(refname)",
+    "refs/heads",
+    "refs/remotes",
+  ]);
+  assertOk(result);
+  return parseBranchList(result.stdout);
+};
+
+/** Switch to an existing branch. Use `git switch` (>=2.23) which refuses
+ *  to clobber uncommitted changes with a clear error — matching the
+ *  safer semantics we'd want anyway. Older gits error with a "unknown
+ *  subcommand" message, which the UI surfaces verbatim. */
+export const checkout = async (cwd: string | undefined, branch: string): Promise<void> => {
+  if (!branch) throw new WorkspaceError("Branch name is required", 400);
+  const result = await runGit(cwd, ["switch", branch]);
+  assertOk(result);
+};
+
+export const push = async (cwd: string | undefined): Promise<void> => {
+  const result = await runGit(cwd, ["push"]);
+  assertOk(result);
+};
+
+export const pull = async (cwd: string | undefined): Promise<void> => {
+  const result = await runGit(cwd, ["pull"]);
+  assertOk(result);
+};
+
+/** Save the working tree + index as a stash entry. `-u` includes
+ *  untracked so the common "stash everything" workflow is one click;
+ *  callers can opt out by passing `includeUntracked: false`. */
+export const stash = async (
+  cwd: string | undefined,
+  message?: string,
+  includeUntracked = true,
+): Promise<void> => {
+  const args = ["stash", "push"];
+  if (includeUntracked) args.push("-u");
+  if (message?.trim()) args.push("-m", message.trim());
+  const result = await runGit(cwd, args);
+  assertOk(result);
+};
+
+export const stashPop = async (cwd: string | undefined): Promise<void> => {
+  const result = await runGit(cwd, ["stash", "pop"]);
+  assertOk(result);
+};
+
+/** Drop a stash by its ref. We use the full `stash@{n}` ref instead of
+ *  relying on position so a concurrent stash action elsewhere can't
+ *  shift indices out from under us. */
+export const stashDrop = async (cwd: string | undefined, index: number): Promise<void> => {
+  if (!Number.isInteger(index) || index < 0) {
+    throw new WorkspaceError("Invalid stash index", 400);
+  }
+  const result = await runGit(cwd, ["stash", "drop", `stash@{${index}}`]);
+  assertOk(result);
+};
+
+export const listStashes = async (cwd: string | undefined): Promise<GitStashList> => {
+  const result = await runGit(cwd, ["stash", "list", "--format=%gd@@%s"]);
+  assertOk(result);
+  return parseStashList(result.stdout);
 };

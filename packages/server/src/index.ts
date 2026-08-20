@@ -2,7 +2,23 @@ import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
 import { listDirectory, searchFiles } from "./services/fs";
-import { commit, getDiff, getStatus, stagePaths, unstagePaths } from "./services/git";
+import {
+  checkout,
+  commit,
+  discardPaths,
+  getDiff,
+  getStatus,
+  init,
+  listBranches,
+  listStashes,
+  pull,
+  push,
+  stagePaths,
+  stash,
+  stashDrop,
+  stashPop,
+  unstagePaths,
+} from "./services/git";
 import {
   createSessionWithCwd,
   deleteSession,
@@ -545,6 +561,128 @@ const server = Bun.serve({
           const cwd = await requestCwd(sessionId);
           await commit(cwd, message ?? "");
           return Response.json({ ok: true });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/discard": {
+      POST: async (req) => {
+        const { sessionId, paths } = (await req.json().catch(() => ({}))) as { sessionId?: string; paths?: string[] };
+        try {
+          const cwd = await requestCwd(sessionId);
+          await discardPaths(cwd, paths ?? []);
+          return Response.json({ ok: true });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/init": {
+      POST: async (req) => {
+        const { sessionId } = (await req.json().catch(() => ({}))) as { sessionId?: string };
+        try {
+          const cwd = await requestCwd(sessionId);
+          await init(cwd);
+          return Response.json(await getStatus(cwd));
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/branches": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        try {
+          const cwd = await requestCwd(sessionId);
+          return Response.json(await listBranches(cwd));
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/checkout": {
+      POST: async (req) => {
+        const { sessionId, branch } = (await req.json().catch(() => ({}))) as { sessionId?: string; branch?: string };
+        try {
+          const cwd = await requestCwd(sessionId);
+          await checkout(cwd, branch ?? "");
+          return Response.json(await getStatus(cwd));
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/push": {
+      POST: async (req) => {
+        const { sessionId } = (await req.json().catch(() => ({}))) as { sessionId?: string };
+        try {
+          const cwd = await requestCwd(sessionId);
+          await push(cwd);
+          return Response.json({ ok: true });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/pull": {
+      POST: async (req) => {
+        const { sessionId } = (await req.json().catch(() => ({}))) as { sessionId?: string };
+        try {
+          const cwd = await requestCwd(sessionId);
+          await pull(cwd);
+          return Response.json({ ok: true });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/stashes": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        try {
+          const cwd = await requestCwd(sessionId);
+          return Response.json(await listStashes(cwd));
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/stash": {
+      POST: async (req) => {
+        const { sessionId, message, includeUntracked } = (await req.json().catch(() => ({}))) as {
+          sessionId?: string;
+          message?: string;
+          includeUntracked?: boolean;
+        };
+        try {
+          const cwd = await requestCwd(sessionId);
+          await stash(cwd, message, includeUntracked !== false);
+          return Response.json(await listStashes(cwd));
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/stash/pop": {
+      POST: async (req) => {
+        const { sessionId } = (await req.json().catch(() => ({}))) as { sessionId?: string };
+        try {
+          const cwd = await requestCwd(sessionId);
+          await stashPop(cwd);
+          return Response.json(await listStashes(cwd));
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/stash/drop": {
+      POST: async (req) => {
+        const { sessionId, index } = (await req.json().catch(() => ({}))) as { sessionId?: string; index?: number };
+        try {
+          const cwd = await requestCwd(sessionId);
+          await stashDrop(cwd, index ?? -1);
+          return Response.json(await listStashes(cwd));
         } catch (err) {
           return fsErrorResponse(err);
         }

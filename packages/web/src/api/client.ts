@@ -3,9 +3,15 @@
 // handling so each call site is a one-liner.
 
 import type {
+  GitBranchList,
+  GitCheckoutRequest,
   GitCommitRequest,
   GitDiffResult,
+  GitSessionRequest,
   GitStageRequest,
+  GitStashList,
+  GitStashPushRequest,
+  GitStashRefRequest,
   GitStatus,
   ListResult,
   ProviderQuota,
@@ -133,6 +139,76 @@ export const commitGit = (sessionId: string | null | undefined, message: string)
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId: sessionId ?? undefined, message } satisfies GitCommitRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+
+export const initGitRepo = (sessionId?: string | null) =>
+  fetch(`${BASE}/git/init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId ?? undefined } satisfies GitSessionRequest),
+  }).then((r) => jsonOrThrow<GitStatus>(r));
+
+export const discardGitPaths = (sessionId: string | null | undefined, paths: string[]) =>
+  fetch(`${BASE}/git/discard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId ?? undefined, paths } satisfies GitStageRequest),
+  }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+
+export const listGitBranches = (sessionId?: string | null) =>
+  fetch(`${BASE}/git/branches?sessionId=${encodeURIComponent(sessionId ?? "")}`).then((r) =>
+    jsonOrThrow<GitBranchList>(r),
+  );
+
+export const checkoutGitBranch = (sessionId: string | null | undefined, branch: string) =>
+  fetch(`${BASE}/git/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId ?? undefined, branch } satisfies GitCheckoutRequest),
+  }).then((r) => jsonOrThrow<GitStatus>(r));
+
+export const pushGit = (sessionId?: string | null) =>
+  fetch(`${BASE}/git/push`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId ?? undefined } satisfies GitSessionRequest),
+  }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+
+export const pullGit = (sessionId?: string | null) =>
+  fetch(`${BASE}/git/pull`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId ?? undefined } satisfies GitSessionRequest),
+  }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+
+export const listGitStashes = (sessionId?: string | null) =>
+  fetch(`${BASE}/git/stashes?sessionId=${encodeURIComponent(sessionId ?? "")}`).then((r) =>
+    jsonOrThrow<GitStashList>(r),
+  );
+
+export const pushGitStash = (sessionId: string | null | undefined, message?: string, includeUntracked = true) =>
+  fetch(`${BASE}/git/stash`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessionId: sessionId ?? undefined,
+      message,
+      includeUntracked,
+    } satisfies GitStashPushRequest),
+  }).then((r) => jsonOrThrow<GitStashList>(r));
+
+export const popGitStash = (sessionId?: string | null) =>
+  fetch(`${BASE}/git/stash/pop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId ?? undefined } satisfies GitSessionRequest),
+  }).then((r) => jsonOrThrow<GitStashList>(r));
+
+export const dropGitStash = (sessionId: string | null | undefined, index: number) =>
+  fetch(`${BASE}/git/stash/drop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId ?? undefined, index } satisfies GitStashRefRequest),
+  }).then((r) => jsonOrThrow<GitStashList>(r));
 
 // ─── Provider quotas ─────────────────────────────────────────────────
 
