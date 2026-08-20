@@ -116,6 +116,14 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
 .conversation-message__content {
   --ms-flow-paragraph-y: 0px;
 }
+.conversation-message__content :deep(.list-node) {
+  --ms-flow-list-y: 12px;
+  margin-block: 12px;
+}
+.conversation-message__content :deep(.list-item) {
+  --ms-flow-list-item-y: 2px;
+  margin-block: 2px;
+}
 
 /* Error variant: red accent on the model name and the message so failed
  * turns read at a glance instead of looking like an empty successful bubble. */
