@@ -46,6 +46,14 @@ const jsonOrThrow = async <T>(res: Response): Promise<T> => {
 // is an `Error`, so this narrowing is the single conversion site.
 export const toMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** Append an optional `sessionId` query param. Omitted entirely when the
+ *  session id is falsy — a bare `sessionId=` is meaningless to the server,
+ *  and every GET helper across the client shares one rule. */
+const withSessionId = (params: URLSearchParams, sessionId?: string | null): string => {
+  if (sessionId) params.set("sessionId", sessionId);
+  return params.toString();
+};
+
 // ─── AI sessions ──────────────────────────────────────────────────────
 
 export const listSessions = () =>
@@ -92,32 +100,32 @@ export const stopPty = (ptyId: string) =>
 
 export const listDirectory = async (sessionId?: string | null, path?: string) => {
   const params = new URLSearchParams();
-  if (sessionId) params.set("sessionId", sessionId);
   if (path) params.set("path", path);
-  const qs = params.toString();
-  const url = qs ? `${BASE}/fs/list?${qs}` : `${BASE}/fs/list`;
+  const query = withSessionId(params, sessionId);
+  const url = query ? `${BASE}/fs/list?${query}` : `${BASE}/fs/list`;
   const r = await fetch(url);
   return await jsonOrThrow<ListResult>(r);
 };
 
 export const searchFiles = async (sessionId: string | null | undefined, query: string) => {
   const params = new URLSearchParams({ q: query });
-  if (sessionId) params.set("sessionId", sessionId);
-  const r = await fetch(`${BASE}/fs/search?${params}`);
+  const qs = withSessionId(params, sessionId);
+  const r = await fetch(`${BASE}/fs/search?${qs}`);
   return await jsonOrThrow<SearchResult>(r);
 };
 
 // ─── Git (Git pane) ───────────────────────────────────────────────────
 
 export const getGitStatus = (sessionId?: string | null) =>
-  fetch(`${BASE}/git/status?sessionId=${encodeURIComponent(sessionId ?? "")}`).then((r) =>
+  fetch(`${BASE}/git/status?${withSessionId(new URLSearchParams(), sessionId)}`).then((r) =>
     jsonOrThrow<GitStatus>(r),
   );
 
-export const getGitDiff = (sessionId: string | null | undefined, path: string, staged: boolean) =>
-  fetch(
-    `${BASE}/git/diff?sessionId=${encodeURIComponent(sessionId ?? "")}&path=${encodeURIComponent(path)}&staged=${staged ? 1 : 0}`,
-  ).then((r) => jsonOrThrow<GitDiffResult>(r));
+export const getGitDiff = (sessionId: string | null | undefined, path: string, staged: boolean) => {
+  const params = new URLSearchParams({ path, staged: staged ? "1" : "0" });
+  const query = withSessionId(params, sessionId);
+  return fetch(`${BASE}/git/diff?${query}`).then((r) => jsonOrThrow<GitDiffResult>(r));
+};
 
 export const stageGitPaths = (sessionId: string | null | undefined, paths?: string[]) =>
   fetch(`${BASE}/git/stage`, {
@@ -155,7 +163,7 @@ export const discardGitPaths = (sessionId: string | null | undefined, paths: str
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
 
 export const listGitBranches = (sessionId?: string | null) =>
-  fetch(`${BASE}/git/branches?sessionId=${encodeURIComponent(sessionId ?? "")}`).then((r) =>
+  fetch(`${BASE}/git/branches?${withSessionId(new URLSearchParams(), sessionId)}`).then((r) =>
     jsonOrThrow<GitBranchList>(r),
   );
 
@@ -181,7 +189,7 @@ export const pullGit = (sessionId?: string | null) =>
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
 
 export const listGitStashes = (sessionId?: string | null) =>
-  fetch(`${BASE}/git/stashes?sessionId=${encodeURIComponent(sessionId ?? "")}`).then((r) =>
+  fetch(`${BASE}/git/stashes?${withSessionId(new URLSearchParams(), sessionId)}`).then((r) =>
     jsonOrThrow<GitStashList>(r),
   );
 
