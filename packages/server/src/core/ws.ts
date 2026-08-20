@@ -174,9 +174,17 @@ const initialModelState = (): Pick<
     model: undefined,
     modified: "",
     context: { tokens: null, contextWindow: 0, percent: null, tokensText: "—" },
-    messages: { total: 0, user: 0, assistant: 0 },
+    messages: {
+      total: 0,
+      user: 0,
+      assistant: 0,
+      totalText: "0",
+      userText: "0",
+      assistantText: "0",
+    },
     cost: { value: "$0.00", raw: 0 },
     lastAssistant: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    lastAssistantText: { input: "0", output: "0", reasoning: "0", cacheRead: "0", cacheWrite: "0" },
     cacheHit: "0.0%",
   },
   resources: {

@@ -7,7 +7,7 @@ export interface SettingsState {
   hideTemporarySessions: boolean;
   /** Submit-on-Enter (current default) vs submit on Cmd/Ctrl+Enter. */
   sendKey: SendKey;
-  /** Render a local timestamp under each committed message. */
+  /** Render a local timestamp under each committed message (default on). */
   showTimestamps: boolean;
   /** Render committed tool result details expanded by default. */
   expandedToolResults: boolean;
@@ -23,7 +23,7 @@ const hydrate = (raw: Partial<SettingsState>): SettingsState => ({
   hideTemporarySessions:
     typeof raw.hideTemporarySessions === "boolean" ? raw.hideTemporarySessions : true,
   sendKey: isSendKey(raw.sendKey) ? raw.sendKey : "enter",
-  showTimestamps: typeof raw.showTimestamps === "boolean" ? raw.showTimestamps : false,
+  showTimestamps: typeof raw.showTimestamps === "boolean" ? raw.showTimestamps : true,
   expandedToolResults:
     typeof raw.expandedToolResults === "boolean" ? raw.expandedToolResults : false,
   notifySound: typeof raw.notifySound === "boolean" ? raw.notifySound : false,
@@ -35,7 +35,7 @@ export const settings = persistedState<SettingsState>(
   {
     hideTemporarySessions: true,
     sendKey: "enter",
-    showTimestamps: false,
+    showTimestamps: true,
     expandedToolResults: false,
     notifySound: false,
     notifyDesktop: false,

@@ -94,9 +94,19 @@ export const computeSessionStatsView = async (
       total: stats.totalMessages,
       user: stats.userMessages,
       assistant: stats.assistantMessages,
+      totalText: numberFormat.format(stats.totalMessages),
+      userText: numberFormat.format(stats.userMessages),
+      assistantText: numberFormat.format(stats.assistantMessages),
     },
     cost: { value: formatCost(stats.cost), raw: stats.cost },
     lastAssistant,
+    lastAssistantText: {
+      input: numberFormat.format(lastAssistant.input),
+      output: numberFormat.format(lastAssistant.output),
+      reasoning: numberFormat.format(lastAssistant.reasoning),
+      cacheRead: numberFormat.format(lastAssistant.cacheRead),
+      cacheWrite: numberFormat.format(lastAssistant.cacheWrite),
+    },
     cacheHit,
   };
 };

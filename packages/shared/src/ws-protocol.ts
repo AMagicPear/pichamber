@@ -290,9 +290,23 @@ export type SessionStatsView = {
     /** Comma-grouped token count, e.g. "95,881"; "—" while unknown. */
     tokensText: string;
   };
-  messages: { total: number; user: number; assistant: number };
+  messages: {
+    total: number;
+    user: number;
+    assistant: number;
+    /** Comma-grouped render of each count, e.g. "1,234". The server owns
+     *  the formatting so the client doesn't need a locale-specific
+     *  number formatter (project rule: display strings come from the
+     *  server). */
+    totalText: string;
+    userText: string;
+    assistantText: string;
+  };
   cost: { value: string; raw: number };
   lastAssistant: LastAssistantUsage;
+  /** Comma-grouped render of `lastAssistant`, one string per bucket,
+   *  for the same reason `messages.*Text` exists. */
+  lastAssistantText: { [K in keyof LastAssistantUsage]: string };
   /** Cache hit rate, e.g. "99.4%". `cacheRead / (cacheRead + input)`. */
   cacheHit: string;
 };

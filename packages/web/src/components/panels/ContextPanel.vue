@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { LastAssistantUsage, SessionStatsView } from "@pichamber/shared";
+import type { SessionStatsView } from "@pichamber/shared";
 import { useConversationSession } from "@/composables/useConversationSession";
 
 const { stats } = useConversationSession();
@@ -16,28 +16,25 @@ const hasData = computed(
     (!!view.value.model || view.value.messages.total > 0 || !!view.value.modified),
 );
 
-const numberFormat = new Intl.NumberFormat("en-US");
 const usageRows = computed(() => {
-  const usage: LastAssistantUsage = view.value?.lastAssistant ?? {
-    input: 0,
-    output: 0,
-    reasoning: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
+  const text = view.value?.lastAssistantText ?? {
+    input: "0",
+    output: "0",
+    reasoning: "0",
+    cacheRead: "0",
+    cacheWrite: "0",
   };
   // Order matches the openchamber reference; reasoning sits between output
   // and cacheRead so the eye scans the production tokens first, then the
   // billing-relevant cache buckets.
   return [
-    { label: "Input", value: usage.input },
-    { label: "Output", value: usage.output },
-    { label: "Reasoning", value: usage.reasoning },
-    { label: "Cache Read", value: usage.cacheRead },
-    { label: "Cache Write", value: usage.cacheWrite },
+    { label: "Input", value: text.input },
+    { label: "Output", value: text.output },
+    { label: "Reasoning", value: text.reasoning },
+    { label: "Cache Read", value: text.cacheRead },
+    { label: "Cache Write", value: text.cacheWrite },
   ];
 });
-
-const formatTokens = (n: number) => numberFormat.format(n);
 
 /** "OpenCode Zen / hy3-free" — keep the provider subtle and the model id
  *  crisp, mirroring how the model selector surfaces them. */
@@ -89,15 +86,15 @@ const modelTitle = computed(() => {
       <section class="context-pane__section">
         <h3 class="context-pane__heading ui-section-title">Messages</h3>
         <div class="context-pane__stat">
-          <span class="context-pane__value">{{ formatTokens(view?.messages.total ?? 0) }}</span>
+          <span class="context-pane__value">{{ view?.messages.totalText ?? "0" }}</span>
         </div>
         <div class="context-pane__row">
           <span class="context-pane__row-label">User</span>
-          <span class="context-pane__row-value">{{ formatTokens(view?.messages.user ?? 0) }}</span>
+          <span class="context-pane__row-value">{{ view?.messages.userText ?? "0" }}</span>
         </div>
         <div class="context-pane__row">
           <span class="context-pane__row-label">Assistant</span>
-          <span class="context-pane__row-value">{{ formatTokens(view?.messages.assistant ?? 0) }}</span>
+          <span class="context-pane__row-value">{{ view?.messages.assistantText ?? "0" }}</span>
         </div>
       </section>
 
@@ -112,7 +109,7 @@ const modelTitle = computed(() => {
         <h3 class="context-pane__heading ui-section-title">Last Assistant Message</h3>
         <div v-for="row in usageRows" :key="row.label" class="context-pane__row">
           <span class="context-pane__row-label">{{ row.label }}</span>
-          <span class="context-pane__row-value">{{ formatTokens(row.value) }}</span>
+          <span class="context-pane__row-value">{{ row.value }}</span>
         </div>
       </section>
 
