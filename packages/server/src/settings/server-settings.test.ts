@@ -68,17 +68,13 @@ describe("server-settings persistence", () => {
   });
 
   test("resolveExternalPi searches $PATH when the field is empty", async () => {
-    await useTempDir();
-    // Pick any command that's always on PATH. `node` works on every
-    // supported host; on this machine it's at /opt/homebrew/bin/node
-    // (see `which node`). We don't assert the exact path — just that
-    // we got *something* absolute back.
-    process.env.PATH = process.env.PATH ?? "";
+    const dir = await useTempDir();
+    const binary = join(dir, "pichamber-test-bin");
+    await writeFile(binary, "");
+    process.env.PATH = dir;
     const { saveServerSettings, resolveExternalPi } = await importSettings();
-    saveServerSettings({ useExternalPi: true, externalPiPath: "node" });
-    const resolved = resolveExternalPi();
-    expect(resolved).not.toBeNull();
-    expect(resolved?.startsWith("/")).toBe(true);
+    saveServerSettings({ useExternalPi: true, externalPiPath: "pichamber-test-bin" });
+    expect(resolveExternalPi()).toBe(binary);
   });
 
   test("resolveExternalPi returns null when the bare name isn't on PATH", async () => {
@@ -96,11 +92,11 @@ describe("server-settings persistence", () => {
   });
 
   test("resolveExternalPi accepts an absolute path that exists", async () => {
-    await useTempDir();
-    // `/bin/sh` exists on every unix host and the test runner here is
-    // Bun on macOS, so we use that as a stand-in for "any real file".
+    const dir = await useTempDir();
+    const binary = join(dir, "pi");
+    await writeFile(binary, "");
     const { saveServerSettings, resolveExternalPi } = await importSettings();
-    saveServerSettings({ useExternalPi: true, externalPiPath: "/bin/sh" });
-    expect(resolveExternalPi()).toBe("/bin/sh");
+    saveServerSettings({ useExternalPi: true, externalPiPath: binary });
+    expect(resolveExternalPi()).toBe(binary);
   });
 });

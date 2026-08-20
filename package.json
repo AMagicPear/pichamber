@@ -1,6 +1,6 @@
 {
   "name": "@amagicpear/pichamber",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "description": "A browser-based workspace for the Pi Coding Agent",
   "license": "MIT",
   "type": "module",
@@ -45,8 +45,7 @@
     "type-check": "bun --filter '*' type-check",
     "lint": "oxlint . --fix",
     "package": "node scripts/package.mjs",
-    "prepack": "bun run package",
-    "test:package": "node scripts/package-smoke.mjs"
+    "prepack": "bun run package"
   },
   "bin": {
     "pichamber": "bin/pichamber.js"
