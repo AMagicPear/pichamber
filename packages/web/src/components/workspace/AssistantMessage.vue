@@ -61,6 +61,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
     <template v-else>
       <header class="conversation-message__author">
         <ProviderLogo :provider-id="provider" :model-id="modelId" :size="16" /> {{ label }}
+        <time v-if="showTimestamp && timestampText" class="conversation-message__time">{{ timestampText }}</time>
       </header>
       <ConversationDetail
         v-if="thinking"
@@ -82,7 +83,6 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
         :code-block-monaco-options="{ disableFileHeader: true }"
         :viewport-priority="false"
       />
-      <p v-if="showTimestamp && timestampText" class="conversation-message__timestamp">{{ timestampText }}</p>
     </template>
   </article>
 </template>
@@ -144,16 +144,16 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   overflow-wrap: anywhere;
 }
 
-/* Timestamp footer lives under both committed and error variants so
- * timestamps align with the message body, not the author line. Right-
- * aligned so it tucks to the trailing edge, matching the user-side
- * timestamp rule in ConversationMessages.vue — one consistent edge for
- * the whole thread instead of alternating sides. */
-.conversation-message__timestamp {
-  margin: 8px 0 0;
+/* Timestamp sits inline in the author row, muted, right after the model
+ * name. The assistant body is a full-width left-anchored block, so a
+ * footer under it has no natural edge to follow — left-aligned looks
+ * sparse under a short reply and right-aligned dangles at the column's
+ * far right. Inline in the header reads as message metadata and avoids
+ * the detached-footer problem entirely. */
+.conversation-message__time {
   color: var(--ui-text-muted);
   font-size: 11px;
+  font-weight: 500;
   line-height: 1.4;
-  text-align: right;
 }
 </style>
