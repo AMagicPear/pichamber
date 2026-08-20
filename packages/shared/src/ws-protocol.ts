@@ -214,6 +214,14 @@ export type PiExtensionSource = {
   installedPath?: string;
 };
 
+/** An installed Pi package with a newer registry or remote revision available. */
+export type PiExtensionUpdate = {
+  source: string;
+  displayName: string;
+  type: "npm" | "git";
+  scope: "user" | "project";
+};
+
 /** One pichamber-shipped built-in extension (e.g. Ark Agent Plan). */
 export type PiBuiltinExtension = {
   id: string;

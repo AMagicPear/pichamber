@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch, type Ref } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
 import { refreshSessions, workspace } from "@/stores/workspace";
@@ -25,7 +25,7 @@ import type {
 const draft = ref<string>();
 const connected = ref(false);
 /** 统一 item 流：服务器铸造的稳定 id 终生不变，live→committed 只翻字段。 */
-const items = ref<LiveItem[]>([]);
+const items: Ref<LiveItem[]> = ref([]);
 const busy = ref(false);
 /** Set when a real server message flips busy true; consumed (and reset)
  *  by the watcher below the moment busy goes false. Disconnect-time busy

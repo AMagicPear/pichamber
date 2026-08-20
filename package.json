@@ -29,6 +29,11 @@
   "workspaces": [
     "packages/*"
   ],
+  "catalog": {
+    "@earendil-works/pi-agent-core": "^0.84.2",
+    "@earendil-works/pi-ai": "^0.84.2",
+    "@earendil-works/pi-coding-agent": "^0.84.2"
+  },
   "scripts": {
     "dev": "concurrently -k -n \"SERVER,WEB\" -c \"cyan,magenta\" \"bun run dev:server\" \"bun run dev:web\"",
     "dev:web": "bun --filter @pichamber/web dev",

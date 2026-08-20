@@ -19,6 +19,7 @@ import type {
   PiBehaviorSettings,
   PiBuiltinExtension,
   PiExtensionSource,
+  PiExtensionUpdate,
   PiProviderSettings,
   ExtensionsOverview,
   PtyStartOptions,
@@ -317,3 +318,15 @@ export const fetchPiExtensionsOverview = (sessionId: string) =>
   fetch(`${BASE}/pi/extensions/overview?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
     jsonOrThrow<ExtensionsOverview>(r),
   );
+
+export const checkPiExtensionUpdates = (sessionId: string) =>
+  fetch(`${BASE}/pi/extensions/updates?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
+    jsonOrThrow<{ updates: PiExtensionUpdate[] }>(r),
+  );
+
+export const updatePiExtensions = (sessionId: string, source?: string) =>
+  fetch(`${BASE}/pi/extensions/updates?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(source ? { source } : {}),
+  }).then((r) => jsonOrThrow<{ updates: PiExtensionUpdate[] }>(r));

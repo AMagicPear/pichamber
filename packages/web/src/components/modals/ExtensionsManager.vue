@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import type { ExtensionsOverview, PiBuiltinExtension, PiExtensionSource } from "@pichamber/shared";
+import type { ExtensionsOverview, PiBuiltinExtension, PiExtensionSource, PiExtensionUpdate } from "@pichamber/shared";
 import {
+  checkPiExtensionUpdates,
   fetchPiExtensionsOverview,
   installPiExtensionSource,
   removePiExtensionSource,
   setPiBuiltinExtension,
   toMessage,
+  updatePiExtensions,
 } from "@/api/client";
 import { workspace } from "@/stores/workspace";
 import SettingsGroup from "./SettingsGroup.vue";
@@ -16,6 +18,9 @@ const overview = ref<ExtensionsOverview | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const saving = ref(false);
+const checkingUpdates = ref(false);
+const updates = ref<PiExtensionUpdate[]>([]);
+const updatesChecked = ref(false);
 
 const newSource = ref("");
 const newScope = ref<"user" | "project">("user");
@@ -31,6 +36,37 @@ const load = async () => {
     error.value = toMessage(cause);
   } finally {
     loading.value = false;
+  }
+};
+
+const checkUpdates = async () => {
+  const sessionId = workspace.sessionId;
+  if (!sessionId) return;
+  checkingUpdates.value = true;
+  error.value = null;
+  try {
+    updates.value = (await checkPiExtensionUpdates(sessionId)).updates;
+    updatesChecked.value = true;
+  } catch (cause) {
+    error.value = toMessage(cause);
+  } finally {
+    checkingUpdates.value = false;
+  }
+};
+
+const updatePackages = async (source?: string) => {
+  const sessionId = workspace.sessionId;
+  if (!sessionId) return;
+  saving.value = true;
+  error.value = null;
+  try {
+    updates.value = (await updatePiExtensions(sessionId, source)).updates;
+    updatesChecked.value = true;
+    await load();
+  } catch (cause) {
+    error.value = toMessage(cause);
+  } finally {
+    saving.value = false;
   }
 };
 
@@ -107,8 +143,16 @@ const builtins = computed(() => overview.value?.builtins ?? []);
 const sources = computed(() => overview.value?.sources ?? []);
 const inventoryAvailable = computed(() => overview.value?.inventoryAvailable ?? false);
 
-watch(() => workspace.sessionId, load);
-onMounted(load);
+watch(() => workspace.sessionId, async () => {
+  updates.value = [];
+  updatesChecked.value = false;
+  await load();
+  await checkUpdates();
+});
+onMounted(async () => {
+  await load();
+  await checkUpdates();
+});
 </script>
 
 <template>
@@ -140,6 +184,20 @@ onMounted(load);
     </SettingsGroup>
 
     <SettingsGroup title="Package sources" class="extension-manager__sources">
+      <div class="extension-manager__update-bar">
+        <span>
+          <strong v-if="updates.length">{{ updates.length }} update{{ updates.length === 1 ? "" : "s" }} available</strong>
+          <span v-else-if="checkingUpdates">Checking for updates…</span>
+          <span v-else-if="updatesChecked">No package updates available.</span>
+          <span v-else>Updates have not been checked.</span>
+        </span>
+        <div class="extension-manager__actions">
+          <button type="button" :disabled="saving || checkingUpdates" @click="checkUpdates">Check again</button>
+          <button v-if="updates.length" type="button" :disabled="saving || checkingUpdates" @click="updatePackages()">
+            Update all
+          </button>
+        </div>
+      </div>
       <SettingsOption inline title="Add source" description="Use npm:, git:, a URL, or a local package path.">
         <span class="extension-manager__add">
           <input
@@ -169,6 +227,12 @@ onMounted(load);
             </small>
           </div>
           <div class="extension-manager__actions">
+            <button
+              v-if="updates.some((update) => update.source === entry.source && update.scope === entry.scope)"
+              type="button"
+              :disabled="saving || checkingUpdates"
+              @click="updatePackages(entry.source)"
+            >Update</button>
             <button type="button" class="is-danger" :disabled="saving" @click="removeSource(entry)">Remove</button>
           </div>
         </li>
@@ -249,6 +313,8 @@ onMounted(load);
 .extension-manager__resources { display: flex; flex-wrap: wrap; gap: 4px; }
 .extension-manager__resources code { padding: 2px 5px; border-radius: 4px; background: var(--ui-accent-soft); color: var(--ui-accent-text); font-size: 10px; overflow-wrap: anywhere; }
 .extension-manager__add { display: flex; align-items: center; gap: 5px; }
+.extension-manager__update-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: var(--ui-text-muted); font-size: 12px; }
+.extension-manager__update-bar strong { color: var(--ui-status-text); font-weight: 600; }
 .extension-manager__add input { width: 220px; min-width: 0; }
 .extension-manager__add select { min-width: 82px !important; }
 .extension-manager__add button, .extension-manager__actions button { min-height: 27px; padding: 3px 10px; border-radius: 5px; color: var(--ui-text-muted); font: inherit; font-size: 11px; }
