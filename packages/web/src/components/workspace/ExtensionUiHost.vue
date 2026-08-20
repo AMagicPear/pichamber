@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
-import { onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import CloseIcon from "@/assets/icons/Close.svg";
 import Modal from "@/components/layout/Modal.vue";
 
@@ -18,6 +18,12 @@ const emit = defineEmits<{
   respond: [response: RpcExtensionUIResponse];
   dismissNotification: [id: string];
 }>();
+
+// A select/input/editor title is expected to be a short question, but some
+// models stuff a whole paragraph into it. Treat anything beyond a compact
+// heading as long-form body text: render it smaller, wrap it, and cap its
+// height so it scrolls in place instead of filling the whole modal.
+const longTitle = computed(() => (props.dialog?.title.length ?? 0) > 160);
 
 const value = ref("");
 let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -55,7 +61,8 @@ const confirm = (confirmed: boolean) => {
       <div v-if="dialog" class="extension-dialog">
         <header>
           <span class="extension-dialog__label">Extension request</span>
-          <h3>{{ dialog.title }}</h3>
+          <h3 v-if="!longTitle">{{ dialog.title }}</h3>
+          <p v-else class="extension-dialog__title-long">{{ dialog.title }}</p>
           <p v-if="dialog.method === 'confirm'">{{ dialog.message }}</p>
         </header>
 
@@ -132,6 +139,20 @@ const confirm = (confirmed: boolean) => {
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+/* A title the model wrote as a whole paragraph stays readable: body-size
+ * text instead of a giant heading, and it scrolls in place if it runs
+ * longer than ~6 lines so it can't crowd out the choices below. */
+.extension-dialog .extension-dialog__title-long {
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 9.6em;
+  overflow-y: auto;
 }
 .extension-dialog p { margin: 0; color: var(--ui-text-muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
 .extension-dialog input,
