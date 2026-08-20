@@ -28,17 +28,27 @@ const props = defineProps<{
    *  auto-collapse when it flips false (streaming segment ended). Manual
    *  toggles between the flips are respected. */
   autoExpand?: boolean;
+  /** Initial expanded state for tool-result details where there's no
+   *  streaming segment to react to. Only consults at mount — doesn't
+   *  override later manual toggles — so the user's collapse preference
+   *  survives a re-render. */
+  defaultExpanded?: boolean;
   /** Hide the plain preview line while expanded. Summary-type previews
    *  (Thinking: same text as the body) are redundant when open; header-type
    *  previews (bash command / ls path) stay visible. */
   hidePreviewOnExpand?: boolean;
 }>();
 
-const expanded = ref(false);
+// Initial state honours the per-item preference (tool results want a
+// quiet default; Thinking wants to start collapsed). The autoExpand
+// watcher below only kicks in for callers that flip `autoExpand` during
+// the lifetime (Thinking during streaming); tool-result callers leave it
+// undefined and never trip the watcher.
+const expanded = ref(!!props.defaultExpanded);
 // immediate: mounts mid-stream start expanded; flips drive open/close.
 watch(
   () => props.autoExpand,
-  (now) => { expanded.value = !!now; },
+  (now) => { if (now !== undefined) expanded.value = !!now; },
   { immediate: true },
 );
 

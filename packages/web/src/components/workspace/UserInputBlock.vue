@@ -12,6 +12,7 @@ import IconButton from "@/components/IconButton.vue";
 import ComposerShelf from "@/components/workspace/ComposerShelf.vue";
 import ModelSelector from "@/components/workspace/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
+import type { SendKey } from "@/stores/settings";
 
 const draft = defineModel<string | undefined>({ required: true });
 
@@ -37,6 +38,8 @@ const props = defineProps<{
   availableModels: ModelDescriptor[];
   thinkingLevel: ThinkingLevel;
   availableThinkingLevels: ThinkingLevel[];
+  /** Submit on bare Enter (current default) or on Cmd/Ctrl+Enter. */
+  sendKey: SendKey;
 }>();
 
 const submitMode = ref<"steer" | "followUp">("steer");
@@ -56,11 +59,18 @@ const onKeydown = (event: KeyboardEvent) => {
     else if (props.busy) emit("abort");
     return;
   }
-  if (event.key === "Enter" && !event.shiftKey) {
+  if (event.key === "Enter") {
     // Enter is also used to confirm an IME candidate. Do not submit while
     // composition is active; otherwise the IME writes the draft back after
     // the send handler clears it.
     if (event.isComposing || event.keyCode === 229) return;
+    // Shift+Enter always inserts a newline regardless of send-key preference;
+    // the rest branches on whether the user picked bare Enter or Cmd/Ctrl+Enter.
+    const wantsModSend = event.metaKey || event.ctrlKey;
+    const shouldSubmit = props.sendKey === "enter"
+      ? !event.shiftKey
+      : wantsModSend;
+    if (!shouldSubmit) return;
     event.preventDefault();
     if (shelfMode.value) shelf.value?.choose();
     else emit("send", props.busy ? (event.altKey ? "followUp" : submitMode.value) : undefined);
@@ -181,6 +191,16 @@ const aboveWidgets = computed(() =>
 const belowWidgets = computed(() =>
   Object.entries(props.extensionWidgets).filter(([, widget]) => widget.placement === "belowEditor"),
 );
+
+/** Placeholder mentions the active submit shortcut so users on the alternative
+ *  scheme don't have to dig through Settings. Kept short — the chevron isn't
+ *  a full shortcut hint. */
+const placeholder = computed(() => {
+  const base = "Ask Pi anything. Type @ for files or / for commands.";
+  return props.sendKey === "enter"
+    ? base
+    : `${base} Submit with ⌘/Ctrl + Enter.`;
+});
 </script>
 
 <template>
@@ -201,7 +221,7 @@ const belowWidgets = computed(() =>
         ref="inputEl"
         v-model="draft"
         class="composer__input"
-        placeholder="Ask Pi anything. Type @ for files or / for commands."
+        :placeholder="placeholder"
         rows="1"
         @input="detectTrigger"
         @keydown="onKeydown"

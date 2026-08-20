@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
 import { refreshSessions, workspace } from "@/stores/workspace";
+import { settings } from "@/stores/settings";
 import type {
   LiveItem,
   AgentActivity,
@@ -26,6 +27,11 @@ const connected = ref(false);
 /** 统一 item 流：服务器铸造的稳定 id 终生不变，live→committed 只翻字段。 */
 const items = ref<LiveItem[]>([]);
 const busy = ref(false);
+/** Set when a real server message flips busy true; consumed (and reset)
+ *  by the watcher below the moment busy goes false. Disconnect-time busy
+ *  resets don't pass through this gate, so we don't fire notifications on
+ *  clean session swaps. */
+let notifyOnNextSettle = false;
 const activity = ref<AgentActivity>({ phase: "idle" });
 const pending = ref<PendingMessages>({ steering: [], followUp: [] });
 const canRestorePending = ref(true);
@@ -123,6 +129,7 @@ const onMessage = (message: ServerMessage) => {
     resyncPending = false;
     connected.value = true;
     items.value = message.items;
+    if (message.busy) notifyOnNextSettle = true;
     busy.value = message.busy;
     activity.value = message.activity;
     pending.value = message.pending;
@@ -143,7 +150,10 @@ const onMessage = (message: ServerMessage) => {
       return;
     }
     lastSeq = message.seq;
-    if (message.busy !== undefined) busy.value = message.busy;
+    if (message.busy !== undefined) {
+      if (message.busy) notifyOnNextSettle = true;
+      busy.value = message.busy;
+    }
     if (message.activity) activity.value = message.activity;
     if (message.pending) pending.value = message.pending;
     if (message.resources) resources.value = message.resources;
@@ -224,6 +234,81 @@ const dismissNotification = (id: string) => {
   const index = extensionUi.notifications.findIndex((notification) => notification.id === id);
   if (index !== -1) extensionUi.notifications.splice(index, 1);
 };
+
+// ─── Turn-completion notifications ──────────────────────────────────
+//
+// Fired from the `busy` watcher below when the server reports a turn has
+// fully settled (busy: true → false). Disconnect() also flips busy to false
+// but bypasses `notifyOnNextSettle`, so clean session swaps don't ping.
+
+// Short Web Audio two-note "ding-dong". Most browsers suspend an
+// AudioContext until a user gesture, so the very first settle after page
+// load may stay silent — that's by design and matches every other
+// browser-based agent UI.
+const playCompletionChime = () => {
+  if (typeof window === "undefined") return;
+  try {
+    const Ctx = window.AudioContext
+      ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const schedule = (t: number, freq: number, dur: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + dur);
+    };
+    const t0 = ctx.currentTime + 0.005;
+    schedule(t0, 880, 0.18);
+    schedule(t0 + 0.09, 1320, 0.16);
+    if (ctx.state === "suspended") void ctx.resume();
+    setTimeout(() => { ctx.close().catch(() => undefined); }, 400);
+  } catch {
+    /* users who block audio context get nothing — totally fine */
+  }
+};
+
+const fireDesktopNotification = (modelLabel: string) => {
+  if (typeof window === "undefined" || typeof Notification === "undefined") return;
+  if (Notification.permission !== "granted") return;
+  try {
+    const body = modelLabel ? `${modelLabel} finished responding.` : "Agent finished responding.";
+    const notification = new Notification("Pichamber", { body, silent: true, tag: "pichamber-completion" });
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+    };
+    setTimeout(() => notification.close(), 7_000);
+  } catch {
+    /* some browsers throw when fired too often in quick succession */
+  }
+};
+
+const notifyAgentSettled = () => {
+  if (settings.notifySound) playCompletionChime();
+  if (settings.notifyDesktop) {
+    const label = model.value?.name?.trim() || model.value?.id || model.value?.provider || "";
+    fireDesktopNotification(label);
+  }
+};
+
+// Module-scope watcher so it lives as long as the composable does. The
+// gate (`notifyOnNextSettle`) is set by the message handlers above; the
+// disconnect path flips busy without touching it, so session swaps never
+// ping. We track the prior value to detect the true→false edge reliably
+// even across rapid ref toggles.
+watch(busy, (now, prev) => {
+  if (prev === true && now === false && notifyOnNextSettle) {
+    notifyOnNextSettle = false;
+    notifyAgentSettled();
+  }
+});
 
 /** Pi owns the model and thinking state. Wait for its state broadcast
  *  instead of guessing locally: setModel can fail after the user selects a

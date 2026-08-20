@@ -18,6 +18,10 @@ const props = defineProps<{
   final?: boolean;
   /** Friendly model name resolved from the current model registry. */
   modelName?: string;
+  /** Render a timestamp row under the message body. */
+  showTimestamp?: boolean;
+  /** Pre-formatted by the parent from message.timestamp. */
+  timestampText?: string;
 }>();
 
 const error = computed(() => {
@@ -78,6 +82,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
         :code-block-monaco-options="{ disableFileHeader: true }"
         :viewport-priority="false"
       />
+      <p v-if="showTimestamp && timestampText" class="conversation-message__timestamp">{{ timestampText }}</p>
     </template>
   </article>
 </template>
@@ -137,5 +142,15 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Timestamp footer lives under both committed and error variants so
+ * timestamps align with the message body, not the author line. The same
+ * rule in ConversationMessages.vue styles user-side timestamps. */
+.conversation-message__timestamp {
+  margin: 8px 0 0;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
 }
 </style>

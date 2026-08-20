@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import MarkdownRender from "markstream-vue";
-import type { LiveItem, ModelDescriptor } from "@pichamber/shared";
+import type { AgentMessage, LiveItem, ModelDescriptor } from "@pichamber/shared";
 import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
@@ -14,6 +14,8 @@ import { workspace } from "@/stores/workspace";
 const props = defineProps<{
   items: LiveItem[];
   availableModels?: ModelDescriptor[];
+  /** Render a local timestamp under each committed message. */
+  showTimestamps?: boolean;
 }>();
 
 /* ── Scroll anchoring (event-driven, following the StackBlitz
@@ -193,6 +195,24 @@ const userSkillBlocks = computed(() => {
   }
   return map;
 });
+
+/** Cheap, locale-aware timestamp string reused by both user and assistant
+ *  rows. Pulls the actual server-assigned `timestamp` (ms epoch) off the
+ *  message — every pi message type carries one — so the displayed time
+ *  matches when the message was committed, not when the timestamp row
+ *  was first rendered. Returns undefined when the message is empty (a
+ *  rare "draft" placeholder) so the template can omit the footer. */
+const formatLocalTimestamp = (message: AgentMessage | undefined): string | undefined => {
+  if (!message) return undefined;
+  const ts = (message as { timestamp?: unknown }).timestamp;
+  if (typeof ts !== "number" || !Number.isFinite(ts)) return undefined;
+  return new Date(ts).toLocaleString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    day: "numeric",
+  });
+};
 </script>
 
 <template>
@@ -242,12 +262,15 @@ const userSkillBlocks = computed(() => {
               />
             </div>
           </div>
+          <p v-if="props.showTimestamps" class="conversation-message__timestamp">{{ formatLocalTimestamp(item.message) }}</p>
         </article>
         <AssistantMessage
           v-else-if="item.kind === 'assistant'"
           :message="item.message"
           :final="item.phase === 'committed'"
           :model-name="modelNameFor(item.message)"
+          :show-timestamp="!!props.showTimestamps"
+          :timestamp-text="formatLocalTimestamp(item.message)"
         />
         <ToolResultMessage v-else-if="item.kind === 'tool'" v-memo="[item]" :detail="toolDetail(item)" />
         <article v-else-if="item.kind === 'compaction'" v-memo="[item]" class="conversation-message conversation-message--compaction">
@@ -284,6 +307,19 @@ const userSkillBlocks = computed(() => {
 .conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 28px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 28px; }
+
+/* Per-message timestamp footer. Right-aligned under user bubbles, left-
+   aligned under assistant/tool responses. Color tracks the muted footer
+   vocabulary so it reads as metadata, not content. */
+.conversation-message__timestamp {
+  margin: 6px 0 0;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.conversation-message--user .conversation-message__timestamp {
+  text-align: right;
+}
 
 /* Compaction summary block: a quiet inset card between messages, mirroring
    the TUI's CompactionSummaryMessage (same surface as custom messages). */

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ToolIcon from "@/assets/icons/Tool.svg";
+import { settings } from "@/stores/settings";
 import type { ConversationToolDetail } from "./conversationToolDetail";
 import ConversationDetail from "./ConversationDetail.vue";
 
@@ -23,6 +24,7 @@ defineProps<{
       :running="detail.running"
       :started-at="detail.startedAt"
       :body="detail.body"
+      :default-expanded="settings.expandedToolResults"
     />
   </article>
 </template>

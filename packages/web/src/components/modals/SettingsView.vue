@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, toRef, watch } from "vue";
+import { computed, onMounted, ref, toRef, watch } from "vue";
 import SplitPane from "@/components/layout/SplitPane.vue";
 import IconButton from "@/components/IconButton.vue";
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
 import AiGenerate2Icon from "@/assets/icons/AiGenerate2.svg";
-import BarChart2Icon from "@/assets/icons/BarChart2.svg";
 import BookOpenIcon from "@/assets/icons/BookOpen.svg";
 import BookIcon from "@/assets/icons/Book.svg";
 import BrainIcon from "@/assets/icons/Brain.svg";
@@ -51,8 +50,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { key: "appearance", label: "Appearance", icon: PaletteIcon, enabled: true },
-  { key: "chat", label: "Chat", icon: ChatAi3Icon },
-  { key: "notifications", label: "Notifications", icon: Notification3Icon },
+  { key: "chat", label: "Chat", icon: ChatAi3Icon, enabled: true },
+  { key: "notifications", label: "Notifications", icon: Notification3Icon, enabled: true },
   { key: "sessions", label: "Sessions", icon: ChatHistoryIcon, enabled: true },
   { key: "shortcuts", label: "Shortcuts", icon: CommandIcon },
   { key: "git", label: "Git", icon: GitBranchIcon },
@@ -66,7 +65,6 @@ const navItems: NavItem[] = [
   { key: "mcp", label: "MCP", icon: McpIcon },
   { key: "extensions", label: "Extensions", icon: CodeBoxIcon, enabled: true },
   { key: "providers", label: "Providers", icon: CloudIcon, enabled: true },
-  { key: "usage", label: "Usage", icon: BarChart2Icon },
   { key: "skills-installed", label: "Skills", icon: BookOpenIcon },
   { key: "skills-catalog", label: "Skills Catalog", icon: BookIcon },
   { key: "runtime", label: "Runtime", icon: TerminalIcon, enabled: true },
@@ -88,6 +86,66 @@ const settingsSize = toRef(settingsView, "size");
 const { resources } = useConversationSession();
 const { preference: themePreference, options: themeOptions, setTheme } = useTheme();
 const serverSettings = useServerSettings();
+
+// Desktop-notification permission is a tristate of "we don't know yet",
+// "the user said yes/no", or "this browser can't show notifications".
+// We refresh on mount and after a successful request; some browsers
+// silently downgrade "default" to "denied" between sessions, so a quick
+// re-read avoids the toggle getting stuck enabled.
+type NotificationStatus = "unsupported" | NotificationPermission;
+const notificationStatus = ref<NotificationStatus>(
+  typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+);
+const refreshNotificationStatus = () => {
+  if (typeof Notification === "undefined") return;
+  notificationStatus.value = Notification.permission;
+};
+onMounted(refreshNotificationStatus);
+const canDesktopNotify = computed(() => notificationStatus.value === "granted");
+
+const requestNotificationPermission = async () => {
+  if (typeof Notification === "undefined") return;
+  if (notificationStatus.value === "granted" || notificationStatus.value === "denied") return;
+  const next = await Notification.requestPermission();
+  notificationStatus.value = next;
+};
+
+/** Match the user-visible state to "what does the button actually do".
+ *  Read-only labels when permission is already decided so the row stays
+ *  calm once granted/denied. */
+const permissionLabel = computed(() => {
+  const status = notificationStatus.value;
+  if (status === "unsupported") {
+    return {
+      title: "Browser unsupported",
+      description: "This browser does not expose the system Notification API.",
+      action: "Unavailable",
+      disabled: true,
+    };
+  }
+  if (status === "granted") {
+    return {
+      title: "Notifications allowed",
+      description: "Desktop notifications are enabled in this browser.",
+      action: "Granted",
+      disabled: true,
+    };
+  }
+  if (status === "denied") {
+    return {
+      title: "Notifications blocked",
+      description: "Reset the permission from your browser's site settings, then re-open this page.",
+      action: "Denied",
+      disabled: true,
+    };
+  }
+  return {
+    title: "Allow desktop notifications",
+    description: "Asks the browser to show a system notification when an agent turn completes.",
+    action: "Request permission",
+    disabled: false,
+  };
+});
 
 const visibleNavItems = computed(() =>
   navItems.filter((item) =>
@@ -233,6 +291,56 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
             <SettingsOption title="Hide temporary sessions" description="Hide sessions under /tmp and macOS temporary folders.">
               <input v-model="settings.hideTemporarySessions" type="checkbox" />
             </SettingsOption>
+          </template>
+
+          <template v-else-if="activeKey === 'chat'">
+            <SettingsPageHeader title="Chat" description="Local preferences for the conversation view. These never sync across devices." />
+
+            <SettingsGroup title="Composer">
+              <SettingsOption inline title="Send key" description="Pick the key combo that submits a message. Plain Enter is faster; Cmd/Ctrl+Enter leaves the newline key free.">
+                <select v-model="settings.sendKey">
+                  <option value="enter">Enter (default)</option>
+                  <option value="modEnter">⌘/Ctrl + Enter</option>
+                </select>
+              </SettingsOption>
+            </SettingsGroup>
+
+            <SettingsGroup title="Display">
+              <SettingsOption title="Show timestamps" description="Render a local timestamp under every committed message in the conversation.">
+                <input v-model="settings.showTimestamps" type="checkbox" />
+              </SettingsOption>
+              <SettingsOption title="Expand tool results by default" description="Open committed tool result details when the page first renders. You'll still be able to fold them.">
+                <input v-model="settings.expandedToolResults" type="checkbox" />
+              </SettingsOption>
+            </SettingsGroup>
+          </template>
+
+          <template v-else-if="activeKey === 'notifications'">
+            <SettingsPageHeader title="Notifications" description="Decide how Pichamber lets you know the agent has finished a turn." />
+
+            <SettingsGroup title="On agent turn complete">
+              <SettingsOption title="Sound" description="Play a short chime when the agent becomes idle. Respects your device's mute switch.">
+                <input v-model="settings.notifySound" type="checkbox" />
+              </SettingsOption>
+              <SettingsOption title="Desktop notification" description="Show a system notification when the turn ends. Requires browser permission below.">
+                <input v-model="settings.notifyDesktop" type="checkbox" :disabled="!canDesktopNotify" />
+              </SettingsOption>
+            </SettingsGroup>
+
+            <SettingsGroup title="Browser permission">
+              <SettingsOption
+                inline
+                :title="permissionLabel.title"
+                :description="permissionLabel.description"
+              >
+                <button
+                  type="button"
+                  class="settings-permission-button"
+                  :disabled="permissionLabel.disabled"
+                  @click="requestNotificationPermission"
+                >{{ permissionLabel.action }}</button>
+              </SettingsOption>
+            </SettingsGroup>
           </template>
 
           <template v-else-if="activeKey === 'extensions'">
@@ -475,5 +583,25 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
   background: var(--ui-surface-selected);
   font-family: var(--ui-font-mono);
   font-size: 11px;
+}
+
+/* Permission button: matches the input/select control surface so the
+ * inline option row stays visually balanced. Disabled reads muted so
+ * "Granted" / "Denied" / "Unavailable" don't pull focus. */
+.settings-permission-button {
+  min-width: 132px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.settings-permission-button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 </style>

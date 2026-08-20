@@ -13,6 +13,7 @@ import UserInputBlock from "@/components/workspace/UserInputBlock.vue";
 import ExtensionUiHost from "@/components/workspace/ExtensionUiHost.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { workspace } from "@/stores/workspace";
+import { settings } from "@/stores/settings";
 import { computed, watch } from "vue";
 
 const presets = [
@@ -64,7 +65,7 @@ watch(
 
 <template>
   <section class="conversation" :class="{ 'conversation--active': hasConversation }">
-    <ConversationMessages v-if="hasConversation" :items="items" :available-models="availableModels" />
+    <ConversationMessages v-if="hasConversation" :items="items" :available-models="availableModels" :show-timestamps="settings.showTimestamps" />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <UserInputBlock
@@ -81,6 +82,7 @@ watch(
       :available-models="availableModels"
       :thinking-level="thinking.level"
       :available-thinking-levels="thinking.availableLevels"
+      :send-key="settings.sendKey"
       @send="send"
       @abort="abort"
       @compact="compact"
