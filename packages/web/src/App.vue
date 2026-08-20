@@ -7,29 +7,20 @@ import { ui } from "@/stores/ui";
 import SessionHeader from "@/components/panels/SessionHeader.vue";
 import SessionSidebar from "@/components/panels/SessionSidebar.vue";
 import { RouterView } from "vue-router";
-import PanelSkeleton from "@/components/PanelSkeleton.vue";
-import { computed, defineAsyncComponent, h, KeepAlive, type Component } from "vue";
+import { computed, defineAsyncComponent, KeepAlive } from "vue";
 
 // On-demand panels and modal: their heavy deps (diff viewer, terminal/ghostty
 // WASM, the full settings surface) are split into lazy chunks and only fetched
 // when the panel is actually opened, instead of paying for them on first paint.
-// Each shows a themed skeleton while its chunk resolves (delay avoids a flash
-// on fast local loads).
-const asyncPanel = (
-  loader: () => Promise<{ default: Component }>,
-  variant: "terminal" | "git" | "files" | "context" | "settings",
-) =>
-  defineAsyncComponent({
-    loader: () => loader().then((mod) => mod.default),
-    loadingComponent: h(PanelSkeleton, { variant }),
-    delay: 150,
-  });
-
-const SettingsModal = asyncPanel(() => import("@/components/modals/SettingsView.vue"), "settings");
-const AsyncTerminalPanel = asyncPanel(() => import("@/components/panels/TerminalPanel.vue"), "terminal");
-const AsyncGitPanel = asyncPanel(() => import("@/components/panels/GitPanel.vue"), "git");
-const AsyncFilesPanel = asyncPanel(() => import("@/components/panels/FilesPanel.vue"), "files");
-const AsyncContextPanel = asyncPanel(() => import("@/components/panels/ContextPanel.vue"), "context");
+const SettingsModal = defineAsyncComponent(
+  () => import("@/components/modals/SettingsView.vue"),
+);
+const AsyncTerminalPanel = defineAsyncComponent(
+  () => import("@/components/panels/TerminalPanel.vue"),
+);
+const AsyncGitPanel = defineAsyncComponent(() => import("@/components/panels/GitPanel.vue"));
+const AsyncFilesPanel = defineAsyncComponent(() => import("@/components/panels/FilesPanel.vue"));
+const AsyncContextPanel = defineAsyncComponent(() => import("@/components/panels/ContextPanel.vue"));
 
 const rightPanel = computed(() => ({
   git: AsyncGitPanel,
