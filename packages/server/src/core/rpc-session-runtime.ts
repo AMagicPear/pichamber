@@ -2,7 +2,8 @@
  * RPC-backed session runtime.
  *
  * Spawns a user-installed `pi --mode rpc` subprocess and proxies the
- * session surface through Pi's JSONL protocol (`docs/rpc.md`).
+ * session surface through Pi's JSONL protocol
+ * (https://github.com/earendil-works/pi-coding-agent/blob/main/docs/rpc.md).
  *
  * The default SDK runtime drives Pi in-process; this runtime is the
  * "optional compatibility and process-isolation mode" from

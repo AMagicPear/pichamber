@@ -8,8 +8,8 @@
  *   • `SdkSessionRuntime` (default) — drives Pi's bundled `AgentSession`
  *     in-process. Reuses everything in `core/`.
  *   • `RpcSessionRuntime` — spawns a user-installed `pi --mode rpc` and
- *     proxies the same surface through the JSONL protocol described in
- *     `docs/rpc.md`.
+ *     proxies the same surface through Pi's JSONL protocol
+ *     (https://github.com/earendil-works/pi-coding-agent/blob/main/docs/rpc.md).
  *
  * The runtime covers only agent concerns (prompts, events, model,
  * thinking level, session state, extension UI). Files, Git, and PTY are
