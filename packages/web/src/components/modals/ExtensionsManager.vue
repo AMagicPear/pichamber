@@ -219,9 +219,10 @@ onMounted(async () => {
       <ul v-else class="extension-manager__list">
         <li v-for="entry in sources" :key="`${entry.scope}:${entry.source}`" class="extension-manager__manage-row">
           <div class="extension-manager__item-copy">
-            <strong>{{ entry.source }}</strong>
+            <strong>{{ entry.source }} <small v-if="entry.version">v{{ entry.version }}</small></strong>
             <small>
               {{ scopeLabel(entry.scope) }}
+              <template v-if="updates.some((update) => update.source === entry.source && update.scope === entry.scope)"> · update available</template>
               <template v-if="entry.filtered"> · filtered</template>
               <template v-if="entry.installedPath"> · {{ entry.installedPath }}</template>
             </small>

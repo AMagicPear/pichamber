@@ -212,6 +212,8 @@ export type PiExtensionSource = {
   scope: "user" | "project";
   filtered: boolean;
   installedPath?: string;
+  /** Version read from the installed package manifest, when available. */
+  version?: string;
 };
 
 /** An installed Pi package with a newer registry or remote revision available. */

@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { DefaultPackageManager, getAgentDir, type AgentSession } from "@earendil-works/pi-coding-agent";
 import type { PiExtensionSource, PiExtensionUpdate } from "@pichamber/shared";
 
@@ -8,12 +10,25 @@ const packageManagerFor = (session: AgentSession, cwd: string) =>
     settingsManager: session.settingsManager,
   });
 
+const readInstalledVersion = (path: string | undefined): string | undefined => {
+  if (!path) return undefined;
+  const manifest = join(path, "package.json");
+  if (!existsSync(manifest)) return undefined;
+  try {
+    const version = (JSON.parse(readFileSync(manifest, "utf8")) as { version?: unknown }).version;
+    return typeof version === "string" && version.trim() ? version : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 export const listPiExtensionSources = (session: AgentSession, cwd: string): PiExtensionSource[] =>
   packageManagerFor(session, cwd).listConfiguredPackages().map((source) => ({
     source: source.source,
     scope: source.scope,
     filtered: source.filtered,
     installedPath: source.installedPath,
+    version: readInstalledVersion(source.installedPath),
   }));
 
 export const installPiExtensionSource = async (
