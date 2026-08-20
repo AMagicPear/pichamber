@@ -112,6 +112,11 @@ const confirm = (confirmed: boolean) => {
   display: grid;
   width: 100%;
   gap: 13px;
+  /* Long payloads (ask_user_question selects many big options) can far
+   * exceed the fixed-width sm modal. Cap the height and scroll instead
+   * of letting the container clip the ends off. */
+  max-height: min(65vh, 460px);
+  overflow-y: auto;
 }
 .extension-dialog header { display: grid; gap: 4px; }
 .extension-dialog__label {
@@ -120,8 +125,15 @@ const confirm = (confirmed: boolean) => {
   font-weight: 600;
   text-transform: uppercase;
 }
-.extension-dialog h3 { margin: 0; color: var(--ui-text-strong); font-size: 15px; font-weight: 600; }
-.extension-dialog p { margin: 0; color: var(--ui-text-muted); font-size: 13px; line-height: 1.45; }
+.extension-dialog h3 {
+  margin: 0;
+  color: var(--ui-text-strong);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.extension-dialog p { margin: 0; color: var(--ui-text-muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
 .extension-dialog input,
 .extension-dialog textarea {
   width: 100%;
@@ -140,13 +152,16 @@ const confirm = (confirmed: boolean) => {
 .extension-dialog__options { display: grid; gap: 3px; }
 .extension-dialog__options button {
   min-height: 31px;
-  padding: 6px 9px;
+  padding: 8px 10px;
   border: 1px solid var(--ui-border-subtle);
   border-radius: 5px;
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
   text-align: left;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 .extension-dialog__options button:hover { background: var(--ui-surface-hover); }
