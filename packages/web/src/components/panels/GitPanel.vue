@@ -272,11 +272,12 @@ watch(() => workspace.cwd, () => {
       <span>{{ statusError }}</span>
       <button
         type="button"
-        class="git-pane__btn git-pane__btn--primary"
+        class="ui-empty-action"
         :disabled="syncBusy === 'init'"
         @click="doInit"
       >
-        {{ syncBusy === "init" ? "Initializing…" : "Initialize repository" }}
+        <GitBranchIcon />
+        <span>{{ syncBusy === "init" ? "Initializing…" : "Initialize repository" }}</span>
       </button>
     </div>
 

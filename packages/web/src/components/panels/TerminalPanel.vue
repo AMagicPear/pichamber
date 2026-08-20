@@ -223,7 +223,7 @@ watch(
       <template v-if="tabs.length === 0">
         <div class="terminal__empty">
           <p>No terminals yet.</p>
-          <button type="button" class="terminal__action" @click="createTab">
+          <button type="button" class="ui-empty-action" @click="createTab">
             <AddIcon />
             <span>New terminal</span>
           </button>
