@@ -220,7 +220,19 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
     <div ref="content" class="conversation__content">
       <template v-for="item in items" :key="item.id">
         <article v-if="item.kind === 'user'" v-memo="[item]" class="conversation-message conversation-message--user">
-          <div class="conversation-message__user">
+          <div
+            v-for="(img, i) in messageImages(item.message)"
+            :key="`image:${i}`"
+            class="conversation-message__image"
+          >
+            <img
+              :src="`data:${img.mimeType};base64,${img.data}`"
+              alt="Attached image"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+          <div v-if="userSkillBlocks.get(item.id) || messageText(item.message)" class="conversation-message__user">
             <!-- When the user message starts with a pi-expanded skill block,
                  collapse the body to a chip so the markdown renderer doesn't
                  see an HTML-shaped blob (its sanitizer would clip on the
@@ -251,16 +263,6 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
               :fade="false"
               :viewport-priority="false"
             />
-            <div v-if="messageImages(item.message).length > 0" class="conversation-message__images">
-              <img
-                v-for="(img, i) in messageImages(item.message)"
-                :key="i"
-                :src="`data:${img.mimeType};base64,${img.data}`"
-                alt="Attached image"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
           </div>
           <p v-if="props.showTimestamps" class="conversation-message__timestamp">{{ formatLocalTimestamp(item.message) }}</p>
         </article>
@@ -319,6 +321,7 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
   font-size: 11px;
   line-height: 1.4;
 }
+.conversation-message--user { display: flex; flex-direction: column; align-items: flex-end; }
 .conversation-message--user .conversation-message__timestamp {
   text-align: right;
 }
@@ -343,7 +346,7 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
 }
 .compaction-summary__label { font-weight: 700; color: var(--ui-text); }
 .compaction-summary__meta { color: var(--ui-text-tertiary); font-size: 12px; }
-.conversation-message__user { display: grid; width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid var(--ui-border-subtle); border-radius: 12px 12px 4px; background: var(--ui-surface-muted); }
+.conversation-message__user { display: grid; box-sizing: border-box; width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid var(--ui-border-subtle); border-radius: 12px 12px 4px; background: var(--ui-surface-muted); }
 
 /* Force the bubble to actually honor its 85% cap when the content
    carries long unbroken strings (paths / URLs in mixed CJK messages).
@@ -353,24 +356,20 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
 .conversation-message__user { min-width: 0; max-width: 85%; }
 .conversation-message__user > * { min-width: 0; max-width: 100%; }
 
-/* Attached images inside the user bubble: thumbnails capped to the bubble
-   width, stacked vertically with the text above. */
-.conversation-message__images {
+/* Each attachment is its own image message, outside the text bubble. */
+.conversation-message__image {
   display: flex;
-  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
+  width: 85%;
+  max-width: 420px;
+  margin: 0 0 8px auto;
 }
-.conversation-message__images:first-child { margin-top: 0; }
-.conversation-message__images img {
+.conversation-message__image img {
   display: block;
   width: auto;
-  max-width: min(100%, 420px);
+  max-width: 100%;
   max-height: 320px;
-  border: 1px solid #e2ded5;
   border-radius: 8px;
-  background: var(--ui-surface);
   object-fit: contain;
   animation: user-image-enter 180ms var(--ui-ease-emphasized) both;
 }
@@ -379,7 +378,7 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .conversation-message__images img { animation: none; }
+  .conversation-message__image img { animation: none; }
 }
 
 /* Error variants: red accent on the message block so failed turns read at

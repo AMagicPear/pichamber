@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AgentActivity, ModelDescriptor, PendingMessages, SlashCommandInfo } from "@pichamber/shared";
+import type { AgentActivity, ExtensionWidget, ModelDescriptor, PendingMessages, SlashCommandInfo } from "@pichamber/shared";
 import { computed, nextTick, ref } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
 import MicIcon from "@/assets/icons/Mic.svg";
@@ -12,9 +12,14 @@ import IconButton from "@/components/IconButton.vue";
 import ComposerShelf from "@/components/workspace/ComposerShelf.vue";
 import ModelSelector from "@/components/workspace/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
+import ComposerActivityStack from "@/components/workspace/ComposerActivityStack.vue";
 import type { SendKey } from "@/stores/settings";
+import type { DraftImage } from "@/composables/useConversationSession";
+import AttachmentIcon from "@/assets/icons/Attachment2.svg";
+import CloseIcon from "@/assets/icons/Close.svg";
 
 const draft = defineModel<string | undefined>({ required: true });
+const images = defineModel<DraftImage[]>("images", { required: true });
 
 const emit = defineEmits<{
   send: [behavior?: "steer" | "followUp"];
@@ -33,7 +38,7 @@ const props = defineProps<{
   canRestorePending: boolean;
   commands: SlashCommandInfo[];
   extensionStatuses: Record<string, string>;
-  extensionWidgets: Record<string, { lines: string[]; placement: "aboveEditor" | "belowEditor" }>;
+  extensionWidgets: Record<string, { widget: ExtensionWidget; placement: "aboveEditor" | "belowEditor" }>;
   model: ModelDescriptor | undefined;
   availableModels: ModelDescriptor[];
   thinkingLevel: ThinkingLevel;
@@ -46,6 +51,97 @@ const submitMode = ref<"steer" | "followUp">("steer");
 const shelf = ref<InstanceType<typeof ComposerShelf> | null>(null);
 const shelfMode = ref<"files" | "commands" | null>(null);
 const shelfQuery = ref("");
+const dragDepth = ref(0);
+const isDraggingImage = computed(() => dragDepth.value > 0);
+
+const MAX_IMAGES = 8;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGES_BYTES = 25 * 1024 * 1024;
+const supportedImageTypes = new Set<DraftImage["mimeType"]>([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
+
+const hasImageFile = (transfer: DataTransfer | null) =>
+  Array.from(transfer?.items ?? []).some((item) =>
+    item.kind === "file" && supportedImageTypes.has(item.type as DraftImage["mimeType"]),
+  ) || Array.from(transfer?.files ?? [])
+    .some((file) => supportedImageTypes.has(file.type as DraftImage["mimeType"]));
+
+const fileData = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result).split(",", 2)[1] ?? "");
+  reader.onerror = () => reject(reader.error);
+  reader.readAsDataURL(file);
+});
+
+const imageAspectRatio = (file: File) => new Promise<number>((resolve, reject) => {
+  const url = URL.createObjectURL(file);
+  const image = new Image();
+  image.onload = () => {
+    URL.revokeObjectURL(url);
+    resolve(image.naturalWidth / image.naturalHeight);
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(url);
+    reject(new Error("Could not read image dimensions"));
+  };
+  image.src = url;
+});
+
+const onDragEnter = (event: DragEvent) => {
+  if (!hasImageFile(event.dataTransfer)) return;
+  dragDepth.value += 1;
+};
+
+const onDragLeave = (event: DragEvent) => {
+  if (!hasImageFile(event.dataTransfer)) return;
+  dragDepth.value = Math.max(0, dragDepth.value - 1);
+};
+
+const addImages = async (candidates: File[]) => {
+  const remaining = MAX_IMAGES - images.value.length;
+  let totalBytes = images.value.reduce((total, image) => total + Math.floor(image.data.length * 3 / 4), 0);
+  const files: File[] = [];
+  for (const file of candidates) {
+    if (
+      files.length < remaining &&
+      supportedImageTypes.has(file.type as DraftImage["mimeType"]) &&
+      file.size <= MAX_IMAGE_BYTES &&
+      totalBytes + file.size <= MAX_IMAGES_BYTES
+    ) {
+      files.push(file);
+      totalBytes += file.size;
+    }
+  }
+  const added = await Promise.all(files.map(async (file) => ({
+    id: crypto.randomUUID(),
+    type: "image" as const,
+    mimeType: file.type as DraftImage["mimeType"],
+    data: await fileData(file),
+    aspectRatio: await imageAspectRatio(file).catch(() => 1),
+  })));
+  images.value = [...images.value, ...added];
+};
+
+const onDrop = (event: DragEvent) => {
+  dragDepth.value = 0;
+  void addImages(Array.from(event.dataTransfer?.files ?? []));
+};
+
+const onPaste = (event: ClipboardEvent) => {
+  const files = Array.from(event.clipboardData?.items ?? []).flatMap((item) => {
+    const file = item.kind === "file" ? item.getAsFile() : null;
+    return file ? [file] : [];
+  });
+  if (files.length > 0) void addImages(files);
+};
+
+const removeImage = (id: string) => {
+  images.value = images.value.filter((image) => image.id !== id);
+};
 
 const onKeydown = (event: KeyboardEvent) => {
   if (shelfMode.value && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
@@ -172,6 +268,37 @@ const openFiles = () => {
 };
 
 const pendingCount = computed(() => props.pending.steering.length + props.pending.followUp.length);
+type TaskTreeEntry = {
+  widget: Extract<ExtensionWidget, { kind: "task-tree" }>;
+  placement: "aboveEditor" | "belowEditor";
+};
+type AuxiliaryItem = {
+  id: string;
+  source: "status" | "widget-line";
+  placement: "aboveEditor" | "belowEditor";
+  text: string;
+};
+const activityWidgets = computed<Record<string, TaskTreeEntry>>(() => Object.fromEntries(
+  Object.entries(props.extensionWidgets).filter(([, entry]) => entry.widget.kind === "task-tree"),
+) as Record<string, TaskTreeEntry>);
+const activityWidgetCount = computed(() => Object.keys(activityWidgets.value).length);
+const auxiliaryItems = computed<AuxiliaryItem[]>(() => [
+  ...Object.entries(props.extensionStatuses).map(([key, text]) => ({
+    id: `status:${key}`,
+    source: "status" as const,
+    placement: "belowEditor" as const,
+    text,
+  })),
+  ...Object.entries(props.extensionWidgets).flatMap(([key, entry]) => entry.widget.kind === "lines"
+    ? entry.widget.lines.map((text, index) => ({
+      id: `widget:${key}:${index}`,
+      source: "widget-line" as const,
+      placement: entry.placement,
+      text,
+    }))
+    : [],
+  ),
+]);
 const activityText = computed(() => {
   switch (props.activity.phase) {
     case "thinking": return "Thinking";
@@ -182,15 +309,6 @@ const activityText = computed(() => {
     default: return "Ready";
   }
 });
-
-/** Widgets keyed by the extension's widget key so Vue's reconciliation
- *  survives `extensionWidgets` reorderings without remounting each panel. */
-const aboveWidgets = computed(() =>
-  Object.entries(props.extensionWidgets).filter(([, widget]) => widget.placement === "aboveEditor"),
-);
-const belowWidgets = computed(() =>
-  Object.entries(props.extensionWidgets).filter(([, widget]) => widget.placement === "belowEditor"),
-);
 
 /** Placeholder mentions the active submit shortcut so users on the alternative
  *  scheme don't have to dig through Settings. Kept short — the chevron isn't
@@ -205,7 +323,19 @@ const placeholder = computed(() => {
 
 <template>
   <div class="composer-shell">
-    <div class="composer" :class="{ 'is-busy': busy, 'has-shelf': shelfMode }">
+    <ComposerActivityStack
+      :widgets="activityWidgets"
+      :show-status="busy || auxiliaryItems.length > 0"
+    >
+      <template #composer>
+      <div
+        class="composer"
+        :class="{ 'is-busy': busy, 'has-shelf': !!shelfMode, 'is-dragging-image': isDraggingImage }"
+        @dragenter="onDragEnter"
+        @dragover.prevent
+        @dragleave="onDragLeave"
+        @drop.prevent="onDrop"
+      >
       <ComposerShelf
         ref="shelf"
         :mode="shelfMode"
@@ -214,9 +344,7 @@ const placeholder = computed(() => {
         @select-file="onPickFile"
         @select-command="onPickCommand"
       />
-      <div v-for="([key, widget]) in aboveWidgets" :key="`above:${key}`" class="composer__widget">
-        <span v-for="(line, lineIndex) in widget.lines" :key="lineIndex">{{ line }}</span>
-      </div>
+      <div v-if="isDraggingImage" class="composer__drop-indicator" aria-hidden="true"><AttachmentIcon /></div>
       <textarea
         ref="inputEl"
         v-model="draft"
@@ -226,7 +354,16 @@ const placeholder = computed(() => {
         @input="detectTrigger"
         @keydown="onKeydown"
         @click="detectTrigger"
+        @paste="onPaste"
       />
+      <div v-if="images.length" class="composer__images" aria-label="Attached images">
+        <div v-for="image in images" :key="image.id" class="composer__image" :style="{ '--image-aspect': image.aspectRatio }">
+          <div class="composer__image-content">
+            <img :src="`data:${image.mimeType};base64,${image.data}`" alt="Attached image" />
+            <button type="button" aria-label="Remove image" title="Remove image" @click="removeImage(image.id)"><CloseIcon /></button>
+          </div>
+        </div>
+      </div>
       <div v-if="pendingCount" class="composer__queue">
         <div v-for="(message, index) in pending.steering" :key="`steer:${index}:${message}`">
           <span>Steer</span><p>{{ message }}</p>
@@ -235,9 +372,6 @@ const placeholder = computed(() => {
           <span>Follow up</span><p>{{ message }}</p>
         </div>
         <button v-if="canRestorePending" type="button" @click="emit('restorePending')">Restore all</button>
-      </div>
-      <div v-for="([key, widget]) in belowWidgets" :key="`below:${key}`" class="composer__widget">
-        <span v-for="(line, lineIndex) in widget.lines" :key="lineIndex">{{ line }}</span>
       </div>
       <div class="composer__footer">
         <div class="composer__footer-leading">
@@ -304,21 +438,16 @@ const placeholder = computed(() => {
           ><SendIcon /></IconButton>
         </div>
       </div>
-    </div>
-
-    <!-- Status line lives OUTSIDE the composer box so it reads as a
-         footnote, not another panel inside the input. Activity indicator
-         + extension chatter flow on one wrapping row, joined by ·. -->
-    <div
-      v-if="busy || Object.keys(extensionStatuses).length > 0"
-      class="composer__status"
-    >
-      <span v-if="busy" class="composer__activity"><i />{{ activityText }}</span>
-      <template v-for="(text, key) in extensionStatuses" :key="key">
-        <span class="composer__status-sep" aria-hidden="true">·</span>
-        <span class="composer__status-text">{{ text }}</span>
+      </div>
       </template>
-    </div>
+      <template #status>
+        <span v-if="busy" class="composer__activity"><i />{{ activityText }}</span>
+        <template v-for="(item, index) in auxiliaryItems" :key="item.id">
+          <span v-if="busy || activityWidgetCount > 0 || index > 0" class="composer__status-sep" aria-hidden="true">·</span>
+          <span class="composer__status-text" :data-source="item.source">{{ item.text }}</span>
+        </template>
+      </template>
+    </ComposerActivityStack>
   </div>
 </template>
 
@@ -343,6 +472,7 @@ const placeholder = computed(() => {
   border: 1px solid var(--ui-border);
   border-radius: 13px;
   background: var(--ui-surface);
+  z-index: 2;
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 .composer:focus-within {
@@ -354,6 +484,24 @@ const placeholder = computed(() => {
    * pulling any cool color into the input surface. */
   border-color: #c8bfae;
 }
+.composer.is-dragging-image {
+  border-color: var(--ui-border-focus);
+  border-style: dashed;
+  box-shadow: 0 0 0 2px var(--ui-focus);
+}
+.composer__drop-indicator {
+  position: absolute;
+  z-index: 3;
+  inset: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgb(83 101 91 / 10%);
+  color: var(--ui-text-muted);
+  pointer-events: none;
+}
+.composer__drop-indicator :deep(svg) { width: 24px; height: 24px; }
 .composer.has-shelf {
   border-radius: 0 0 13px 13px;
 }
@@ -381,18 +529,74 @@ const placeholder = computed(() => {
 .composer__input::placeholder {
   color: var(--ui-text-muted);
 }
+.composer__images {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px 10px;
+}
+.composer__image {
+  width: 42px;
+  height: 42px;
+  width: min(42px, calc(42px * var(--image-aspect)));
+  height: min(42px, calc(42px / var(--image-aspect)));
+  animation: composer-image-enter 140ms var(--ui-ease-emphasized) both;
+}
+.composer__image-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 140ms var(--ui-ease-emphasized);
+}
+.composer__image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  object-fit: cover;
+}
+.composer__image button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+  cursor: pointer;
+}
+.composer__image button:hover { color: var(--ui-text-strong); background: var(--ui-surface-hover); }
+.composer__image button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 1px; }
+.composer__image button :deep(svg) { width: 10px; height: 10px; }
+@keyframes composer-image-enter {
+  from { opacity: 0; transform: translateY(2px) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .composer__image:has(img:hover) .composer__image-content { transform: rotate(-1deg) scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .composer__image { animation: none; }
+}
 
-/* Borders between vertical sections inside the composer box: queue and
- * widgets share the same 1px top divider. */
-.composer__queue,
-.composer__widget {
+/* Pending messages are separated from the editor by a quiet divider. */
+.composer__queue {
   border-top: 1px solid var(--ui-border-subtle);
 }
 
 /* Status footnote lives OUTSIDE the composer box — no border, no
- * background, just muted text below the input. Activity pulse + extension
- * chatter share one wrapping row joined by · so it reads as a single
- * quiet phrase rather than another panel. */
+ * background, just muted text below the input. The ActivityToggle (its
+ * own component) and extension statuses share one wrapping row joined
+ * by · so they read as a single quiet phrase rather than separate
+ * surfaces. */
 .composer__status {
   display: flex;
   flex-wrap: wrap;
@@ -403,6 +607,15 @@ const placeholder = computed(() => {
   color: var(--ui-text-muted);
   font-size: 11px;
   line-height: 1.4;
+  position: relative;
+  z-index: 1;
+}
+.composer__status-sep {
+  opacity: 0.55;
+}
+.composer__status-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .composer__activity {
   display: inline-flex;
@@ -416,30 +629,11 @@ const placeholder = computed(() => {
   height: 5px;
   flex: 0 0 5px;
   border-radius: 50%;
-  /* Warm neutral, no blue. */
-  background: #a89274;
+  background: var(--ui-status-text);
   animation: activity-pulse 1.4s ease-in-out infinite;
 }
 @keyframes activity-pulse {
   50% { opacity: 0.35; }
-}
-.composer__status-sep {
-  opacity: 0.55;
-}
-.composer__status-text {
-  white-space: nowrap;
-}
-
-/* Above- / below-editor extension widget strips. */
-.composer__widget {
-  display: grid;
-  gap: 2px;
-  padding: 7px 12px;
-  background: var(--ui-surface-subtle);
-  color: var(--ui-text-muted);
-  font-size: 12px;
-  line-height: 1.4;
-  white-space: pre-wrap;
 }
 
 /* Pending message queue (steer/follow-up messages waiting to flush). */
@@ -447,7 +641,6 @@ const placeholder = computed(() => {
   display: grid;
   gap: 3px;
   padding: 6px 9px;
-  background: var(--ui-surface-subtle);
 }
 .composer__queue > div {
   display: grid;
@@ -545,9 +738,5 @@ const placeholder = computed(() => {
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow-control);
   color: var(--ui-text-strong);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .composer__activity i { animation: none; }
 }
 </style>

@@ -35,6 +35,14 @@ export type PendingMessages = {
   followUp: string[];
 };
 
+/** Inline image payload accepted by Pi's RPC protocol. The browser sends the
+ * base64 body only; the server adapts it to the SDK's equivalent shape. */
+export type PromptImage = {
+  type: "image";
+  data: string;
+  mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+};
+
 export type RuntimeToolInfo = {
   name: string;
   description: string;
@@ -47,6 +55,40 @@ export type ExtensionInfo = {
   sourceInfo: SourceInfo;
   commands: string[];
   tools: string[];
+};
+
+export type ExtensionWidgetPlacement = "aboveEditor" | "belowEditor";
+
+export type ActivityNode = {
+  id: string;
+  kind: "subagent" | "workflow" | "step";
+  label: string;
+  state: string;
+  startedAt?: number;
+  updatedAt?: number;
+  endedAt?: number;
+  activity?: {
+    state?: string;
+    currentTool?: string;
+    lastActivityAt?: number;
+    currentToolStartedAt?: number;
+    turnCount?: number;
+    toolCount?: number;
+  };
+  children?: ActivityNode[];
+};
+
+export type ExtensionWidget =
+  | { kind: "lines"; lines: string[] }
+  | { kind: "task-tree"; runs: ActivityNode[]; omitted?: number };
+
+export type WebExtensionUIRequest = Exclude<RpcExtensionUIRequest, { method: "setWidget" }> | {
+  type: "extension_ui_request";
+  id: string;
+  method: "setWidget";
+  widgetKey: string;
+  widget?: ExtensionWidget;
+  widgetPlacement?: ExtensionWidgetPlacement;
 };
 
 export type RuntimeResources = {
@@ -354,14 +396,14 @@ export type ServerMessage =
       stats?: SessionStatsView;
       resources?: RuntimeResources;
     }
-  /** 扩展 UI 请求（官方 RPC 模式 extension_ui_request 帧原样转发）。 */
-  | { type: "ui_request"; request: RpcExtensionUIRequest }
+  /** Extension UI request normalized for browser rendering. */
+  | { type: "ui_request"; request: WebExtensionUIRequest }
   | { type: "draft_restore"; messages: string[] }
   | { type: "error"; error: string };
 
 /** JSON messages the client sends to the session WebSocket server. */
 export type ClientMessage =
-  | { type: "prompt"; message: string; streamingBehavior?: "steer" | "followUp" }
+  | { type: "prompt"; message: string; images?: PromptImage[]; streamingBehavior?: "steer" | "followUp" }
   | { type: "abort"; restorePending?: boolean }
   | { type: "restore_pending" }
   | { type: "compact"; customInstructions?: string }

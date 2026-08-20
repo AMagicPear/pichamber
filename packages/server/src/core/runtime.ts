@@ -30,6 +30,7 @@ import type {
   SourceInfo,
 } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { PromptImage } from "@pichamber/shared";
 
 export type { AgentSessionEvent, SourceInfo };
 
@@ -78,6 +79,8 @@ export type RuntimeModelInfo = ModelInfo & { name?: string };
 export type RuntimePromptOptions = {
   /** When streaming, how to queue the message: "steer" or "followUp". */
   streamingBehavior?: "steer" | "followUp";
+  /** Inline image attachments, in the public RPC wire format. */
+  images?: PromptImage[];
 };
 
 export type RuntimeClearedQueue = {

@@ -515,6 +515,7 @@ export const createRpcSessionRuntime = async ({
       await send({
         type: "prompt",
         message,
+        images: options?.images,
         streamingBehavior: options?.streamingBehavior,
       });
     },

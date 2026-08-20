@@ -7,8 +7,11 @@ import { settings } from "@/stores/settings";
 import type {
   LiveItem,
   AgentActivity,
+  ExtensionWidget,
+  ExtensionWidgetPlacement,
   ModelDescriptor,
   PendingMessages,
+  PromptImage,
   RuntimeResources,
   ServerMessage,
   SessionStatsView,
@@ -23,6 +26,8 @@ import type {
  *  export, no Pinia, no provide/inject.
  * ─────────────────────────────────────────────────────────────────── */
 const draft = ref<string>();
+export type DraftImage = PromptImage & { id: string; aspectRatio: number };
+const images = ref<DraftImage[]>([]);
 const connected = ref(false);
 /** 统一 item 流：服务器铸造的稳定 id 终生不变，live→committed 只翻字段。 */
 const items: Ref<LiveItem[]> = ref([]);
@@ -55,10 +60,7 @@ const extensionUi = reactive({
     type: "info" | "warning" | "error";
   }>,
   statuses: {} as Record<string, string>,
-  widgets: {} as Record<
-    string,
-    { lines: string[]; placement: "aboveEditor" | "belowEditor" }
-  >,
+  widgets: {} as Record<string, { widget: ExtensionWidget; placement: ExtensionWidgetPlacement }>,
 });
 const extensionDialogQueue: Array<NonNullable<typeof extensionUi.dialog>> = [];
 
@@ -177,9 +179,9 @@ const onMessage = (message: ServerMessage) => {
       if (request.statusText) extensionUi.statuses[request.statusKey] = request.statusText;
       else delete extensionUi.statuses[request.statusKey];
     } else if (request.method === "setWidget") {
-      if (request.widgetLines) {
+      if (request.widget) {
         extensionUi.widgets[request.widgetKey] = {
-          lines: request.widgetLines,
+          widget: request.widget,
           placement: request.widgetPlacement ?? "aboveEditor",
         };
       } else delete extensionUi.widgets[request.widgetKey];
@@ -204,16 +206,22 @@ const onStatus = (status: WsStatus) => {
 };
 
 const canSend = computed(
-  () => connected.value && draft.value != undefined && draft.value.trim().length > 0,
+  () => connected.value && (Boolean(draft.value?.trim()) || images.value.length > 0),
 );
 
 const send = (streamingBehavior?: "steer" | "followUp") => {
   const text = draft.value?.trim();
-  if (!canSend.value || !ws || !text) return;
+  if (!canSend.value || !ws) return;
   // Dismiss any lingering error toasts so they don't pile up across turns.
   extensionUi.notifications = extensionUi.notifications.filter((n) => n.type !== "error");
-  ws.send({ type: "prompt", message: text, streamingBehavior });
+  ws.send({
+    type: "prompt",
+    message: text ?? "",
+    images: images.value.map(({ type, data, mimeType }) => ({ type, data, mimeType })),
+    streamingBehavior,
+  });
   draft.value = undefined;
+  images.value = [];
 };
 
 const abort = () => ws?.send({ type: "abort", restorePending: true });
@@ -328,6 +336,7 @@ const disconnect = () => {
   activeSessionId = null;
   connected.value = false;
   items.value = [];
+  images.value = [];
   busy.value = false;
   activity.value = { phase: "idle" };
   pending.value = { steering: [], followUp: [] };
@@ -398,6 +407,7 @@ export const useConversationSession = () => {
     pending,
     resources,
     extensionUi,
+    images,
     respondToExtension,
     restorePending,
     send,

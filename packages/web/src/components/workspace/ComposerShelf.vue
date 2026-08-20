@@ -6,6 +6,7 @@ import CommandIcon from "@/assets/icons/Command.svg";
 import { listDirectory, searchFiles, toMessage } from "@/api/client";
 import { getEntryIcon } from "@/components/workspace/fileIcon";
 import { workspace } from "@/stores/workspace";
+import FloatingPanel from "./FloatingPanel.vue";
 
 const props = defineProps<{
   mode: "files" | "commands" | null;
@@ -90,123 +91,64 @@ defineExpose({ move, choose });
 </script>
 
 <template>
-  <div v-if="mode" class="composer-shelf" role="listbox" :aria-label="mode === 'files' ? 'Files' : 'Commands'">
-    <header class="composer-shelf__header">
-      <span class="composer-shelf__kind">
-        <AttachmentIcon v-if="mode === 'files'" />
-        <CommandIcon v-else />
-        {{ mode === "files" ? "Files" : "Pi commands" }}
-      </span>
-      <span class="composer-shelf__query">{{ mode === "files" ? `@${query}` : `/${query}` }}</span>
-    </header>
-
-    <div class="composer-shelf__list">
-      <template v-if="mode === 'commands'">
-        <button
-          v-for="(command, index) in commandResults"
-          :key="`${command.source}:${command.name}`"
-          type="button"
-          class="composer-shelf__row composer-shelf__row--command"
-          :class="{ 'is-selected': index === selectedIndex }"
-          role="option"
-          :aria-selected="index === selectedIndex"
-          @mouseenter="selectedIndex = index"
-          @mousedown.prevent="emit('selectCommand', command)"
-        >
-          <span class="composer-shelf__command-copy">
-            <span class="composer-shelf__primary">/{{ command.name }}</span>
-            <span class="composer-shelf__description">{{ command.description || "No description" }}</span>
-          </span>
-          <span class="composer-shelf__source" :class="`is-${command.source}`">{{ command.source }}</span>
-        </button>
-        <p v-if="commandResults.length === 0" class="composer-shelf__state">No matching Pi commands</p>
-      </template>
-
-      <template v-else>
-        <button
-          v-for="(entry, index) in fileResults"
-          :key="entry.path"
-          type="button"
-          class="composer-shelf__row composer-shelf__row--file"
-          :class="{ 'is-selected': index === selectedIndex }"
-          role="option"
-          :aria-selected="index === selectedIndex"
-          @mouseenter="selectedIndex = index"
-          @mousedown.prevent="emit('selectFile', entry.relativePath)"
-        >
-          <svg class="composer-shelf__file-icon" aria-hidden="true"><use :href="getEntryIcon(entry.name, false, false)" /></svg>
-          <span class="composer-shelf__primary">{{ entry.name }}</span>
-          <span class="composer-shelf__description">{{ entry.relativePath }}</span>
-        </button>
-        <p v-if="loading" class="composer-shelf__state">Searching files...</p>
-        <p v-else-if="error" class="composer-shelf__state is-error">{{ error }}</p>
-        <p v-else-if="fileResults.length === 0" class="composer-shelf__state">No matching files</p>
-      </template>
-    </div>
-
-    <footer class="composer-shelf__footer">Up/Down to navigate <span>Enter to insert</span> <span>Esc to close</span></footer>
-  </div>
+  <FloatingPanel
+    v-if="mode"
+    :title="mode === 'files' ? 'Files' : 'Pi commands'"
+    :hint="mode === 'files' ? `@${query}` : `/${query}`"
+    :aria-label="mode === 'files' ? 'Files' : 'Commands'"
+    role="listbox"
+  >
+    <template #title-icon>
+      <AttachmentIcon v-if="mode === 'files'" />
+      <CommandIcon v-else />
+    </template>
+    <template v-if="mode === 'commands'">
+      <button
+        v-for="(command, index) in commandResults"
+        :key="`${command.source}:${command.name}`"
+        type="button"
+        class="composer-shelf__row composer-shelf__row--command"
+        :class="{ 'is-selected': index === selectedIndex }"
+        role="option"
+        :aria-selected="index === selectedIndex"
+        @mouseenter="selectedIndex = index"
+        @mousedown.prevent="emit('selectCommand', command)"
+      >
+        <span class="composer-shelf__command-copy">
+          <span class="composer-shelf__primary">/{{ command.name }}</span>
+          <span class="composer-shelf__description">{{ command.description || "No description" }}</span>
+        </span>
+        <span class="composer-shelf__source" :class="`is-${command.source}`">{{ command.source }}</span>
+      </button>
+      <p v-if="commandResults.length === 0" class="composer-shelf__state">No matching Pi commands</p>
+    </template>
+    <template v-else>
+      <button
+        v-for="(entry, index) in fileResults"
+        :key="entry.path"
+        type="button"
+        class="composer-shelf__row composer-shelf__row--file"
+        :class="{ 'is-selected': index === selectedIndex }"
+        role="option"
+        :aria-selected="index === selectedIndex"
+        @mouseenter="selectedIndex = index"
+        @mousedown.prevent="emit('selectFile', entry.relativePath)"
+      >
+        <svg class="composer-shelf__file-icon" aria-hidden="true"><use :href="getEntryIcon(entry.name, false, false)" /></svg>
+        <span class="composer-shelf__primary">{{ entry.name }}</span>
+        <span class="composer-shelf__description">{{ entry.relativePath }}</span>
+      </button>
+      <p v-if="loading" class="composer-shelf__state">Searching files...</p>
+      <p v-else-if="error" class="composer-shelf__state is-error">{{ error }}</p>
+      <p v-else-if="fileResults.length === 0" class="composer-shelf__state">No matching files</p>
+    </template>
+    <template #footer>
+      Up/Down to navigate <span>Enter to insert</span> <span>Esc to close</span>
+    </template>
+  </FloatingPanel>
 </template>
 
 <style scoped>
-.composer-shelf {
-  position: absolute;
-  z-index: 40;
-  bottom: calc(100% - 1px);
-  left: -1px;
-  display: flex;
-  width: calc(100% + 2px);
-  max-height: min(292px, 42vh);
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--ui-border-focus);
-  border-bottom-color: var(--ui-border);
-  border-radius: 10px 10px 0 0;
-  background: var(--ui-surface);
-  box-shadow: 0 -12px 30px rgb(33 31 26 / 10%);
-}
-.composer-shelf__header,
-.composer-shelf__footer {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  color: var(--ui-text-muted);
-  font-size: 11px;
-}
-.composer-shelf__header {
-  justify-content: space-between;
-  min-height: 36px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--ui-border-subtle);
-  background: var(--ui-surface-subtle);
-}
-.composer-shelf__kind {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--ui-text-strong);
-  font-size: 12px;
-  font-weight: 600;
-}
-.composer-shelf__kind svg,
-.composer-shelf__file-icon {
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
-}
-.composer-shelf__query {
-  max-width: 55%;
-  overflow: hidden;
-  font-family: var(--ui-font-mono);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.composer-shelf__list {
-  min-height: 0;
-  padding: 5px;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
 .composer-shelf__row {
   width: 100%;
   border: 0;
@@ -236,6 +178,11 @@ defineExpose({ move, choose });
 }
 .composer-shelf__row.is-selected {
   background: var(--ui-surface-selected);
+}
+.composer-shelf__file-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
 }
 .composer-shelf__command-copy {
   display: grid;
@@ -281,14 +228,6 @@ defineExpose({ move, choose });
   text-align: center;
 }
 .composer-shelf__state.is-error { color: #9b4242; }
-.composer-shelf__footer {
-  gap: 12px;
-  min-height: 27px;
-  padding: 0 12px;
-  border-top: 1px solid var(--ui-border-subtle);
-  background: var(--ui-surface-subtle);
-}
-.composer-shelf__footer span { color: var(--ui-text-muted); }
 @media (max-width: 640px) {
   .composer-shelf__row--file .composer-shelf__description { display: none; }
   .composer-shelf__row--file { grid-template-columns: auto minmax(0, 1fr); }

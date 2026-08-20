@@ -15,15 +15,18 @@ import type {
   AgentActivity,
   ModelDescriptor,
   PendingMessages,
+  PromptImage,
   RuntimeResources,
   ServerMessage,
+  WebExtensionUIRequest,
+  ExtensionWidget,
   SessionStatsView,
   ThinkingState,
 } from "@pichamber/shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
 import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
-import { displayWidgetLines } from "../extensions/widget-lines";
+import { normalizeWidgetRequest } from "../extensions/widget-lines";
 import { computeSessionStatsView } from "./context";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { conversationItems } from "./conversation";
@@ -73,7 +76,7 @@ type AssistantItem = Extract<LiveItem, { kind: "assistant" }>;
  * them before a browser socket has attached. */
 type ExtensionUiState = {
   statuses: Record<string, string>;
-  widgets: Record<string, { lines: string[]; placement: "aboveEditor" | "belowEditor" }>;
+  widgets: Record<string, { widget: ExtensionWidget; placement: "aboveEditor" | "belowEditor" }>;
   title?: string;
 };
 
@@ -125,7 +128,44 @@ type SessionChannel = {
  *  prompt + steer/followUp after compaction ends. */
 type CompactionQueuedMessage = {
   text: string;
+  images?: PromptImage[];
   mode: "steer" | "followUp";
+};
+
+const SUPPORTED_IMAGE_MIME_TYPES = new Set<PromptImage["mimeType"]>([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
+const MAX_PROMPT_IMAGES = 8;
+const MAX_PROMPT_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_PROMPT_IMAGES_BYTES = 25 * 1024 * 1024;
+
+const base64ByteLength = (data: string) =>
+  (data.length / 4) * 3 - (data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0);
+
+const parsePromptImages = (value: unknown): PromptImage[] | null => {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_PROMPT_IMAGES) return null;
+  let totalBytes = 0;
+  const images: PromptImage[] = [];
+  for (const image of value) {
+    if (
+      !image ||
+      typeof image !== "object" ||
+      (image as { type?: unknown }).type !== "image" ||
+      typeof (image as { data?: unknown }).data !== "string" ||
+      !SUPPORTED_IMAGE_MIME_TYPES.has((image as { mimeType?: PromptImage["mimeType"] }).mimeType as PromptImage["mimeType"])
+    ) return null;
+    const data = (image as { data: string }).data;
+    if (!data || data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(data)) return null;
+    const bytes = base64ByteLength(data);
+    totalBytes += bytes;
+    if (bytes > MAX_PROMPT_IMAGE_BYTES || totalBytes > MAX_PROMPT_IMAGES_BYTES) return null;
+    images.push(image as PromptImage);
+  }
+  return images;
 };
 
 const channelsBySession = new Map<string, SessionChannel>();
@@ -278,14 +318,14 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
 /** Store the extension operations whose meaning is "set current value".
  * Notifications and dialogs are intentionally not retained: replaying either
  * one on reconnect would produce duplicate toasts or prompts. */
-const applyExtensionUiRequest = (state: ExtensionUiState, request: RpcExtensionUIRequest) => {
+const applyExtensionUiRequest = (state: ExtensionUiState, request: WebExtensionUIRequest) => {
   if (request.method === "setStatus") {
     if (request.statusText) state.statuses[request.statusKey] = request.statusText;
     else delete state.statuses[request.statusKey];
   } else if (request.method === "setWidget") {
-    if (request.widgetLines) {
+    if (request.widget) {
       state.widgets[request.widgetKey] = {
-        lines: request.widgetLines,
+        widget: request.widget,
         placement: request.widgetPlacement ?? "aboveEditor",
       };
     } else delete state.widgets[request.widgetKey];
@@ -298,7 +338,7 @@ const applyExtensionUiRequest = (state: ExtensionUiState, request: RpcExtensionU
  * from the session snapshot because extension UI is event-shaped in the
  * public protocol, while the client already applies these setters idempotently. */
 const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
-  const send = (request: RpcExtensionUIRequest) => {
+  const send = (request: WebExtensionUIRequest) => {
     if (socket.readyState === 1) {
       socket.send(JSON.stringify({ type: "ui_request", request } satisfies ServerMessage));
     }
@@ -318,7 +358,7 @@ const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
       id: crypto.randomUUID(),
       method: "setWidget",
       widgetKey,
-      widgetLines: widget.lines,
+      widget: widget.widget,
       widgetPlacement: widget.placement,
     });
   }
@@ -336,7 +376,7 @@ const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
  * labels, so `ctx.ui.*` strings can carry ANSI color codes. Web clients need
  * the semantic text only; normalize every textual UI field at this boundary
  * so SDK and RPC runtimes render identically. */
-const stripExtensionUiAnsi = (request: RpcExtensionUIRequest): RpcExtensionUIRequest => {
+const stripExtensionUiAnsi = (request: RpcExtensionUIRequest): WebExtensionUIRequest => {
   const strip = (text: string) => Bun.stripANSI(text);
   switch (request.method) {
     case "select":
@@ -363,13 +403,7 @@ const stripExtensionUiAnsi = (request: RpcExtensionUIRequest): RpcExtensionUIReq
         statusText: request.statusText === undefined ? undefined : strip(request.statusText),
       };
     case "setWidget":
-      const widgetLines = request.widgetLines
-        ? displayWidgetLines(request.widgetLines.map(strip))
-        : undefined;
-      return {
-        ...request,
-        widgetLines: widgetLines?.length ? widgetLines : undefined,
-      };
+      return normalizeWidgetRequest({ ...request, widgetLines: request.widgetLines?.map(strip) });
     case "setTitle":
       return { ...request, title: strip(request.title) };
     case "set_editor_text":
@@ -478,10 +512,12 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
       const [first, ...rest] = channel.compactionQueue;
       channel.compactionQueue = [];
       runtime
-        .prompt(first.text)
+        .prompt(first.text, first.images ? { images: first.images } : undefined)
         .catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
       for (const m of rest) {
-        const submit = m.mode === "followUp" ? runtime.followUp(m.text) : runtime.steer(m.text);
+        const submit = m.mode === "followUp"
+          ? runtime.prompt(m.text, { streamingBehavior: "followUp", images: m.images })
+          : runtime.prompt(m.text, { streamingBehavior: "steer", images: m.images });
         submit.catch((err: unknown) => console.error("flush queued message failed", sessionId, err));
       }
     }
@@ -885,6 +921,15 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "prompt message must be a string");
           return;
         }
+        const images = parsePromptImages(input.images);
+        if (!images) {
+          sendError(bunWS, "prompt images must be up to 8 PNG, JPEG, WebP, or GIF files (10 MB each, 25 MB total)");
+          return;
+        }
+        if (!input.message.trim() && images.length === 0) {
+          sendError(bunWS, "prompt requires a message or image");
+          return;
+        }
         if (bunWS.data.closed) return;
         const streamingBehavior =
           input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
@@ -897,18 +942,22 @@ export const sessionWsHandler: WsHandler = {
           if (!input.message.startsWith("/")) {
             channel.compactionQueue.push({
               text: input.message,
+              images: images.length > 0 ? images : undefined,
               mode: streamingBehavior === "followUp" ? "followUp" : "steer",
             });
             broadcastState(channel, { pending: pendingWithQueue(channel) });
           } else {
             runtime
-              .prompt(input.message)
+              .prompt(input.message, images.length > 0 ? { images } : undefined)
               .catch((err: unknown) => sendError(bunWS, toMessage(err)));
           }
           return;
         }
         runtime
-          .prompt(input.message, streamingBehavior ? { streamingBehavior } : {})
+          .prompt(input.message, {
+            streamingBehavior,
+            images: images.length > 0 ? images : undefined,
+          })
           .finally(() => {
             const channel = channelsBySession.get(sessionId);
             if (!channel) return;
