@@ -150,7 +150,12 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
  * sparse under a short reply and right-aligned dangles at the column's
  * far right. Inline in the header reads as message metadata and avoids
  * the detached-footer problem entirely. */
+/* Time sits next to the model name and aligns with its bottom (the name's
+ * baseline) rather than vertically centering in the taller author row — it
+ * reads as a small trailing label off the name, not a middle block. */
 .conversation-message__time {
+  align-self: flex-end;
+  margin-bottom: 1px;
   color: var(--ui-text-muted);
   font-size: 11px;
   font-weight: 500;
