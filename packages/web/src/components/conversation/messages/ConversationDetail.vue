@@ -1,14 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch, type Component } from "vue";
-import FolderIcon from "@/assets/icons/Folder.svg";
-import FileTextIcon from "@/assets/icons/FileText.svg";
 import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
 import FilePathLabel from "@/components/ui/FilePathLabel.vue";
-import ChatMarkdown from "./ChatMarkdown.vue";
-import CodeView from "../../ui/CodeView.vue";
-import DiffView from "../../panels/DiffView.vue";
-import { getEntryIcon } from "../../ui/fileIcon";
 import { type ToolBody } from "./toolBody";
+import ToolBodyView from "./ToolBodyView";
 
 const props = defineProps<{
   icon?: Component | string;
@@ -86,22 +81,6 @@ const elapsed = computed(() => {
   if (props.startedAt === undefined) return undefined;
   return Math.max(0, Math.floor((now.value - props.startedAt) / 1000));
 });
-
-// Per-kind content text for the structured lists — a one-line muted summary
-// shown above the entries so a user scanning the message log can tell apart
-// `ls src` from `ls docs` without expanding.
-const entriesHeading = computed(() => {
-  const body = props.body;
-  if (body.kind === "ls") return body.entries.length === 0 ? "empty directory" : `${body.entries.length} entries`;
-  if (body.kind === "grep") return body.matches.length === 0 ? "no matches" : `${body.matches.length} matches`;
-  if (body.kind === "paths") return body.paths.length === 0 ? "no files" : `${body.paths.length} files`;
-  return null;
-});
-
-const showNotes = computed(() => {
-  const body = props.body;
-  return (body.kind === "ls" || body.kind === "grep" || body.kind === "paths") && body.notes.length > 0;
-});
 </script>
 
 <template>
@@ -133,70 +112,9 @@ const showNotes = computed(() => {
     </button>
     <div class="conversation-detail__body">
       <div class="conversation-detail__body-inner">
-        <ChatMarkdown
-          v-if="body.kind === 'markdown'"
-          class="conversation-detail__markdown"
-          :content="body.content"
-        />
-        <DiffView v-else-if="body.kind === 'diff'" class="conversation-detail__diff" :patch="body.patch" />
-        <div v-else-if="body.kind === 'images'" class="conversation-detail__images">
-          <img
-            v-for="(img, i) in body.images"
-            :key="i"
-            :src="`data:${img.mimeType};base64,${img.data}`"
-            alt="Read image"
-            loading="lazy"
-            decoding="async"
-          />
-        </div>
-        <CodeView
-          v-else-if="body.kind === 'code'"
-          class="conversation-detail__code"
-          :content="body.content"
-          :fileName="body.fileName"
-        />
-        <pre v-else-if="body.kind === 'text'" class="conversation-detail__text">{{ body.content }}</pre>
-        <div v-else-if="body.kind === 'ls'" class="conversation-detail__list">
-          <div v-if="entriesHeading" class="conversation-detail__list-heading">{{ entriesHeading }}</div>
-          <ul v-if="body.entries.length > 0" class="conversation-detail__list-items">
-            <li v-for="(entry, i) in body.entries" :key="`${i}:${entry.name}`" class="conversation-detail__list-row">
-              <svg v-if="getEntryIcon(entry.name, entry.isDir, false)" class="conversation-detail__list-icon" aria-hidden="true">
-                <use :href="getEntryIcon(entry.name, entry.isDir, false)" />
-              </svg>
-              <FolderIcon v-else-if="entry.isDir" class="conversation-detail__list-icon" aria-hidden="true" />
-              <FileTextIcon v-else class="conversation-detail__list-icon" aria-hidden="true" />
-              <span class="conversation-detail__list-name">{{ entry.name }}</span>
-            </li>
-          </ul>
-          <p v-else class="conversation-detail__list-empty">Empty directory</p>
-          <p v-if="showNotes" class="conversation-detail__list-notes">{{ body.notes.join(" · ") }}</p>
-        </div>
-        <div v-else-if="body.kind === 'grep'" class="conversation-detail__list">
-          <div v-if="entriesHeading" class="conversation-detail__list-heading">{{ entriesHeading }}</div>
-          <ul v-if="body.matches.length > 0" class="conversation-detail__list-items conversation-detail__list-items--matches">
-            <li v-for="(m, i) in body.matches" :key="`${i}:${m.file}:${m.line}`" class="conversation-detail__match">
-              <FilePathLabel class="conversation-detail__match-path" :path="m.file" :show-prefix="false" />
-              <span class="conversation-detail__match-line">{{ m.line }}</span>
-              <span class="conversation-detail__match-text">{{ m.text }}</span>
-            </li>
-          </ul>
-          <p v-else class="conversation-detail__list-empty">No matches</p>
-          <p v-if="showNotes" class="conversation-detail__list-notes">{{ body.notes.join(" · ") }}</p>
-        </div>
-        <div v-else-if="body.kind === 'paths'" class="conversation-detail__list">
-          <div v-if="entriesHeading" class="conversation-detail__list-heading">{{ entriesHeading }}</div>
-          <ul v-if="body.paths.length > 0" class="conversation-detail__list-items">
-            <li v-for="(p, i) in body.paths" :key="`${i}:${p}`" class="conversation-detail__list-row">
-              <svg v-if="getEntryIcon(p, false, false)" class="conversation-detail__list-icon" aria-hidden="true">
-                <use :href="getEntryIcon(p, false, false)" />
-              </svg>
-              <FileTextIcon v-else class="conversation-detail__list-icon" aria-hidden="true" />
-              <FilePathLabel class="conversation-detail__list-name" :path="p" :show-prefix="false" />
-            </li>
-          </ul>
-          <p v-else class="conversation-detail__list-empty">No files</p>
-          <p v-if="showNotes" class="conversation-detail__list-notes">{{ body.notes.join(" · ") }}</p>
-        </div>
+        <!-- Every body kind (markdown/diff/images/code/text/ls/grep/paths)
+             is rendered by the ToolBodyView TSX component. -->
+        <ToolBodyView :body="body" />
       </div>
     </div>
   </section>
@@ -291,157 +209,6 @@ const showNotes = computed(() => {
   line-height: 1.5;
   white-space: nowrap;
 }
-.conversation-detail__markdown {
-  margin: 0;
-  color: var(--ui-text-muted);
-}
-/* DiffView 自带滚动盒，这里只要撑满展开区的宽度。 */
-.conversation-detail__diff {
-  max-width: 100%;
-  min-width: 0;
-}
-/* 图片附件缩略图：与用户消息里的图片风格一致——封顶宽度但不被强制放大。 */
-.conversation-detail__images {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.conversation-detail__images img {
-  display: block;
-  max-width: 100%;
-  max-height: 320px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  background: var(--ui-surface-subtle);
-  object-fit: contain;
-}
-
-/* Plain text (bash / unknown tools / JSON fallback): bare monospace output —
- * no box, the expanded body's left border anchors it. Auto-wrap at the
- * container edge (pre-wrap keeps newlines + indentation); long unbroken
- * tokens (JSON values, paths, URLs) break via overflow-wrap so nothing
- * forces horizontal scroll. Only vertical scrolling remains for long
- * outputs. */
-.conversation-detail__text {
-  margin: 0;
-  overflow: auto;
-  max-height: 420px;
-  color: var(--ui-text);
-  font-family: var(--ui-font-mono);
-  font-size: 12.5px;
-  line-height: 1.55;
-  white-space: pre-wrap;   /* preserve newlines, wrap at the container edge */
-  overflow-wrap: break-word; /* break only when a token can't fit on its own line */
-  word-break: normal;
-}
-
-/* Structured list (ls / find / grep): inset card with a muted heading and
- * one row per entry. Rows reuse the file-icon vocabulary from the file panel
- * so folders / files read like a familiar directory listing. */
-.conversation-detail__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px 10px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  background: var(--ui-surface-subtle);
-  color: var(--ui-text);
-}
-.conversation-detail__list-heading {
-  color: var(--ui-text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-.conversation-detail__list-items {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.conversation-detail__list-items--matches {
-  gap: 4px;
-}
-.conversation-detail__list-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.conversation-detail__list-row:hover {
-  background: var(--ui-surface);
-}
-.conversation-detail__list-icon {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-}
-.conversation-detail__list-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.conversation-detail__match {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr);
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-  padding: 4px 6px;
-  border-left: 2px solid var(--ui-border);
-  background: var(--ui-surface);
-  border-radius: 0 4px 4px 0;
-  font-size: 13px;
-  line-height: 1.45;
-}
-.conversation-detail__match-path {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ui-text);
-}
-.conversation-detail__match-line {
-  flex: none;
-  min-width: 2.5em;
-  padding: 0 6px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 999px;
-  color: var(--ui-text-muted);
-  font-family: var(--ui-font-mono);
-  font-size: 11px;
-  text-align: center;
-}
-.conversation-detail__match-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ui-text-secondary);
-  font-family: var(--ui-font-mono);
-  font-size: 12.5px;
-}
-.conversation-detail__list-empty,
-.conversation-detail__list-notes {
-  margin: 0;
-  color: var(--ui-text-muted);
-  font-size: 12px;
-}
-.conversation-detail__list-notes {
-  padding-top: 4px;
-  border-top: 1px dashed var(--ui-border-subtle);
-}
-
 .conversation-detail__body {
   display: grid;
   grid-template-rows: 0fr;

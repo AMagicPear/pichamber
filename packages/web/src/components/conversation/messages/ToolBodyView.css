@@ -1,0 +1,157 @@
+/* Styling for the tool-result body — the expanded area of a
+ * <ConversationDetail>. Rendered by <ToolBodyView> (a TSX render component),
+ * so these classes are plain CSS, namespace-prefixed under `.tool-body-view`
+ * to avoid global collisions instead of relying on scoped attributes. */
+
+.tool-body-view__markdown {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+
+/* DiffView carries its own scroll box; just stretch to the expanded width. */
+.tool-body-view__diff {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Image attachment thumbnails: capped width, never force-enlarged. */
+.tool-body-view__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tool-body-view__images img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 8px;
+  background: var(--ui-surface-subtle);
+  object-fit: contain;
+}
+
+/* Plain text (bash / unknown tools / JSON fallback): bare monospace output —
+ * no box, the expanded body's left border anchors it. Auto-wrap at the
+ * container edge (pre-wrap keeps newlines + indentation); long unbroken
+ * tokens (JSON values, paths, URLs) break via overflow-wrap so nothing
+ * forces horizontal scroll. Only vertical scrolling remains for long
+ * output. */
+.tool-body-view__text {
+  margin: 0;
+  overflow: auto;
+  max-height: 420px;
+  color: var(--ui-text);
+  font-family: var(--ui-font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+/* Structured list (ls / find / grep): inset card with a muted heading and
+ * one row per entry. Rows reuse the file-icon vocabulary from the file panel
+ * so folders / files read like a familiar directory listing. */
+.tool-body-view__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 8px;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+}
+.tool-body-view__list-heading {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.tool-body-view__list-items {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tool-body-view__list-items--matches {
+  gap: 4px;
+}
+.tool-body-view__list-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.tool-body-view__list-row:hover {
+  background: var(--ui-surface);
+}
+.tool-body-view__list-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+.tool-body-view__list-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-body-view__match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr);
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-left: 2px solid var(--ui-border);
+  background: var(--ui-surface);
+  border-radius: 0 4px 4px 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.tool-body-view__match-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-text);
+}
+.tool-body-view__match-line {
+  flex: none;
+  min-width: 2.5em;
+  padding: 0 6px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 999px;
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+.tool-body-view__match-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-text-secondary);
+  font-family: var(--ui-font-mono);
+  font-size: 12.5px;
+}
+.tool-body-view__list-empty,
+.tool-body-view__list-notes {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+.tool-body-view__list-notes {
+  padding-top: 4px;
+  border-top: 1px dashed var(--ui-border-subtle);
+}

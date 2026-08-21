@@ -3,7 +3,6 @@ import { computed } from "vue";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
 import ChatMarkdown from "./ChatMarkdown.vue";
 import { messageImages, messageText } from "./messageContent";
-import { parseSkillBlock } from "./skillBlock";
 import SkillBlockChip from "./SkillBlockChip.vue";
 
 type SkillChip = { name: string; location: string };
@@ -16,6 +15,26 @@ const props = defineProps<{
   timestampText?: string;
 }>();
 
+/** Browser-safe reimplementation of pi's skill block parser.
+ *  The browser bundle cannot import the `@earendil-works/pi-coding-agent`
+ *  package — its top-level evaluation path references `process.env` and
+ *  other Node globals, which Vite refuses to shim. The parser itself is
+ *  pure-string (a single regex match), so this keeps the chat-list
+ *  rendering path independent of the Node-side SDK.
+ *
+ * The canonical text shape produced on submit is:
+ *
+ *   <skill name="<name>" location="<file>">
+ *   References are relative to <dir>.
+ *
+ *   <body>
+ *   </skill>
+ *
+ * Optionally followed by a blank line + the user's trailing text.
+ */
+const SKILL_BLOCK_RE =
+  /^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/;
+
 /** What the row actually renders: optional skill chip + optional text.
  *  Skill messages come out of `/skill:name` as
  *  `<skill name=… location=…>…</skill>` plus optional trailing text the
@@ -27,11 +46,12 @@ const parts = computed<{ skill: SkillChip | null; text: string }>(() => {
   const text = messageText(props.message);
   // Fast-path: the canonical shape always starts with "<skill ". Plain
   // text skips the regex entirely.
-  const parsed = text.startsWith("<skill ") ? parseSkillBlock(text) : null;
+  const parsed = text.startsWith("<skill ") ? SKILL_BLOCK_RE.exec(text) : null;
   if (!parsed) return { skill: null, text };
+  const userMessage = parsed[4]?.trim();
   return {
-    skill: { name: parsed.name, location: parsed.location },
-    text: parsed.userMessage ?? "",
+    skill: { name: parsed[1] ?? "", location: parsed[2] ?? "" },
+    text: userMessage ? userMessage : "",
   };
 });
 </script>

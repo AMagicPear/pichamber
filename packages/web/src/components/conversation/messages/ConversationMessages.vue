@@ -6,11 +6,9 @@ import CompactionSummaryMessage from "./CompactionSummaryMessage.vue";
 import CustomSummaryMessage from "./CustomSummaryMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
 import { messageImages, messageText, messageTimestampText, toolResultText } from "./messageContent";
-import { modelDisplayName } from "./modelDisplay";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import UserMessage from "./UserMessage.vue";
-import { workspace } from "@/stores/workspace";
-import type { ConversationItem } from "@/stores/workspace";
+import { workspace, type ConversationItem, type ConversationTool } from "@/stores/workspace";
 
 const props = defineProps<{
   items: ConversationItem[];
@@ -131,8 +129,23 @@ watch(
   { immediate: true },
 );
 
-/** 工具条目渲染详情：提交后优先用权威 toolResult 消息内容，live 阶段用执行进度。 */
-const toolDetail = (item: Extract<ConversationItem, { kind: "tool" }>): ConversationToolDetail => {
+/** 工具条目渲染详情：提交后优先用权威 toolResult 消息内容，live 阶段用执行进度。
+ *
+ * Memoized by `tool`/`message` object reference: `conversation` is a
+ * shallowRef rebuilt on every event (`buildConversationItems` / `replaceItem`),
+ * so the list re-renders often and each tool row would otherwise re-parse its
+ * output on every one of those renders. Committed tool items keep their
+ * `tool`/`message` object identity across unrelated events, so the untouched
+ * ones reuse this cache; a running tool (whose `tool` object is rebuilt on
+ * each progress tick) still recomputes, which is exactly what it needs. */
+const cachedToolDetail = new WeakMap<
+  ConversationTool,
+  { message: AgentMessage | undefined; detail: ConversationToolDetail }
+>();
+
+const computeToolDetail = (
+  item: Extract<ConversationItem, { kind: "tool" }>,
+): ConversationToolDetail => {
   const { tool, message } = item;
   const messageMeta = message as { toolName?: unknown; isError?: unknown } | undefined;
   // 提交后 message 是权威输出；live 阶段 tool.result 是 pi 的 `{content,
@@ -161,9 +174,25 @@ const toolDetail = (item: Extract<ConversationItem, { kind: "tool" }>): Conversa
   };
 };
 
+/** Memoized access into `computeToolDetail`: reuse the cached detail while
+ *  the tool (and its authoritative message) object identities are unchanged. */
+const toolDetail = (item: Extract<ConversationItem, { kind: "tool" }>): ConversationToolDetail => {
+  const cached = cachedToolDetail.get(item.tool);
+  if (cached && cached.message === item.message) return cached.detail;
+  const detail = computeToolDetail(item);
+  cachedToolDetail.set(item.tool, { message: item.message, detail });
+  return detail;
+};
+
+/** Use the registry's friendly name everywhere a model id is displayed. */
 const modelNameFor = (message: AgentMessage | undefined): string | undefined => {
   if (message?.role !== "assistant") return undefined;
-  return modelDisplayName(props.availableModels, message.provider, message.model);
+  const { provider, model } = message;
+  if (typeof model !== "string") return undefined;
+  return (
+    props.availableModels?.find((m) => m.provider === provider && m.id === model)?.name ??
+    model
+  );
 };
 </script>
 
