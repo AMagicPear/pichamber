@@ -562,22 +562,21 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
     switch (event.type) {
       case "agent_start": {
         state.busy = true;
-        state.activity = { phase: "thinking" };
+        state.activity = { phase: "working" };
         broadcastState(channel, { busy: true, activity: state.activity });
         break;
       }
       // 会话内容事件（官方 `AgentSessionEvent`）原样转发；客户端像 TUI
       // 的 handleEvent 一样按事件构建会话视图。busy/activity/pending
-      // 等仍由下面的 state 帧承载（服务器算好的显示状态）。
+      // 等仍由下面的 state 帧承载（服务器算好的显示状态）。activity
+      // 只跟随 TUI 的 StatusIndicator：agent_start→working、
+      // compaction_start→compacting、auto_retry_start→retrying、
+      // 结算→idle；message/tool 事件不碰它（细粒度由消息流渲染）。
       case "message_start": {
         const { role } = event.message;
         if ((role === "user" || role === "assistant") && !state.busy) {
           state.busy = true;
           broadcastState(channel, { busy: true });
-        }
-        if (role === "assistant") {
-          state.activity = { phase: "responding" };
-          broadcastState(channel, { activity: state.activity });
         }
         broadcastEvent(event);
         break;
@@ -589,21 +588,11 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
         queueStatsRefresh();
         broadcastEvent(event);
         break;
-      case "tool_execution_start": {
-        state.activity = { phase: "tool", toolName: event.toolName };
-        broadcastState(channel, { activity: state.activity });
-        broadcastEvent(event);
-        break;
-      }
+      case "tool_execution_start":
       case "tool_execution_update":
+      case "tool_execution_end":
         broadcastEvent(event);
         break;
-      case "tool_execution_end": {
-        broadcastEvent(event);
-        state.activity = { phase: "thinking" };
-        broadcastState(channel, { activity: state.activity });
-        break;
-      }
       case "queue_update": {
         state.pending = { steering: [...event.steering], followUp: [...event.followUp] };
         broadcastState(channel, { pending: state.pending });

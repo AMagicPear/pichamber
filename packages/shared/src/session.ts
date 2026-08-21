@@ -19,15 +19,17 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { ImageContent } from "@earendil-works/pi-ai";
 
-/** 服务器推导的「当前在干嘛」：给 Composer 状态行 / 会话头部用。官方没有
- *  等价类型（TUI 从事件流自行推导），这里保留为 wire 视图。 */
+/** Composer 状态行的"当前在干嘛"，与 TUI 的 `StatusIndicatorKind`
+ *  （working/retry/compaction/branchSummary）+ `IdleStatus` 一一对应。
+ *  thinking/responding/tool 等细粒度状态不在这里 —— 它们由会话消息流
+ *  自己渲染（流式回复 / running 工具卡片），对应 TUI 的
+ *  streamingComponent / ToolExecutionComponent 就地渲染，不入 activity。
+ *  branchSummary 等我们有分支流程时再加。 */
 export type AgentActivity =
   | { phase: "idle" }
-  | { phase: "thinking" }
-  | { phase: "responding" }
-  | { phase: "tool"; toolName: string }
-  | { phase: "compacting" }
-  | { phase: "retrying"; attempt: number; maxAttempts: number };
+  | { phase: "working" }
+  | { phase: "retrying"; attempt: number; maxAttempts: number }
+  | { phase: "compacting" };
 
 /** 排队中的消息（steer/followUp），与官方 queue_update 事件同构。 */
 export type PendingMessages = {

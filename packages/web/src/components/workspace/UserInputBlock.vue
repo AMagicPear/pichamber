@@ -340,9 +340,7 @@ const auxiliaryItems = computed<AuxiliaryItem[]>(() => [
 ]);
 const activityText = computed(() => {
   switch (props.activity.phase) {
-    case "thinking": return "Thinking";
-    case "responding": return "Responding";
-    case "tool": return `Running ${props.activity.toolName}`;
+    case "working": return "Working";
     case "compacting": return "Compacting context";
     case "retrying": return `Retrying ${props.activity.attempt}/${props.activity.maxAttempts}`;
     default: return "Ready";
