@@ -13,8 +13,9 @@ import ComposerShelf from "@/components/workspace/ComposerShelf.vue";
 import ModelSelector from "@/components/workspace/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
 import ComposerActivityStack from "@/components/workspace/ComposerActivityStack.vue";
+import { messageText } from "@/components/workspace/messageContent";
 import type { SendKey } from "@/stores/settings";
-import type { DraftImage } from "@/stores/workspace";
+import { conversation, type DraftImage } from "@/stores/workspace";
 import AttachmentIcon from "@/assets/icons/Attachment2.svg";
 import CloseIcon from "@/assets/icons/Close.svg";
 
@@ -340,11 +341,39 @@ const auxiliaryItems = computed<AuxiliaryItem[]>(() => [
 ]);
 const activityText = computed(() => {
   switch (props.activity.phase) {
-    case "working": return "Working";
+    case "working": {
+      const detail = workingDetail.value;
+      if (detail === "thinking") return "Thinking";
+      if (detail === "responding") return "Responding";
+      if (detail) return `Running ${detail.tool}`;
+      return "Working";
+    }
     case "compacting": return "Compacting context";
     case "retrying": return `Retrying ${props.activity.attempt}/${props.activity.maxAttempts}`;
     default: return "Ready";
   }
+});
+
+/** `working` 的细粒度"在干嘛"，照抄 TUI 的做法：indicator 只显示
+ *  working，thinking/responding/正在跑工具由消息流组件自己表达——这里从
+ *  conversation 列表派生（正在流式的 assistant 消息 / running 工具卡片），
+ *  服务端不再把细分塞进 activity。 */
+const workingDetail = computed<"thinking" | "responding" | { tool: string } | undefined>(() => {
+  const items = conversation.value;
+  // 最近一条正在流式的 assistant 消息：已产出文本 → responding，
+  // 否则还在 thinking（流式开头 content 只有 thinking part）。
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item && item.kind === "message" && item.streaming && item.message.role === "assistant") {
+      return messageText(item.message).trim() ? "responding" : "thinking";
+    }
+  }
+  // 正在运行的最后一个工具。
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item && item.kind === "tool" && item.tool.running) return { tool: item.tool.toolName };
+  }
+  return undefined;
 });
 
 /** Placeholder mentions the active submit shortcut so users on the alternative
