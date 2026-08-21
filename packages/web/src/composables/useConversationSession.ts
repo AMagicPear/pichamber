@@ -4,15 +4,13 @@ import { onBeforeUnmount } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
 import { matchBuiltinCommand } from "./builtin-commands";
+import { extensionUi, pushErrorToast, showNextExtensionDialog } from "@/stores/extensionUi";
 import {
   applyServerMessage,
   connected,
   draft,
-  extensionUi,
   images,
-  pushErrorToast,
   resetSessionState,
-  showNextExtensionDialog,
   thinking,
 } from "@/stores/workspace";
 import type { ModelDescriptor, ServerMessage } from "@amagicpear/pichamber-shared";

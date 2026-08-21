@@ -1,12 +1,10 @@
 import { computed, reactive, ref, shallowRef, watch } from "vue";
 import { createSession, listSessions, toMessage } from "@/api/client";
 import { pathBasename } from "@amagicpear/pichamber-shared";
-import type { RpcExtensionUIRequest } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type {
   AgentActivity,
   AgentSessionEvent,
-  ExtensionWidget,
   ImageContent,
   ModelDescriptor,
   PendingMessages,
@@ -16,9 +14,9 @@ import type {
   SessionStatsView,
   ThinkingState,
   WebExtensionUIRequest,
-  WidgetPlacement,
 } from "@amagicpear/pichamber-shared";
 import { settings } from "@/stores/settings";
+import { applyExtensionUiRequest, pushErrorToast, resetExtensionUi } from "@/stores/extensionUi";
 
 /** 当前工作区/会话的一切状态，按官方推荐的模块级 reactive 模式统一放这里。
  *  - `workspace`：项目/会话元数据（cwd、sessionId、sessionName…）
@@ -151,19 +149,7 @@ export const resources = ref<RuntimeResources>({
   extensionInventoryAvailable: false,
 });
 
-type ExtensionDialog = Extract<
-  RpcExtensionUIRequest,
-  { method: "select" | "confirm" | "input" | "editor" }
->;
-type ExtensionNotification = { id: string; message: string; type: "info" | "warning" | "error" };
-type WidgetEntry = { widget: ExtensionWidget; placement: WidgetPlacement };
-
-export const extensionUi = reactive({
-  dialog: null as ExtensionDialog | null,
-  notifications: [] as ExtensionNotification[],
-  statuses: {} as Record<string, string>,
-  widgets: {} as Record<string, WidgetEntry>,
-});
+// extensionUi（reactive + 对话框/通知队列）已挪到 @/stores/extensionUi.ts
 
 /** 空直到服务器在 snapshot/state 里确认可用模型。 */
 export const availableModels = ref<ModelDescriptor[]>([]);
@@ -222,7 +208,12 @@ const buildConversationItems = (messages: AgentMessage[]): ConversationItem[] =>
           items.push({
             id: `tool:${part.id}`,
             kind: "tool",
-            tool: { toolCallId: part.id, toolName: part.name, args: part.arguments, running: false },
+            tool: {
+              toolCallId: part.id,
+              toolName: part.name,
+              args: part.arguments,
+              running: false,
+            },
           });
           pendingTool.set(part.id, items.length - 1);
         }
@@ -287,7 +278,12 @@ const applyEvent = (event: AgentSessionEvent) => {
     case "message_update": {
       for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i];
-        if (item && item.kind === "message" && item.streaming && item.message.role === "assistant") {
+        if (
+          item &&
+          item.kind === "message" &&
+          item.streaming &&
+          item.message.role === "assistant"
+        ) {
           replaceItem(i, { ...item, message: event.message });
           break;
         }
@@ -383,69 +379,7 @@ watch(
   { immediate: true },
 );
 
-// ─── 扩展 UI / 通知 ──────────────────────────────────────────────────
-// 对话框队列、toast、完成提示音/桌面通知——全部是围绕 `extensionUi` 与
-// `settings` 的 UI 装饰，与 store 状态同住，不占 composable。
-
-const extensionDialogQueue: ExtensionDialog[] = [];
-
-/** 弹出队列里的下一个扩展对话框（当前对话框应答后调用）。 */
-export const showNextExtensionDialog = () => {
-  extensionUi.dialog = extensionDialogQueue.shift() ?? null;
-};
-
-/** Push a transport / model / thinking / catastrophic-prompt error onto the
- *  shared toast queue. The toast auto-dismisses after 5s and can be closed
- *  manually, matching the lifecycle of extension notifications. */
-export const pushErrorToast = (message: string) => {
-  const id = `error-${crypto.randomUUID()}`;
-  extensionUi.notifications.push({ id, message, type: "error" });
-  setTimeout(() => dismissNotification(id), 5_000);
-};
-
-export const dismissNotification = (id: string) => {
-  const index = extensionUi.notifications.findIndex((n) => n.id === id);
-  if (index !== -1) extensionUi.notifications.splice(index, 1);
-};
-
-/** 扩展 `ui.*` 请求：对话框排队、toast、status/widget/title 落 state。 */
-const handleUiRequest = (request: WebExtensionUIRequest) => {
-  switch (request.method) {
-    case "select":
-    case "confirm":
-    case "input":
-    case "editor":
-      if (extensionUi.dialog) extensionDialogQueue.push(request);
-      else extensionUi.dialog = request;
-      break;
-    case "notify":
-      extensionUi.notifications.push({
-        id: request.id,
-        message: request.message,
-        type: request.notifyType ?? "info",
-      });
-      setTimeout(() => dismissNotification(request.id), 5_000);
-      break;
-    case "setStatus":
-      if (request.statusText) extensionUi.statuses[request.statusKey] = request.statusText;
-      else delete extensionUi.statuses[request.statusKey];
-      break;
-    case "setWidget":
-      if (request.widget) {
-        extensionUi.widgets[request.widgetKey] = {
-          widget: request.widget,
-          placement: request.widgetPlacement ?? "aboveEditor",
-        };
-      } else delete extensionUi.widgets[request.widgetKey];
-      break;
-    case "setTitle":
-      windowTitle.value = request.title || undefined;
-      break;
-    case "set_editor_text":
-      draft.value = request.text;
-      break;
-  }
-};
+// 扩展 UI 装饰（对话框队列 / toast / status / widget）已挪到 @/stores/extensionUi.ts
 
 // ─── Turn-completion notifications ──────────────────────────────────
 //
@@ -582,9 +516,19 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
       }
       break;
     }
-    case "ui_request":
-      handleUiRequest(message.request);
+    case "ui_request": {
+      // setTitle / set_editor_text 改的是 workspace 自己拥有的 state，
+      // 其余扩展 UI 装饰交给 extensionUi store。
+      const req = message.request as WebExtensionUIRequest;
+      if (req.method === "setTitle") {
+        windowTitle.value = req.title || undefined;
+      } else if (req.method === "set_editor_text") {
+        draft.value = req.text;
+      } else {
+        applyExtensionUiRequest(req);
+      }
       break;
+    }
     case "draft_restore":
       draft.value = [...message.messages, draft.value?.trim()].filter(Boolean).join("\n\n");
       break;
@@ -614,11 +558,7 @@ export const resetSessionState = () => {
     diagnostics: [],
     extensionInventoryAvailable: false,
   };
-  extensionUi.dialog = null;
-  extensionDialogQueue.splice(0);
-  extensionUi.notifications.splice(0);
-  for (const key of Object.keys(extensionUi.statuses)) delete extensionUi.statuses[key];
-  for (const key of Object.keys(extensionUi.widgets)) delete extensionUi.widgets[key];
+  resetExtensionUi();
   windowTitle.value = undefined;
   model.value = undefined;
   availableModels.value = [];

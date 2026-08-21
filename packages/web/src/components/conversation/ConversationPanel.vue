@@ -13,6 +13,7 @@ import UserInputBlock from "@/components/conversation/composer/UserInputBlock.vu
 import ExtensionUiHost from "@/components/conversation/ExtensionUiHost.vue";
 import type { ExtensionWidget, WidgetPlacement } from "@amagicpear/pichamber-shared";
 import { useConversationSession } from "@/composables/useConversationSession";
+import { dismissNotification, extensionUi } from "@/stores/extensionUi";
 import { workspace } from "@/stores/workspace";
 import {
   activity,
@@ -21,9 +22,7 @@ import {
   canRestorePending,
   canSend,
   conversation,
-  dismissNotification,
   draft,
-  extensionUi,
   images,
   model,
   pending,
