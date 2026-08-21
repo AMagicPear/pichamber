@@ -28,11 +28,9 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 
 const commandResults = computed(() => {
   const query = props.query.toLowerCase();
-  return props.commands
-    .filter((command) =>
-      `${command.name} ${command.description ?? ""}`.toLowerCase().includes(query),
-    )
-    .slice(0, 10);
+  return props.commands.filter((command) =>
+    `${command.name} ${command.description ?? ""}`.toLowerCase().includes(query),
+  );
 });
 
 const fileResults = computed(() => files.value.filter((entry) => !entry.isDirectory).slice(0, 10));
