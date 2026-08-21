@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import AddIcon from "@/assets/icons/Add.svg";
-import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
 import CalendarScheduleIcon from "@/assets/icons/CalendarSchedule.svg";
 import ChatNewIcon from "@/assets/icons/ChatNew.svg";
 import CheckboxMultipleIcon from "@/assets/icons/CheckboxMultiple.svg";
@@ -15,7 +14,10 @@ import SearchIcon from "@/assets/icons/Search.svg";
 import SettingsIcon from "@/assets/icons/Settings3.svg";
 import SortDescIcon from "@/assets/icons/SortDesc.svg";
 import { ArrowsMerge } from "@/components/ui/ArrowsMerge";
+import LogoMark, { LOGO_MARK_VIEW_BOX } from "@/components/ui/LogoMark";
 import IconButton from "@/components/ui/IconButton.vue";
+import SearchBox from "@/components/ui/SearchBox.vue";
+import { splitHighlight } from "@/composables/highlight";
 import AboutModal from "@/components/modals/AboutModal.vue";
 import ProjectPickerModal from "@/components/modals/ProjectPickerModal.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
@@ -37,10 +39,40 @@ import {
 import { settings } from "@/stores/settings";
 import { deleteSession, toMessage } from "@/api/client";
 
+const searchOpen = ref(false);
+const sessionSearch = ref("");
+
+const toggleSessionSearch = () => {
+  searchOpen.value = !searchOpen.value;
+  if (!searchOpen.value) sessionSearch.value = "";
+};
+
+const searchQuery = computed(() => sessionSearch.value.trim().toLowerCase());
+
+/** A session matches when the query hits its title or any of its message text. */
+const matchesSearch = (session: SessionInfo) => {
+  if (!searchQuery.value) return true;
+  const haystack = [
+    sessionTitle(session),
+    session.allMessagesText,
+    session.firstMessage,
+    session.name,
+  ]
+    .filter((v): v is string => Boolean(v))
+    .join("\n")
+    .toLowerCase();
+  return haystack.includes(searchQuery.value);
+};
+
 const visibleSessions = computed(() => {
-  if (!settings.hideTemporarySessions) return sessions.value;
-  return sessions.value.filter((session) => !isTemporarySessionPath(session.cwd));
+  const base = settings.hideTemporarySessions
+    ? sessions.value.filter((session) => !isTemporarySessionPath(session.cwd))
+    : sessions.value;
+  return searchQuery.value ? base.filter(matchesSearch) : base;
 });
+
+/** Highlight the query within a session title for sidebar rendering. */
+const highlightTitle = (title: string) => splitHighlight(title, searchQuery.value);
 
 const isTemporarySessionPath = (cwd: string) =>
   cwd.startsWith("/private/tmp") ||
@@ -196,10 +228,9 @@ onMounted(async () => {
 <template>
   <aside class="sidebar">
     <div class="sidebar__topbar">
-      <div class="sidebar__search-group">
-        <IconButton class="search-primary" label="Search" disabled><SearchIcon /></IconButton>
-        <IconButton label="Search options" disabled><ArrowDownSIcon /></IconButton>
-      </div>
+      <svg class="sidebar__logo" :viewBox="LOGO_MARK_VIEW_BOX" width="22" height="22" aria-label="Pichamber" role="img">
+        <LogoMark />
+      </svg>
     </div>
 
     <div class="sidebar__actions" aria-label="Workspace actions">
@@ -212,16 +243,21 @@ onMounted(async () => {
         <IconButton label="Scheduled tasks" disabled><CalendarScheduleIcon /></IconButton>
       </div>
       <div>
-        <IconButton label="Search sessions" disabled><SearchIcon /></IconButton>
+        <IconButton label="Search sessions" :pressed="searchOpen" @click="toggleSessionSearch"><SearchIcon /></IconButton>
         <IconButton label="Select sessions" disabled><CheckboxMultipleIcon /></IconButton>
         <IconButton label="Sort projects" disabled><SortDescIcon /></IconButton>
       </div>
     </div>
 
+    <div class="sidebar__searchbar" :class="{ 'is-open': searchOpen }">
+      <SearchBox v-if="searchOpen" v-model="sessionSearch" placeholder="Search sessions..." label="Search sessions" autoFocus />
+    </div>
+
     <section ref="sessionListRoot" class="session-list scroll-fade-bottom">
       <p v-if="sessionsLoading" class="session-list__state">Loading sessions...</p>
       <p v-else-if="sessionsError" class="session-list__state session-list__state--error">{{ sessionsError }}</p>
-      <p v-else-if="visibleSessions.length === 0" class="session-list__state">No sessions yet.</p>
+      <p v-else-if="sessions.length === 0" class="session-list__state">No sessions yet.</p>
+      <p v-else-if="visibleSessions.length === 0" class="session-list__state">No sessions match &quot;{{ sessionSearch }}&quot;.</p>
 
       <template v-else>
         <section v-for="project in projectGroups" :key="project.cwd" class="session-list__section">
@@ -266,7 +302,12 @@ onMounted(async () => {
                 }"
                 @click="closeSessionMenu(); navigate()"
               >
-                <span class="session-list__title">{{ sessionTitle(session) }}</span>
+                <span class="session-list__title">
+                  <template v-for="(segment, i) in highlightTitle(sessionTitle(session))" :key="i">
+                    <mark v-if="segment.hit" class="session-list__hit">{{ segment.text }}</mark>
+                    <template v-else>{{ segment.text }}</template>
+                  </template>
+                </span>
                 <span class="session-list__age">{{ sessionAge(session) }}</span>
                 <IconButton
                   class="session-list__menu-trigger"
@@ -325,7 +366,7 @@ onMounted(async () => {
   display: grid;
   width: 100%;
   height: 100%;
-  grid-template-rows: 48px 40px minmax(0, 1fr) 42px;
+  grid-template-rows: 48px 40px auto minmax(0, 1fr) 42px;
   overflow: hidden;
   color: var(--ui-text);
   font-size: 14px;
@@ -338,29 +379,17 @@ onMounted(async () => {
   align-items: center;
 }
 .sidebar__topbar {
-  gap: 14px;
-  align-items: center;
-  padding: 7px var(--sidebar-gutter) 7px 48px;
+  padding-left: 52px;
 }
-.sidebar__search-group {
-  display: flex;
-  width: 68px;
-  height: 28px;
+.sidebar__searchbar {
+  height: 0;
+  padding: 0;
   overflow: hidden;
-  border: 1px solid var(--ui-border);
-  border-radius: 9px;
+  transition: height var(--ui-duration-medium) var(--ui-ease-emphasized), padding var(--ui-duration-medium) var(--ui-ease-emphasized);
 }
-.sidebar__search-group > :deep(.icon-button) {
-  border-radius: 0;
-}
-.sidebar__search-group > :deep(.icon-button + .icon-button) {
-  flex: 0 0 28px;
-  width: 28px;
-  border-left: 1px solid var(--ui-border);
-}
-.sidebar__search-group > :deep(.search-primary) {
-  flex: 0 0 40px;
-  width: 40px;
+.sidebar__searchbar.is-open {
+  height: calc(var(--ui-input-height) + 8px);
+  padding: 6px var(--sidebar-gutter) 2px;
 }
 .sidebar__actions {
   justify-content: space-between;
@@ -518,6 +547,12 @@ onMounted(async () => {
     color 150ms ease-out,
     transform 150ms ease-out;
   white-space: nowrap;
+}
+.session-list__hit {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
 }
 .session-list__item:hover .session-list__title {
   color: var(--ui-text-strong);

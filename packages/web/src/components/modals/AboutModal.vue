@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import AppLogo from "@/components/shell/AppLogo";
+import AppLogo from "@/components/ui/AppLogo";
 import Modal from "@/components/ui/Modal.vue";
 import IconButton from "@/components/ui/IconButton.vue";
 import CloseIcon from "@/assets/icons/Close.svg";

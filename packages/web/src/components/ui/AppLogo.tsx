@@ -1,4 +1,5 @@
 import { defineComponent, type PropType } from "vue";
+import LogoMark from "./LogoMark";
 
 const LEFT_FACE_CELL_OPACITIES = [
   0.2, 0.45, 0.15, 0.55,
@@ -155,17 +156,7 @@ export const AppLogo = defineComponent({
         />
         <g class={props.isAnimated ? "app-logo-glow" : undefined}>
           <g transform={`${isoMatrix} scale(0.06) translate(-400, -400)`}>
-            <path
-              fill-rule="evenodd"
-              clip-rule="evenodd"
-              d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
-              fill={props.strokeColor}
-            />
-            <path
-              d="M517.36 400H634.72V634.72H517.36Z"
-              fill={props.strokeColor}
-              fill-opacity="0.4"
-            />
+            <LogoMark color={props.strokeColor} />
           </g>
         </g>
       </svg>

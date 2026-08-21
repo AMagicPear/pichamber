@@ -1,10 +1,9 @@
 <script lang="tsx">
 import { computed, defineComponent, onMounted, ref, watch, type PropType } from "vue";
-import CloseIcon from "@/assets/icons/Close.svg";
 import FileAddIcon from "@/assets/icons/FileAdd.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
-import SearchIcon from "@/assets/icons/Search.svg";
+import SearchBox from "@/components/ui/SearchBox.vue";
 import type { DirEntry } from "@amagicpear/pichamber-shared";
 import { listDirectory, toMessage } from "@/api/client";
 import IconButton from "@/components/ui/IconButton.vue";
@@ -106,33 +105,14 @@ export default defineComponent({
     return () => (
       <div class="file-tree file-tree--root">
         <div class="file-tree__toolbar">
-          <div class="file-tree__search">
-            <span class="file-tree__search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              value={search.value}
-              type="search"
-              placeholder="Search files..."
-              aria-label="Search files"
-              onInput={(event: Event) => {
-                search.value = (event.target as HTMLInputElement).value;
-              }}
-            />
-            {search.value && (
-              <button
-                type="button"
-                class="file-tree__search-clear"
-                aria-label="Clear search"
-                title="Clear search"
-                onClick={() => {
-                  search.value = "";
-                }}
-              >
-                <CloseIcon />
-              </button>
-            )}
-          </div>
+          <SearchBox
+            modelValue={search.value}
+            onUpdate:modelValue={(value: string) => {
+              search.value = value;
+            }}
+            placeholder="Search files..."
+            label="Search files"
+          />
           <div class="file-tree__actions">
             <IconButton size="standard" label="New file" disabled>
               <FileAddIcon />
@@ -180,74 +160,6 @@ export default defineComponent({
   gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--ui-border-subtle);
-}
-.file-tree__search {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  height: var(--ui-input-height);
-  min-width: 0;
-  padding: 0 10px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-surface-subtle);
-  transition: border-color var(--ui-duration-fast) var(--ui-ease-standard), background-color var(--ui-duration-fast) var(--ui-ease-standard);
-}
-.file-tree__search:focus-within {
-  border-color: var(--ui-border-focus);
-  background: var(--ui-surface);
-}
-.file-tree__search-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  color: var(--ui-text-muted);
-}
-.file-tree__search-icon svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.file-tree__search input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 13px;
-}
-.file-tree__search input::-webkit-search-cancel-button {
-  display: none;
-  appearance: none;
-}
-.file-tree__search input::placeholder {
-  color: var(--ui-text-muted);
-}
-.file-tree__search-clear {
-  display: inline-flex;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  color: var(--ui-text-muted);
-}
-.file-tree__search-clear:hover {
-  background: var(--ui-surface-hover);
-  color: var(--ui-text-strong);
-}
-.file-tree__search-clear:focus-visible {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: 1px;
-}
-.file-tree__search-clear svg {
-  width: 12px;
-  height: 12px;
 }
 .file-tree__actions {
   display: flex;
