@@ -69,10 +69,10 @@
     "@types/node": "^26.2.0",
     "bun-types": "^1.4.0",
     "concurrently": "^10.0.5",
-    "oxlint": "~1.78.0",
+    "oxlint": "~1.79.0",
     "typescript": "~7.0.2",
     "typescript6": "npm:@typescript/typescript6@^6.0.2",
-    "vue-tsc": "^3.3.10"
+    "vue-tsc": "^3.3.11"
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"

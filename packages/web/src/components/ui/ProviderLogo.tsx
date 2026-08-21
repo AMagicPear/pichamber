@@ -1,19 +1,26 @@
-import { computed, defineComponent, h, ref, watch, type PropType } from "vue";
-import fallbackLogo from "@/assets/provider-logos/fallback.svg?url";
+import { defineComponent, type PropType } from "vue";
+import type { FunctionalComponent, SVGAttributes } from "vue";
 
-type LogoState = "local" | "remote" | "none";
+type LogoComponent = FunctionalComponent<SVGAttributes>;
 
-const localLogoModules = import.meta.glob<string>("../../assets/provider-logos/*.svg", {
+// Bundled as Vue components (vite-svg-loader) so each logo renders as a real
+// inline <svg> — no <img> shell, no remote fetch, no scattered CSS. The
+// component owns its sizing + theming: fills ride currentColor and the svg
+// inherits the theme's --ui-text, so light/dark flips natively. The logos
+// (provider marks + the models.dev fallback mark) all come out of one glob.
+const localLogoModules = import.meta.glob<LogoComponent>("../../assets/provider-logos/*.svg", {
   eager: true,
   import: "default",
-  query: "?url",
+  query: "?component",
 });
 
-const localLogos = new Map<string, string>();
-for (const [path, url] of Object.entries(localLogoModules)) {
-  const match = path.match(/provider-logos\/([^/]+)\.svg$/i);
-  if (match?.[1] && url) localLogos.set(match[1].toLowerCase(), url);
+const localLogos = new Map<string, LogoComponent>();
+for (const [path, component] of Object.entries(localLogoModules)) {
+  const match = path.replace(/\?component$/, "").match(/provider-logos\/([^/]+)\.svg$/i);
+  if (match?.[1] && component) localLogos.set(match[1].toLowerCase(), component);
 }
+
+const fallbackLogo = localLogos.get("fallback")!;
 
 const aliases = new Map([
   ["codex", "openai"],
@@ -34,7 +41,12 @@ const namePrefixes = new Map([
 ]);
 
 const normalize = (value: string) =>
-  value.toLowerCase().trim().replace(/^models\./, "").replace(/^provider\./, "").replace(/\s+/g, "-");
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/^models\./, "")
+    .replace(/^provider\./, "")
+    .replace(/\s+/g, "-");
 
 /** Candidates derived from the provider id alone — aliases, normalized
  *  provider string, and its primary segment. */
@@ -59,17 +71,23 @@ const modelIdFallback = (modelId: string) => {
   return hit ? [hit] : [];
 };
 
-const localSourceFor = (providerId: string, modelId = "") => {
+/** Resolve the bundled logo component for a provider/model. Falls back to the
+ *  models.dev fallback mark when nothing matches. */
+const resolveLogo = (providerId: string, modelId = ""): LogoComponent => {
   const candidates = providerCandidates(providerId);
-  const id = candidates.find((candidate) => localLogos.has(candidate));
-  if (id) return localLogos.get(id) ?? null;
-  return modelIdFallback(modelId)
-    .map((candidate) => localLogos.get(candidate) ?? null)
-    .find((src): src is string => src !== null) ?? null;
+  const fromProvider = candidates.map((c) => localLogos.get(c)).find(Boolean);
+  if (fromProvider) return fromProvider;
+  const fromModel = modelIdFallback(modelId)
+    .map((c) => localLogos.get(c))
+    .find(Boolean);
+  return fromModel ?? fallbackLogo;
 };
+
+const toPixels = (size: number | string) => (typeof size === "number" ? `${size}px` : size);
 
 export default defineComponent({
   name: "ProviderLogo",
+  inheritAttrs: false,
   props: {
     providerId: { type: String, default: "" },
     modelId: { type: String, default: "" },
@@ -78,49 +96,23 @@ export default defineComponent({
     class: { type: String, default: "" },
   },
   setup(props) {
-    /** Resolution order: provider aliases/local → model id prefix → remote
-     *  fallback for the provider → model id prefix fallback → none. */
-    const candidates = computed(() => {
-      const fromProvider = providerCandidates(props.providerId);
-      if (fromProvider.length > 0) return fromProvider;
-      return modelIdFallback(props.modelId);
-    });
-    const localSrc = computed(() => localSourceFor(props.providerId, props.modelId));
-    const remoteId = computed(() => candidates.value[0] ?? null);
-    // Never pull the provider's logo remotely unless it couldn't be found
-    // in the bundled set; when all resolution fails, show the bundled
-    // models.dev fallback mark instead of a generic brain icon.
-    const state = ref<LogoState>(localSrc.value ? "local" : remoteId.value ? "remote" : "none");
-
-    watch(
-      [localSrc, remoteId],
-      () => {
-        state.value = localSrc.value ? "local" : remoteId.value ? "remote" : "none";
-      },
-    );
-
-    const onError = () => {
-      state.value = state.value === "local" && remoteId.value ? "remote" : "none";
+    return () => {
+      const Logo = resolveLogo(props.providerId, props.modelId);
+      return (
+        <Logo
+          class={["provider-logo", props.class]}
+          role="img"
+          aria-label={props.alt || `${props.providerId || "model"} logo`}
+          style={{
+            color: "var(--ui-text)",
+            fill: "currentColor",
+            display: "block",
+            width: toPixels(props.size),
+            height: toPixels(props.size),
+            flex: "0 0 auto",
+          }}
+        />
+      );
     };
-
-    const src = computed(() => {
-      if (state.value === "local") return localSrc.value;
-      if (state.value === "remote" && remoteId.value) return `https://models.dev/logos/${remoteId.value}.svg`;
-      return fallbackLogo;
-    });
-
-    return () =>
-      h("img", {
-        src: src.value,
-        alt: props.alt || `${props.providerId || "model"} logo`,
-        class: ["provider-logo", "provider-logo--image", props.class],
-        width: props.size,
-        height: props.size,
-        style: { display: "block", objectFit: "contain" },
-        loading: "eager",
-        decoding: "async",
-        draggable: false,
-        onError,
-      });
   },
 });

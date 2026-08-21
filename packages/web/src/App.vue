@@ -225,18 +225,6 @@ button {
   cursor: pointer;
 }
 
-:root .provider-logo--image {
-  transition: filter var(--ui-duration-medium) var(--ui-ease-standard);
-}
-
-:root[data-theme="dark"] .provider-logo--image {
-  filter: invert(1) brightness(0.88);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root .provider-logo--image { transition: none; }
-}
-
 .app-shell {
   position: relative;
   width: 100%;
