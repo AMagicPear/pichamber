@@ -801,12 +801,13 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         if (bunWS.data.closed) return;
-        const streamingBehavior =
-          input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
-            ? input.streamingBehavior
-            : runtime.isStreaming
-              ? "steer"
-              : undefined;
+        // 流式行为由服务端权威判断：客户端传的只是用户偏好（流式中怎么
+        // 排队），是否真的流式看 runtime.isStreaming —— 不信任客户端
+        // 的本地 busy 快照（广播可能滞后）。非流式一律走新回合。
+        const requested = input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
+          ? input.streamingBehavior
+          : undefined;
+        const streamingBehavior = runtime.isStreaming ? requested ?? "steer" : undefined;
         const channel = channelsBySession.get(sessionId);
         if (runtime.isCompacting && channel) {
           if (!input.message.startsWith("/")) {

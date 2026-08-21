@@ -209,7 +209,7 @@ const onKeydown = (event: KeyboardEvent) => {
     if (!shouldSubmit) return;
     event.preventDefault();
     if (shelfMode.value) shelf.value?.choose();
-    else emitSend(props.busy ? (event.altKey ? "followUp" : submitMode.value) : undefined);
+    else emitSend(event.altKey ? "followUp" : submitMode.value);
   }
 };
 
@@ -339,6 +339,7 @@ const auxiliaryItems = computed<AuxiliaryItem[]>(() => [
     : [],
   ),
 ]);
+
 const activityText = computed(() => {
   switch (props.activity.phase) {
     case "working": {
@@ -489,7 +490,7 @@ const placeholder = computed(() => {
               @click="submitMode = 'followUp'"
             >Follow up</button>
           </div>
-          <IconButton v-if="busy" size="compact" label="Dictation" disabled><MicIcon /></IconButton>
+          <IconButton size="compact" label="Dictation" disabled><MicIcon /></IconButton>
           <IconButton
             v-if="busy"
             size="compact"
@@ -498,16 +499,10 @@ const placeholder = computed(() => {
             @click="emit('abort')"
           ><StopIcon /></IconButton>
           <IconButton
-            v-else
-            size="compact"
-            label="Dictation"
-            disabled
-          ><MicIcon /></IconButton>
-          <IconButton
             size="compact"
             :label="busy ? (submitMode === 'steer' ? 'Steer agent' : 'Queue follow-up') : 'Send'"
             :disabled="!canSend"
-            @click="emitSend(busy ? submitMode : undefined)"
+            @click="emitSend(submitMode)"
           ><SendIcon /></IconButton>
         </div>
       </div>
