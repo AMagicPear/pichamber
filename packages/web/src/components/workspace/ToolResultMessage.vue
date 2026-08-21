@@ -28,3 +28,10 @@ defineProps<{
     />
   </article>
 </template>
+
+<style scoped>
+/* Red label on the detail header so failed tool calls read at a glance. */
+.conversation-message--tool-error :deep(.conversation-detail__label) {
+  color: var(--ui-error-strong);
+}
+</style>

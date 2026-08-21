@@ -16,7 +16,6 @@ Vue 3 + Bun 薄壳，wrap `pi` coding agent + 真实 shell 终端。
 - WS 客户端 → 扩展 `packages/web/src/api/ws.ts`，URL 走 `wsUrl(path)`
 - 服务端状态 → 模块级 `Map` + 导出函数，不写 class
 - WS 服务端路由 → 实现 `WsHandler` 接口，`upgrade` 时把 handler 挂到 `ws.data.handler`
-- 服务端算显示用的字符串（`~/foo` 折叠等），客户端不重复实现
 
 ### 3. 同样功能下，代码越少越好
 
@@ -24,7 +23,7 @@ Vue 3 + Bun 薄壳，wrap `pi` coding agent + 真实 shell 终端。
 
 ## 约定
 
-- **Vue `:key`**：必须用稳定 id，异步 server id 单独存字段 —— 改 key 会触发 unmount/remount，副作用很贵（PTY 那个 bug 就是这个）
+- **Vue `:key`**：必须用稳定 id，异步 server id 单独存字段
 - **图标**：`vite-svg-loader` 把 SVG 当 Vue 组件 import
 - **函数风格**：实现代码优先 `const foo = (...) => {}`；`void` / `Promise<void>` 返回类型通常交给 TypeScript 推断，非 `void` 返回类型只有在 API 表达更清楚或推断不直观时再显式标注
 

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import MarkdownRender from "markstream-vue";
 import type { AgentMessage, ModelDescriptor } from "@amagicpear/pichamber-shared";
 import AssistantMessage from "./AssistantMessage.vue";
-import ToolResultMessage from "./ToolResultMessage.vue";
+import CompactionSummaryMessage from "./CompactionSummaryMessage.vue";
+import CustomSummaryMessage from "./CustomSummaryMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
 import { messageImages, messageText, toolResultText } from "./messageContent";
-import { parseSkillBlock } from "./skillBlock";
-import SkillBlockChip from "./SkillBlockChip.vue";
 import { modelDisplayName } from "./modelDisplay";
+import ToolResultMessage from "./ToolResultMessage.vue";
+import UserMessage from "./UserMessage.vue";
 import { workspace } from "@/stores/workspace";
 import type { ConversationItem } from "@/stores/workspace";
 
@@ -166,36 +166,6 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
   return modelDisplayName(props.availableModels, message.provider, message.model);
 };
 
-/** Returns the parsed skill block when the user message is the canonical
- *  shape pi produces from `/skill:name` expansion, otherwise null.
- *  pi appends the skill's body wrapped in `<skill ...>...</skill>`; without
- *  this check the markdown renderer treats it as malformed HTML and clips
- *  the message on the inner `<table>`/`<tr>` tags. */
-type SkillBlockShape = { name: string; location: string; userMessage?: string };
-const skillBlockFor = (message: AgentMessage | undefined): SkillBlockShape | null => {
-  const text = messageText(message);
-  if (!text) return null;
-  // Avoid the full regex probe on every keystroke for every message; the
-  // shape always starts with the literal "<skill ". message.content is also
-  // validated as a string above, so a substring check is enough.
-  if (!text.startsWith("<skill ")) return null;
-  const parsed = parseSkillBlock(text);
-  if (!parsed) return null;
-  return { name: parsed.name, location: parsed.location, userMessage: parsed.userMessage };
-};
-
-/** Pre-compute skill-block parsing once per user message so the template
- *  doesn't run the regex multiple times for the same item. */
-const userSkillBlocks = computed(() => {
-  const map = new Map<string, SkillBlockShape | null>();
-  for (const item of props.items) {
-    if (item.kind === "message" && item.message.role === "user") {
-      map.set(item.id, skillBlockFor(item.message));
-    }
-  }
-  return map;
-});
-
 /** Cheap, locale-aware timestamp string reused by both user and assistant
  *  rows. Pulls the actual server-assigned `timestamp` (ms epoch) off the
  *  message — every pi message type carries one — so the displayed time
@@ -219,210 +189,51 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
   <div ref="scroller" class="conversation__messages scroll-fade-bottom" @scroll="onScroll" @wheel="onWheel">
     <div ref="content" class="conversation__content">
       <template v-for="item in items" :key="item.id">
-        <template v-if="item.kind === 'message'">
-          <article v-if="item.message.role === 'user'" v-memo="[item]" class="conversation-message conversation-message--user">
-            <div
-              v-for="(img, i) in messageImages(item.message)"
-              :key="`image:${i}`"
-              class="conversation-message__image"
-            >
-              <img
-                :src="`data:${img.mimeType};base64,${img.data}`"
-                alt="Attached image"
-                loading="lazy"
-                decoding="async"
-              />
-            </div>
-            <div v-if="userSkillBlocks.get(item.id) || messageText(item.message)" class="conversation-message__user">
-              <!-- When the user message starts with a pi-expanded skill block,
-                   collapse the body to a chip so the markdown renderer doesn't
-                   see an HTML-shaped blob (its sanitizer would clip on the
-                   inner `<table>` tags and the user ends up staring at raw
-                   XML). Any trailing text the user appended after the
-                   `/skill:name` command is rendered normally. -->
-              <template v-if="userSkillBlocks.get(item.id)">
-                <SkillBlockChip
-                  :name="userSkillBlocks.get(item.id)!.name"
-                  :location="userSkillBlocks.get(item.id)!.location"
-                />
-                <MarkdownRender
-                  v-if="userSkillBlocks.get(item.id)!.userMessage"
-                  class="markdown-chat"
-                  mode="chat"
-                  :content="userSkillBlocks.get(item.id)!.userMessage!"
-                  :final="true"
-                  :fade="false"
-                  :viewport-priority="false"
-                />
-              </template>
-              <MarkdownRender
-                v-else-if="messageText(item.message)"
-                class="markdown-chat"
-                mode="chat"
-                :content="messageText(item.message)"
-                :final="true"
-                :fade="false"
-                :viewport-priority="false"
-              />
-            </div>
-            <p v-if="props.showTimestamps" class="conversation-message__timestamp">{{ formatLocalTimestamp(item.message) }}</p>
-          </article>
-          <AssistantMessage
-            v-else-if="item.message.role === 'assistant'"
-            :message="item.message"
-            :final="!item.streaming"
-            :model-name="modelNameFor(item.message)"
-            :show-timestamp="!!props.showTimestamps"
-            :timestamp-text="formatLocalTimestamp(item.message)"
-          />
-          <article v-else-if="item.message.role === 'compactionSummary'" v-memo="[item]" class="conversation-message conversation-message--compaction">
-            <div class="compaction-summary">
-              <div class="compaction-summary__header">
-                <span class="compaction-summary__label">[compaction]</span>
-                <span class="compaction-summary__meta">Compacted from {{ item.message.tokensBefore.toLocaleString() }} tokens</span>
-              </div>
-              <MarkdownRender
-                class="markdown-chat"
-                mode="chat"
-                :content="item.message.summary"
-                :final="true"
-                :fade="false"
-                :viewport-priority="false"
-              />
-            </div>
-          </article>
-          <!-- custom / branchSummary：官方消息模型的低噪声卡片 -->
-          <article v-else-if="item.message.role === 'custom' || item.message.role === 'branchSummary'" v-memo="[item]" class="conversation-message conversation-message--custom">
-            <div class="custom-summary">
-              <div class="custom-summary__header">
-                <span class="custom-summary__label">[{{ item.message.role }}]</span>
-              </div>
-              <MarkdownRender
-                v-if="messageText(item.message)"
-                class="markdown-chat"
-                mode="chat"
-                :content="messageText(item.message)"
-                :final="true"
-                :fade="false"
-                :viewport-priority="false"
-              />
-            </div>
-          </article>
-        </template>
-        <ToolResultMessage v-else-if="item.kind === 'tool'" v-memo="[item]" :detail="toolDetail(item)" />
+        <UserMessage
+          v-if="item.kind === 'message' && item.message.role === 'user'"
+          :message="item.message"
+          :show-timestamp="!!props.showTimestamps"
+        />
+        <AssistantMessage
+          v-else-if="item.kind === 'message' && item.message.role === 'assistant'"
+          :message="item.message"
+          :final="!item.streaming"
+          :model-name="modelNameFor(item.message)"
+          :show-timestamp="!!props.showTimestamps"
+          :timestamp-text="formatLocalTimestamp(item.message)"
+        />
+        <CompactionSummaryMessage
+          v-else-if="item.kind === 'message' && item.message.role === 'compactionSummary'"
+          :message="item.message"
+        />
+        <CustomSummaryMessage
+          v-else-if="item.kind === 'message' && (item.message.role === 'custom' || item.message.role === 'branchSummary')"
+          :message="item.message"
+        />
+        <ToolResultMessage
+          v-else-if="item.kind === 'tool'"
+          :detail="toolDetail(item)"
+        />
       </template>
     </div>
   </div>
 </template>
 
-<style scoped>
-.conversation__messages { flex: 1; align-self: stretch; width: 100%; min-width: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 24px max(var(--conversation-inline-gutter), calc((100% - var(--conversation-shell-width)) / 2)) 32px; }
-/* Virtual rendering via the browser: out-of-view messages skip layout &
-   paint but keep their size (contain-intrinsic-size is the estimate until
-   first paint), so very long histories scroll smoothly and resizing the
-   pane doesn't relayout everything. Cheap, native, no height bookkeeping;
-   expanded tool details survive remounts, which is a free bonus. */
+<style>
+/* Unscoped on purpose: these rules govern the spacing between sibling
+ * articles rendered by different child components (AssistantMessage,
+ * ToolResultMessage, UserMessage, CompactionSummaryMessage,
+ * CustomSummaryMessage). Scoped CSS would attribute-match each child and
+ * never see the others, breaking `+` sibling selectors. */
 .conversation-message { width: 100%; max-width: var(--conversation-content-width); min-width: 0; margin: 0 auto; padding: 0 clamp(12px, 2.5vw, var(--conversation-inline-gutter)); color: var(--ui-text); content-visibility: auto; contain-intrinsic-size: auto 96px; }
 .conversation-message + .conversation-message { margin-top: 24px; }
 .conversation-message--assistant + .conversation-message--tool-result { margin-top: 12px; }
 .conversation-message--tool-result + .conversation-message--tool-result { margin-top: 12px; }
-.conversation-message--tool-result + .conversation-message--assistant, .conversation-message--tool-result + .conversation-message--user { margin-top: 24px; }
+.conversation-message--tool-result + .conversation-message--assistant,
+.conversation-message--tool-result + .conversation-message--user { margin-top: 24px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 24px; }
+</style>
 
-/* User-side timestamp footer: tucked to the right edge under the
- * right-anchored bubble so it reads as a quiet metadata note, not
- * content. (Assistant messages render their time inline in the author
- * header row instead — see AssistantMessage.vue — because a wider body
- * has no clean footer edge to follow.) */
-.conversation-message__timestamp {
-  margin: 6px 0 0;
-  color: var(--ui-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
-}
-.conversation-message--user { display: flex; flex-direction: column; align-items: flex-end; }
-.conversation-message--user .conversation-message__timestamp {
-  text-align: right;
-}
-
-/* Compaction summary block: a quiet inset card between messages, mirroring
-   the TUI's CompactionSummaryMessage (same surface as custom messages). */
-.conversation-message--compaction { content-visibility: auto; contain-intrinsic-size: auto 120px; }
-/* Custom / branch-summary cards from the official message model. */
-.conversation-message--custom { content-visibility: auto; contain-intrinsic-size: auto 80px; }
-.custom-summary {
-  padding: 10px 14px;
-  border: 1px solid var(--ui-border-subtle);
-  border-left: 3px solid var(--ui-border);
-  border-radius: 10px;
-  background: var(--ui-surface-muted);
-  color: var(--ui-text-secondary);
-  font-size: 13px;
-}
-.custom-summary__header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
-.custom-summary__label { font-weight: 600; color: var(--ui-text-tertiary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-.compaction-summary {
-  padding: 12px 16px;
-  border: 1px solid var(--ui-border-subtle);
-  border-left: 3px solid var(--ui-border);
-  border-radius: 10px;
-  background: var(--ui-surface-muted);
-  color: var(--ui-text-secondary);
-  font-size: 14px;
-}
-.compaction-summary__header {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-.compaction-summary__label { font-weight: 700; color: var(--ui-text); }
-.compaction-summary__meta { color: var(--ui-text-tertiary); font-size: 12px; }
-.conversation-message__user { display: grid; box-sizing: border-box; width: fit-content; max-width: 85%; margin: 0 0 0 auto; padding: 8px 14px; border: 1px solid var(--ui-border-subtle); border-radius: 12px 12px 4px; background: var(--ui-surface-muted); }
-
-/* Force the bubble to actually honor its 85% cap when the content
-   carries long unbroken strings (paths / URLs in mixed CJK messages).
-   Grid items default to min-width: auto, which lets a long line push the
-   bubble past the cap; resetting to 0 lets `max-width` take effect and
-   hands the wrap rules in `markdown-chat` down to the markdown node. */
-.conversation-message__user { min-width: 0; max-width: 85%; }
-.conversation-message__user > * { min-width: 0; max-width: 100%; }
-
-/* Each attachment is its own image message, outside the text bubble. */
-.conversation-message__image {
-  display: flex;
-  justify-content: flex-end;
-  width: 85%;
-  max-width: 420px;
-  margin: 0 0 8px auto;
-}
-.conversation-message__image img {
-  display: block;
-  width: auto;
-  max-width: 100%;
-  max-height: 320px;
-  border-radius: 8px;
-  object-fit: contain;
-  animation: user-image-enter 180ms var(--ui-ease-emphasized) both;
-}
-@keyframes user-image-enter {
-  from { opacity: 0; transform: translateY(3px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .conversation-message__image img { animation: none; }
-}
-
-/* Error variants: red accent on the message block so failed turns read at
- * a glance instead of looking like an empty successful bubble. The author
- * header and text colors live in AssistantMessage.vue. */
-.conversation-message--assistant-error {
-  padding: 14px 16px;
-  border: 1px solid var(--ui-error-border);
-  border-radius: 10px;
-  background: var(--ui-error-bg);
-}
-.conversation-message--tool-error :deep(.conversation-detail__label) {
-  color: var(--ui-error-strong);
-}
+<style scoped>
+.conversation__messages { flex: 1; align-self: stretch; width: 100%; min-width: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 24px max(var(--conversation-inline-gutter), calc((100% - var(--conversation-shell-width)) / 2)) 32px; }
 </style>

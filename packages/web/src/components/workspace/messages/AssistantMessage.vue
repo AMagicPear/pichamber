@@ -169,4 +169,13 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   font-weight: 500;
   line-height: 1.4;
 }
+
+/* Error variant: red accent on the message block so failed turns read at
+ * a glance instead of looking like an empty successful bubble. */
+.conversation-message--assistant-error {
+  padding: 14px 16px;
+  border: 1px solid var(--ui-error-border);
+  border-radius: 10px;
+  background: var(--ui-error-bg);
+}
 </style>
