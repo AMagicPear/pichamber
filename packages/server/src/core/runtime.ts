@@ -24,7 +24,6 @@ import type {
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
   SessionEntry,
-  SessionInfo,
   SessionStats,
   SlashCommandInfo,
   SourceInfo,
@@ -209,12 +208,6 @@ export interface SessionRuntime {
   /** Cached session stats; SDK uses `getSessionStats()`, RPC uses the
    *  same call through the JSONL protocol. */
   getSessionStats(): Promise<SessionStats>;
-
-  /** Wire-format session info used by `listAllSessions`. The SDK
-   *  implementation just forwards the SessionInfo list; RPC returns the
-   *  active session (other sessions live in the SDK's `SessionManager`,
-   *  so we expose them separately when listing). */
-  getSessionInfo(): Promise<SessionInfo | null>;
 
   // ── Extensions ──────────────────────────────────────────────────
 

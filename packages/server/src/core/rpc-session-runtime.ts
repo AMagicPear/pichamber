@@ -24,7 +24,6 @@ import {
   type RpcExtensionUIRequest,
   type RpcExtensionUIResponse,
   type SessionEntry,
-  type SessionInfo,
 } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
@@ -37,7 +36,6 @@ import {
   guiBuiltinSlashCommands,
 } from "./runtime";
 import { resolveExternalPi } from "../settings/server-settings";
-import { SessionManager as SessionManagerCtor } from "@earendil-works/pi-coding-agent";
 import { RpcMessageStream } from "./rpc-message-stream";
 
 type RpcPayload = Record<string, unknown> & { type: string };
@@ -634,30 +632,6 @@ export const createRpcSessionRuntime = async ({
 
     async getSessionStats() {
       return (await send({ type: "get_session_stats" })) as never;
-    },
-
-    async getSessionInfo(): Promise<SessionInfo | null> {
-      // The subprocess only knows the current session. Reuse the
-      // SessionManager on the server for full listings (it lives in
-      // `~/.pi/agent/sessions` so the SDK and the external pi share a
-      // directory).
-      if (!resolvedSessionFile) return null;
-      try {
-        const manager = SessionManagerCtor.open(resolvedSessionFile);
-        return {
-          id: sessionId,
-          path: resolvedSessionFile,
-          cwd: manager.getCwd(),
-          name: initialState.sessionName,
-          created: new Date(0),
-          modified: new Date(),
-          messageCount: initialState.messageCount,
-          firstMessage: "",
-          allMessagesText: "",
-        };
-      } catch {
-        return null;
-      }
     },
 
     async bindExtensions(_uiContext: ExtensionUIContext) {

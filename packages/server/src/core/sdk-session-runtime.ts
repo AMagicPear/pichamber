@@ -11,7 +11,6 @@ import {
   type AgentSessionEvent,
   type ExtensionUIContext,
   type SessionEntry,
-  type SessionInfo,
   type SessionManager,
   createAgentSession,
   getAgentDir,
@@ -233,20 +232,6 @@ export const createSdkSessionRuntime = async (
 
     async getSessionStats() {
       return session.getSessionStats();
-    },
-
-    async getSessionInfo(): Promise<SessionInfo | null> {
-      return {
-        id: session.sessionId,
-        path: session.sessionFile ?? "",
-        cwd: sessionManager.getCwd(),
-        name: session.sessionName,
-        created: new Date(0),
-        modified: new Date(),
-        messageCount: session.state.messages.length,
-        firstMessage: "",
-        allMessagesText: "",
-      };
     },
 
     async bindExtensions(uiContext: ExtensionUIContext) {
