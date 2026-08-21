@@ -407,6 +407,7 @@ export type ClientMessage =
   | { type: "abort"; restorePending?: boolean }
   | { type: "restore_pending" }
   | { type: "compact"; customInstructions?: string }
+  | { type: "reload" }
   | { type: "set_model"; provider: string; modelId: string }
   | { type: "set_thinking_level"; level: ThinkingLevel }
   | { type: "resync" }

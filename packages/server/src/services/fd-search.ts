@@ -47,11 +47,6 @@ const probeFdOnPath = (): string | null => {
   return null;
 };
 
-/** Force the next probeFd call to re-scan PATH (used by tests). */
-export const resetFdPathCache = () => {
-  cachedFdPath = undefined;
-};
-
 /** True iff an `fd` binary exists somewhere on PATH. */
 export const isFdAvailable = (): boolean => probeFdOnPath() !== null;
 
@@ -75,7 +70,12 @@ const buildQuery = (raw: string): string | null => {
   return segments.join("[\\\\/]") + (hasTrailingSeparator ? "[\\\\/]" : "");
 };
 
-const runFd = (fdPath: string, query: string, baseDir: string, signal: AbortSignal): Promise<FdEntry[]> =>
+const runFd = (
+  fdPath: string,
+  query: string,
+  baseDir: string,
+  signal: AbortSignal,
+): Promise<FdEntry[]> =>
   new Promise((onResult) => {
     const args = [
       "--base-directory",
@@ -134,7 +134,8 @@ const runFd = (fdPath: string, query: string, baseDir: string, signal: AbortSign
         if (!line) continue;
         const hasTrailingSeparator = line.endsWith("/");
         const display = hasTrailingSeparator ? line.slice(0, -1) : line;
-        if (display === ".git" || display.startsWith(".git/") || display.includes("/.git/")) continue;
+        if (display === ".git" || display.startsWith(".git/") || display.includes("/.git/"))
+          continue;
         // fd prints paths relative to --base-directory. Resolve to absolute
         // so the caller can `relative()` against the workspace root the
         // same way it does for the BFS fallback.

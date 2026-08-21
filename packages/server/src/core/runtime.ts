@@ -39,13 +39,13 @@ export type SessionRuntimeType = "sdk" | "rpc";
 
 /** Curated subset of Pi's `BUILTIN_SLASH_COMMANDS` that maps cleanly to GUI
  *  concepts. The web client shows them in the slash-command shelf so users
- *  can discover them, but they don't auto-execute: typing `/compact` still
- *  just sends the text, since the SDK session doesn't intercept built-ins
- *  the way the TUI does. That matches the "label, not action" intent of the
- *  shelf — keeping the picker honest about what each entry will do. Skip
- *  TUI-only flows (`/settings`, `/login`, `/hotkeys`, `/quit`, …) and
- *  anything with an existing GUI control (`/model` → ModelSelector,
- *  `/new` → + new session button). */
+ *  can discover them. On submit, the frontend routes entries with a direct
+ *  GUI operation (`/compact` → compact, `/reload` → reload) to their
+ *  dedicated WS frames; everything else is "label, not action" — the text
+ *  goes through `prompt()` as-is, keeping the picker honest about what each
+ *  entry will do. Skip TUI-only flows (`/settings`, `/login`, `/hotkeys`,
+ *  `/quit`, …) and anything with an existing GUI control (`/model` →
+ *  ModelSelector, `/new` → + new session button). */
 type BuiltinSlashCommand = Omit<SlashCommandInfo, "source"> & { source: "builtin" };
 
 const guiBuiltinSourceInfo = (name: string): SourceInfo =>

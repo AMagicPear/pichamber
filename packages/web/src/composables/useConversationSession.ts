@@ -1,7 +1,12 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { computed, onBeforeUnmount, reactive, ref, watch, type Ref } from "vue";
+import type {
+  RpcExtensionUIRequest,
+  RpcExtensionUIResponse,
+} from "@earendil-works/pi-coding-agent";
+import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
+import { matchBuiltinCommand } from "./builtin-commands";
 import { refreshSessions, workspace } from "@/stores/workspace";
 import { settings } from "@/stores/settings";
 import type {
@@ -16,6 +21,7 @@ import type {
   ServerMessage,
   SessionStatsView,
   ThinkingState,
+  WebExtensionUIRequest,
 } from "@amagicpear/pichamber-shared";
 
 /* ── Module-level state ─────────────────────────────────────────────
@@ -29,14 +35,12 @@ const draft = ref<string>();
 export type DraftImage = PromptImage & { id: string; aspectRatio: number };
 const images = ref<DraftImage[]>([]);
 const connected = ref(false);
-/** 统一 item 流：服务器铸造的稳定 id 终生不变，live→committed 只翻字段。 */
-const items: Ref<LiveItem[]> = ref([]);
+
+/** 统一 item 流：服务器铸造的稳定 id 终生不变，live→committed 只翻字段。
+ *  shallowRef：流由服务器整体替换/整条重写，避免 ref 的 UnwrapRef 在
+ *  递归的 LiveItem 上深层展开（TS2589）。 */
+const items = shallowRef<LiveItem[]>([]);
 const busy = ref(false);
-/** Set when a real server message flips busy true; consumed (and reset)
- *  by the watcher below the moment busy goes false. Disconnect-time busy
- *  resets don't pass through this gate, so we don't fire notifications on
- *  clean session swaps. */
-let notifyOnNextSettle = false;
 const activity = ref<AgentActivity>({ phase: "idle" });
 const pending = ref<PendingMessages>({ steering: [], followUp: [] });
 const canRestorePending = ref(true);
@@ -47,22 +51,20 @@ const resources = ref<RuntimeResources>({
   diagnostics: [],
   extensionInventoryAvailable: false,
 });
+type ExtensionDialog = Extract<
+  RpcExtensionUIRequest,
+  { method: "select" | "confirm" | "input" | "editor" }
+>;
+type ExtensionNotification = { id: string; message: string; type: "info" | "warning" | "error" };
+type WidgetEntry = { widget: ExtensionWidget; placement: ExtensionWidgetPlacement };
+
 const extensionUi = reactive({
-  dialog: null as
-    | Extract<
-        import("@earendil-works/pi-coding-agent").RpcExtensionUIRequest,
-        { method: "select" | "confirm" | "input" | "editor" }
-      >
-    | null,
-  notifications: [] as Array<{
-    id: string;
-    message: string;
-    type: "info" | "warning" | "error";
-  }>,
+  dialog: null as ExtensionDialog | null,
+  notifications: [] as ExtensionNotification[],
   statuses: {} as Record<string, string>,
-  widgets: {} as Record<string, { widget: ExtensionWidget; placement: ExtensionWidgetPlacement }>,
+  widgets: {} as Record<string, WidgetEntry>,
 });
-const extensionDialogQueue: Array<NonNullable<typeof extensionUi.dialog>> = [];
+const extensionDialogQueue: ExtensionDialog[] = [];
 
 const showNextExtensionDialog = () => {
   extensionUi.dialog = extensionDialogQueue.shift() ?? null;
@@ -81,6 +83,12 @@ watch(model, (next) => {
 const thinking = ref<ThinkingState>({ level: "off", availableLevels: ["off"] });
 /** Pre-formatted Context-pane view; the server is the source of truth. */
 const stats = ref<SessionStatsView | undefined>();
+/** Terminal window/tab title set by extensions via `ctx.ui.setTitle()`.
+ *  This is a per-session host-window title (the pi protocol's
+ *  `setTitle`), NOT the browser tab title — it must never touch
+ *  `document.title`. Displayed by SessionHeader, which falls back to
+ *  `workspace.sessionName` when no extension title is set. */
+const windowTitle = ref<string | undefined>();
 /** Push a transport / model / thinking / catastrophic-prompt error onto the
  *  shared toast queue. The toast auto-dismisses after 5s and can be closed
  *  manually, matching the lifecycle of extension notifications. */
@@ -92,9 +100,11 @@ const pushErrorToast = (message: string) => {
 
 let ws: WsHandle | null = null;
 let activeSessionId: string | null = null;
+
 /** 已应用的广播序号；发现间隙就请求 resync（快照会重置）。 */
 let lastSeq = 0;
 let resyncPending = false;
+
 /** Number of components currently subscribed via the composable. The
  *  WebSocket only opens when the first one mounts and only closes when
  *  the last one unmounts, so the Context pane (a passive reader) can't
@@ -114,94 +124,117 @@ const applyModelState = (snapshot: {
 };
 
 /** 按 id 原地 upsert：顺序即服务器推送顺序，流式增长/阶段翻转都只改内容。 */
-const applyItem = (item: LiveItem) => {
-  const index = items.value.findIndex((i) => i.id === item.id);
-  if (index === -1) items.value.push(item);
-  else items.value[index] = item;
-};
-
 const requestResync = () => {
   if (resyncPending) return;
   resyncPending = true;
   ws?.send({ type: "resync" });
 };
 
-const onMessage = (message: ServerMessage) => {
-  if (message.type === "snapshot") {
-    resyncPending = false;
-    connected.value = true;
-    items.value = message.items;
-    if (message.busy) notifyOnNextSettle = true;
-    busy.value = message.busy;
-    activity.value = message.activity;
-    pending.value = message.pending;
-    canRestorePending.value = message.canRestorePending;
-    lastSeq = message.seq;
-    applyModelState(message);
-    resources.value = message.resources;
-  } else if (message.type === "item") {
-    if (message.seq !== lastSeq + 1) {
-      requestResync();
-      return;
-    }
-    lastSeq = message.seq;
-    applyItem(message.item);
-  } else if (message.type === "state") {
-    if (message.seq !== lastSeq + 1) {
-      requestResync();
-      return;
-    }
-    lastSeq = message.seq;
-    if (message.busy !== undefined) {
-      if (message.busy) notifyOnNextSettle = true;
-      busy.value = message.busy;
-    }
-    if (message.activity) activity.value = message.activity;
-    if (message.pending) pending.value = message.pending;
-    if (message.resources) resources.value = message.resources;
-    applyModelState(message);
-    // 服务器只在 agent_settled 发一次 busy=false —— 会话文件变了，刷新侧栏。
-    if (message.busy === false) void refreshSessions();
-  } else if (message.type === "ui_request") {
-    const { request } = message;
-    if (request.type !== "extension_ui_request") return;
-    if (request.method === "select" || request.method === "confirm" || request.method === "input" || request.method === "editor") {
+const handleUiRequest = (request: WebExtensionUIRequest) => {
+  switch (request.method) {
+    case "select":
+    case "confirm":
+    case "input":
+    case "editor":
       if (extensionUi.dialog) extensionDialogQueue.push(request);
       else extensionUi.dialog = request;
-    } else if (request.method === "notify") {
+      break;
+    case "notify":
       extensionUi.notifications.push({
         id: request.id,
         message: request.message,
         type: request.notifyType ?? "info",
       });
       setTimeout(() => dismissNotification(request.id), 5_000);
-    } else if (request.method === "setStatus") {
+      break;
+    case "setStatus":
       if (request.statusText) extensionUi.statuses[request.statusKey] = request.statusText;
       else delete extensionUi.statuses[request.statusKey];
-    } else if (request.method === "setWidget") {
+      break;
+    case "setWidget":
       if (request.widget) {
         extensionUi.widgets[request.widgetKey] = {
           widget: request.widget,
           placement: request.widgetPlacement ?? "aboveEditor",
         };
       } else delete extensionUi.widgets[request.widgetKey];
-    } else if (request.method === "setTitle") {
-      document.title = request.title || "Pichamber";
-    } else if (request.method === "set_editor_text") {
+      break;
+    case "setTitle":
+      windowTitle.value = request.title || undefined;
+      break;
+    case "set_editor_text":
       draft.value = request.text;
+      break;
+  }
+};
+
+const onMessage = (message: ServerMessage) => {
+  switch (message.type) {
+    case "snapshot": {
+      resyncPending = false;
+      connected.value = true;
+      items.value = message.items;
+      busy.value = message.busy;
+      activity.value = message.activity;
+      pending.value = message.pending;
+      canRestorePending.value = message.canRestorePending;
+      lastSeq = message.seq;
+      applyModelState(message);
+      resources.value = message.resources;
+      break;
     }
-  } else if (message.type === "draft_restore") {
-    draft.value = [...message.messages, draft.value?.trim()].filter(Boolean).join("\n\n");
-  } else if (message.type === "error") {
-    pushErrorToast(message.error);
+    case "item": {
+      if (message.seq !== lastSeq + 1) {
+        requestResync();
+        break;
+      }
+      lastSeq = message.seq;
+      const item = message.item;
+      const index = items.value.findIndex((i) => i.id === item.id);
+      // shallowRef 不追踪数组内部变更，upsert 后整条重写触发渲染。
+      if (index === -1) items.value = [...items.value, item];
+      else items.value = items.value.map((i) => (i.id === item.id ? item : i));
+      break;
+    }
+    case "state": {
+      if (message.seq !== lastSeq + 1) {
+        requestResync();
+        break;
+      }
+      lastSeq = message.seq;
+      if (message.busy !== undefined) busy.value = message.busy;
+      if (message.activity) activity.value = message.activity;
+      if (message.pending) pending.value = message.pending;
+      if (message.resources) resources.value = message.resources;
+      applyModelState(message);
+      // 服务器只在 agent_settled / compaction_end 广播 busy=false
+      // 回合跑完刷新侧栏 + 完成通知。disconnect 的本地翻转不经过这里，不会误响。
+      if (message.busy === false) {
+        void refreshSessions();
+        notifyAgentSettled();
+      }
+      break;
+    }
+    case "ui_request":
+      handleUiRequest(message.request);
+      break;
+    case "draft_restore":
+      draft.value = [...message.messages, draft.value?.trim()].filter(Boolean).join("\n\n");
+      break;
+    case "error":
+      pushErrorToast(message.error);
+      break;
   }
 };
 
 const onStatus = (status: WsStatus) => {
-  if (status.type === "closed") {
-    connected.value = false;
-  } else if (status.type === "error") {
-    pushErrorToast(status.error);
+  switch (status.type) {
+    case "closed":
+      connected.value = false;
+      break;
+    case "error":
+      pushErrorToast(status.error);
+      break;
   }
 };
 
@@ -214,26 +247,36 @@ const send = (streamingBehavior?: "steer" | "followUp") => {
   if (!canSend.value || !ws) return;
   // Dismiss any lingering error toasts so they don't pile up across turns.
   extensionUi.notifications = extensionUi.notifications.filter((n) => n.type !== "error");
-  ws.send({
-    type: "prompt",
-    message: text ?? "",
-    images: images.value.map(({ type, data, mimeType }) => ({ type, data, mimeType })),
-    streamingBehavior,
-  });
+  // Built-in slash commands route to their dedicated WS frames instead of
+  // leaving the client as a `prompt` message (see `builtin-commands.ts`).
+  const builtin = matchBuiltinCommand(text ?? "");
+  switch (builtin?.name) {
+    case "compact":
+      compact(builtin.customInstructions ?? undefined);
+      break;
+    case "reload":
+      reload();
+      break;
+    default:
+      ws.send({
+        type: "prompt",
+        message: text ?? "",
+        images: images.value.map(({ type, data, mimeType }) => ({ type, data, mimeType })),
+        streamingBehavior,
+      });
+  }
   draft.value = undefined;
   images.value = [];
 };
 
 const abort = () => ws?.send({ type: "abort", restorePending: true });
 const restorePending = () => ws?.send({ type: "restore_pending" });
-const compact = () => ws?.send({ type: "compact" });
+const compact = (customInstructions?: string) => ws?.send({ type: "compact", customInstructions });
+/** Reload extensions, prompts, themes, and context files — mirrors the
+ *  TUI's `/reload`. The server guards against streaming/compaction. */
+const reload = () => ws?.send({ type: "reload" });
 
-const respondToExtension = (
-  response:
-    | { type: "extension_ui_response"; id: string; cancelled: true }
-    | { type: "extension_ui_response"; id: string; value: string }
-    | { type: "extension_ui_response"; id: string; confirmed: boolean },
-) => {
+const respondToExtension = (response: RpcExtensionUIResponse) => {
   ws?.send({ type: "ui_response", response });
   showNextExtensionDialog();
 };
@@ -245,9 +288,9 @@ const dismissNotification = (id: string) => {
 
 // ─── Turn-completion notifications ──────────────────────────────────
 //
-// Fired from the `busy` watcher below when the server reports a turn has
-// fully settled (busy: true → false). Disconnect() also flips busy to false
-// but bypasses `notifyOnNextSettle`, so clean session swaps don't ping.
+// Fired directly from the `state` handler when the server broadcasts
+// `busy: false` (agent_settled / compaction_end). Disconnect flips busy
+// locally without a server frame, so session swaps never ping.
 
 // Short Web Audio two-note "ding-dong". Most browsers suspend an
 // AudioContext until a user gesture, so the very first settle after page
@@ -256,8 +299,9 @@ const dismissNotification = (id: string) => {
 const playCompletionChime = () => {
   if (typeof window === "undefined") return;
   try {
-    const Ctx = window.AudioContext
-      ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const Ctx =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
     const schedule = (t: number, freq: number, dur: number) => {
@@ -276,7 +320,9 @@ const playCompletionChime = () => {
     schedule(t0, 880, 0.18);
     schedule(t0 + 0.09, 1320, 0.16);
     if (ctx.state === "suspended") void ctx.resume();
-    setTimeout(() => { ctx.close().catch(() => undefined); }, 400);
+    setTimeout(() => {
+      ctx.close().catch(() => undefined);
+    }, 400);
   } catch {
     /* users who block audio context get nothing — totally fine */
   }
@@ -287,7 +333,11 @@ const fireDesktopNotification = (modelLabel: string) => {
   if (Notification.permission !== "granted") return;
   try {
     const body = modelLabel ? `${modelLabel} finished responding.` : "Agent finished responding.";
-    const notification = new Notification("Pichamber", { body, silent: true, tag: "pichamber-completion" });
+    const notification = new Notification("Pichamber", {
+      body,
+      silent: true,
+      tag: "pichamber-completion",
+    });
     notification.onclick = () => {
       window.focus();
       notification.close();
@@ -305,18 +355,6 @@ const notifyAgentSettled = () => {
     fireDesktopNotification(label);
   }
 };
-
-// Module-scope watcher so it lives as long as the composable does. The
-// gate (`notifyOnNextSettle`) is set by the message handlers above; the
-// disconnect path flips busy without touching it, so session swaps never
-// ping. We track the prior value to detect the true→false edge reliably
-// even across rapid ref toggles.
-watch(busy, (now, prev) => {
-  if (prev === true && now === false && notifyOnNextSettle) {
-    notifyOnNextSettle = false;
-    notifyAgentSettled();
-  }
-});
 
 /** Pi owns the model and thinking state. Wait for its state broadcast
  *  instead of guessing locally: setModel can fail after the user selects a
@@ -353,7 +391,7 @@ const disconnect = () => {
   extensionUi.notifications.splice(0);
   for (const key of Object.keys(extensionUi.statuses)) delete extensionUi.statuses[key];
   for (const key of Object.keys(extensionUi.widgets)) delete extensionUi.widgets[key];
-  document.title = "Pichamber";
+  windowTitle.value = undefined;
   model.value = undefined;
   availableModels.value = [];
   thinking.value = { level: "off", availableLevels: ["off"] };
@@ -410,10 +448,12 @@ export const useConversationSession = () => {
     images,
     respondToExtension,
     restorePending,
+    reload,
     send,
     setModel,
     setThinkingLevel,
     stats,
     thinking,
+    windowTitle,
   };
 };

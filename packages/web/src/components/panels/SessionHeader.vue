@@ -18,7 +18,7 @@ import { activeGitBranch, loadGitBranch } from "@/stores/git";
 import { ui } from "@/stores/ui";
 import { workspace } from "@/stores/workspace";
 
-const { availableModels } = useConversationSession();
+const { availableModels, windowTitle } = useConversationSession();
 const gitBranch = activeGitBranch;
 
 /** At least one quoted provider is configured when the Pi SDK reports a
@@ -49,63 +49,55 @@ const onProvidersClick = () => {
 </script>
 
 <template>
-  <header
-    class="session-header"
-    :class="{ 'is-left-collapsed': !ui.panels.left.open }"
-  >
+  <header class="session-header" :class="{ 'is-left-collapsed': !ui.panels.left.open }">
     <div class="session-header__leading">
       <div class="session-header__title">
+        <div class="session-header__title-row">
           <h1 :title="workspace.sessionName ?? undefined">{{ workspace.sessionName }}</h1>
-          <div class="session-header__path-row">
-            <p :title="workspace.cwd ?? undefined">{{ workspace.cwd }}</p>
-            <span v-if="gitBranch" class="session-header__branch" :title="`Git branch: ${gitBranch}`">
-              <GitBranchIcon />
-              {{ gitBranch }}
-            </span>
-          </div>
+          <span v-if="windowTitle" class="session-header__window-title" :title="windowTitle">{{ windowTitle }}</span>
+        </div>
+        <div class="session-header__path-row">
+          <p :title="workspace.cwd ?? undefined">{{ workspace.cwd }}</p>
+          <span v-if="gitBranch" class="session-header__branch" :title="`Git branch: ${gitBranch}`">
+            <GitBranchIcon />
+            {{ gitBranch }}
+          </span>
+        </div>
       </div>
     </div>
 
     <nav class="session-header__tools" aria-label="Session tools">
       <div ref="root" class="providers-trigger">
-        <IconButton
-          class="providers-button"
-          label="Usage & balance"
-          :title="hasQuotedProvider ? 'View usage & balance' : 'No supported providers configured'"
-          :pressed="open"
-          :disabled="!hasQuotedProvider"
-          @click="onProvidersClick"
-        >
+        <IconButton class="providers-button" label="Usage & balance"
+          :title="hasQuotedProvider ? 'View usage & balance' : 'No supported providers configured'" :pressed="open"
+          :disabled="!hasQuotedProvider" @click="onProvidersClick">
           <StackIcon />
         </IconButton>
         <MenuPanel :open="open" :style="style" :width="280" aria-label="Usage & balance">
           <ProviderQuotaPanel :open="open" />
         </MenuPanel>
       </div>
-      <IconButton
-        label="Toggle terminal panel"
-        :pressed="ui.panels.bottom.open"
-        @click="ui.toggle('bottom')"
-      >
+      <IconButton label="Toggle terminal panel" :pressed="ui.panels.bottom.open" @click="ui.toggle('bottom')">
         <TerminalBoxIcon />
       </IconButton>
-      <IconButton label="Web" disabled><GlobalIcon /></IconButton>
-      <IconButton
-        label="Git panel"
-        :pressed="ui.panels.right.open && ui.activeRightPanel === 'git'"
-        @click="ui.selectRightPanel('git')"
-      ><GitBranchIcon /></IconButton>
-      <IconButton
-        label="Files panel"
-        :pressed="ui.panels.right.open && ui.activeRightPanel === 'files'"
-        @click="ui.selectRightPanel('files')"
-      ><FolderIcon /></IconButton>
-      <IconButton
-        label="Context panel"
-        :pressed="ui.panels.right.open && ui.activeRightPanel === 'context'"
-        @click="ui.selectRightPanel('context')"
-      ><FileListIcon /></IconButton>
-      <IconButton label="Account" disabled><AiAgentIcon class="account-icon" /></IconButton>
+      <IconButton label="Web" disabled>
+        <GlobalIcon />
+      </IconButton>
+      <IconButton label="Git panel" :pressed="ui.panels.right.open && ui.activeRightPanel === 'git'"
+        @click="ui.selectRightPanel('git')">
+        <GitBranchIcon />
+      </IconButton>
+      <IconButton label="Files panel" :pressed="ui.panels.right.open && ui.activeRightPanel === 'files'"
+        @click="ui.selectRightPanel('files')">
+        <FolderIcon />
+      </IconButton>
+      <IconButton label="Context panel" :pressed="ui.panels.right.open && ui.activeRightPanel === 'context'"
+        @click="ui.selectRightPanel('context')">
+        <FileListIcon />
+      </IconButton>
+      <IconButton label="Account" disabled>
+        <AiAgentIcon class="account-icon" />
+      </IconButton>
     </nav>
   </header>
 </template>
@@ -119,32 +111,72 @@ const onProvidersClick = () => {
   padding: 0 10px 0 16px;
   border-bottom: 1px solid var(--ui-border-subtle);
 }
+
 .session-header.is-left-collapsed {
   padding-left: 48px;
 }
+
 .session-header__leading,
 .session-header__tools {
   display: flex;
   align-items: center;
 }
+
 .session-header__leading {
   flex: 1 1 auto;
   min-width: 0;
   gap: 8px;
 }
+
 .session-header__title {
   min-width: 0;
 }
+
+.session-header__title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.session-header__title-row h1 {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* Extension-set terminal window/tab title (ctx.ui.setTitle). Lives next
+ * to the session name as a separate badge — never replaces it: the
+ * session name is persisted session metadata, the window title is an
+ * ephemeral host-window label that extensions may update frequently
+ * (e.g. titlebar-spinner animates it). */
+.session-header__window-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  padding: 1px 8px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 999px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-header h1,
 .session-header p {
   margin: 0;
 }
+
 .session-header__path-row {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 8px;
 }
+
 .session-header__branch {
   display: inline-flex;
   flex: 0 0 auto;
@@ -157,10 +189,12 @@ const onProvidersClick = () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .session-header__branch svg {
   width: 12px;
   height: 12px;
 }
+
 .session-header h1 {
   overflow: hidden;
   font-size: 14px;
@@ -169,6 +203,7 @@ const onProvidersClick = () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .session-header p {
   overflow: hidden;
   color: var(--ui-text-muted);
@@ -177,9 +212,11 @@ const onProvidersClick = () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .session-header__tools {
   gap: 8px;
 }
+
 .account-icon {
   width: 22px;
   height: 22px;
