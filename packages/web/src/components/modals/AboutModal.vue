@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import AppLogo from "@/components/AppLogo";
-import Modal from "@/components/layout/Modal.vue";
-import IconButton from "@/components/IconButton.vue";
+import AppLogo from "@/components/shell/AppLogo";
+import Modal from "@/components/ui/Modal.vue";
+import IconButton from "@/components/ui/IconButton.vue";
 import CloseIcon from "@/assets/icons/Close.svg";
 import GithubIcon from "@/assets/icons/Github.svg";
 import { getVersion } from "@/api/client";

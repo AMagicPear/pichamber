@@ -5,8 +5,8 @@
  * edge so the card can never leak from its bottom. */
 import type { ExtensionWidget } from "@amagicpear/pichamber-shared";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import ActivityPanel from "./ActivityPanel.vue";
-import ActivityToggle from "./ActivityToggle.vue";
+import ActivityPanel from "../../activity/ActivityPanel.vue";
+import ActivityToggle from "../../activity/ActivityToggle.vue";
 
 const props = defineProps<{
   widgets: Record<string, {

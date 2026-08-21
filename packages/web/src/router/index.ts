@@ -1,4 +1,4 @@
-import ConversationPanel from "@/components/panels/ConversationPanel.vue";
+import ConversationPanel from "@/components/conversation/ConversationPanel.vue";
 import { toMessage } from "@/api/client";
 import {
   createSessionForCwd,

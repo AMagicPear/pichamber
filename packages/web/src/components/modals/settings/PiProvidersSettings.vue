@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import type { PiProviderSettings } from "@amagicpear/pichamber-shared";
 import { fetchPiProviders, removePiProviderCredential, setPiProviderApiKey, toMessage } from "@/api/client";
 import { workspace } from "@/stores/workspace";
-import ProviderLogo from "@/components/workspace/ProviderLogo";
+import ProviderLogo from "@/components/ui/ProviderLogo";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
 
 const providers = ref<PiProviderSettings[]>([]);

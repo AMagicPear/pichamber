@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import MarkdownRender from "markstream-vue";
 import { computed } from "vue";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
 import BrainAi3Icon from "@/assets/icons/BrainAi3.svg";
+import ChatMarkdown from "./ChatMarkdown.vue";
 import ConversationDetail from "./ConversationDetail.vue";
-import ProviderLogo from "./ProviderLogo";
+import ProviderLogo from "../../ui/ProviderLogo";
 import { inline, messageText, thinkingStreaming as thinkingStreamingOf, thinkingText } from "./messageContent";
 
 /** 从 AgentMessage union 里取 assistant 消息（pi-ai 类型带真实字段）。 */
@@ -73,15 +73,12 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
         :auto-expand="thinkingStreaming"
         hide-preview-on-expand
       />
-      <MarkdownRender
+      <ChatMarkdown
         v-if="text"
-        class="conversation-message__content markdown-chat"
-        mode="chat"
+        class="conversation-message__content"
         :content="text"
         :final="final"
-        :fade="false"
         :code-block-monaco-options="{ disableFileHeader: true }"
-        :viewport-priority="false"
       />
     </template>
   </article>

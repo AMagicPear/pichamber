@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, toRef, watch } from "vue";
-import SplitPane from "@/components/layout/SplitPane.vue";
-import IconButton from "@/components/IconButton.vue";
+import SplitPane from "@/components/shell/SplitPane.vue";
+import IconButton from "@/components/ui/IconButton.vue";
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
 import AiGenerate2Icon from "@/assets/icons/AiGenerate2.svg";
 import BookOpenIcon from "@/assets/icons/BookOpen.svg";
@@ -24,18 +24,18 @@ import ServerIcon from "@/assets/icons/Server.svg";
 import SlashCommands2Icon from "@/assets/icons/SlashCommands2.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalIcon from "@/assets/icons/Terminal.svg";
-import { McpIcon } from "@/components/McpIcon";
+import { McpIcon } from "@/components/ui/McpIcon";
 import { settings } from "@/stores/settings";
 import { resources } from "@/stores/workspace";
 import { preference as themePreference, setTheme, themeOptions } from "@/stores/theme";
 import { useServerSettings } from "@/stores/server-settings";
 import { persistedState } from "@/stores/persisted";
-import PiBehaviorSettings from "@/components/modals/PiBehaviorSettings.vue";
-import PiProvidersSettings from "@/components/modals/PiProvidersSettings.vue";
-import SettingsGroup from "@/components/modals/SettingsGroup.vue";
-import SettingsOption from "@/components/modals/SettingsOption.vue";
-import SettingsPageHeader from "@/components/modals/SettingsPageHeader.vue";
-import ExtensionsManager from "@/components/modals/ExtensionsManager.vue";
+import PiBehaviorSettings from "@/components/modals/settings/PiBehaviorSettings.vue";
+import PiProvidersSettings from "@/components/modals/settings/PiProvidersSettings.vue";
+import SettingsGroup from "@/components/modals/settings/SettingsGroup.vue";
+import SettingsOption from "@/components/modals/settings/SettingsOption.vue";
+import SettingsPageHeader from "@/components/modals/settings/SettingsPageHeader.vue";
+import ExtensionsManager from "@/components/modals/settings/ExtensionsManager.vue";
 
 defineOptions({ name: "SettingsView" });
 

@@ -4,9 +4,9 @@ import { computed, nextTick, ref, watch } from "vue";
 import AttachmentIcon from "@/assets/icons/Attachment2.svg";
 import CommandIcon from "@/assets/icons/Command.svg";
 import { listDirectory, searchFiles, toMessage } from "@/api/client";
-import { getEntryIcon } from "@/components/workspace/fileIcon";
+import { getEntryIcon } from "@/components/ui/fileIcon";
 import { workspace } from "@/stores/workspace";
-import FloatingPanel from "./FloatingPanel.vue";
+import FloatingPanel from "../../ui/FloatingPanel.vue";
 
 const props = defineProps<{
   mode: "files" | "commands" | null;

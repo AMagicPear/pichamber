@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
 import type { ModelDescriptor } from "@amagicpear/pichamber-shared";
-import MenuPanel from "@/components/MenuPanel.vue";
+import MenuPanel from "@/components/ui/MenuPanel.vue";
 import ProviderLogo from "./ProviderLogo";
 import { usePopover } from "@/composables/usePopover";
 

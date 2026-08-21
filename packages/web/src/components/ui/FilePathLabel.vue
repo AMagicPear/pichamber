@@ -10,7 +10,7 @@
  */
 import { computed } from "vue";
 import { lastSeparatorIndex } from "@amagicpear/pichamber-shared";
-import { getEntryIcon } from "@/components/workspace/fileIcon";
+import { getEntryIcon } from "@/components/ui/fileIcon";
 
 const props = withDefaults(
   defineProps<{

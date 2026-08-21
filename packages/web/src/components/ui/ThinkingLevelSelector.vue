@@ -3,7 +3,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { computed, ref } from "vue";
 import AiGenerate2Icon from "@/assets/icons/AiGenerate2.svg";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
-import MenuPanel from "@/components/MenuPanel.vue";
+import MenuPanel from "@/components/ui/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 
 const props = defineProps<{

@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import MarkdownRender from "markstream-vue";
 import { computed, onBeforeUnmount, ref, watch, type Component } from "vue";
 import FolderIcon from "@/assets/icons/Folder.svg";
 import FileTextIcon from "@/assets/icons/FileText.svg";
 import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
-import FilePathLabel from "@/components/FilePathLabel.vue";
-import CodeView from "./CodeView.vue";
-import DiffView from "./DiffView.vue";
-import { getEntryIcon } from "./fileIcon";
+import FilePathLabel from "@/components/ui/FilePathLabel.vue";
+import ChatMarkdown from "./ChatMarkdown.vue";
+import CodeView from "../../ui/CodeView.vue";
+import DiffView from "../../panels/DiffView.vue";
+import { getEntryIcon } from "../../ui/fileIcon";
 import { type ToolBody } from "./toolBody";
 
 const props = defineProps<{
@@ -133,14 +133,10 @@ const showNotes = computed(() => {
     </button>
     <div class="conversation-detail__body">
       <div class="conversation-detail__body-inner">
-        <MarkdownRender
+        <ChatMarkdown
           v-if="body.kind === 'markdown'"
-          class="conversation-detail__markdown markdown-chat"
-          mode="chat"
+          class="conversation-detail__markdown"
           :content="body.content"
-          :final="true"
-          :fade="false"
-          :viewport-priority="false"
         />
         <DiffView v-else-if="body.kind === 'diff'" class="conversation-detail__diff" :patch="body.patch" />
         <div v-else-if="body.kind === 'images'" class="conversation-detail__images">

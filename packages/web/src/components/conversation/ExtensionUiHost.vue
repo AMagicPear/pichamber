@@ -2,7 +2,7 @@
 import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import CloseIcon from "@/assets/icons/Close.svg";
-import Modal from "@/components/layout/Modal.vue";
+import Modal from "@/components/ui/Modal.vue";
 
 type DialogRequest = Extract<
   RpcExtensionUIRequest,

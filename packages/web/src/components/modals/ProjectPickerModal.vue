@@ -2,7 +2,7 @@
 import { nextTick, ref, watch } from "vue";
 import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
 import FolderIcon from "@/assets/icons/Folder.svg";
-import Modal from "@/components/layout/Modal.vue";
+import Modal from "@/components/ui/Modal.vue";
 import { browseProjectDirectories, toMessage } from "@/api/client";
 
 const props = defineProps<{ show: boolean }>();

@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import MarkdownRender from "markstream-vue";
 import { computed } from "vue";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
+import ChatMarkdown from "./ChatMarkdown.vue";
 import { messageImages, messageText } from "./messageContent";
 import { parseSkillBlock } from "./skillBlock";
 import SkillBlockChip from "./SkillBlockChip.vue";
 
+type SkillChip = { name: string; location: string };
+
 const props = defineProps<{
   message: AgentMessage;
-  showTimestamp?: boolean;
+  /** Pre-formatted by the parent from message.timestamp, so the row
+   *  reads the same source as AssistantMessage and the user-side footer
+   *  matches the assistant-side inline time. */
+  timestampText?: string;
 }>();
-
-type SkillChip = { name: string; location: string };
 
 /** What the row actually renders: optional skill chip + optional text.
  *  Skill messages come out of `/skill:name` as
@@ -30,21 +33,6 @@ const parts = computed<{ skill: SkillChip | null; text: string }>(() => {
     skill: { name: parsed.name, location: parsed.location },
     text: parsed.userMessage ?? "",
   };
-});
-
-/** Pulls the actual server-assigned `timestamp` (ms epoch) off the
- *  message — every pi message type carries one — so the displayed time
- *  matches when the message was committed. Empty when the message has
- *  no timestamp yet (a rare "draft" placeholder). */
-const timestampText = computed(() => {
-  const ts = (props.message as { timestamp?: unknown }).timestamp;
-  if (typeof ts !== "number" || !Number.isFinite(ts)) return undefined;
-  return new Date(ts).toLocaleString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-  });
 });
 </script>
 
@@ -69,16 +57,9 @@ const timestampText = computed(() => {
       <SkillBlockChip :name="parts.skill.name" :location="parts.skill.location" />
     </div>
     <div v-if="parts.text" class="conversation-message__user">
-      <MarkdownRender
-        class="markdown-chat"
-        mode="chat"
-        :content="parts.text"
-        :final="true"
-        :fade="false"
-        :viewport-priority="false"
-      />
+      <ChatMarkdown :content="parts.text" />
     </div>
-    <p v-if="showTimestamp && timestampText" class="conversation-message__timestamp">{{ timestampText }}</p>
+    <p v-if="timestampText" class="conversation-message__timestamp">{{ timestampText }}</p>
   </article>
 </template>
 

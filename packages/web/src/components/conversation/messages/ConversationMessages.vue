@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { AgentMessage, ModelDescriptor } from "@amagicpear/pichamber-shared";
 import AssistantMessage from "./AssistantMessage.vue";
 import CompactionSummaryMessage from "./CompactionSummaryMessage.vue";
 import CustomSummaryMessage from "./CustomSummaryMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
-import { messageImages, messageText, toolResultText } from "./messageContent";
+import { messageImages, messageText, messageTimestampText, toolResultText } from "./messageContent";
 import { modelDisplayName } from "./modelDisplay";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import UserMessage from "./UserMessage.vue";
@@ -165,24 +165,6 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
   if (message?.role !== "assistant") return undefined;
   return modelDisplayName(props.availableModels, message.provider, message.model);
 };
-
-/** Cheap, locale-aware timestamp string reused by both user and assistant
- *  rows. Pulls the actual server-assigned `timestamp` (ms epoch) off the
- *  message — every pi message type carries one — so the displayed time
- *  matches when the message was committed, not when the timestamp row
- *  was first rendered. Returns undefined when the message is empty (a
- *  rare "draft" placeholder) so the template can omit the footer. */
-const formatLocalTimestamp = (message: AgentMessage | undefined): string | undefined => {
-  if (!message) return undefined;
-  const ts = (message as { timestamp?: unknown }).timestamp;
-  if (typeof ts !== "number" || !Number.isFinite(ts)) return undefined;
-  return new Date(ts).toLocaleString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-  });
-};
 </script>
 
 <template>
@@ -192,7 +174,7 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
         <UserMessage
           v-if="item.kind === 'message' && item.message.role === 'user'"
           :message="item.message"
-          :show-timestamp="!!props.showTimestamps"
+          :timestamp-text="props.showTimestamps ? messageTimestampText(item.message) : undefined"
         />
         <AssistantMessage
           v-else-if="item.kind === 'message' && item.message.role === 'assistant'"
@@ -200,7 +182,7 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
           :final="!item.streaming"
           :model-name="modelNameFor(item.message)"
           :show-timestamp="!!props.showTimestamps"
-          :timestamp-text="formatLocalTimestamp(item.message)"
+          :timestamp-text="messageTimestampText(item.message)"
         />
         <CompactionSummaryMessage
           v-else-if="item.kind === 'message' && item.message.role === 'compactionSummary'"

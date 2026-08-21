@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import FolderIcon from "@/assets/icons/Folder.svg";
-import FileTree from "@/components/workspace/FileTree.vue";
+import FileTree from "@/components/panels/FileTree.vue";
 import { workspace } from "@/stores/workspace";
 </script>
 

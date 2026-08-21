@@ -7,9 +7,9 @@ import RefreshIcon from "@/assets/icons/Refresh2.svg";
 import SearchIcon from "@/assets/icons/Search.svg";
 import type { DirEntry } from "@amagicpear/pichamber-shared";
 import { listDirectory, toMessage } from "@/api/client";
-import IconButton from "@/components/IconButton.vue";
+import IconButton from "@/components/ui/IconButton.vue";
 import { workspace } from "@/stores/workspace";
-import { getEntryIcon } from "./fileIcon";
+import { getEntryIcon } from "../ui/fileIcon";
 
 const FileTreeNode = defineComponent({
   name: "FileTreeNode",

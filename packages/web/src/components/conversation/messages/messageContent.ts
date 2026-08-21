@@ -76,3 +76,20 @@ export const thinkingStreaming = (message?: AgentMessage, final = false): boolea
 
 /** Collapse whitespace for single-line previews. */
 export const inline = (value: string): string => value.replace(/\s+/g, " ").trim();
+
+/** Pulls the server-assigned `timestamp` (ms epoch) off a pi message —
+ *  every message type carries one — and renders it as a short local
+ *  string suitable for both user-side footers and assistant-side
+ *  inline timestamps. Returns undefined when the field is missing or
+ *  malformed so the caller can omit the row entirely. */
+export const messageTimestampText = (message: AgentMessage | undefined): string | undefined => {
+  if (!message) return undefined;
+  const ts = (message as { timestamp?: unknown }).timestamp;
+  if (typeof ts !== "number" || !Number.isFinite(ts)) return undefined;
+  return new Date(ts).toLocaleString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    day: "numeric",
+  });
+};

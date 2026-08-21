@@ -8,8 +8,8 @@ import "@/styles/panels.css";
 
 import App from "./App.vue";
 import "@/assets/markdown.css";
-import ConversationCodeBlock from "./components/workspace/ConversationCodeBlock.vue";
-import LocalFileLink from "./components/workspace/LocalFileLink.vue";
+import ConversationCodeBlock from "./components/conversation/messages/ConversationCodeBlock.vue";
+import LocalFileLink from "./components/ui/LocalFileLink.vue";
 import router from "./router";
 import { initializeTheme } from "./stores/theme";
 

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
-import IconButton from "@/components/IconButton.vue";
-import SplitPane from "@/components/layout/SplitPane.vue";
-import Modal from "@/components/layout/Modal.vue";
+import IconButton from "@/components/ui/IconButton.vue";
+import SplitPane from "@/components/shell/SplitPane.vue";
+import Modal from "@/components/ui/Modal.vue";
 import { ui } from "@/stores/ui";
-import SessionHeader from "@/components/panels/SessionHeader.vue";
-import SessionSidebar from "@/components/panels/SessionSidebar.vue";
+import SessionHeader from "@/components/shell/SessionHeader.vue";
+import SessionSidebar from "@/components/shell/SessionSidebar.vue";
 import { RouterView } from "vue-router";
 import { computed, defineAsyncComponent, KeepAlive } from "vue";
 
@@ -13,7 +13,7 @@ import { computed, defineAsyncComponent, KeepAlive } from "vue";
 // WASM, the full settings surface) are split into lazy chunks and only fetched
 // when the panel is actually opened, instead of paying for them on first paint.
 const SettingsModal = defineAsyncComponent(
-  () => import("@/components/modals/SettingsView.vue"),
+  () => import("@/components/modals/settings/SettingsView.vue"),
 );
 const AsyncTerminalPanel = defineAsyncComponent(
   () => import("@/components/panels/TerminalPanel.vue"),
