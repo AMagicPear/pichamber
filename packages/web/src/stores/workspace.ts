@@ -7,7 +7,6 @@ import type {
   AgentActivity,
   AgentSessionEvent,
   ExtensionWidget,
-  ExtensionWidgetPlacement,
   ImageContent,
   ModelDescriptor,
   PendingMessages,
@@ -17,6 +16,7 @@ import type {
   SessionStatsView,
   ThinkingState,
   WebExtensionUIRequest,
+  WidgetPlacement,
 } from "@amagicpear/pichamber-shared";
 import { settings } from "@/stores/settings";
 
@@ -156,7 +156,7 @@ type ExtensionDialog = Extract<
   { method: "select" | "confirm" | "input" | "editor" }
 >;
 type ExtensionNotification = { id: string; message: string; type: "info" | "warning" | "error" };
-type WidgetEntry = { widget: ExtensionWidget; placement: ExtensionWidgetPlacement };
+type WidgetEntry = { widget: ExtensionWidget; placement: WidgetPlacement };
 
 export const extensionUi = reactive({
   dialog: null as ExtensionDialog | null,
