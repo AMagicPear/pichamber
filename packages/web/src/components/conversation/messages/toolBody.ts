@@ -17,7 +17,6 @@ export type ToolBody =
   | { kind: "diff"; patch: string }
   | { kind: "images"; images: ToolImage[] }
   | { kind: "markdown"; content: string }
-  | { kind: "ls"; output: string }
   | { kind: "grep"; output: string }
   | { kind: "paths"; output: string }
   | { kind: "text"; content: string };
@@ -68,9 +67,10 @@ export const toolBody = ({
   if (toolName === "bash") return { kind: "text", content: output };
   // Structured lists (ls/grep/find) pass the raw output through; the parse
   // + list rendering is owned by `<ToolBodyView>` (see ToolBodyView.tsx).
-  if (toolName === "ls") return { kind: "ls", output };
+  // ls 与 find 渲染方式相同，共用一个流式 "paths" 列表；grep 因输出是
+  // <path>:<line>:<text> 结构，仍走独立的 "grep" 解析。
+  if (toolName === "ls" || toolName === "find") return { kind: "paths", output };
   if (toolName === "grep") return { kind: "grep", output };
-  if (toolName === "find") return { kind: "paths", output };
 
   // 未知工具：保持简单 — 输出按纯文本展示，由调用方按需扩展注册表。
   return { kind: "text", content: output };

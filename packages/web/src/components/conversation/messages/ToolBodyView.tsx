@@ -5,7 +5,6 @@ import type { VNode } from "vue";
 // the JSX/<FolderIcon/> usage type-checks.
 import FolderIconSrc from "@/assets/icons/Folder.svg";
 import FileTextIconSrc from "@/assets/icons/FileText.svg";
-import FilePathLabel from "@/components/ui/FilePathLabel.vue";
 import { getEntryIcon } from "../../ui/fileIcon";
 import CodeView from "../../ui/CodeView.vue";
 import DiffView from "../../panels/DiffView.vue";
@@ -71,15 +70,15 @@ const rowIcon = (name: string, isDir: boolean, fileFallback: boolean) => {
   return null;
 };
 
-const renderLsRows = (output: string): ListRows => {
+const renderListRows = (output: string): ListRows => {
   const { lines, notes } = splitNotes(output);
-  const names = lines.filter((l) => l.length > 0);
+  const items = lines.filter((l) => l.length > 0).map(displayPath);
   return {
-    heading: names.length === 0 ? "empty directory" : `${names.length} entries`,
-    empty: "Empty directory",
-    itemsClass: "",
+    heading: items.length === 0 ? "no files" : `${items.length} files`,
+    empty: "No files",
+    itemsClass: " tool-body-view__list-items--flow",
     notes,
-    rows: names.map((name) => (
+    rows: items.map((name) => (
       <li class="tool-body-view__list-row" key={name}>
         {rowIcon(name, isDirName(name), true)}
         <span class="tool-body-view__list-name">{name}</span>
@@ -110,7 +109,7 @@ const renderGrepRows = (output: string): ListRows => {
     notes,
     rows: matches.map((m) => (
       <li class="tool-body-view__match" key={`${m.file}:${m.line}`}>
-        <FilePathLabel class="tool-body-view__match-path" path={m.file} showPrefix={false} />
+        <span class="tool-body-view__match-path">{m.file}</span>
         <span class="tool-body-view__match-line">{m.line}</span>
         <span class="tool-body-view__match-text">{m.text}</span>
       </li>
@@ -118,30 +117,8 @@ const renderGrepRows = (output: string): ListRows => {
   };
 };
 
-const renderPathsRows = (output: string): ListRows => {
-  const { lines, notes } = splitNotes(output);
-  const paths = lines.filter((p) => p.length > 0).map(displayPath);
-  return {
-    heading: paths.length === 0 ? "no files" : `${paths.length} files`,
-    empty: "No files",
-    itemsClass: "",
-    notes,
-    rows: paths.map((p) => (
-      <li class="tool-body-view__list-row" key={p}>
-        {rowIcon(p, false, true)}
-        <FilePathLabel class="tool-body-view__list-name" path={p} showPrefix={false} />
-      </li>
-    )),
-  };
-};
-
-const listBody = (body: Extract<ToolBody, { kind: "ls" | "grep" | "paths" }>) => {
-  const parsed =
-    body.kind === "ls"
-      ? renderLsRows(body.output)
-      : body.kind === "grep"
-        ? renderGrepRows(body.output)
-        : renderPathsRows(body.output);
+const listBody = (body: Extract<ToolBody, { kind: "grep" | "paths" }>) => {
+  const parsed = body.kind === "grep" ? renderGrepRows(body.output) : renderListRows(body.output);
   return (
     <div class="tool-body-view__list">
       <div class="tool-body-view__list-heading">{parsed.heading}</div>
@@ -186,12 +163,10 @@ export const ToolBodyView = defineComponent({
           return <CodeView content={body.content} fileName={body.fileName} />;
         case "text":
           return <pre class="tool-body-view__text">{body.content}</pre>;
-        case "ls":
         case "grep":
         case "paths":
           return listBody(body);
       }
-      return null;
     };
   },
 });

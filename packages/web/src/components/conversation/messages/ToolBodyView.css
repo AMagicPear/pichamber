@@ -55,11 +55,10 @@
 .tool-body-view__list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px 10px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  background: var(--ui-surface-subtle);
+  gap: 4px;
+  padding: 2px 0;
+  max-height: 420px;
+  overflow-y: auto;
   color: var(--ui-text);
 }
 .tool-body-view__list-heading {
@@ -78,6 +77,17 @@
 }
 .tool-body-view__list-items--matches {
   gap: 4px;
+}
+/* find 结果流式排布:一个个 tag 顺排自动换行,中间留空,不做整行分栏。 */
+.tool-body-view__list-items--flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.tool-body-view__list-items--flow .tool-body-view__list-row {
+  flex: 0 0 auto;
+  gap: 4px;
+  max-width: 100%;
 }
 .tool-body-view__list-row {
   display: flex;
@@ -106,17 +116,14 @@
   white-space: nowrap;
 }
 .tool-body-view__match {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr);
+  display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 0;
   min-width: 0;
-  padding: 4px 6px;
-  border-left: 2px solid var(--ui-border);
-  background: var(--ui-surface);
-  border-radius: 0 4px 4px 0;
-  font-size: 13px;
-  line-height: 1.45;
+  padding: 1px 0;
+  font-family: var(--ui-font-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 .tool-body-view__match-path {
   min-width: 0;
@@ -127,22 +134,19 @@
 }
 .tool-body-view__match-line {
   flex: none;
-  min-width: 2.5em;
-  padding: 0 6px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 999px;
+  padding: 0 0 0 4px;
   color: var(--ui-text-muted);
-  font-family: var(--ui-font-mono);
-  font-size: 11px;
-  text-align: center;
+  font-size: 11.5px;
 }
+.tool-body-view__match-line::after { content: ":"; color: var(--ui-text-muted); }
 .tool-body-view__match-text {
+  flex: 1 1 auto;
   min-width: 0;
+  padding-left: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ui-text-secondary);
-  font-family: var(--ui-font-mono);
   font-size: 12.5px;
 }
 .tool-body-view__list-empty,

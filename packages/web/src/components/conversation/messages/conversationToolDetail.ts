@@ -2,6 +2,9 @@ import type { Component } from "vue";
 import FileAddIcon from "@/assets/icons/FileAdd.svg";
 import FileEditIcon from "@/assets/icons/FileEdit.svg";
 import FileTextIcon from "@/assets/icons/FileText.svg";
+import FolderIcon from "@/assets/icons/Folders.svg";
+import SearchEyeIcon from "@/assets/icons/SearchEye.svg";
+import SearchIcon from "@/assets/icons/Search.svg";
 import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import { inline } from "./messageContent";
 import { displayPath, isFileTool, numberArg, patchOpsSummary, stringArg } from "./toolDiff";
@@ -98,6 +101,28 @@ export const conversationToolDetail = ({
       label: failed ? errorLabel("ls") : path ? "List Directory" : "List Files",
       preview: relative ?? inline(fallbackPreview),
       body: toolBody({ toolName, args, output, isError }),
+      icon: FolderIcon,
+      isError: failed,
+    };
+  }
+
+  if (toolName === "find") {
+    const relative = path ? displayPath(path) : undefined;
+    return {
+      label: failed ? errorLabel("find") : "Find Files",
+      preview: relative ?? inline(fallbackPreview),
+      body: toolBody({ toolName, args, output, isError }),
+      icon: SearchIcon,
+      isError: failed,
+    };
+  }
+
+  if (toolName === "grep") {
+    return {
+      label: failed ? errorLabel("grep") : "Grep",
+      preview: inline(fallbackPreview),
+      body: toolBody({ toolName, args, output, isError }),
+      icon: SearchEyeIcon,
       isError: failed,
     };
   }
