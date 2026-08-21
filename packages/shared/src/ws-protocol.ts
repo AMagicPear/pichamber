@@ -8,12 +8,14 @@ import type {
   SlashCommandInfo,
   SourceInfo,
 } from "@earendil-works/pi-coding-agent";
+import type { ImageContent } from "@earendil-works/pi-ai";
 
 export * from "./paths";
 
 export type {
   AgentMessage,
   AgentSessionEvent,
+  ImageContent,
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
   SessionEntry,
@@ -35,13 +37,10 @@ export type PendingMessages = {
   followUp: string[];
 };
 
-/** Inline image payload accepted by Pi's RPC protocol. The browser sends the
- * base64 body only; the server adapts it to the SDK's equivalent shape. */
-export type PromptImage = {
-  type: "image";
-  data: string;
-  mimeType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
-};
+/** Inline image attachment — the official `ImageContent` from pi-ai
+ *  (base64 body without the data: URL prefix). The server additionally
+ *  validates the MIME union at the socket boundary. */
+export type PromptImage = ImageContent;
 
 export type RuntimeToolInfo = {
   name: string;
@@ -99,67 +98,6 @@ export type RuntimeResources = {
   /** False when the active runtime cannot enumerate extension/tool resources. */
   extensionInventoryAvailable: boolean;
 };
-
-type ToolExecutionStartEvent = Extract<AgentSessionEvent, { type: "tool_execution_start" }>;
-type ToolExecutionUpdateEvent = Extract<AgentSessionEvent, { type: "tool_execution_update" }>;
-type ToolExecutionEndEvent = Extract<AgentSessionEvent, { type: "tool_execution_end" }>;
-
-export type LiveToolExecution = Pick<ToolExecutionStartEvent, "toolCallId" | "toolName" | "args"> & {
-  result?: ToolExecutionUpdateEvent["partialResult"] | ToolExecutionEndEvent["result"];
-  isError?: ToolExecutionEndEvent["isError"];
-  running: boolean;
-  /** 工具开始执行的时刻（ms）。live 条目在 tool_execution_start 写入，
-   *  客户端用它校准 timeout 倒计时；历史重建的 committed 条目没有此字段。 */
-  startedAt?: number;
-};
-
-/** 一条统一的消息条目：回复、工具执行都按实际发生顺序排在同一个列表里。
- *  id 由服务器铸造并终生不变（user/assistant 为 u-N/a-N，工具为 pi 的
- *  toolCallId），流式/运行中为 live 阶段，落定后翻转为 committed ——
- *  客户端按 id 原地更新即可，不需要任何搬运/去重逻辑。 */
-export type LiveItem =
-  | {
-      id: string;
-      kind: "user";
-      phase: "live" | "committed";
-      message: AgentMessage;
-    }
-  | {
-      id: string;
-      kind: "assistant";
-      phase: "live" | "committed";
-      message: AgentMessage;
-    }
-  | {
-      id: string;
-      kind: "tool";
-      phase: "live" | "committed";
-      /** 执行信息（参数/进度/结果），提交后仍保留以支撑标签渲染。 */
-      tool: LiveToolExecution;
-      /** 权威的 toolResult 消息，提交（message_end）后填充。 */
-      message?: AgentMessage;
-    }
-  | {
-      id: string;
-      kind: "custom";
-      phase: "live" | "committed";
-      message: AgentMessage;
-      /** pi 会话条目 id；重建时按它匹配以保持 id 稳定（custom 消息重建
-       *  时会新建对象，无法像普通消息那样按对象身份匹配）。 */
-      entryId?: string;
-    }
-  | {
-      id: string;
-      kind: "compaction";
-      phase: "committed";
-      /** LLM 生成的上下文压缩摘要。 */
-      summary: string;
-      /** 压缩前的 token 数。 */
-      tokensBefore: number;
-      timestamp: number;
-      /** pi 会话条目 id，语义同 custom.entryId。 */
-      entryId?: string;
-    };
 
 /** Slim model reference the server emits and accepts on the wire.
  *  We don't ship the full Model<Api> because the pi-ai type erases to
@@ -364,7 +302,11 @@ export type SessionStatsView = {
 };
 
 /** JSON messages the server sends to session WebSocket clients.
- *  每个消息都携带单调递增的 seq；客户端发现 seq 不连续即请求 resync。 */
+ *  每个消息都携带单调递增的 seq；客户端发现 seq 不连续即请求 resync。
+ *
+ *  会话内容直接复用官方的 `AgentSessionEvent` 事件流（`event` 帧）与
+ *  `AgentMessage` 消息模型（`snapshot.messages`），不再自造 item 协议；
+ *  其余帧只承载服务器算好的显示状态（model/stats/resources…）。 */
 export type ServerMessage =
   | {
       type: "snapshot";
@@ -376,14 +318,19 @@ export type ServerMessage =
        * interrupting the current agent run. External Pi's public RPC
        * protocol has no equivalent clear-queue command. */
       canRestorePending: boolean;
-      items: LiveItem[];
+      /** 官方会话消息模型：user/assistant/toolResult/custom/
+       *  compactionSummary（含 compaction 摘要与 custom 消息）。 */
+      messages: AgentMessage[];
       model?: ModelDescriptor;
       availableModels?: ModelDescriptor[];
       thinking?: ThinkingState;
       stats?: SessionStatsView;
       resources: RuntimeResources;
     }
-  | { type: "item"; seq: number; item: LiveItem }
+  /** 官方会话事件原样转发（message_start/update/end、
+   *  tool_execution_*、queue_update、agent_start/settled、compaction_*、
+   *  auto_retry_*、entry_appended…）。 */
+  | { type: "event"; seq: number; event: AgentSessionEvent }
   | {
       type: "state";
       seq: number;

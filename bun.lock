@@ -37,6 +37,7 @@
       "name": "@amagicpear/pichamber-shared",
       "devDependencies": {
         "@earendil-works/pi-agent-core": "catalog:",
+        "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@tsconfig/node24": "^24.0.4",
         "typescript": "~7.0.2",

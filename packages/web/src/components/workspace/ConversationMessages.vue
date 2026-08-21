@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import MarkdownRender from "markstream-vue";
-import type { AgentMessage, LiveItem, ModelDescriptor } from "@amagicpear/pichamber-shared";
+import type { AgentMessage, ModelDescriptor } from "@amagicpear/pichamber-shared";
 import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";
@@ -10,9 +10,10 @@ import { parseSkillBlock } from "./skillBlock";
 import SkillBlockChip from "./SkillBlockChip.vue";
 import { modelDisplayName } from "./modelDisplay";
 import { workspace } from "@/stores/workspace";
+import type { ConversationItem } from "@/stores/workspace";
 
 const props = defineProps<{
-  items: LiveItem[];
+  items: ConversationItem[];
   availableModels?: ModelDescriptor[];
   /** Render a local timestamp under each committed message. */
   showTimestamps?: boolean;
@@ -131,7 +132,7 @@ watch(
 );
 
 /** 工具条目渲染详情：提交后优先用权威 toolResult 消息内容，live 阶段用执行进度。 */
-const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationToolDetail => {
+const toolDetail = (item: Extract<ConversationItem, { kind: "tool" }>): ConversationToolDetail => {
   const { tool, message } = item;
   const messageMeta = message as { toolName?: unknown; isError?: unknown } | undefined;
   // 提交后 message 是权威输出；live 阶段 tool.result 是 pi 的 `{content,
@@ -144,8 +145,8 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
   // 读图片时 message 里有 image part；live 阶段没有 message，partialResult
   // 只是占位文字，所以图片只在提交后出现。
   const images = message ? messageImages(message) : [];
-  // 计时只对正在运行的命令有意义：live + running 才标 running，startedAt
-  // 由服务端在 tool_execution_start 写入，倒计时按它校准（重连/中途渲染也准）。
+  // 计时只对正在运行的命令有意义：running 才标 running，startedAt
+  // 由客户端在 tool_execution_start 写入，倒计时按它校准（重连/中途渲染也准）。
   return {
     ...conversationToolDetail({
       toolName: tool.toolName || (typeof messageMeta?.toolName === "string" ? messageMeta.toolName : ""),
@@ -155,15 +156,14 @@ const toolDetail = (item: Extract<LiveItem, { kind: "tool" }>): ConversationTool
       fallbackPreview: messageText(message) || JSON.stringify(tool.args),
       images,
     }),
-    running: item.phase === "live" && tool.running,
+    running: tool.running,
     startedAt: tool.startedAt,
   };
 };
 
-const modelNameFor = (message: Extract<LiveItem, { kind: "assistant" }>["message"] | undefined): string | undefined => {
+const modelNameFor = (message: AgentMessage | undefined): string | undefined => {
   if (message?.role !== "assistant") return undefined;
-  const model = message as { provider?: unknown; model?: unknown };
-  return modelDisplayName(props.availableModels, model.provider, model.model);
+  return modelDisplayName(props.availableModels, message.provider, message.model);
 };
 
 /** Returns the parsed skill block when the user message is the canonical
@@ -172,7 +172,7 @@ const modelNameFor = (message: Extract<LiveItem, { kind: "assistant" }>["message
  *  this check the markdown renderer treats it as malformed HTML and clips
  *  the message on the inner `<table>`/`<tr>` tags. */
 type SkillBlockShape = { name: string; location: string; userMessage?: string };
-const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["message"]): SkillBlockShape | null => {
+const skillBlockFor = (message: AgentMessage | undefined): SkillBlockShape | null => {
   const text = messageText(message);
   if (!text) return null;
   // Avoid the full regex probe on every keystroke for every message; the
@@ -189,7 +189,7 @@ const skillBlockFor = (message: Extract<LiveItem, { message?: unknown }>["messag
 const userSkillBlocks = computed(() => {
   const map = new Map<string, SkillBlockShape | null>();
   for (const item of props.items) {
-    if (item.kind === "user" && item.message) {
+    if (item.kind === "message" && item.message.role === "user") {
       map.set(item.id, skillBlockFor(item.message));
     }
   }
@@ -219,78 +219,97 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
   <div ref="scroller" class="conversation__messages scroll-fade-bottom" @scroll="onScroll" @wheel="onWheel">
     <div ref="content" class="conversation__content">
       <template v-for="item in items" :key="item.id">
-        <article v-if="item.kind === 'user'" v-memo="[item]" class="conversation-message conversation-message--user">
-          <div
-            v-for="(img, i) in messageImages(item.message)"
-            :key="`image:${i}`"
-            class="conversation-message__image"
-          >
-            <img
-              :src="`data:${img.mimeType};base64,${img.data}`"
-              alt="Attached image"
-              loading="lazy"
-              decoding="async"
-            />
-          </div>
-          <div v-if="userSkillBlocks.get(item.id) || messageText(item.message)" class="conversation-message__user">
-            <!-- When the user message starts with a pi-expanded skill block,
-                 collapse the body to a chip so the markdown renderer doesn't
-                 see an HTML-shaped blob (its sanitizer would clip on the
-                 inner `<table>` tags and the user ends up staring at raw
-                 XML). Any trailing text the user appended after the
-                 `/skill:name` command is rendered normally. -->
-            <template v-if="userSkillBlocks.get(item.id)">
-              <SkillBlockChip
-                :name="userSkillBlocks.get(item.id)!.name"
-                :location="userSkillBlocks.get(item.id)!.location"
+        <template v-if="item.kind === 'message'">
+          <article v-if="item.message.role === 'user'" v-memo="[item]" class="conversation-message conversation-message--user">
+            <div
+              v-for="(img, i) in messageImages(item.message)"
+              :key="`image:${i}`"
+              class="conversation-message__image"
+            >
+              <img
+                :src="`data:${img.mimeType};base64,${img.data}`"
+                alt="Attached image"
+                loading="lazy"
+                decoding="async"
               />
+            </div>
+            <div v-if="userSkillBlocks.get(item.id) || messageText(item.message)" class="conversation-message__user">
+              <!-- When the user message starts with a pi-expanded skill block,
+                   collapse the body to a chip so the markdown renderer doesn't
+                   see an HTML-shaped blob (its sanitizer would clip on the
+                   inner `<table>` tags and the user ends up staring at raw
+                   XML). Any trailing text the user appended after the
+                   `/skill:name` command is rendered normally. -->
+              <template v-if="userSkillBlocks.get(item.id)">
+                <SkillBlockChip
+                  :name="userSkillBlocks.get(item.id)!.name"
+                  :location="userSkillBlocks.get(item.id)!.location"
+                />
+                <MarkdownRender
+                  v-if="userSkillBlocks.get(item.id)!.userMessage"
+                  class="markdown-chat"
+                  mode="chat"
+                  :content="userSkillBlocks.get(item.id)!.userMessage!"
+                  :final="true"
+                  :fade="false"
+                  :viewport-priority="false"
+                />
+              </template>
               <MarkdownRender
-                v-if="userSkillBlocks.get(item.id)!.userMessage"
+                v-else-if="messageText(item.message)"
                 class="markdown-chat"
                 mode="chat"
-                :content="userSkillBlocks.get(item.id)!.userMessage!"
+                :content="messageText(item.message)"
                 :final="true"
                 :fade="false"
                 :viewport-priority="false"
               />
-            </template>
-            <MarkdownRender
-              v-else-if="messageText(item.message)"
-              class="markdown-chat"
-              mode="chat"
-              :content="messageText(item.message)"
-              :final="true"
-              :fade="false"
-              :viewport-priority="false"
-            />
-          </div>
-          <p v-if="props.showTimestamps" class="conversation-message__timestamp">{{ formatLocalTimestamp(item.message) }}</p>
-        </article>
-        <AssistantMessage
-          v-else-if="item.kind === 'assistant' && item.message"
-          :message="item.message"
-          :final="item.phase === 'committed'"
-          :model-name="modelNameFor(item.message)"
-          :show-timestamp="!!props.showTimestamps"
-          :timestamp-text="formatLocalTimestamp(item.message)"
-        />
-        <ToolResultMessage v-else-if="item.kind === 'tool'" v-memo="[item]" :detail="toolDetail(item)" />
-        <article v-else-if="item.kind === 'compaction'" v-memo="[item]" class="conversation-message conversation-message--compaction">
-          <div class="compaction-summary">
-            <div class="compaction-summary__header">
-              <span class="compaction-summary__label">[compaction]</span>
-              <span class="compaction-summary__meta">Compacted from {{ item.tokensBefore.toLocaleString() }} tokens</span>
             </div>
-            <MarkdownRender
-              class="markdown-chat"
-              mode="chat"
-              :content="item.summary"
-              :final="true"
-              :fade="false"
-              :viewport-priority="false"
-            />
-          </div>
-        </article>
+            <p v-if="props.showTimestamps" class="conversation-message__timestamp">{{ formatLocalTimestamp(item.message) }}</p>
+          </article>
+          <AssistantMessage
+            v-else-if="item.message.role === 'assistant'"
+            :message="item.message"
+            :final="!item.streaming"
+            :model-name="modelNameFor(item.message)"
+            :show-timestamp="!!props.showTimestamps"
+            :timestamp-text="formatLocalTimestamp(item.message)"
+          />
+          <article v-else-if="item.message.role === 'compactionSummary'" v-memo="[item]" class="conversation-message conversation-message--compaction">
+            <div class="compaction-summary">
+              <div class="compaction-summary__header">
+                <span class="compaction-summary__label">[compaction]</span>
+                <span class="compaction-summary__meta">Compacted from {{ item.message.tokensBefore.toLocaleString() }} tokens</span>
+              </div>
+              <MarkdownRender
+                class="markdown-chat"
+                mode="chat"
+                :content="item.message.summary"
+                :final="true"
+                :fade="false"
+                :viewport-priority="false"
+              />
+            </div>
+          </article>
+          <!-- custom / branchSummary：官方消息模型的低噪声卡片 -->
+          <article v-else-if="item.message.role === 'custom' || item.message.role === 'branchSummary'" v-memo="[item]" class="conversation-message conversation-message--custom">
+            <div class="custom-summary">
+              <div class="custom-summary__header">
+                <span class="custom-summary__label">[{{ item.message.role }}]</span>
+              </div>
+              <MarkdownRender
+                v-if="messageText(item.message)"
+                class="markdown-chat"
+                mode="chat"
+                :content="messageText(item.message)"
+                :final="true"
+                :fade="false"
+                :viewport-priority="false"
+              />
+            </div>
+          </article>
+        </template>
+        <ToolResultMessage v-else-if="item.kind === 'tool'" v-memo="[item]" :detail="toolDetail(item)" />
       </template>
     </div>
   </div>
@@ -329,6 +348,19 @@ const formatLocalTimestamp = (message: AgentMessage | undefined): string | undef
 /* Compaction summary block: a quiet inset card between messages, mirroring
    the TUI's CompactionSummaryMessage (same surface as custom messages). */
 .conversation-message--compaction { content-visibility: auto; contain-intrinsic-size: auto 120px; }
+/* Custom / branch-summary cards from the official message model. */
+.conversation-message--custom { content-visibility: auto; contain-intrinsic-size: auto 80px; }
+.custom-summary {
+  padding: 10px 14px;
+  border: 1px solid var(--ui-border-subtle);
+  border-left: 3px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-text-secondary);
+  font-size: 13px;
+}
+.custom-summary__header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.custom-summary__label { font-weight: 600; color: var(--ui-text-tertiary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
 .compaction-summary {
   padding: 12px 16px;
   border: 1px solid var(--ui-border-subtle);

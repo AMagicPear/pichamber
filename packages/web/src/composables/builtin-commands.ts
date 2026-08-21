@@ -3,7 +3,7 @@
  *
  * Owns the mapping from typed built-in commands to their direct
  * operations. The WS protocol stays plain: a built-in never leaves the
- * client as a `prompt` message — `useConversationSession.send()` matches
+ * client as a `prompt` message — `useConversationSession.prompt()` matches
  * here first and dispatches to `compact`/`reload` WS frames instead.
  * Everything else (extension commands, prompt templates, skill commands,
  * raw user text) keeps its existing flow through the `prompt` frame.

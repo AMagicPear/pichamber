@@ -91,10 +91,10 @@ export const getSessionFile = (id: string): string | undefined =>
 export const getConversationEntries = (runtime: SessionRuntime): Promise<SessionEntry[]> =>
   runtime.buildConversationEntries();
 
-/** Snapshot helper for the WS layer: rebuild items against the
- *  authoritative session entry list while preserving client ids. */
-import { conversationItems } from "./conversation";
-export { conversationItems };
+/** Snapshot helper for the WS layer: official `AgentMessage[]` derived
+ *  from the authoritative session entry list (compaction-aware). */
+import { conversationMessages } from "./conversation";
+export { conversationMessages };
 
 export const deactivateSession = async (id: string) => {
   const runtime = activeSessions.get(id);

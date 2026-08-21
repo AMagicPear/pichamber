@@ -9,9 +9,9 @@
  * snapshot on connect, item/state broadcasts thereafter, and UI
  * requests proxied through the extension bridge.
  */
-import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { RpcExtensionUIRequest, RpcExtensionUIResponse, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type {
-  LiveItem,
   AgentActivity,
   ModelDescriptor,
   PendingMessages,
@@ -29,7 +29,7 @@ import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
 import { normalizeWidgetRequest } from "../extensions/widget-lines";
 import { computeSessionStatsView } from "./context";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
-import { conversationItems } from "./conversation";
+import { conversationMessages } from "./conversation";
 import { deactivateSession, getSession } from "./session";
 import type { SessionRuntime } from "./runtime";
 
@@ -69,7 +69,6 @@ export type WsData = PtyWsData | SessionWsData;
 
 type BunWS = ServerWebSocket<SessionWsData>;
 
-type AssistantItem = Extract<LiveItem, { kind: "assistant" }>;
 
 /** Durable extension UI state. Unlike notifications and dialogs, these UI
  * setters describe current state and must survive an RPC process emitting
@@ -80,23 +79,17 @@ type ExtensionUiState = {
   title?: string;
 };
 
-/**
- * 统一 item 流状态：所有会话内容（回复/工具执行）按实际发生顺序排在同一个
- * 列表里，id 铸造后终生不变；权威状态（runtime）只在 agent_settled
- * 时对齐一次（compaction/分支导航/重试后重建）。
- */
+/** 频道状态：会话内容的权威视图（官方 `AgentMessage[]`）在每次对齐时从
+ *  runtime 重建，其余是服务器算好的显示状态。会话内容本身的事件流直接
+ *  转发给客户端（`event` 帧），不再在这里铸造任何 item。 */
 type ChannelState = {
-  items: LiveItem[];
-  /** 正在流式的 assistant item（message_start 到 message_end）。 */
-  streaming?: AssistantItem;
+  /** 最近一次从 runtime entries 对齐的官方消息列表（快照用）。 */
+  messages: AgentMessage[];
   busy: boolean;
   activity: AgentActivity;
   pending: PendingMessages;
   /** 广播序号：每个 ServerMessage 递增，客户端用它做间隙检测。 */
   seq: number;
-  userCount: number;
-  assistantCount: number;
-  customCount: number;
   model: ModelDescriptor | undefined;
   availableModels: ModelDescriptor[];
   thinking: ThinkingState;
@@ -262,32 +255,16 @@ const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean =
  *  subprocess once; SDK mode reuses the in-memory session manager. */
 const fetchEntries = (runtime: SessionRuntime) => runtime.buildConversationEntries();
 
-/** `reconcile` rebuilds the item list against the authoritative runtime
- *  state. New items keep their client-side ids; unmatched ones mint
- *  `e:<entryId>` so reconnects stay stable. */
-const reconcile = async (
-  channel: SessionChannel,
-  keepLive: boolean,
-): Promise<boolean> => {
+/** `reconcile` rebuilds the official `AgentMessage[]` from the authoritative
+ *  runtime entries (compaction-aware, via pi's own conversion helpers). */
+const reconcile = async (channel: SessionChannel): Promise<boolean> => {
   const state = channel.state;
   const entries = await fetchEntries(channel.runtime);
-  const rebuilt = conversationItems(entries, state.items.filter((item) => item.phase === "committed"));
-  const live = keepLive ? state.items.filter((item) => item.phase === "live") : [];
-  const next = [...rebuilt, ...live];
+  const next = conversationMessages(entries);
   const changed =
-    next.length !== state.items.length ||
-    next.some((item, i) => {
-      const prevItem = state.items[i];
-      if (!prevItem) return true;
-      return (
-        prevItem.id !== item.id ||
-        prevItem.phase !== item.phase ||
-        (prevItem.kind !== "compaction" &&
-          item.kind !== "compaction" &&
-          prevItem.message !== item.message)
-      );
-    });
-  state.items = next;
+    next.length !== state.messages.length ||
+    next.some((message, i) => message !== state.messages[i]);
+  state.messages = next;
   return changed;
 };
 
@@ -297,7 +274,7 @@ const snapshotResources = async (runtime: SessionRuntime): Promise<RuntimeResour
   runtime.getResources();
 
 const snapshotMessage = (channel: SessionChannel): ServerMessage => {
-  const { seq, busy, activity, pending, items, model, availableModels, thinking, stats, resources } =
+  const { seq, busy, activity, pending, messages, model, availableModels, thinking, stats, resources } =
     channel.state;
   return {
     type: "snapshot",
@@ -306,7 +283,7 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
     activity,
     pending,
     canRestorePending: channel.runtime.supportsQueueRestore,
-    items,
+    messages,
     model,
     availableModels,
     thinking,
@@ -447,14 +424,11 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
     sockets: new Set(),
     unsubscribe: () => undefined,
     state: {
-      items: [],
+      messages: [],
       busy: false,
       activity: { phase: "idle" },
       pending: { steering: [], followUp: [] },
       seq: 0,
-      userCount: 0,
-      assistantCount: 0,
-      customCount: 0,
       ...initialModelState(),
     },
     queueModelStateBroadcast,
@@ -470,9 +444,10 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
       if (bunWS.readyState === 1) bunWS.send(payload);
     }
   };
-  const broadcastItem = (item: LiveItem) => {
+  /** Forward one official `AgentSessionEvent` untouched. */
+  const broadcastEvent = (event: AgentSessionEvent) => {
     channel.state.seq += 1;
-    broadcast({ type: "item", seq: channel.state.seq, item });
+    broadcast({ type: "event", seq: channel.state.seq, event } satisfies ServerMessage);
   };
   const broadcastSnapshot = () => {
     channel.state.seq += 1;
@@ -485,15 +460,14 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
   };
 
   /** Common settlement shape shared by `compaction_end` and `agent_settled`:
-   *  reset busy/activity/streaming, rebuild items against the authoritative
-   *  runtime, refresh stats + resources, and broadcast the new state.
+   *  reset busy/activity, rebuild messages against the authoritative runtime,
+   *  refresh stats + resources, and broadcast the new state.
    *  Compaction additionally surfaces SDK errors as toasts and flushes its
    *  message queue before settling. */
   const settleChannel = async (options?: { errorMessage?: string; flushQueue?: boolean }) => {
     const state = channel.state;
     state.busy = false;
     state.activity = { phase: "idle" };
-    state.streaming = undefined;
 
     if (options?.errorMessage) {
       broadcast({
@@ -522,7 +496,7 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
       }
     }
 
-    if (await reconcile(channel, false)) broadcastSnapshot();
+    if (await reconcile(channel)) broadcastSnapshot();
     const settledStats = await computeSessionStatsView(runtime);
     state.resources = await snapshotResources(runtime);
     const fields: {
@@ -580,145 +554,41 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
         broadcastState(channel, { busy: true, activity: state.activity });
         break;
       }
+      // 会话内容事件（官方 `AgentSessionEvent`）原样转发；客户端像 TUI
+      // 的 handleEvent 一样按事件构建会话视图。busy/activity/pending
+      // 等仍由下面的 state 帧承载（服务器算好的显示状态）。
       case "message_start": {
         const { role } = event.message;
         if ((role === "user" || role === "assistant") && !state.busy) {
           state.busy = true;
           broadcastState(channel, { busy: true });
         }
-        if (role === "user") {
-          const item: LiveItem = {
-            id: `u-${++state.userCount}`,
-            kind: "user",
-            phase: "live",
-            message: event.message,
-          };
-          state.items.push(item);
-          broadcastItem(item);
-        } else if (role === "assistant") {
+        if (role === "assistant") {
           state.activity = { phase: "responding" };
           broadcastState(channel, { activity: state.activity });
-          const item: AssistantItem = {
-            id: `a-${++state.assistantCount}`,
-            kind: "assistant",
-            phase: "live",
-            message: event.message,
-          };
-          state.items.push(item);
-          state.streaming = item;
-          broadcastItem(item);
-        } else if (role === "custom") {
-          const item: LiveItem = {
-            id: `c-${++state.customCount}`,
-            kind: "custom",
-            phase: "live",
-            message: event.message,
-          };
-          state.items.push(item);
-          broadcastItem(item);
         }
+        broadcastEvent(event);
         break;
       }
-      case "message_update": {
-        if (state.streaming) {
-          state.streaming.message = event.message;
-          broadcastItem(state.streaming);
-        }
+      case "message_update":
+        broadcastEvent(event);
         break;
-      }
-      case "message_end": {
-        const message = event.message;
-        const { role } = message;
-        if (role === "user") {
-          for (let i = state.items.length - 1; i >= 0; i--) {
-            const item = state.items[i];
-            if (item.kind === "user" && item.phase === "live") {
-              item.message = message;
-              item.phase = "committed";
-              broadcastItem(item);
-              break;
-            }
-          }
-        } else if (role === "assistant") {
-          const item = state.items.find(
-            (i): i is Extract<LiveItem, { kind: "assistant" }> =>
-              i.kind === "assistant" && i.phase === "live",
-          );
-          if (item) {
-            item.message = message;
-            item.phase = "committed";
-            broadcastItem(item);
-            if (state.streaming === item) state.streaming = undefined;
-          }
-        } else if (role === "toolResult") {
-          const toolCallId = (message as { toolCallId?: unknown }).toolCallId;
-          if (typeof toolCallId === "string") {
-            const item = state.items.find((i) => i.id === `tool:${toolCallId}`);
-            if (item?.kind === "tool") {
-              item.message = message;
-              item.phase = "committed";
-              broadcastItem(item);
-            }
-          }
-        } else if (role === "custom") {
-          const item = state.items.find((i) => i.kind === "custom" && i.phase === "live");
-          if (item?.kind === "custom") {
-            item.message = message;
-            item.phase = "committed";
-            // RPC doesn't emit entry_appended for custom messages; SDK
-            // does and the entry id is stashed in entry_appended below.
-            // We can't fetch the entry id synchronously here without
-            // another roundtrip, so leave entryId empty for RPC and
-            // accept that custom-message id stability across reconnects
-            // may rely on order rather than entryId.
-            broadcastItem(item);
-          }
-        }
+      case "message_end":
         queueStatsRefresh();
+        broadcastEvent(event);
         break;
-      }
       case "tool_execution_start": {
         state.activity = { phase: "tool", toolName: event.toolName };
         broadcastState(channel, { activity: state.activity });
-        const item: LiveItem = {
-          id: `tool:${event.toolCallId}`,
-          kind: "tool",
-          phase: "live",
-          tool: {
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            args: event.args,
-            running: true,
-            startedAt: Date.now(),
-          },
-        };
-        state.items.push(item);
-        broadcastItem(item);
+        broadcastEvent(event);
         break;
       }
-      case "tool_execution_update": {
-        const item = state.items.find((i) => i.id === `tool:${event.toolCallId}`);
-        if (item?.kind === "tool") {
-          item.tool.result = event.partialResult;
-          broadcastItem(item);
-        }
+      case "tool_execution_update":
+        broadcastEvent(event);
         break;
-      }
       case "tool_execution_end": {
-        const item = state.items.find((i) => i.id === `tool:${event.toolCallId}`);
-        if (item?.kind === "tool") {
-          item.tool.result = event.result;
-          item.tool.isError = event.isError;
-          item.tool.running = false;
-          broadcastItem(item);
-        }
-        const runningTool = state.items.find(
-          (candidate): candidate is Extract<LiveItem, { kind: "tool" }> =>
-            candidate.kind === "tool" && candidate.tool.running,
-        );
-        state.activity = runningTool
-          ? { phase: "tool", toolName: runningTool.tool.toolName }
-          : { phase: "thinking" };
+        broadcastEvent(event);
+        state.activity = { phase: "thinking" };
         broadcastState(channel, { activity: state.activity });
         break;
       }
@@ -730,7 +600,6 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
       case "compaction_start": {
         state.busy = true;
         state.activity = { phase: "compacting" };
-        state.streaming = undefined;
         channel.compactionQueue = [];
         broadcastState(channel, { busy: true, activity: state.activity });
         break;
@@ -761,7 +630,7 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
         const isModelEntry =
           event.entry.type === "model_change" || event.entry.type === "thinking_level_change";
         if (!isModelEntry && event.entry.type === "compaction") {
-          void reconcile(channel, false).then((changed) => {
+          void reconcile(channel).then((changed) => {
             if (changed) broadcastSnapshot();
           });
         }
@@ -797,7 +666,7 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
   // get_entries roundtrip instead of racing it against `open()`.
   channel.ready = (async () => {
     try {
-      await reconcile(channel, true);
+      await reconcile(channel);
     } catch (error) {
       console.error("Failed to reconcile session", sessionId, error);
     }

@@ -20,10 +20,11 @@ import {
   busy,
   canRestorePending,
   canSend,
+  conversation,
+  dismissNotification,
   draft,
   extensionUi,
   images,
-  items,
   model,
   pending,
   resources,
@@ -47,15 +48,20 @@ const {
   compact,
   connect,
   disconnect,
-  dismissNotification,
+  prompt,
   respondToExtension,
   restorePending,
-  send,
   setModel,
   setThinkingLevel,
 } = useConversationSession();
 
-const hasConversation = computed(() => items.value.length > 0);
+/** 对齐官方 `prompt(text, options?)`：composer 的草稿/图片在 store，
+ *  发送时把草稿文本和 streaming 行为交给官方签名的动作。 */
+const onSend = (behavior?: "steer" | "followUp") => {
+  prompt(draft.value ?? "", { streamingBehavior: behavior });
+};
+
+const hasConversation = computed(() => conversation.value.length > 0);
 
 /* Temporary front-end data for tuning the Activity card. It sits at the
  * same boundary as the real extension UI payload, so Activity receives
@@ -129,7 +135,7 @@ watch(
 
 <template>
   <section class="conversation" :class="{ 'conversation--active': hasConversation }">
-    <ConversationMessages v-if="hasConversation" :items="items" :available-models="availableModels" :show-timestamps="settings.showTimestamps" />
+    <ConversationMessages v-if="hasConversation" :items="conversation" :available-models="availableModels" :show-timestamps="settings.showTimestamps" />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <UserInputBlock
@@ -148,7 +154,7 @@ watch(
       :thinking-level="thinking.level"
       :available-thinking-levels="thinking.availableLevels"
       :send-key="settings.sendKey"
-      @send="send"
+      @send="onSend"
       @abort="abort"
       @compact="compact"
       @restore-pending="restorePending"
@@ -163,7 +169,7 @@ watch(
       @dismiss-notification="dismissNotification"
     />
 
-    <div v-if="items.length === 0" class="presets" aria-label="Prompt starters">
+    <div v-if="conversation.length === 0" class="presets" aria-label="Prompt starters">
       <button
         v-for="preset in presets"
         :key="preset.label"
