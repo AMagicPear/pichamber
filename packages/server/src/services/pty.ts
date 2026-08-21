@@ -3,7 +3,7 @@
 import { statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { spawn, type IDisposable, type IPty } from "bun-pty";
-import type { PtyStartResult } from "@pichamber/shared";
+import type { PtyStartResult } from "@amagicpear/pichamber-shared";
 
 import { getWorkspace, shortPath } from "./workspace";
 

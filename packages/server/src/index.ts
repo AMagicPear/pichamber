@@ -54,7 +54,7 @@ import {
   saveServerSettings,
   type ServerSettings,
 } from "./settings/server-settings";
-import type { ExtensionsOverview, LoadedExtensionInfo } from "@pichamber/shared";
+import type { ExtensionsOverview, LoadedExtensionInfo } from "@amagicpear/pichamber-shared";
 import {
   getPiBehaviorSettings,
   listPiProviders,

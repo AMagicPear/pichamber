@@ -11,7 +11,7 @@ import IconButton from "@/components/IconButton.vue";
 import ConversationMessages from "@/components/workspace/ConversationMessages.vue";
 import UserInputBlock from "@/components/workspace/UserInputBlock.vue";
 import ExtensionUiHost from "@/components/workspace/ExtensionUiHost.vue";
-import type { ExtensionWidget, ExtensionWidgetPlacement } from "@pichamber/shared";
+import type { ExtensionWidget, ExtensionWidgetPlacement } from "@amagicpear/pichamber-shared";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { workspace } from "@/stores/workspace";
 import { settings } from "@/stores/settings";

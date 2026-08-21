@@ -1,7 +1,7 @@
 import { reactive, ref } from "vue";
 import { createSession, listSessions, toMessage } from "@/api/client";
-import { pathBasename } from "@pichamber/shared";
-import type { ModelDescriptor, SessionInfo } from "@pichamber/shared";
+import { pathBasename } from "@amagicpear/pichamber-shared";
+import type { ModelDescriptor, SessionInfo } from "@amagicpear/pichamber-shared";
 
 export const workspace = reactive({
   cwd: "~" as string | null,

@@ -1,11 +1,15 @@
 {
-  "name": "@pichamber/shared",
-  "version": "0.7.0",
+  "name": "@amagicpear/pichamber-shared",
   "private": true,
   "type": "module",
   "main": "./src/ws-protocol.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
   "devDependencies": {
+    "@tsconfig/node24": "^24.0.4",
     "@earendil-works/pi-agent-core": "catalog:",
-    "@earendil-works/pi-coding-agent": "catalog:"
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "typescript": "~7.0.2"
   }
 }

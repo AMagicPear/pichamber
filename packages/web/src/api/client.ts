@@ -29,7 +29,7 @@ import type {
   SessionInfo,
   VersionInfo,
   ProjectBrowseResult,
-} from "@pichamber/shared";
+} from "@amagicpear/pichamber-shared";
 
 const BASE = "/api";
 

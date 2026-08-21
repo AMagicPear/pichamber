@@ -3,7 +3,7 @@
  * string or an array of typed parts (text / thinking / toolCall / image…);
  * these helpers pick the parts a given surface renders.
  */
-import type { AgentMessage } from "@pichamber/shared";
+import type { AgentMessage } from "@amagicpear/pichamber-shared";
 
 type ContentPart = { type?: unknown; [key: string]: unknown } | string;
 

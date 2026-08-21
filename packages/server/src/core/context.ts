@@ -2,7 +2,7 @@ import {
   getLastAssistantUsage,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import type { LastAssistantUsage, ModelDescriptor, SessionStatsView } from "@pichamber/shared";
+import type { LastAssistantUsage, ModelDescriptor, SessionStatsView } from "@amagicpear/pichamber-shared";
 import type { SessionRuntime } from "./runtime";
 
 const numberFormat = new Intl.NumberFormat("en-US");

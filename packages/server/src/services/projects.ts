@@ -1,6 +1,6 @@
 import { readdir, realpath } from "node:fs/promises";
 import { dirname, join, parse } from "node:path";
-import type { ProjectBrowseResult } from "@pichamber/shared";
+import type { ProjectBrowseResult } from "@amagicpear/pichamber-shared";
 import { canonicalWorkspace, getWorkspace } from "./workspace";
 
 export const browseProjectDirectories = async (input?: string | null): Promise<ProjectBrowseResult> => {

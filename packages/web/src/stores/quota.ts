@@ -1,7 +1,7 @@
 import { ref, watch } from "vue";
 import { fetchQuotaProviders } from "@/api/client";
 import { workspace } from "@/stores/workspace";
-import type { ProviderDescriptor } from "@pichamber/shared";
+import type { ProviderDescriptor } from "@amagicpear/pichamber-shared";
 
 /** Providers the server can quote, with their Pi SDK display names —
  *  populated from `/api/quota/providers` (the server's registry + Pi's

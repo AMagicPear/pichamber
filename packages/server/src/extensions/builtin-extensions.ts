@@ -16,7 +16,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { PiBuiltinExtension } from "@pichamber/shared";
+import type { PiBuiltinExtension } from "@amagicpear/pichamber-shared";
 
 export type BuiltinExtensionDef = {
   id: string;

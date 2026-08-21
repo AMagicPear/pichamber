@@ -1,6 +1,6 @@
 import type { AuthInteraction } from "@earendil-works/pi-ai";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import type { PiBehaviorSettings, PiProviderSettings } from "@pichamber/shared";
+import type { PiBehaviorSettings, PiProviderSettings } from "@amagicpear/pichamber-shared";
 
 const providerSettings = (session: AgentSession): PiProviderSettings[] =>
   session.modelRuntime.getProviders().map((provider) => {

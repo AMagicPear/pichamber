@@ -2,7 +2,7 @@
 /* Pure Activity card. The surrounding composer stack owns placement,
  * animation, trigger state, and dismissal; this component only presents
  * the task-tree widget vocabulary. */
-import type { ExtensionWidget } from "@pichamber/shared";
+import type { ExtensionWidget } from "@amagicpear/pichamber-shared";
 import CloseIcon from "@/assets/icons/Close.svg";
 import ActivityTree from "./ActivityTree.vue";
 

@@ -9,7 +9,7 @@
  * "icon → muted dirs → bright basename" layout without duplicating logic.
  */
 import { computed } from "vue";
-import { lastSeparatorIndex } from "@pichamber/shared";
+import { lastSeparatorIndex } from "@amagicpear/pichamber-shared";
 import { getEntryIcon } from "@/components/workspace/fileIcon";
 
 const props = withDefaults(

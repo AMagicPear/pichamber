@@ -36,11 +36,11 @@
   },
   "scripts": {
     "dev": "concurrently -k -n \"SERVER,WEB\" -c \"cyan,magenta\" \"bun run dev:server\" \"bun run dev:web\"",
-    "dev:web": "bun --filter @pichamber/web dev",
-    "dev:server": "bun --filter @pichamber/server dev",
+    "dev:web": "bun --filter @amagicpear/pichamber-web dev",
+    "dev:server": "bun --filter @amagicpear/pichamber-server dev",
     "build": "bun --filter '*' build",
-    "build:web": "bun --filter @pichamber/web build",
-    "build:server": "bun --filter @pichamber/server build",
+    "build:web": "bun --filter @amagicpear/pichamber-web build",
+    "build:server": "bun --filter @amagicpear/pichamber-server build",
     "test": "bun test",
     "type-check": "bun --filter '*' type-check",
     "lint": "oxlint . --fix",
@@ -66,8 +66,8 @@
     "commander": "^15.0.0"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.14",
     "@types/node": "^26.2.0",
+    "bun-types": "^1.4.0",
     "concurrently": "^10.0.5",
     "oxlint": "~1.78.0",
     "typescript": "~7.0.2",

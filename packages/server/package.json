@@ -1,6 +1,5 @@
 {
-  "name": "@pichamber/server",
-  "version": "0.7.0",
+  "name": "@amagicpear/pichamber-server",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -14,7 +13,7 @@
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
-    "@pichamber/shared": "workspace:*",
+    "@amagicpear/pichamber-shared": "workspace:*",
     "bun-pty": "^0.4.10"
   },
   "devDependencies": {

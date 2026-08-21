@@ -3,7 +3,7 @@
  * the composer, while the composer and its auxiliary row remain ordinary
  * document flow. The reveal viewport clips animation below the composer
  * edge so the card can never leak from its bottom. */
-import type { ExtensionWidget } from "@pichamber/shared";
+import type { ExtensionWidget } from "@amagicpear/pichamber-shared";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import ActivityPanel from "./ActivityPanel.vue";
 import ActivityToggle from "./ActivityToggle.vue";

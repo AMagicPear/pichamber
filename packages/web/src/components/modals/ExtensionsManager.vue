@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import type { ExtensionsOverview, PiBuiltinExtension, PiExtensionSource, PiExtensionUpdate } from "@pichamber/shared";
+import type { ExtensionsOverview, PiBuiltinExtension, PiExtensionSource, PiExtensionUpdate } from "@amagicpear/pichamber-shared";
 import {
   checkPiExtensionUpdates,
   fetchPiExtensionsOverview,

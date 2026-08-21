@@ -16,7 +16,7 @@ import type {
   ServerMessage,
   SessionStatsView,
   ThinkingState,
-} from "@pichamber/shared";
+} from "@amagicpear/pichamber-shared";
 
 /* ── Module-level state ─────────────────────────────────────────────
  *  Lives outside the composable so multiple components (the

@@ -22,7 +22,7 @@ import type {
   ExtensionWidget,
   SessionStatsView,
   ThinkingState,
-} from "@pichamber/shared";
+} from "@amagicpear/pichamber-shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
 import { createUiBridge, type UiBridge } from "../extensions/extension-ui";

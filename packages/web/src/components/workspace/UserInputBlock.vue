@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AgentActivity, ExtensionWidget, ModelDescriptor, PendingMessages, SlashCommandInfo } from "@pichamber/shared";
+import type { AgentActivity, ExtensionWidget, ModelDescriptor, PendingMessages, SlashCommandInfo } from "@amagicpear/pichamber-shared";
 import { computed, nextTick, ref, watch } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
 import MicIcon from "@/assets/icons/Mic.svg";

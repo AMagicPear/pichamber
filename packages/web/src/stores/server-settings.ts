@@ -11,7 +11,7 @@
  * always populated before the user interacts with it.
  */
 import { ref } from "vue";
-import type { ServerSettings } from "@pichamber/shared";
+import type { ServerSettings } from "@amagicpear/pichamber-shared";
 import { fetchServerSettings, toMessage, updateServerSettings } from "@/api/client";
 
 const defaults: ServerSettings = {

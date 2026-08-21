@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import MarkdownRender from "markstream-vue";
-import type { AgentMessage, LiveItem, ModelDescriptor } from "@pichamber/shared";
+import type { AgentMessage, LiveItem, ModelDescriptor } from "@amagicpear/pichamber-shared";
 import AssistantMessage from "./AssistantMessage.vue";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import { conversationToolDetail, type ConversationToolDetail } from "./conversationToolDetail";

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
-import type { ModelDescriptor } from "@pichamber/shared";
+import type { ModelDescriptor } from "@amagicpear/pichamber-shared";
 import MenuPanel from "@/components/MenuPanel.vue";
 import ProviderLogo from "./ProviderLogo";
 import { usePopover } from "@/composables/usePopover";

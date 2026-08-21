@@ -1,5 +1,5 @@
 {
-  "name": "@pichamber/builtin-ark-agent-plan",
+  "name": "@amagicpear/pichamber-builtin-ark-agent-plan",
   "version": "0.1.1",
   "description": "Registers Volcengine Ark Agent Plan as a pi provider (dynamic model list via ListArkAgentPlanModel).",
   "private": true,

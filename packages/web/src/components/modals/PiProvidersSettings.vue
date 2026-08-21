@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { PiProviderSettings } from "@pichamber/shared";
+import type { PiProviderSettings } from "@amagicpear/pichamber-shared";
 import { fetchPiProviders, removePiProviderCredential, setPiProviderApiKey, toMessage } from "@/api/client";
 import { workspace } from "@/stores/workspace";
 import ProviderLogo from "@/components/workspace/ProviderLogo";

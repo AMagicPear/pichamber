@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import type { PiBehaviorSettings } from "@pichamber/shared";
+import type { PiBehaviorSettings } from "@amagicpear/pichamber-shared";
 import { fetchPiBehavior, toMessage, updatePiBehavior } from "@/api/client";
 import { workspace } from "@/stores/workspace";
 import SettingsGroup from "./SettingsGroup.vue";

@@ -17,7 +17,7 @@ import type {
   GitStash,
   GitStashList,
   GitStatus,
-} from "@pichamber/shared";
+} from "@amagicpear/pichamber-shared";
 import { getWorkspace } from "./workspace";
 import { WorkspaceError } from "./workspace";
 

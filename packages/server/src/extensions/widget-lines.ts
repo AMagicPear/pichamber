@@ -1,5 +1,5 @@
 /* Parse Pi extension widget payloads at the server boundary so browsers receive typed data. */
-import type { ExtensionWidget, ActivityNode } from "@pichamber/shared";
+import type { ExtensionWidget, ActivityNode } from "@amagicpear/pichamber-shared";
 import type { RpcExtensionUIRequest } from "@earendil-works/pi-coding-agent";
 
 const ASYNC_PREFIX = "PI_SUBAGENT_ASYNC_JSON:";

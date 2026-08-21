@@ -1,4 +1,4 @@
-import type { ServerMessage } from "@pichamber/shared";
+import type { ServerMessage } from "@amagicpear/pichamber-shared";
 
 export type WsHandle = {
   send: (message: unknown) => void;

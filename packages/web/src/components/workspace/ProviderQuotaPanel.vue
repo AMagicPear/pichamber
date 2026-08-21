@@ -4,7 +4,7 @@ import { fetchProviderQuota } from "@/api/client";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
 import { workspace } from "@/stores/workspace";
-import type { ModelDescriptor, ProviderDescriptor, ProviderQuota, QuotaWindow } from "@pichamber/shared";
+import type { ModelDescriptor, ProviderDescriptor, ProviderQuota, QuotaWindow } from "@amagicpear/pichamber-shared";
 import ProviderLogo from "./ProviderLogo";
 
 const props = defineProps<{ open: boolean }>();

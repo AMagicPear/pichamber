@@ -61,14 +61,14 @@ pichamber/
 ├── .oxlintrc.json            # lint config applied to all packages
 ├── bun.lock
 └── packages/
-    ├── web/                  # Vue 3 + Vite frontend (@pichamber/web)
-    └── server/               # Bun HTTP server (@pichamber/server)
+    ├── web/                  # Vue 3 + Vite frontend (@amagicpear/pichamber-web)
+    └── server/               # Bun HTTP server (@amagicpear/pichamber-server)
 ```
 
 | Package                                  | Stack                                | Purpose     |
 | ---------------------------------------- | ------------------------------------ | ----------- |
-| [`@pichamber/web`](./packages/web)       | Vue 3 (rc) · Vite · Pinia · Vue Router | Browser SPA |
-| [`@pichamber/server`](./packages/server) | Bun runtime                          | HTTP server |
+| [`@amagicpear/pichamber-web`](./packages/web)       | Vue 3 (rc) · Vite · Pinia · Vue Router | Browser SPA |
+| [`@amagicpear/pichamber-server`](./packages/server) | Bun runtime                          | HTTP server |
 
 Remote-host and Pi runtime decisions are documented in
 [`docs/architecture.md`](./docs/architecture.md).
@@ -114,8 +114,8 @@ bun run lint
 Per-package scripts use Bun's `--filter`:
 
 ```sh
-bun --filter @pichamber/web dev
-bun --filter @pichamber/server start
+bun --filter @amagicpear/pichamber-web dev
+bun --filter @amagicpear/pichamber-server start
 ```
 
 ## Conventions

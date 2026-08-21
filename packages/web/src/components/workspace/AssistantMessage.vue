@@ -2,7 +2,7 @@
 import MarkdownRender from "markstream-vue";
 import { computed } from "vue";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import type { AgentMessage } from "@pichamber/shared";
+import type { AgentMessage } from "@amagicpear/pichamber-shared";
 import BrainAi3Icon from "@/assets/icons/BrainAi3.svg";
 import ConversationDetail from "./ConversationDetail.vue";
 import ProviderLogo from "./ProviderLogo";

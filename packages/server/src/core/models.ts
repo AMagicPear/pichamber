@@ -1,4 +1,4 @@
-import type { ModelDescriptor, ThinkingState } from "@pichamber/shared";
+import type { ModelDescriptor, ThinkingState } from "@amagicpear/pichamber-shared";
 import type { RuntimeModelInfo, SessionRuntime, RuntimeModelDescriptor } from "./runtime";
 
 /** Wrap the runtime's `ModelInfo` rows in the slim wire descriptor

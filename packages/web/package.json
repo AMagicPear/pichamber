@@ -1,5 +1,5 @@
 {
-  "name": "@pichamber/web",
+  "name": "@amagicpear/pichamber-web",
   "version": "0.7.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "type-check": "node ../../scripts/vue-tsc.mjs --build --force"
   },
   "dependencies": {
-    "@pichamber/shared": "workspace:*",
+    "@amagicpear/pichamber-shared": "workspace:*",
     "ghostty-web": "^0.4.0",
     "katex": "^0.18.1",
     "markstream-vue": "^1.0.7",

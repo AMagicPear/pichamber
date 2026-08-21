@@ -8,7 +8,7 @@
  */
 import { sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { LiveItem } from "@pichamber/shared";
+import type { LiveItem } from "@amagicpear/pichamber-shared";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 const toolCallIdOf = (message: AgentMessage): string | undefined => {

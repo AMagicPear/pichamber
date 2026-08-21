@@ -31,7 +31,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { createSyntheticSourceInfo } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { PromptImage } from "@pichamber/shared";
+import type { PromptImage } from "@amagicpear/pichamber-shared";
 
 export type { AgentSessionEvent, SourceInfo };
 

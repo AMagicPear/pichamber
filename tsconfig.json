@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "./packages/shared" },
     { "path": "./packages/web" },
     { "path": "./packages/server" }
   ]

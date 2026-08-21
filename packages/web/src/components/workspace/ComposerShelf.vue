@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DirEntry, SlashCommandInfo } from "@pichamber/shared";
+import type { DirEntry, SlashCommandInfo } from "@amagicpear/pichamber-shared";
 import { computed, nextTick, ref, watch } from "vue";
 import AttachmentIcon from "@/assets/icons/Attachment2.svg";
 import CommandIcon from "@/assets/icons/Command.svg";

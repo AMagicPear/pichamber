@@ -1,4 +1,4 @@
-import type { ModelDescriptor } from "@pichamber/shared";
+import type { ModelDescriptor } from "@amagicpear/pichamber-shared";
 
 /** Use the registry's friendly name everywhere a model id is displayed. */
 export const modelDisplayName = (

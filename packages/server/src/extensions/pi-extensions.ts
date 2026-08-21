@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DefaultPackageManager, getAgentDir, type AgentSession } from "@earendil-works/pi-coding-agent";
-import type { PiExtensionSource, PiExtensionUpdate } from "@pichamber/shared";
+import type { PiExtensionSource, PiExtensionUpdate } from "@amagicpear/pichamber-shared";
 
 const packageManagerFor = (session: AgentSession, cwd: string) =>
   new DefaultPackageManager({

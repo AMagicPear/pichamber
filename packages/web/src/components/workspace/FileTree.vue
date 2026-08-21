@@ -5,7 +5,7 @@ import FileAddIcon from "@/assets/icons/FileAdd.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
 import RefreshIcon from "@/assets/icons/Refresh2.svg";
 import SearchIcon from "@/assets/icons/Search.svg";
-import type { DirEntry } from "@pichamber/shared";
+import type { DirEntry } from "@amagicpear/pichamber-shared";
 import { listDirectory, toMessage } from "@/api/client";
 import IconButton from "@/components/IconButton.vue";
 import { workspace } from "@/stores/workspace";

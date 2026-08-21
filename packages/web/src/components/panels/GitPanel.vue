@@ -6,7 +6,7 @@ import type {
   GitChange,
   GitStashList,
   GitStatus,
-} from "@pichamber/shared";
+} from "@amagicpear/pichamber-shared";
 import {
   checkoutGitBranch,
   commitGit,

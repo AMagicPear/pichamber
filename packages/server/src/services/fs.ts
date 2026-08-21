@@ -15,7 +15,7 @@
  */
 import { readdir, stat } from "node:fs/promises";
 import { basename, relative, resolve } from "node:path";
-import type { DirEntry, ListResult } from "@pichamber/shared";
+import type { DirEntry, ListResult } from "@amagicpear/pichamber-shared";
 
 import { fdSearch, isFdAvailable, scoreEntry } from "./fd-search";
 import { canonicalPathInWorkspace, canonicalWorkspace, shortPath } from "./workspace";
