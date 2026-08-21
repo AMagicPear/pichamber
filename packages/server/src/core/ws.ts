@@ -32,6 +32,7 @@ import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { conversationItems } from "./conversation";
 import { deactivateSession, getSession } from "./session";
 import type { SessionRuntime } from "./runtime";
+import { dispatchBuiltinSlashCommand, matchBuiltinSlashCommand } from "./builtin-commands";
 
 // ─── WebSocket protocol multiplexing types ─────────────────────────────
 //
@@ -931,6 +932,36 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         if (bunWS.data.closed) return;
+        // Mirror TUI's `interactive-mode.js` intercept: built-in slash
+        // commands run locally before reaching `runtime.prompt()`. Extension
+        // commands still flow through the SDK's `_tryExecuteExtensionCommand`
+        // path because that lives inside `prompt()` itself. The local
+        // dispatch only handles built-ins the SDK doesn't auto-route.
+        const builtin = matchBuiltinSlashCommand(input.message);
+        if (builtin) {
+          const channel = channelsBySession.get(sessionId);
+          dispatchBuiltinSlashCommand(builtin, runtime)
+            .then(async () => {
+              if (builtin.kind === "reload" && channel) {
+                // Reload rebuilds the extension runner, so any UI bindings
+                // from the old runner are stale. Re-bind before
+                // re-snapshotting so the next prompt sees fresh state.
+                try {
+                  await runtime.bindExtensions(channel.uiBridge.context);
+                } catch (err) {
+                  console.error("Failed to re-bind extensions after reload", sessionId, err);
+                }
+                try {
+                  channel.state.resources = await snapshotResources(runtime);
+                } catch (err) {
+                  console.error("Failed to snapshot resources after reload", sessionId, err);
+                }
+                broadcastState(channel, { resources: channel.state.resources });
+              }
+            })
+            .catch((err: unknown) => sendError(bunWS, toMessage(err)));
+          return;
+        }
         const streamingBehavior =
           input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
             ? input.streamingBehavior

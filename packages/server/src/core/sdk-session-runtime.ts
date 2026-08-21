@@ -180,6 +180,15 @@ export const createSdkSessionRuntime = async (
     async compact(customInstructions?: string) {
       return session.compact(customInstructions);
     },
+    async reload() {
+      // `AgentSession.reload()` rebuilds the extension runner, resource
+      // loader, settings, and provider registry. The optional
+      // `beforeSessionStart` hook is what the TUI uses to re-render the
+      // chat history from messages before re-binding UI; pichamber keeps
+      // chat on the client side and drives rendering from live WS events,
+      // so the hook is unnecessary here.
+      await session.reload();
+    },
     async setModel(provider: string, modelId: string) {
       const target = session.modelRuntime.getModel(provider, modelId);
       if (!target) throw new Error(`Unknown model: ${provider}/${modelId}`);

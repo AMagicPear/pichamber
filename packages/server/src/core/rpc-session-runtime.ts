@@ -532,6 +532,13 @@ export const createRpcSessionRuntime = async ({
     async compact(customInstructions?: string) {
       return send({ type: "compact", customInstructions });
     },
+    async reload() {
+      // RPC mode talks to an external `pi --mode rpc` over JSONL, which
+      // doesn't yet expose a reload command. Until Pi adds one, surface
+      // the gap explicitly so callers can decide to fall back to the
+      // SDK backend or just re-spawn the process.
+      throw new Error("/reload is not supported by the RPC runtime");
+    },
     async setModel(provider: string, modelId: string) {
       await send({ type: "set_model", provider, modelId });
       await refreshModelFromState();

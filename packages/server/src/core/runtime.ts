@@ -157,6 +157,12 @@ export interface SessionRuntime {
   followUp(message: string): Promise<void>;
   abort(): Promise<void>;
   compact(customInstructions?: string): Promise<unknown>;
+  /** Reload extensions, prompts, themes, context files, and providers —
+   *  mirrors the TUI's `/reload`. SDK calls `session.reload()`; RPC
+   *  throws because reloading an external `pi --mode rpc` process isn't
+   *  part of the JSONL protocol yet. Add a `reload` RPC command upstream
+   *  when that need arises; for now the surface is SDK-only. */
+  reload(): Promise<void>;
   setModel(provider: string, modelId: string): Promise<void>;
   setThinkingLevel(level: ThinkingLevel): Promise<void>;
   clearQueue(): RuntimeClearedQueue;
