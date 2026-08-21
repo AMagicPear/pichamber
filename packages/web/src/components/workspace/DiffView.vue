@@ -3,7 +3,7 @@
 // styled scroll box, so the parent doesn't need its own wrapper.
 import { createDiffSurface } from "stream-diffs";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useTheme } from "@/composables/useTheme";
+import { activeTheme } from "@/stores/theme";
 
 const props = defineProps<{
   /** Raw unified diff text (e.g. stdout from `git diff`). */
@@ -14,7 +14,6 @@ const props = defineProps<{
 }>();
 
 const host = ref<HTMLElement>();
-const { resolvedTheme } = useTheme();
 let controller: ReturnType<typeof createDiffSurface> | undefined;
 
 const render = async () => {
@@ -27,7 +26,7 @@ const render = async () => {
     kind: "patch",
     patch: props.patch,
     options: {
-      theme: resolvedTheme.value === "dark" ? "vitesse-dark" : "vitesse-light",
+      theme: activeTheme.value === "dark" ? "vitesse-dark" : "vitesse-light",
       diffStyle: props.diffStyle ?? "unified",
       // Word-level highlight inside changed lines so small edits read
       // like prose instead of full-line blocks.
@@ -43,7 +42,7 @@ const render = async () => {
 
 onMounted(() => void render());
 onBeforeUnmount(() => controller?.dispose());
-watch(() => [props.patch, props.diffStyle, resolvedTheme.value], () => void render());
+watch(() => [props.patch, props.diffStyle, activeTheme.value], () => void render());
 </script>
 
 <template>

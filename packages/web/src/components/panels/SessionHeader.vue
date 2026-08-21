@@ -10,15 +10,13 @@ import GitBranchIcon from "@/assets/icons/GitBranch.svg";
 import IconButton from "@/components/IconButton.vue";
 import MenuPanel from "@/components/MenuPanel.vue";
 import ProviderQuotaPanel from "@/components/workspace/ProviderQuotaPanel.vue";
-import { useConversationSession } from "@/composables/useConversationSession";
 import { usePopover } from "@/composables/usePopover";
+import { availableModels, windowTitle, workspace } from "@/stores/workspace";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
 import { computed, onMounted, ref } from "vue";
 import { activeGitBranch, loadGitBranch } from "@/stores/git";
 import { ui } from "@/stores/ui";
-import { workspace } from "@/stores/workspace";
 
-const { availableModels, windowTitle } = useConversationSession();
 const gitBranch = activeGitBranch;
 
 /** At least one quoted provider is configured when the Pi SDK reports a

@@ -26,8 +26,8 @@ import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalIcon from "@/assets/icons/Terminal.svg";
 import { McpIcon } from "@/components/McpIcon";
 import { settings } from "@/stores/settings";
-import { useConversationSession } from "@/composables/useConversationSession";
-import { useTheme } from "@/composables/useTheme";
+import { resources } from "@/stores/workspace";
+import { preference as themePreference, setTheme, themeOptions } from "@/stores/theme";
 import { useServerSettings } from "@/stores/server-settings";
 import { persistedState } from "@/stores/persisted";
 import PiBehaviorSettings from "@/components/modals/PiBehaviorSettings.vue";
@@ -83,8 +83,6 @@ const settingsView = persistedState<SettingsViewState>("pichamber.settings-view.
 const activeKey = toRef(settingsView, "activeKey");
 const searchQuery = ref("");
 const settingsSize = toRef(settingsView, "size");
-const { resources } = useConversationSession();
-const { preference: themePreference, options: themeOptions, setTheme } = useTheme();
 const serverSettings = useServerSettings();
 
 // Desktop-notification permission is a tristate of "we don't know yet",

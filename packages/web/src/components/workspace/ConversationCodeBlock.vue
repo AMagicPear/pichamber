@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { createCodeStream } from "stream-diffs";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useTheme } from "@/composables/useTheme";
+import { activeTheme } from "@/stores/theme";
 
 const props = defineProps<{
   node: {
@@ -18,7 +18,6 @@ const props = defineProps<{
 }>();
 
 const host = ref<HTMLElement>();
-const { resolvedTheme } = useTheme();
 let controller: ReturnType<typeof createCodeStream> | undefined;
 let mountedGeneration = 0;
 /** Once we've upgraded to the File surface, stop pushing snapshots — the
@@ -38,7 +37,7 @@ const mount = async () => {
   const next = createCodeStream({
     fileName: `code.${props.node.language || "txt"}`,
     language: props.node.language || "plaintext",
-    theme: resolvedTheme.value === "dark" ? "vitesse-dark" : "vitesse-light",
+    theme: activeTheme.value === "dark" ? "vitesse-dark" : "vitesse-light",
     lineNumbers: true,
   });
   controller = next;
@@ -82,7 +81,7 @@ onBeforeUnmount(() => {
 /** Language / theme changes require a re-mount (stream-diffs locks these in
  *  on creation). Code changes just push a snapshot — incremental, no flicker. */
 watch(
-  () => [props.node.language, resolvedTheme.value],
+  () => [props.node.language, activeTheme.value],
   () => void mount(),
 );
 

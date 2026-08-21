@@ -5,7 +5,7 @@ import { connectPtyWs, type WsHandle } from "@/api/ws";
 import { toMessage } from "@/api/client";
 import { useGhosttyInit } from "@/composables/useGhostty";
 import { releaseTerminalCleanup, replaceTerminalCleanup } from "@/composables/terminalRegistry";
-import { useTheme } from "@/composables/useTheme";
+import { activeTheme } from "@/stores/theme";
 
 const props = defineProps<{ ptyId: string }>();
 const emit = defineEmits<{ exited: [{ reason: string }] }>();
@@ -23,8 +23,7 @@ let pendingOutput = "";
 let outputFrame: number | undefined;
 let outputWriting = false;
 
-const { resolvedTheme } = useTheme();
-const terminalTheme = () => resolvedTheme.value === "dark" ? {
+const terminalTheme = () => activeTheme.value === "dark" ? {
   background: "#1d1d1b",
   foreground: "#e8e6e1",
   cursor: "#e8e6e1",
@@ -149,7 +148,7 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(teardown);
-watch(resolvedTheme, () => {
+watch(activeTheme, () => {
   if (terminal) terminal.options.theme = terminalTheme();
 });
 </script>

@@ -11,7 +11,7 @@ import "@/assets/markdown.css";
 import ConversationCodeBlock from "./components/workspace/ConversationCodeBlock.vue";
 import LocalFileLink from "./components/workspace/LocalFileLink.vue";
 import router from "./router";
-import { initializeTheme } from "./composables/useTheme";
+import { initializeTheme } from "./stores/theme";
 
 initializeTheme();
 

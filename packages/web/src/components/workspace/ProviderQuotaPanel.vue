@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { fetchProviderQuota } from "@/api/client";
-import { useConversationSession } from "@/composables/useConversationSession";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
-import { workspace } from "@/stores/workspace";
+import { availableModels, workspace } from "@/stores/workspace";
 import type { ModelDescriptor, ProviderDescriptor, ProviderQuota, QuotaWindow } from "@amagicpear/pichamber-shared";
 import ProviderLogo from "./ProviderLogo";
 
 const props = defineProps<{ open: boolean }>();
-
-const { availableModels } = useConversationSession();
 
 /** Providers we can actually quote: the intersection of what the Pi SDK
  *  reports as configured (`availableModels`) and what the server registry

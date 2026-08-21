@@ -14,6 +14,21 @@ import ExtensionUiHost from "@/components/workspace/ExtensionUiHost.vue";
 import type { ExtensionWidget, ExtensionWidgetPlacement } from "@amagicpear/pichamber-shared";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { workspace } from "@/stores/workspace";
+import {
+  activity,
+  availableModels,
+  busy,
+  canRestorePending,
+  canSend,
+  draft,
+  extensionUi,
+  images,
+  items,
+  model,
+  pending,
+  resources,
+  thinking,
+} from "@/stores/workspace";
 import { settings } from "@/stores/settings";
 import { computed, watch } from "vue";
 
@@ -28,29 +43,16 @@ const presets = [
 ];
 
 const {
-  draft,
-  images,
-  canSend,
+  abort,
+  compact,
   connect,
   disconnect,
-  items,
-  send,
-  model,
-  availableModels,
-  thinking,
-  setModel,
-  setThinkingLevel,
-  abort,
-  activity,
-  busy,
-  canRestorePending,
-  compact,
-  pending,
-  resources,
-  extensionUi,
+  dismissNotification,
   respondToExtension,
   restorePending,
-  dismissNotification,
+  send,
+  setModel,
+  setThinkingLevel,
 } = useConversationSession();
 
 const hasConversation = computed(() => items.value.length > 0);

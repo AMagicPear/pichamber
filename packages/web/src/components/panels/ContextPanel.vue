@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { SessionStatsView } from "@amagicpear/pichamber-shared";
-import { useConversationSession } from "@/composables/useConversationSession";
-
-const { stats } = useConversationSession();
+import { stats } from "@/stores/workspace";
 
 const view = computed<SessionStatsView | undefined>(() => stats.value);
 

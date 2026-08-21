@@ -3,92 +3,53 @@ import type {
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
 } from "@earendil-works/pi-coding-agent";
-import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch } from "vue";
+import { onBeforeUnmount } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
 import { matchBuiltinCommand } from "./builtin-commands";
-import { refreshSessions, workspace } from "@/stores/workspace";
+import { refreshSessions } from "@/stores/workspace";
+import {
+  activity,
+  availableModels,
+  busy,
+  canRestorePending,
+  connected,
+  draft,
+  extensionUi,
+  images,
+  items,
+  model,
+  pending,
+  resources,
+  stats,
+  thinking,
+  windowTitle,
+} from "@/stores/workspace";
 import { settings } from "@/stores/settings";
 import type {
-  LiveItem,
-  AgentActivity,
-  ExtensionWidget,
-  ExtensionWidgetPlacement,
   ModelDescriptor,
-  PendingMessages,
-  PromptImage,
-  RuntimeResources,
   ServerMessage,
-  SessionStatsView,
-  ThinkingState,
   WebExtensionUIRequest,
 } from "@amagicpear/pichamber-shared";
 
-/* ── Module-level state ─────────────────────────────────────────────
- *  Lives outside the composable so multiple components (the
- *  Conversation panel that owns the input + WebSocket lifecycle, and
- *  the Context pane that just renders the stats view) see the same
- *  refs. Mirrors the `workspace` / `ui` pattern: module-level reactive
- *  export, no Pinia, no provide/inject.
+/* ── WS 生命周期与协议动作 ─────────────────────────────────────────
+ *  这里不定义任何状态 —— 所有会话状态都在 `@/stores/workspace`（模块级
+ *  store）。本模块只负责：WebSocket 生命周期、消息处理、以及把用户
+ *  动作翻译成 WS 帧。只取数据的组件请直接 import workspace store，
+ *  不需要调用本 composable。
  * ─────────────────────────────────────────────────────────────────── */
-const draft = ref<string>();
-export type DraftImage = PromptImage & { id: string; aspectRatio: number };
-const images = ref<DraftImage[]>([]);
-const connected = ref(false);
 
-/** 统一 item 流：服务器铸造的稳定 id 终生不变，live→committed 只翻字段。
- *  shallowRef：流由服务器整体替换/整条重写，避免 ref 的 UnwrapRef 在
- *  递归的 LiveItem 上深层展开（TS2589）。 */
-const items = shallowRef<LiveItem[]>([]);
-const busy = ref(false);
-const activity = ref<AgentActivity>({ phase: "idle" });
-const pending = ref<PendingMessages>({ steering: [], followUp: [] });
-const canRestorePending = ref(true);
-const resources = ref<RuntimeResources>({
-  commands: [],
-  tools: [],
-  extensions: [],
-  diagnostics: [],
-  extensionInventoryAvailable: false,
-});
 type ExtensionDialog = Extract<
   RpcExtensionUIRequest,
   { method: "select" | "confirm" | "input" | "editor" }
 >;
-type ExtensionNotification = { id: string; message: string; type: "info" | "warning" | "error" };
-type WidgetEntry = { widget: ExtensionWidget; placement: ExtensionWidgetPlacement };
 
-const extensionUi = reactive({
-  dialog: null as ExtensionDialog | null,
-  notifications: [] as ExtensionNotification[],
-  statuses: {} as Record<string, string>,
-  widgets: {} as Record<string, WidgetEntry>,
-});
 const extensionDialogQueue: ExtensionDialog[] = [];
 
 const showNextExtensionDialog = () => {
   extensionUi.dialog = extensionDialogQueue.shift() ?? null;
 };
-/** Empty until the server confirms available models in `snapshot`/`state`. */
-const availableModels = ref<ModelDescriptor[]>([]);
-const model = ref<ModelDescriptor | undefined>();
-/** Mirror the active model into the shared `workspace` store so views
- *  outside the conversation panel (header quota chip, account badge, …)
- *  see the same provider/model without subscribing to the WS themselves.
- *  Runs at module scope so the mirror is always live, independent of how
- *  many components currently call `useConversationSession`. */
-watch(model, (next) => {
-  workspace.currentModel = next;
-});
-const thinking = ref<ThinkingState>({ level: "off", availableLevels: ["off"] });
-/** Pre-formatted Context-pane view; the server is the source of truth. */
-const stats = ref<SessionStatsView | undefined>();
-/** Terminal window/tab title set by extensions via `ctx.ui.setTitle()`.
- *  This is a per-session host-window title (the pi protocol's
- *  `setTitle`), NOT the browser tab title — it must never touch
- *  `document.title`. Displayed by SessionHeader, which falls back to
- *  `workspace.sessionName` when no extension title is set. */
-const windowTitle = ref<string | undefined>();
+
 /** Push a transport / model / thinking / catastrophic-prompt error onto the
  *  shared toast queue. The toast auto-dismisses after 5s and can be closed
  *  manually, matching the lifecycle of extension notifications. */
@@ -107,21 +68,9 @@ let resyncPending = false;
 
 /** Number of components currently subscribed via the composable. The
  *  WebSocket only opens when the first one mounts and only closes when
- *  the last one unmounts, so the Context pane (a passive reader) can't
- *  tear down the live connection ConversationPanel depends on. */
+ *  the last one unmounts, so a passive reader can't tear down the live
+ *  connection ConversationPanel depends on. */
 let refCount = 0;
-
-const applyModelState = (snapshot: {
-  model?: ModelDescriptor;
-  availableModels?: ModelDescriptor[];
-  thinking?: ThinkingState;
-  stats?: SessionStatsView;
-}) => {
-  if ("model" in snapshot) model.value = snapshot.model;
-  if (snapshot.availableModels) availableModels.value = snapshot.availableModels;
-  if (snapshot.thinking) thinking.value = snapshot.thinking;
-  if (snapshot.stats) stats.value = snapshot.stats;
-};
 
 /** 按 id 原地 upsert：顺序即服务器推送顺序，流式增长/阶段翻转都只改内容。 */
 const requestResync = () => {
@@ -179,7 +128,10 @@ const onMessage = (message: ServerMessage) => {
       pending.value = message.pending;
       canRestorePending.value = message.canRestorePending;
       lastSeq = message.seq;
-      applyModelState(message);
+      if ("model" in message) model.value = message.model;
+      if (message.availableModels) availableModels.value = message.availableModels;
+      if (message.thinking) thinking.value = message.thinking;
+      if (message.stats) stats.value = message.stats;
       resources.value = message.resources;
       break;
     }
@@ -206,7 +158,10 @@ const onMessage = (message: ServerMessage) => {
       if (message.activity) activity.value = message.activity;
       if (message.pending) pending.value = message.pending;
       if (message.resources) resources.value = message.resources;
-      applyModelState(message);
+      if ("model" in message) model.value = message.model;
+      if (message.availableModels) availableModels.value = message.availableModels;
+      if (message.thinking) thinking.value = message.thinking;
+      if (message.stats) stats.value = message.stats;
       // 服务器只在 agent_settled / compaction_end 广播 busy=false
       // 回合跑完刷新侧栏 + 完成通知。disconnect 的本地翻转不经过这里，不会误响。
       if (message.busy === false) {
@@ -238,13 +193,9 @@ const onStatus = (status: WsStatus) => {
   }
 };
 
-const canSend = computed(
-  () => connected.value && (Boolean(draft.value?.trim()) || images.value.length > 0),
-);
-
 const send = (streamingBehavior?: "steer" | "followUp") => {
   const text = draft.value?.trim();
-  if (!canSend.value || !ws) return;
+  if (!connected.value || (!text && images.value.length === 0) || !ws) return;
   // Dismiss any lingering error toasts so they don't pile up across turns.
   extensionUi.notifications = extensionUi.notifications.filter((n) => n.type !== "error");
   // Built-in slash commands route to their dedicated WS frames instead of
@@ -411,12 +362,9 @@ const connect = (sessionId: string) => {
   }
 };
 
-/** Returns the shared refs and API. The first call increments the
- *  refcount but does not touch the WebSocket — lifecycle is driven by
- *  the caller's `watch(workspace.sessionId)`. Subsequent calls (e.g.
- *  the Context pane) just attach to the same state. The last unmount
- *  disconnects to keep a clean shutdown if ConversationPanel itself
- *  unmounts without a session switch. */
+/** Returns the composable's actions (WS lifecycle + protocol verbs). The
+ *  conversation state itself lives in `@/stores/workspace` — components
+ *  that only read data import it directly instead of calling this. */
 export const useConversationSession = () => {
   refCount += 1;
   onBeforeUnmount(() => {
@@ -428,32 +376,16 @@ export const useConversationSession = () => {
   });
 
   return {
-    availableModels,
     abort,
-    activity,
-    busy,
-    canRestorePending,
-    canSend,
     compact,
     connect,
-    connected,
     disconnect,
     dismissNotification,
-    draft,
-    items,
-    model,
-    pending,
-    resources,
-    extensionUi,
-    images,
+    reload,
     respondToExtension,
     restorePending,
-    reload,
     send,
     setModel,
     setThinkingLevel,
-    stats,
-    thinking,
-    windowTitle,
   };
 };

@@ -14,7 +14,7 @@ import ModelSelector from "@/components/workspace/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/workspace/ThinkingLevelSelector.vue";
 import ComposerActivityStack from "@/components/workspace/ComposerActivityStack.vue";
 import type { SendKey } from "@/stores/settings";
-import type { DraftImage } from "@/composables/useConversationSession";
+import type { DraftImage } from "@/stores/workspace";
 import AttachmentIcon from "@/assets/icons/Attachment2.svg";
 import CloseIcon from "@/assets/icons/Close.svg";
 
