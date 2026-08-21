@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DirEntry, SlashCommandInfo } from "@amagicpear/pichamber-shared";
+import type { DirEntry, RuntimeSlashCommand } from "@amagicpear/pichamber-shared";
 import { computed, nextTick, ref, watch } from "vue";
 import AttachmentIcon from "@/assets/icons/Attachment2.svg";
 import CommandIcon from "@/assets/icons/Command.svg";
@@ -11,12 +11,12 @@ import FloatingPanel from "../../ui/FloatingPanel.vue";
 const props = defineProps<{
   mode: "files" | "commands" | null;
   query: string;
-  commands: SlashCommandInfo[];
+  commands: RuntimeSlashCommand[];
 }>();
 
 const emit = defineEmits<{
   selectFile: [path: string];
-  selectCommand: [command: SlashCommandInfo];
+  selectCommand: [command: RuntimeSlashCommand];
 }>();
 
 const files = ref<DirEntry[]>([]);

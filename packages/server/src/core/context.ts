@@ -1,9 +1,7 @@
-import {
-  getLastAssistantUsage,
-  type SessionEntry,
-} from "@earendil-works/pi-coding-agent";
+import { getLastAssistantUsage, type SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
 import type { LastAssistantUsage, ModelDescriptor, SessionStatsView } from "@amagicpear/pichamber-shared";
-import type { SessionRuntime } from "./runtime";
+import { providerName } from "../providers/providers";
 
 const numberFormat = new Intl.NumberFormat("en-US");
 const dateFormat = new Intl.DateTimeFormat("en-US", {
@@ -17,17 +15,15 @@ const dateFormat = new Intl.DateTimeFormat("en-US", {
 const formatPercent = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
 const formatCost = (raw: number) => `$${raw.toFixed(2)}`;
 
-const modelDescriptor = (
-  runtime: SessionRuntime,
-): ModelDescriptor | undefined => {
-  const model = runtime.getCurrentModel();
+const modelDescriptor = (runtime: AgentSessionRuntime): ModelDescriptor | undefined => {
+  const model = runtime.session.model;
   if (!model) return undefined;
   return {
     provider: model.provider,
-    providerName: model.providerName,
+    providerName: providerName(runtime.session, model.provider),
     id: model.id,
     name: model.name,
-    reasoning: model.reasoning,
+    reasoning: Boolean(model.reasoning),
   };
 };
 
@@ -57,10 +53,10 @@ const findModifiedDate = (entries: SessionEntry[]): Date | null => {
  *  field is included so a future sortable cost column wouldn't need a
  *  second pass over the session. */
 export const computeSessionStatsView = async (
-  runtime: SessionRuntime,
+  runtime: AgentSessionRuntime,
 ): Promise<SessionStatsView> => {
-  const stats = await runtime.getSessionStats();
-  const entries = await runtime.buildConversationEntries();
+  const stats = runtime.session.getSessionStats();
+  const entries = runtime.session.sessionManager.buildContextEntries();
   const sdkUsage = getLastAssistantUsage(entries);
 
   const lastAssistant: LastAssistantUsage = sdkUsage

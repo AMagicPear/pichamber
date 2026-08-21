@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, toRef, watch } from "vue";
+import { computed, onMounted, ref, toRef } from "vue";
 import SplitPane from "@/components/shell/SplitPane.vue";
 import IconButton from "@/components/ui/IconButton.vue";
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
@@ -23,12 +23,10 @@ import SearchIcon from "@/assets/icons/Search.svg";
 import ServerIcon from "@/assets/icons/Server.svg";
 import SlashCommands2Icon from "@/assets/icons/SlashCommands2.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
-import TerminalIcon from "@/assets/icons/Terminal.svg";
 import { McpIcon } from "@/components/ui/McpIcon";
 import { settings } from "@/stores/settings";
 import { resources } from "@/stores/workspace";
 import { preference as themePreference, setTheme, themeOptions } from "@/stores/theme";
-import { useServerSettings } from "@/stores/server-settings";
 import { persistedState } from "@/stores/persisted";
 import PiBehaviorSettings from "@/components/modals/settings/PiBehaviorSettings.vue";
 import PiProvidersSettings from "@/components/modals/settings/PiProvidersSettings.vue";
@@ -67,7 +65,6 @@ const navItems: NavItem[] = [
   { key: "providers", label: "Providers", icon: CloudIcon, enabled: true },
   { key: "skills-installed", label: "Skills", icon: BookOpenIcon },
   { key: "skills-catalog", label: "Skills Catalog", icon: BookIcon },
-  { key: "runtime", label: "Runtime", icon: TerminalIcon, enabled: true },
 ];
 
 type SettingsViewState = { activeKey: string; size: number };
@@ -83,7 +80,6 @@ const settingsView = persistedState<SettingsViewState>("pichamber.settings-view.
 const activeKey = toRef(settingsView, "activeKey");
 const searchQuery = ref("");
 const settingsSize = toRef(settingsView, "size");
-const serverSettings = useServerSettings();
 
 // Desktop-notification permission is a tristate of "we don't know yet",
 // "the user said yes/no", or "this browser can't show notifications".
@@ -153,65 +149,6 @@ const visibleNavItems = computed(() =>
 
 const selectItem = (key: string) => {
   activeKey.value = key;
-};
-
-// Load server-side runtime settings when the runtime panel opens.
-// The dialog mounts the SettingsView as a singleton, so we trigger the
-// fetch from the script setup block on first activation rather than
-// per-mount: the first click that hits the Runtime tab will pay the
-// network round-trip, every subsequent click reads from cache.
-const ensureRuntimeLoaded = () => {
-  if (activeKey.value === "runtime" && !serverSettings.loaded.value) {
-    void serverSettings.load();
-  }
-};
-watch(activeKey, ensureRuntimeLoaded, { immediate: true });
-
-// Local mirror of the path so the input doesn't fight server-side
-// normalisation. We commit on blur / enter via `commitRuntimeSettings`.
-const runtimePathDraft = ref("");
-watch(
-  () => serverSettings.settings.value.externalPiPath,
-  (next) => {
-    runtimePathDraft.value = next;
-  },
-  { immediate: true },
-);
-
-// The server resolves the configured path against $PATH. When the
-// user leaves the field blank we still surface what the server will
-// actually spawn, so the hint reads "uses /Users/foo/.bun/bin/pi"
-// rather than a bare "pi" that the browser can't render meaningfully.
-const externalPi = computed(() => serverSettings.settings.value.externalPi);
-const runtimePathPlaceholder = computed(() => {
-  const resolved = externalPi.value.resolved;
-  if (resolved) return resolved;
-  return serverSettings.settings.value.useExternalPi ? "/usr/local/bin/pi" : "pi";
-});
-
-const runtimePathMissing = computed(() => {
-  const ext = externalPi.value;
-  return ext.configured && ext.resolved === null;
-});
-
-const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.value.useExternalPi) => {
-  const next = {
-    useExternalPi,
-    externalPiPath: runtimePathDraft.value.trim(),
-  };
-  // No-op when the local draft already matches the server view.
-  if (
-    next.useExternalPi === serverSettings.settings.value.useExternalPi &&
-    next.externalPiPath === serverSettings.settings.value.externalPiPath
-  ) {
-    return;
-  }
-  try {
-    await serverSettings.save(next);
-  } catch {
-    // Errors are surfaced via `serverSettings.error`; no need to
-    // rethrow here because the UI shows the message inline.
-  }
 };
 </script>
 
@@ -349,63 +286,6 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
           <PiProvidersSettings v-else-if="activeKey === 'providers'" />
 
           <PiBehaviorSettings v-else-if="activeKey === 'behavior'" />
-
-          <template v-else-if="activeKey === 'runtime'">
-            <SettingsPageHeader title="Runtime" description="Choose which Pi build serves new sessions." />
-
-            <SettingsGroup title="Pi executable">
-              <SettingsOption
-                title="Use external Pi executable"
-                description="Spawn pi --mode rpc for new sessions instead of the bundled SDK."
-              >
-                <input
-                  :checked="serverSettings.settings.value.useExternalPi"
-                  :disabled="serverSettings.saving.value || !serverSettings.loaded.value"
-                  type="checkbox"
-                  @change="(event) => {
-                    const target = event.target as HTMLInputElement;
-                    void commitRuntimeSettings(target.checked);
-                  }"
-                />
-              </SettingsOption>
-
-              <SettingsOption
-                inline
-                title="Path"
-                description="Absolute path to pi, or a bare name resolved through $PATH."
-              >
-                <input
-                  v-model="runtimePathDraft"
-                  type="text"
-                  spellcheck="false"
-                  :placeholder="runtimePathPlaceholder"
-                  :disabled="serverSettings.saving.value || !serverSettings.loaded.value || !serverSettings.settings.value.useExternalPi"
-                  @blur="() => void commitRuntimeSettings()"
-                  @keydown.enter="(event) => {
-                    (event.target as HTMLInputElement).blur();
-                  }"
-                />
-              </SettingsOption>
-
-              <p
-                v-if="serverSettings.error.value"
-                class="settings-page__error"
-                role="alert"
-              >
-                {{ serverSettings.error.value }}
-              </p>
-              <p v-else-if="runtimePathMissing" class="settings-page__error" role="alert">
-                Couldn't find <code>{{ externalPi.rawPath || "pi" }}</code> on
-                <code>$PATH</code>. Enter an absolute path or install
-                <code>pi</code> and restart the server.
-              </p>
-              <p v-else-if="serverSettings.settings.value.useExternalPi" class="settings-page__hint">
-                Sessions open a fresh
-                <code>{{ externalPi.resolved }}</code>
-                subprocess. Files, Git, and PTY still run as pichamber services.
-              </p>
-            </SettingsGroup>
-          </template>
         </div>
       </section>
     </template>
@@ -544,44 +424,6 @@ const commitRuntimeSettings = async (useExternalPi = serverSettings.settings.val
 .theme-options__preview.is-system::before { background: linear-gradient(135deg, #efede7 0 49.5%, #2a2a27 50%); }
 .theme-options__preview.is-system i { background: linear-gradient(135deg, #d5d1c8 0 49.5%, #565550 50%); }
 @media (max-width: 700px) { .theme-options { grid-template-columns: 1fr; } }
-
-.settings-option--inline :deep(input[type="text"]) {
-  flex: 1 1 280px;
-  max-width: 420px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--ui-border);
-  border-radius: 6px;
-  background: var(--ui-surface);
-  color: inherit;
-  font: inherit;
-  font-family: var(--ui-font-mono);
-  font-size: 13px;
-}
-.settings-page__error {
-  max-width: 720px;
-  margin: 6px 0 0;
-  padding: 10px 12px;
-  border-left: 3px solid var(--ui-error-strong);
-  border-radius: 4px;
-  background: var(--ui-error-bg);
-  color: var(--ui-error-fg);
-  font-size: 12px;
-}
-.settings-page__hint {
-  max-width: 720px;
-  margin: 6px 0 0;
-  color: var(--ui-text-muted);
-  font-size: 12px;
-}
-.settings-page__hint code,
-.settings-option code {
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: var(--ui-surface-selected);
-  font-family: var(--ui-font-mono);
-  font-size: 11px;
-}
 
 /* Permission button: matches the input/select control surface so the
  * inline option row stays visually balanced. Disabled reads muted so

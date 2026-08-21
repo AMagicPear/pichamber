@@ -1,26 +1,48 @@
 /**
  * Session lifecycle helpers.
  *
- * Owns the per-session `SessionRuntime` map and exposes the few queries
- * the HTTP/WS layer needs (resolve by id, cwd lookup, listing). The
- * runtime choice (SDK vs RPC) lives in `server-settings.ts`; see
- * `runtime.ts` for the abstraction.
+ * Owns the per-session `AgentSessionRuntime` map and exposes the few queries
+ * the HTTP/WS layer needs (resolve by id, cwd lookup, listing). Every
+ * session is backed by Pi's official `AgentSessionRuntime`; the module-scope
+ * `createRuntime` factory is what the runtime stores so /new /resume /fork
+ * flows can rebuild it against the same cwd-bound services.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
-import { SessionManager, type SessionInfo } from "@earendil-works/pi-coding-agent";
-import { toMessage } from "../error";
 import {
-  type SessionRuntime,
-  createSessionRuntime,
-} from "./runtime";
+  type AgentSessionRuntime,
+  type CreateAgentSessionRuntimeFactory,
+  type SessionInfo,
+  SessionManager,
+  createAgentSessionFromServices,
+  createAgentSessionRuntime,
+  createAgentSessionServices,
+  getAgentDir,
+} from "@earendil-works/pi-coding-agent";
+import { toMessage } from "../error";
 
 const sessionFileLookup = new Map<string, string>();
-const activeSessions = new Map<string, SessionRuntime>();
-const openingSessions = new Map<string, Promise<SessionRuntime | null>>();
+const activeSessions = new Map<string, AgentSessionRuntime>();
+const openingSessions = new Map<string, Promise<AgentSessionRuntime | null>>();
 
-const removeRuntime = (runtime: SessionRuntime) => {
+/** Recreate cwd-bound services for a session. Shared by every session; the
+ *  returned `services` + `diagnostics` are what make this a
+ *  `CreateAgentSessionRuntimeFactory` (vs the plain
+ *  `createAgentSessionFromServices`) so future /new /resume /fork flows can
+ *  rebuild the runtime against the same services. */
+const createRuntime: CreateAgentSessionRuntimeFactory = async ({
+  cwd,
+  agentDir,
+  sessionManager,
+  sessionStartEvent,
+}) => {
+  const services = await createAgentSessionServices({ cwd, agentDir });
+  const result = await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent });
+  return { ...result, services, diagnostics: services.diagnostics };
+};
+
+const removeRuntime = (runtime: AgentSessionRuntime) => {
   for (const [id, active] of activeSessions) {
     if (active === runtime) activeSessions.delete(id);
   }
@@ -44,10 +66,9 @@ export const listAllSessions = async (): Promise<SessionInfo[]> => {
   return sessions;
 };
 
-/** Activate (or fetch) the runtime for a session id. RPC-backed sessions
- *  spin up a subprocess on first call; SDK sessions are reused from the
- *  in-memory cache. */
-export const getSession = async (id: string): Promise<SessionRuntime | null> => {
+/** Activate (or fetch) the runtime for a session id. Cached by id; concurrent
+ *  callers share one open promise. */
+export const getSession = async (id: string): Promise<AgentSessionRuntime | null> => {
   const cached = activeSessions.get(id);
   if (cached) return cached;
   const opening = openingSessions.get(id);
@@ -56,9 +77,15 @@ export const getSession = async (id: string): Promise<SessionRuntime | null> => 
   const create = (async () => {
     const sessionFile = await getSessionFileWithId(id);
     if (!sessionFile) return null;
-    const runtime = await createSessionRuntime({ cwd: await resolveSessionCwd(sessionFile), sessionFile });
+    // Resume the file: its header cwd is authoritative.
+    const sessionManager = SessionManager.open(sessionFile);
+    const runtime = await createAgentSessionRuntime(createRuntime, {
+      cwd: sessionManager.getCwd(),
+      agentDir: getAgentDir(),
+      sessionManager,
+    });
     activeSessions.set(id, runtime);
-    if (runtime.sessionId !== id) activeSessions.set(runtime.sessionId, runtime);
+    if (runtime.session.sessionId !== id) activeSessions.set(runtime.session.sessionId, runtime);
     return runtime;
   })();
   openingSessions.set(id, create);
@@ -69,23 +96,13 @@ export const getSession = async (id: string): Promise<SessionRuntime | null> => 
   }
 };
 
-/** Open an existing session file. The runtime decides which cwd to
- *  bind based on the file's metadata. */
-const resolveSessionCwd = async (sessionFile: string): Promise<string> => {
-  // SDK path: the session manager reports the cwd of the file directly.
-  return SessionManager.open(sessionFile).getCwd();
-};
-
 export const getSessionCwd = async (id: string): Promise<string | null> => {
   const active = activeSessions.get(id);
-  if (active) return active.cwd;
+  if (active) return active.services.cwd;
   const sessionFile = await getSessionFileWithId(id);
   if (!sessionFile) return null;
   return SessionManager.open(sessionFile).getCwd();
 };
-
-export const getSessionFile = (id: string): string | undefined =>
-  sessionFileLookup.get(id);
 
 export const deactivateSession = async (id: string) => {
   const runtime = activeSessions.get(id);
@@ -94,9 +111,6 @@ export const deactivateSession = async (id: string) => {
   removeRuntime(runtime);
 };
 
-/** Same delete flow as before, but works on whichever runtime the
- *  session is bound to (SDK or RPC). RPC processes exit on dispose;
- *  SDK sessions just tear down their listener. */
 export const deleteSession = async (
   id: string,
 ): Promise<{ ok: boolean; method: "trash" | "unlink" | "inmemory"; error?: string }> => {
@@ -105,7 +119,7 @@ export const deleteSession = async (
     await session.dispose();
     removeRuntime(session);
   }
-  const sessionPath = session?.sessionFile ?? sessionFileLookup.get(id);
+  const sessionPath = session?.session.sessionFile ?? sessionFileLookup.get(id);
   if (!sessionPath) {
     sessionFileLookup.delete(id);
     return { ok: true, method: "inmemory" };
@@ -138,8 +152,13 @@ export const deleteSession = async (
   }
 };
 
-export const createSessionWithCwd = async (cwd: string): Promise<SessionRuntime> => {
-  const runtime = await createSessionRuntime({ cwd });
-  activeSessions.set(runtime.sessionId, runtime);
+export const createSessionWithCwd = async (cwd: string): Promise<AgentSessionRuntime> => {
+  const sessionManager = SessionManager.create(cwd);
+  const runtime = await createAgentSessionRuntime(createRuntime, {
+    cwd,
+    agentDir: getAgentDir(),
+    sessionManager,
+  });
+  activeSessions.set(runtime.session.sessionId, runtime);
   return runtime;
 };

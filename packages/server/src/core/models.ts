@@ -1,33 +1,34 @@
 import type { ModelDescriptor, ThinkingState } from "@amagicpear/pichamber-shared";
-import type { RuntimeModelInfo, SessionRuntime, RuntimeModelDescriptor } from "./runtime";
+import type { AgentSession, AgentSessionRuntime } from "@earendil-works/pi-coding-agent";
+import type { Model } from "@earendil-works/pi-ai";
+import { providerName } from "../providers/providers";
 
-/** Wrap the runtime's `ModelInfo` rows in the slim wire descriptor
- *  (provider name + display name). */
-const toDescriptor = (model: RuntimeModelInfo, providerLabel: string): ModelDescriptor => ({
+/** Wrap a `Model` row in the slim wire descriptor (provider name + display name). */
+const toDescriptor = (model: Model<any>, providerLabel: string): ModelDescriptor => ({
   provider: model.provider,
   providerName: providerLabel,
   id: model.id,
   name: model.name || model.id,
-  reasoning: model.reasoning,
+  reasoning: Boolean(model.reasoning),
 });
 
-const labelProvider = (runtime: SessionRuntime, providerId: string): string =>
-  runtime.getProviderName(providerId) || providerId;
+const labelProvider = (session: AgentSession, providerId: string): string =>
+  providerName(session, providerId) || providerId;
 
 export const listAvailableModels = async (
-  runtime: SessionRuntime,
+  runtime: AgentSessionRuntime,
 ): Promise<ModelDescriptor[]> => {
-  const models = await runtime.getAvailableModels();
-  return models.map((model) => toDescriptor(model, labelProvider(runtime, model.provider)));
+  const models = runtime.session.modelRuntime.getAvailableSnapshot();
+  return models.map((model) => toDescriptor(model, labelProvider(runtime.session, model.provider)));
 };
 
 /** Pick the current model out of the available set so the client always
  *  sees a descriptor whose `id` actually exists in `availableModels`. */
 export const getEffectiveModelDescriptor = async (
-  runtime: SessionRuntime,
+  runtime: AgentSessionRuntime,
 ): Promise<{ model: ModelDescriptor | undefined; availableModels: ModelDescriptor[] }> => {
   const availableModels = await listAvailableModels(runtime);
-  const current: RuntimeModelDescriptor | undefined = runtime.getCurrentModel();
+  const current = runtime.session.model;
   if (!current) return { model: undefined, availableModels };
   const matchIndex = availableModels.findIndex(
     (m) => m.provider === current.provider && m.id === current.id,
@@ -39,17 +40,16 @@ export const getEffectiveModelDescriptor = async (
   return {
     model: match ?? {
       provider: current.provider,
-      providerName: current.providerName || labelProvider(runtime, current.provider),
+      providerName: labelProvider(runtime.session, current.provider),
       id: current.id,
       name: current.name,
-      reasoning: current.reasoning,
+      reasoning: Boolean(current.reasoning),
     },
     availableModels,
   };
 };
 
-/** Read the runtime's mirrored thinking state. */
-export const getThinkingState = (runtime: SessionRuntime): ThinkingState => ({
-  level: runtime.thinkingLevel,
-  availableLevels: runtime.getAvailableThinkingLevels(),
+export const getThinkingState = (runtime: AgentSessionRuntime): ThinkingState => ({
+  level: runtime.session.thinkingLevel,
+  availableLevels: runtime.session.getAvailableThinkingLevels(),
 });

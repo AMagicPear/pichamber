@@ -1,34 +1,42 @@
 /**
  * Session WebSocket handler.
  *
- * Owns one `SessionChannel` per active session. Every channel has a
- * single subscription against the runtime's event stream (works for
- * both SDK and RPC backends) plus the list of connected client sockets.
+ * One `SessionChannel` per active session, backed by Pi's official
+ * `AgentSessionRuntime`. Every channel subscribes to the runtime's
+ * official `AgentSessionEvent` stream and forwards events verbatim to
+ * clients; the surrounding state (busy / activity / pending / model /
+ * thinking / stats / resources) is computed on the server and emitted
+ * through partial `state` frames.
  *
- * The wire protocol is identical to the SDK-only implementation:
- * snapshot on connect, official event/state broadcasts thereafter, and UI
- * requests proxied through the extension bridge.
+ * SDK is the first-class path — `AgentSessionRuntime` is consumed
+ * directly without a wrapper interface.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   buildContextEntries,
   sessionEntryToContextMessages,
   type AgentSessionEvent,
+  type AgentSessionRuntime,
   type RpcExtensionUIRequest,
   type RpcExtensionUIResponse,
   type SessionEntry,
+  type SourceInfo,
+  createSyntheticSourceInfo,
 } from "@earendil-works/pi-coding-agent";
 import type {
   AgentActivity,
+  ExtensionInfo,
+  ExtensionWidget,
   ImageContent,
   ModelDescriptor,
   PendingMessages,
   RuntimeResources,
+  RuntimeSlashCommand,
+  RuntimeToolInfo,
   ServerMessage,
-  WebExtensionUIRequest,
-  ExtensionWidget,
   SessionStatsView,
   ThinkingState,
+  WebExtensionUIRequest,
 } from "@amagicpear/pichamber-shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
@@ -37,7 +45,6 @@ import { normalizeWidgetRequest } from "../extensions/widget-lines";
 import { computeSessionStatsView } from "./context";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { deactivateSession, getSession } from "./session";
-import type { SessionRuntime } from "./runtime";
 
 // ─── WebSocket protocol multiplexing types ─────────────────────────────
 //
@@ -75,26 +82,22 @@ export type WsData = PtyWsData | SessionWsData;
 
 type BunWS = ServerWebSocket<SessionWsData>;
 
-
 /** Durable extension UI state. Unlike notifications and dialogs, these UI
- * setters describe current state and must survive an RPC process emitting
- * them before a browser socket has attached. */
+ *  setters describe current state and must survive late emitters before a
+ *  browser socket has attached. */
 type ExtensionUiState = {
   statuses: Record<string, string>;
   widgets: Record<string, { widget: ExtensionWidget; placement: "aboveEditor" | "belowEditor" }>;
   title?: string;
 };
 
-/** 频道状态：会话内容的权威视图（官方 `AgentMessage[]`）在每次对齐时从
- *  runtime 重建，其余是服务器算好的显示状态。会话内容本身的事件流直接
- *  转发给客户端（`event` 帧），不再在这里铸造任何 item。 */
 type ChannelState = {
-  /** 最近一次从 runtime entries 对齐的官方消息列表（快照用）。 */
+  /** Latest official `AgentMessage[]` rebuilt from session entries. */
   messages: AgentMessage[];
   busy: boolean;
   activity: AgentActivity;
   pending: PendingMessages;
-  /** 广播序号：每个 ServerMessage 递增，客户端用它做间隙检测。 */
+  /** Monotonic broadcast sequence; clients detect gaps and resync. */
   seq: number;
   model: ModelDescriptor | undefined;
   availableModels: ModelDescriptor[];
@@ -109,9 +112,10 @@ type SessionChannel = {
   sockets: Set<BunWS>;
   unsubscribe: () => void;
   state: ChannelState;
-  /** 扩展 UI 桥：插件 ui.* 调用经 WS 转发，等前端应答。 */
+  /** Extension UI bridge: extension `ctx.ui.*` calls round-trip through
+   *  the WS layer via this. */
   uiBridge: UiBridge;
-  /** Current durable extension UI state, replayed to each newly connected client. */
+  /** Current durable extension UI state, replayed to each new client. */
   extensionUi: ExtensionUiState;
   /** Re-snapshot model + thinking state and broadcast to all sockets. */
   queueModelStateBroadcast: () => void;
@@ -119,7 +123,7 @@ type SessionChannel = {
   /** Messages submitted while compaction is running; flushed on compaction_end. */
   compactionQueue: CompactionQueuedMessage[];
   /** Runtime backing this channel — captured for the reconcile/stats helpers. */
-  runtime: SessionRuntime;
+  runtime: AgentSessionRuntime;
 };
 
 /** A message held while compaction is running, mirroring the TUI's
@@ -168,6 +172,54 @@ const parsePromptImages = (value: unknown): ImageContent[] | null => {
 };
 
 const channelsBySession = new Map<string, SessionChannel>();
+
+/** Build the GUI builtin command shelf (mirrors the SDK path's old
+ *  `guiBuiltinSlashCommands`). Pi's TUI folds builtins into its own
+ *  autocomplete; the web client needs them surfaced so users can
+ *  discover /compact, /new, etc. The wire type `RuntimeSlashCommand`
+ *  widens the official `SlashCommandInfo.source` union with "builtin",
+ *  so no cast is needed here. */
+const builtinSourceInfo = (name: string): SourceInfo =>
+  createSyntheticSourceInfo(`builtin:${name}`, { source: "pi-builtin" });
+
+const GUI_BUILTIN_COMMANDS: RuntimeSlashCommand[] = [
+  { name: "compact", description: "Manually compact the session context", source: "builtin", sourceInfo: builtinSourceInfo("compact") },
+  { name: "new", description: "Start a new session", source: "builtin", sourceInfo: builtinSourceInfo("new") },
+  { name: "name", description: "Set session display name", source: "builtin", sourceInfo: builtinSourceInfo("name") },
+  { name: "resume", description: "Resume a different session", source: "builtin", sourceInfo: builtinSourceInfo("resume") },
+  { name: "fork", description: "Create a new fork from a previous user message", source: "builtin", sourceInfo: builtinSourceInfo("fork") },
+  { name: "clone", description: "Duplicate the current session at the current position", source: "builtin", sourceInfo: builtinSourceInfo("clone") },
+  { name: "reload", description: "Reload extensions, prompts, themes, and context files", source: "builtin", sourceInfo: builtinSourceInfo("reload") },
+];
+
+const snapshotResources = (runtime: AgentSessionRuntime): RuntimeResources => {
+  const session = runtime.session;
+  const result = session.resourceLoader.getExtensions();
+  const activeTools = new Set(result.runtime.getActiveTools());
+  const includeSkills = session.settingsManager.getEnableSkillCommands();
+  const extensionCommands = includeSkills
+    ? result.runtime.getCommands()
+    : result.runtime.getCommands().filter((command) => command.source !== "skill");
+  return {
+    commands: [...GUI_BUILTIN_COMMANDS, ...extensionCommands],
+    tools: result.runtime.getAllTools().map((tool) => ({
+      name: tool.name,
+      description: tool.description ?? "",
+      sourceInfo: tool.sourceInfo,
+      active: activeTools.has(tool.name),
+    } satisfies RuntimeToolInfo)),
+    extensions: result.extensions
+      .filter((extension) => !extension.hidden)
+      .map((extension) => ({
+        path: extension.path,
+        sourceInfo: extension.sourceInfo,
+        commands: [...extension.commands.keys()],
+        tools: [...extension.tools.keys()],
+      } satisfies ExtensionInfo)),
+    diagnostics: result.errors,
+    extensionInventoryAvailable: true,
+  };
+};
 
 /** Broadcast a `state` frame to a channel's sockets, bumping `seq` first.
  *  The client detects gaps in `seq` and requests a resync, so every message
@@ -257,10 +309,6 @@ const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean =
   return false;
 };
 
-/** Pull the conversation entries through the runtime. RPC mode hits the
- *  subprocess once; SDK mode reuses the in-memory session manager. */
-const fetchEntries = (runtime: SessionRuntime) => runtime.buildConversationEntries();
-
 /** Ordered, compaction-aware official `AgentMessage[]` for one session,
  *  via pi's own conversion helpers (compaction summaries / custom messages
  *  / branch summaries all land as official `AgentMessage` roles). */
@@ -268,10 +316,10 @@ const conversationMessages = (entries: SessionEntry[]): AgentMessage[] =>
   buildContextEntries(entries).flatMap(sessionEntryToContextMessages);
 
 /** `reconcile` rebuilds the official `AgentMessage[]` from the authoritative
- *  runtime entries (compaction-aware, via pi's own conversion helpers). */
+ *  session entries (compaction-aware, via pi's own conversion helpers). */
 const reconcile = async (channel: SessionChannel): Promise<boolean> => {
   const state = channel.state;
-  const entries = await fetchEntries(channel.runtime);
+  const entries = channel.runtime.session.sessionManager.buildContextEntries();
   const next = conversationMessages(entries);
   const changed =
     next.length !== state.messages.length ||
@@ -279,11 +327,6 @@ const reconcile = async (channel: SessionChannel): Promise<boolean> => {
   state.messages = next;
   return changed;
 };
-
-/** Build the runtime-relative snapshot of resources. Both backends
- *  expose the same `getResources()` interface, so we don't branch here. */
-const snapshotResources = async (runtime: SessionRuntime): Promise<RuntimeResources> =>
-  runtime.getResources();
 
 const snapshotMessage = (channel: SessionChannel): ServerMessage => {
   const { seq, busy, activity, pending, messages, model, availableModels, thinking, stats, resources } =
@@ -294,7 +337,7 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
     busy,
     activity,
     pending,
-    canRestorePending: channel.runtime.supportsQueueRestore,
+    canRestorePending: true,
     messages,
     model,
     availableModels,
@@ -305,8 +348,8 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
 };
 
 /** Store the extension operations whose meaning is "set current value".
- * Notifications and dialogs are intentionally not retained: replaying either
- * one on reconnect would produce duplicate toasts or prompts. */
+ *  Notifications and dialogs are intentionally not retained: replaying
+ *  either one on reconnect would produce duplicate toasts or prompts. */
 const applyExtensionUiRequest = (state: ExtensionUiState, request: WebExtensionUIRequest) => {
   if (request.method === "setStatus") {
     if (request.statusText) state.statuses[request.statusKey] = request.statusText;
@@ -324,8 +367,8 @@ const applyExtensionUiRequest = (state: ExtensionUiState, request: WebExtensionU
 };
 
 /** Send the durable extension UI snapshot to one socket. This is separate
- * from the session snapshot because extension UI is event-shaped in the
- * public protocol, while the client already applies these setters idempotently. */
+ *  from the session snapshot because extension UI is event-shaped in the
+ *  public protocol, while the client already applies these setters idempotently. */
 const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
   const send = (request: WebExtensionUIRequest) => {
     if (socket.readyState === 1) {
@@ -361,10 +404,10 @@ const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
   }
 };
 
-/** External Pi's RPC mode uses its terminal theme when extensions build UI
- * labels, so `ctx.ui.*` strings can carry ANSI color codes. Web clients need
- * the semantic text only; normalize every textual UI field at this boundary
- * so SDK and RPC runtimes render identically. */
+/** External Pi's RPC mode used to wrap labels in ANSI color codes; web
+ *  clients need semantic text only. SDK never produces ANSI, but the
+ *  normalization runs anyway so a future RPC adapter that pipes through
+ *  this same channel renders identically. */
 const stripExtensionUiAnsi = (request: RpcExtensionUIRequest): WebExtensionUIRequest => {
   const strip = (text: string) => Bun.stripANSI(text);
   switch (request.method) {
@@ -400,9 +443,10 @@ const stripExtensionUiAnsi = (request: RpcExtensionUIRequest): WebExtensionUIReq
   }
 };
 
-const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChannel => {
+const attachListener = (sessionId: string, runtime: AgentSessionRuntime): SessionChannel => {
   const existing = channelsBySession.get(sessionId);
   if (existing) return existing;
+  const session = runtime.session;
 
   let modelStateBroadcastQueued = false;
   const queueModelStateBroadcast = () => {
@@ -497,20 +541,20 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
     if (options?.flushQueue && channel.compactionQueue.length > 0) {
       const [first, ...rest] = channel.compactionQueue;
       channel.compactionQueue = [];
-      runtime
+      session
         .prompt(first.text, first.images ? { images: first.images } : undefined)
         .catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
       for (const m of rest) {
         const submit = m.mode === "followUp"
-          ? runtime.prompt(m.text, { streamingBehavior: "followUp", images: m.images })
-          : runtime.prompt(m.text, { streamingBehavior: "steer", images: m.images });
+          ? session.prompt(m.text, { streamingBehavior: "followUp", images: m.images })
+          : session.prompt(m.text, { streamingBehavior: "steer", images: m.images });
         submit.catch((err: unknown) => console.error("flush queued message failed", sessionId, err));
       }
     }
 
     if (await reconcile(channel)) broadcastSnapshot();
     const settledStats = await computeSessionStatsView(runtime);
-    state.resources = await snapshotResources(runtime);
+    state.resources = snapshotResources(runtime);
     const fields: {
       busy: boolean;
       activity: AgentActivity;
@@ -530,9 +574,8 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
     broadcastState(channel, fields);
   };
 
-  /** Coalesce message-end stats refreshes. RPC stats need two subprocess
-   * roundtrips, so concurrent refreshes can otherwise return out of order and
-   * overwrite newer state. */
+  /** Coalesce message-end stats refreshes so a flurry of message_end
+   *  events during streaming only triggers one snapshot roundtrip. */
   let statsRefreshRunning = false;
   let statsRefreshPending = false;
   const queueStatsRefresh = () => {
@@ -557,7 +600,7 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
     })();
   };
 
-  channel.unsubscribe = runtime.subscribe((event) => {
+  channel.unsubscribe = session.subscribe((event) => {
     const state = channel.state;
     switch (event.type) {
       case "agent_start": {
@@ -566,12 +609,14 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
         broadcastState(channel, { busy: true, activity: state.activity });
         break;
       }
-      // 会话内容事件（官方 `AgentSessionEvent`）原样转发；客户端像 TUI
-      // 的 handleEvent 一样按事件构建会话视图。busy/activity/pending
-      // 等仍由下面的 state 帧承载（服务器算好的显示状态）。activity
-      // 只跟随 TUI 的 StatusIndicator：agent_start→working、
-      // compaction_start→compacting、auto_retry_start→retrying、
-      // 结算→idle；message/tool 事件不碰它（细粒度由消息流渲染）。
+      // Conversation content events (official `AgentSessionEvent`) are
+      // forwarded verbatim; the client mirrors TUI's handleEvent and builds
+      // the conversation view from them. busy/activity/pending are carried
+      // by `state` frames (server-computed display state). activity only
+      // follows the TUI StatusIndicator: agent_start → working,
+      // compaction_start → compacting, auto_retry_start → retrying,
+      // settlement → idle. message/tool events don't touch it (fine-grained
+      // status is rendered by the message stream).
       case "message_start": {
         const { role } = event.message;
         if ((role === "user" || role === "assistant") && !state.busy) {
@@ -646,25 +691,9 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
   });
   channelsBySession.set(sessionId, channel);
 
-  // Cross-process extension UI bridge. The SDK backend wires this up
-  // itself inside `bindExtensions`; the RPC backend runs extensions
-  // inside the subprocess and surfaces `ctx.ui.*` calls as
-  // `extension_ui_request` frames on its stdout. Forward them to the
-  // browser through the channel's existing `ui_request` broadcast so
-  // dialogs, status bars, notifications, and widget updates reach
-  // the UI just like they do against an in-process AgentSession.
-  if (runtime.subscribeExtensionUiRequests) {
-    const unsubUi = runtime.subscribeExtensionUiRequests((request) => {
-      broadcastUiRequest(request);
-    });
-    const previousUnsub = channel.unsubscribe;
-    channel.unsubscribe = () => {
-      previousUnsub();
-      unsubUi();
-    };
-  }
-  // Reconcile before the first socket snapshot. This awaits RPC's
-  // get_entries roundtrip instead of racing it against `open()`.
+  // Reconcile before the first socket snapshot so the initial message list
+  // reflects any session entries (including the SessionHeader) the manager
+  // already loaded.
   channel.ready = (async () => {
     try {
       await reconcile(channel);
@@ -672,12 +701,12 @@ const attachListener = (sessionId: string, runtime: SessionRuntime): SessionChan
       console.error("Failed to reconcile session", sessionId, error);
     }
     try {
-      await runtime.bindExtensions(channel.uiBridge.context);
+      await session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
     } catch (error) {
       console.error("Failed to bind extensions", sessionId, error);
     }
     try {
-      channel.state.resources = await snapshotResources(runtime);
+      channel.state.resources = snapshotResources(runtime);
     } catch (error) {
       console.error("Failed to snapshot resources", sessionId, error);
     }
@@ -785,6 +814,7 @@ export const sessionWsHandler: WsHandler = {
       sendError(bunWS, "session not found");
       return;
     }
+    const session = runtime.session;
     switch (input.type) {
       case "prompt": {
         if (typeof input.message !== "string") {
@@ -801,15 +831,17 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         if (bunWS.data.closed) return;
-        // 流式行为由服务端权威判断：客户端传的只是用户偏好（流式中怎么
-        // 排队），是否真的流式看 runtime.isStreaming —— 不信任客户端
-        // 的本地 busy 快照（广播可能滞后）。非流式一律走新回合。
+        // Streaming behaviour is decided server-side: the client's request is
+        // only a preference. Whether we're actually streaming is determined
+        // by `runtime.session.isStreaming` — don't trust the client's
+        // local busy snapshot (broadcasts may lag). Non-streaming prompts
+        // always start a new turn.
         const requested = input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
           ? input.streamingBehavior
           : undefined;
-        const streamingBehavior = runtime.isStreaming ? requested ?? "steer" : undefined;
+        const streamingBehavior = session.isStreaming ? requested ?? "steer" : undefined;
         const channel = channelsBySession.get(sessionId);
-        if (runtime.isCompacting && channel) {
+        if (session.isCompacting && channel) {
           if (!input.message.startsWith("/")) {
             channel.compactionQueue.push({
               text: input.message,
@@ -818,13 +850,13 @@ export const sessionWsHandler: WsHandler = {
             });
             broadcastState(channel, { pending: pendingWithQueue(channel) });
           } else {
-            runtime
+            session
               .prompt(input.message, images.length > 0 ? { images } : undefined)
               .catch((err: unknown) => sendError(bunWS, toMessage(err)));
           }
           return;
         }
-        runtime
+        session
           .prompt(input.message, {
             streamingBehavior,
             images: images.length > 0 ? images : undefined,
@@ -832,20 +864,14 @@ export const sessionWsHandler: WsHandler = {
           .finally(() => {
             const channel = channelsBySession.get(sessionId);
             if (!channel) return;
-            void snapshotResources(runtime).then((resources) => {
-              channel.state.resources = resources;
-              broadcastState(channel, { resources });
-            });
+            channel.state.resources = snapshotResources(runtime);
+            broadcastState(channel, { resources: channel.state.resources });
           })
           .catch((err: unknown) => sendError(bunWS, toMessage(err)));
         return;
       }
       case "restore_pending": {
-        if (!runtime.supportsQueueRestore) {
-          sendError(bunWS, "Restoring pending messages is not supported by the external Pi runtime");
-          return;
-        }
-        const restored = runtime.clearQueue();
+        const restored = session.clearQueue();
         const messages = [...restored.steering, ...restored.followUp];
         if (messages.length > 0 && bunWS.readyState === 1) {
           bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
@@ -854,13 +880,13 @@ export const sessionWsHandler: WsHandler = {
       }
       case "abort": {
         if (input.restorePending !== false) {
-          const restored = runtime.clearQueue();
+          const restored = session.clearQueue();
           const messages = [...restored.steering, ...restored.followUp];
           if (messages.length > 0 && bunWS.readyState === 1) {
             bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
           }
         }
-        runtime.abort().catch((error) => sendError(bunWS, toMessage(error)));
+        session.abort().catch((error) => sendError(bunWS, toMessage(error)));
         return;
       }
       case "compact": {
@@ -868,22 +894,22 @@ export const sessionWsHandler: WsHandler = {
           typeof input.customInstructions === "string" && input.customInstructions.trim()
             ? input.customInstructions.trim()
             : undefined;
-        runtime
+        session
           .compact(customInstructions)
           .catch((err: unknown) => console.error("compact failed", sessionId, toMessage(err)));
         return;
       }
       case "reload": {
-        if (runtime.isStreaming) {
+        if (session.isStreaming) {
           sendError(bunWS, "Wait for the current response to finish before reloading.");
           return;
         }
-        if (runtime.isCompacting) {
+        if (session.isCompacting) {
           sendError(bunWS, "Wait for compaction to finish before reloading.");
           return;
         }
         try {
-          await runtime.reload();
+          await session.reload();
         } catch (err) {
           sendError(bunWS, toMessage(err));
           return;
@@ -894,12 +920,12 @@ export const sessionWsHandler: WsHandler = {
         const channel = channelsBySession.get(sessionId);
         if (channel) {
           try {
-            await runtime.bindExtensions(channel.uiBridge.context);
+            await session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
           } catch (err) {
             console.error("Failed to re-bind extensions after reload", sessionId, err);
           }
           try {
-            channel.state.resources = await snapshotResources(runtime);
+            channel.state.resources = snapshotResources(runtime);
           } catch (err) {
             console.error("Failed to snapshot resources after reload", sessionId, err);
           }
@@ -913,7 +939,9 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         try {
-          await runtime.setModel(input.provider, input.modelId);
+          const target = session.modelRuntime.getModel(input.provider, input.modelId);
+          if (!target) throw new Error(`Unknown model: ${input.provider}/${input.modelId}`);
+          await session.setModel(target);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
@@ -926,7 +954,7 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         try {
-          await runtime.setThinkingLevel(input.level as Parameters<typeof runtime.setThinkingLevel>[0]);
+          session.setThinkingLevel(input.level as Parameters<typeof session.setThinkingLevel>[0]);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
@@ -948,15 +976,8 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "ui_response requires an id");
           return;
         }
-        const cast = response as RpcExtensionUIResponse;
-        // SDK: resolves the pending dialog in the in-process bridge.
-        // RPC: writes the response back to the subprocess's stdin so
-        // its own UI context resolves the matching dialog.
         const channel = channelsBySession.get(sessionId);
-        if (channel) {
-          channel.uiBridge.handleResponse(cast);
-          runtime.sendExtensionUiResponse?.(cast);
-        }
+        channel?.uiBridge.handleResponse(response as RpcExtensionUIResponse);
         return;
       }
       default:

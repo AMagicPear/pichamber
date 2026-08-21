@@ -14,6 +14,7 @@ import type {
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
   SlashCommandInfo,
+  SlashCommandSource,
   SourceInfo,
   WidgetPlacement,
 } from "@earendil-works/pi-coding-agent";
@@ -85,8 +86,18 @@ export type WebExtensionUIRequest = Exclude<RpcExtensionUIRequest, { method: "se
   widgetPlacement?: WidgetPlacement;
 };
 
+/** Wire command shape for the slash-command shelf. The official
+ *  `SlashCommandInfo` can't express pichamber's GUI built-in shelf entries
+ *  (`SlashCommandSource` is only "extension" | "prompt" | "skill"), so the
+ *  wire type widens `source` with "builtin". Official runtime commands and
+ *  pichamber's curated built-ins both assign to it without casts; the
+ *  client renders `source` as a label only and never branches on it. */
+export type RuntimeSlashCommand = Omit<SlashCommandInfo, "source"> & {
+  source: SlashCommandSource | "builtin";
+};
+
 export type RuntimeResources = {
-  commands: SlashCommandInfo[];
+  commands: RuntimeSlashCommand[];
   tools: RuntimeToolInfo[];
   extensions: ExtensionInfo[];
   diagnostics: Array<{ path: string; error: string }>;

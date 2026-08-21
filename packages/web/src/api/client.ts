@@ -25,7 +25,6 @@ import type {
   PtyStartOptions,
   PtyStartResult,
   SearchResult,
-  ServerSettings,
   SessionInfo,
   VersionInfo,
   ProjectBrowseResult,
@@ -230,18 +229,6 @@ export const fetchProviderQuota = (sessionId: string, provider: string) =>
   fetch(`${BASE}/quota/${encodeURIComponent(provider)}?sessionId=${encodeURIComponent(sessionId)}`).then(
     (r) => jsonOrThrow<ProviderQuota>(r),
   );
-
-// ─── Server settings (runtime choice, etc.) ─────────────────────────
-
-export const fetchServerSettings = () =>
-  fetch(`${BASE}/settings/server`).then((r) => jsonOrThrow<ServerSettings>(r));
-
-export const updateServerSettings = (next: Partial<ServerSettings>) =>
-  fetch(`${BASE}/settings/server`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(next),
-  }).then((r) => jsonOrThrow<ServerSettings>(r));
 
 // ─── Pi SDK configuration ───────────────────────────────────────────
 
