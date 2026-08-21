@@ -14,11 +14,12 @@
  * - Directories-first sort, then case-insensitive name.
  */
 import { readdir, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { basename, relative, resolve } from "node:path";
-import type { DirEntry, ListResult } from "@amagicpear/pichamber-shared";
+import type { DirEntry, ListResult, OpenFileResult } from "@amagicpear/pichamber-shared";
 
 import { fdSearch, isFdAvailable, scoreEntry } from "./fd-search";
-import { canonicalPathInWorkspace, canonicalWorkspace, shortPath } from "./workspace";
+import { canonicalPathInWorkspace, canonicalWorkspace, getWorkspace, resolveInWorkspace, shortPath } from "./workspace";
 
 /**
  * Reject any path that escapes the workspace, including symlink targets.
@@ -155,4 +156,42 @@ export const searchFiles = async (
   // `scoreEntry` lowercases internally; hand it the raw query and let it
   // handle case folding so fd/BFS paths agree on what counts as a match.
   return bfsFallbackSearch(trimmed, workspace, limit);
+};
+
+/** The OS command that opens a path in the default app / file manager. */
+const openCommand = (): string[] => {
+  if (process.platform === "darwin") return ["open"];
+  if (process.platform === "win32") return ["cmd", "/c", "start", ""]; // empty title arg
+  return ["xdg-open"];
+};
+
+/**
+ * Open a path with the OS default application (default editor / Finder).
+ *
+ * Unlike the rest of this module, no existence or containment check —
+ * the terminal-style contract: open whatever path the caller hands us.
+ * Relative paths resolve against the workspace root, `~/…` expands to the
+ * home directory, absolute paths pass through untouched. Fire-and-forget:
+ * we resolve once the child spawns and unref it so the GUI app outlives
+ * the server.
+ */
+export const openFile = async (
+  input: string,
+  workspacePath?: string | null,
+): Promise<OpenFileResult> => {
+  const workspace = await canonicalWorkspace(workspacePath);
+  const target =
+    input === "~" || input.startsWith("~/")
+      ? resolve(getWorkspace(), input.slice(2))
+      : resolveInWorkspace(input, workspace);
+  await new Promise<void>((resolve, reject) => {
+    const [cmd, ...args] = openCommand();
+    const child = spawn(cmd, [...args, target], { stdio: "ignore", detached: true });
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+  });
+  return { path: target };
 };

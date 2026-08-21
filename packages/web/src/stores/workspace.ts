@@ -1,5 +1,5 @@
 import { computed, reactive, ref, shallowRef, watch } from "vue";
-import { createSession, listSessions, toMessage } from "@/api/client";
+import { createSession, listSessions, renameSession, toMessage } from "@/api/client";
 import { pathBasename } from "@amagicpear/pichamber-shared";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type {
@@ -101,6 +101,18 @@ export const refreshSessions = () => {
   });
 
   return sessionsRefreshPromise;
+};
+
+/** Rename a session on the server and reflect the new name in the local
+ *  list + active workspace metadata. Returns the applied name. */
+export const renameSessionInStore = async (sessionId: string, name: string) => {
+  const trimmed = name.trim();
+  await renameSession(sessionId, trimmed);
+  sessions.value = sessions.value.map((s) =>
+    s.id === sessionId ? { ...s, name: trimmed } : s,
+  );
+  if (workspace.sessionId === sessionId) workspace.sessionName = trimmed;
+  return trimmed;
 };
 
 export const createSessionForCwd = async (cwd: string) => {

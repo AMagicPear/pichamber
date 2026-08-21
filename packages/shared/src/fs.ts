@@ -26,6 +26,12 @@ export type SearchResult = {
   entries: DirEntry[];
 };
 
+/** Response body for GET /api/fs/open. */
+export type OpenFileResult = {
+  /** Path that was opened with the OS default app (resolved, not canonical). */
+  path: string;
+};
+
 export type ProjectBrowseResult = {
   path: string;
   parent: string | null;

@@ -185,7 +185,7 @@ watch(
             <TerminalIcon class="terminal__tab-icon" />
             <button
               type="button"
-              class="terminal__tab-icon-close"
+              class="ui-icon-button-mini terminal__tab-icon-close"
               aria-label="Close terminal tab"
               title="Close terminal tab"
               @click.stop="closeTab(tab.id)"
@@ -203,6 +203,7 @@ watch(
         <IconButton
           size="compact"
           :label="maximized ? 'Restore terminal' : 'Maximize terminal'"
+          :pressed="maximized"
           @click="toggleMaximize"
         >
           <FullscreenExitIcon v-if="maximized" />
@@ -211,7 +212,6 @@ watch(
         <IconButton
           size="compact"
           label="Close terminal panel"
-          :pressed="ui.panels.bottom.open"
           @click="ui.toggle('bottom')"
         >
           <CloseIcon />
@@ -356,32 +356,14 @@ watch(
 .terminal__tab-icon-close {
   position: absolute;
   inset: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--ui-text-muted);
   opacity: 0;
-  cursor: pointer;
-  transition:
-    opacity 120ms ease,
-    background-color 120ms ease;
-}
-.terminal__tab-icon-close :deep(svg) {
-  width: 13px;
-  height: 13px;
+  transition: opacity 120ms ease;
 }
 .terminal__tab:hover .terminal__tab-icon {
   opacity: 0;
 }
 .terminal__tab:hover .terminal__tab-icon-close {
   opacity: 1;
-}
-.terminal__tab-icon-close:hover {
-  background: var(--ui-surface-hover);
 }
 .terminal__tab-title {
   max-width: 140px;

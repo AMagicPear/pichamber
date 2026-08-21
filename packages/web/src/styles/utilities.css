@@ -80,3 +80,42 @@
 .ui-font-mono {
   font-family: var(--ui-font-mono);
 }
+
+/* Ghost mini icon button — the tiny inline action shown on hover in dense
+ * rows (e.g. terminal tab close, inline rename confirm/cancel). Mirrors the
+ * previous per-component styles so every instance reads the same: a muted
+ * 16px ghost button with a 13px icon and a subtle hover fill. */
+.ui-icon-button-mini {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ui-text-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--ui-duration-fast) var(--ui-ease-standard),
+    color var(--ui-duration-fast) var(--ui-ease-standard);
+}
+.ui-icon-button-mini > svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+.ui-icon-button-mini:hover:not(:disabled) {
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-strong);
+}
+.ui-icon-button-mini:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+.ui-icon-button-mini:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

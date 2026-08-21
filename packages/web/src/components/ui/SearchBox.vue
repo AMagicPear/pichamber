@@ -44,7 +44,7 @@ const clear = () => emit("update:modelValue", "");
     <button
       v-if="modelValue"
       type="button"
-      class="search-box__clear"
+      class="ui-icon-button-mini search-box__clear"
       :aria-label="`Clear ${label ?? 'search'}`"
       :title="`Clear ${label ?? 'search'}`"
       @click="clear"
@@ -103,26 +103,5 @@ const clear = () => emit("update:modelValue", "");
 .search-box input::placeholder {
   color: var(--ui-text-muted);
 }
-.search-box__clear {
-  display: inline-flex;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  color: var(--ui-text-muted);
-}
-.search-box__clear:hover {
-  background: var(--ui-surface-hover);
-  color: var(--ui-text-strong);
-}
-.search-box__clear:focus-visible {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: 1px;
-}
-.search-box__clear svg {
-  width: 12px;
-  height: 12px;
-}
+
 </style>

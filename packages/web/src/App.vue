@@ -31,8 +31,7 @@ const rightPanel = computed(() => ({
 
 <template>
   <div class="app-shell">
-    <IconButton class="app-shell__sidebar-toggle" label="Toggle left sidebar" :pressed="ui.panels.left.open"
-      @click="ui.toggle('left')">
+    <IconButton class="app-shell__sidebar-toggle" label="Toggle left sidebar" @click="ui.toggle('left')">
       <LayoutLeftIcon />
     </IconButton>
 
@@ -246,9 +245,6 @@ button {
   top: 11px;
   left: 11px;
   z-index: 10;
-}
-.app-shell .app-shell__sidebar-toggle.is-pressed {
-  color: inherit;
 }
 
 .workspace {

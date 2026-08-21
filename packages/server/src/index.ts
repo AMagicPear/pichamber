@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
-import { listDirectory, searchFiles } from "./services/fs";
+import { listDirectory, openFile, searchFiles } from "./services/fs";
 import {
   checkout,
   commit,
@@ -24,6 +24,7 @@ import {
   deleteSession,
   getSessionCwd,
   listAllSessions,
+  renameSession,
 } from "./core/session";
 import {
   hasPty,
@@ -420,6 +421,16 @@ const server = Bun.serve({
         if (!result.ok) return Response.json({ error: "session not found" }, { status: 404 });
         return Response.json(result);
       },
+      PUT: async (req) => {
+        const { name } = (await req.json()) as { name?: string };
+        const trimmed = name?.trim() ?? "";
+        if (!trimmed) {
+          return Response.json({ error: "name required" }, { status: 400 });
+        }
+        const ok = await renameSession(req.params.id, trimmed);
+        if (!ok) return Response.json({ error: "session not found" }, { status: 404 });
+        return Response.json({ ok: true });
+      },
     },
     "/api/projects/browse": {
       GET: async (req) => {
@@ -689,6 +700,8 @@ const server = Bun.serve({
     // ── Filesystem (files panel) ─────────────────────────────────
     // The server resolves the active workspace from sessionId. Paths may be
     // absolute or workspace-relative; canonical paths outside it are rejected.
+    // `/api/fs/open` is the one exception: it opens whatever path it's given
+    // (relative to the workspace, `~/…`, or absolute), like the terminal.
     "/api/fs/list": {
       GET: async (req) => {
         const url = new URL(req.url);
@@ -708,6 +721,19 @@ const server = Bun.serve({
         const sessionId = url.searchParams.get("sessionId");
         try {
           return Response.json({ entries: await searchFiles(q, 60, await requestCwd(sessionId)) });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/fs/open": {
+      GET: async (req) => {
+        const url = new URL(req.url);
+        const path = url.searchParams.get("path") ?? "";
+        const sessionId = url.searchParams.get("sessionId");
+        if (!path) return Response.json({ error: "path is required" }, { status: 400 });
+        try {
+          return Response.json(await openFile(path, await requestCwd(sessionId)));
         } catch (err) {
           return fsErrorResponse(err);
         }

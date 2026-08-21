@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import AddIcon from "@/assets/icons/Add.svg";
-import CalendarScheduleIcon from "@/assets/icons/CalendarSchedule.svg";
 import ChatNewIcon from "@/assets/icons/ChatNew.svg";
 import CheckboxMultipleIcon from "@/assets/icons/CheckboxMultiple.svg";
 import DeleteBinIcon from "@/assets/icons/DeleteBin.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
+import FileEditIcon from "@/assets/icons/FileEdit.svg";
 import FolderIcon from "@/assets/icons/Folder.svg";
 import FolderOpenIcon from "@/assets/icons/FolderOpen.svg";
 import InformationIcon from "@/assets/icons/Information.svg";
@@ -13,9 +13,10 @@ import QuestionIcon from "@/assets/icons/Question.svg";
 import SearchIcon from "@/assets/icons/Search.svg";
 import SettingsIcon from "@/assets/icons/Settings3.svg";
 import SortDescIcon from "@/assets/icons/SortDesc.svg";
-import { ArrowsMerge } from "@/components/ui/ArrowsMerge";
+import CloseIcon from "@/assets/icons/Close.svg";
 import LogoMark, { LOGO_MARK_VIEW_BOX } from "@/components/ui/LogoMark";
 import IconButton from "@/components/ui/IconButton.vue";
+import { Check } from "@/components/ui/Check";
 import SearchBox from "@/components/ui/SearchBox.vue";
 import { splitHighlight } from "@/composables/highlight";
 import AboutModal from "@/components/modals/AboutModal.vue";
@@ -30,6 +31,7 @@ import { ui } from "@/stores/ui";
 import {
   createSessionForCwd,
   loadSessions,
+  renameSessionInStore,
   sessionTitle,
   sessions,
   sessionsError,
@@ -183,7 +185,7 @@ const {
   trigger: ".session-list__menu-trigger.is-menu-target",
   panel: ".menu-panel",
   width: 180,
-  height: 36,
+  height: 66,
 });
 
 const openSessionMenu = (sessionId: string) => {
@@ -209,6 +211,53 @@ const removeSelectedSession = async () => {
     if (workspace.sessionId === sessionId) await router.push({ name: "new-session" });
   } catch (error) {
     sessionsError.value = toMessage(error);
+  }
+};
+
+// ─── Inline rename ────────────────────────────────────────────────────
+// Selecting "Rename" from the session menu swaps the row's title + right-side
+// controls (age + more-menu) for a text input flanked by a check (apply) and
+// a cross (cancel).
+const renamingSessionId = ref<string | null>(null);
+const renameInput = ref("");
+const renamingRef = ref<HTMLInputElement | null>(null);
+
+const beginRename = (session: SessionInfo | undefined) => {
+  if (!session) return;
+  closeSessionMenu();
+  renamingSessionId.value = session.id;
+  renameInput.value = sessionTitle(session);
+  nextTick(() => {
+    renamingRef.value?.focus();
+    renamingRef.value?.select();
+  });
+};
+
+const applyRename = async () => {
+  const sessionId = renamingSessionId.value;
+  if (!sessionId) return;
+  const name = renameInput.value.trim();
+  renamingSessionId.value = null;
+  if (!name) return; // empty → revert without persisting
+  try {
+    await renameSessionInStore(sessionId, name);
+  } catch (error) {
+    sessionsError.value = toMessage(error);
+  }
+};
+
+const cancelRename = () => {
+  renamingSessionId.value = null;
+  renameInput.value = "";
+};
+
+const onRenameEnter = (event: KeyboardEvent) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void applyRename();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    cancelRename();
   }
 };
 
@@ -239,8 +288,6 @@ onMounted(async () => {
         <IconButton label="New session" @click="startProjectSession(workspace.cwd ?? '~')">
           <ChatNewIcon />
         </IconButton>
-        <IconButton label="New multi-run" disabled><ArrowsMerge /></IconButton>
-        <IconButton label="Scheduled tasks" disabled><CalendarScheduleIcon /></IconButton>
       </div>
       <div>
         <IconButton label="Search sessions" :pressed="searchOpen" @click="toggleSessionSearch"><SearchIcon /></IconButton>
@@ -296,28 +343,63 @@ onMounted(async () => {
             >
               <div
                 class="session-list__item"
-                :class="{
-                  'is-active': isActive,
-                  'is-menu-open': sessionMenuOpen && selectedSessionId === session.id,
-                }"
+                :class="[
+                  {
+                    'is-active': isActive,
+                    'is-menu-open': sessionMenuOpen && selectedSessionId === session.id,
+                    'is-renaming': renamingSessionId === session.id,
+                  },
+                ]"
                 @click="closeSessionMenu(); navigate()"
               >
-                <span class="session-list__title">
-                  <template v-for="(segment, i) in highlightTitle(sessionTitle(session))" :key="i">
-                    <mark v-if="segment.hit" class="session-list__hit">{{ segment.text }}</mark>
-                    <template v-else>{{ segment.text }}</template>
-                  </template>
-                </span>
-                <span class="session-list__age">{{ sessionAge(session) }}</span>
-                <IconButton
-                  class="session-list__menu-trigger"
-                  :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === session.id }"
-                  label="Session options"
-                  size="compact"
-                  @click.stop="openSessionMenu(session.id)"
-                >
-                  <More2Icon />
-                </IconButton>
+                <template v-if="renamingSessionId === session.id">
+                  <input
+                    ref="renamingRef"
+                    v-model="renameInput"
+                    class="session-list__rename-input"
+                    aria-label="Rename session"
+                    @click.stop
+                    @keydown="onRenameEnter"
+                  />
+                  <span class="session-list__rename-controls">
+                    <button
+                      type="button"
+                      class="ui-icon-button-mini"
+                      aria-label="Apply rename"
+                      title="Apply rename"
+                      @click.stop="applyRename"
+                    >
+                      <Check />
+                    </button>
+                    <button
+                      type="button"
+                      class="ui-icon-button-mini"
+                      aria-label="Cancel rename"
+                      title="Cancel rename"
+                      @click.stop="cancelRename"
+                    >
+                      <CloseIcon />
+                    </button>
+                  </span>
+                </template>
+                <template v-else>
+                  <span class="session-list__title">
+                    <template v-for="(segment, i) in highlightTitle(sessionTitle(session))" :key="i">
+                      <mark v-if="segment.hit" class="session-list__hit">{{ segment.text }}</mark>
+                      <template v-else>{{ segment.text }}</template>
+                    </template>
+                  </span>
+                  <span class="session-list__age">{{ sessionAge(session) }}</span>
+                  <IconButton
+                    class="session-list__menu-trigger"
+                    :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === session.id }"
+                    label="Session options"
+                    size="compact"
+                    @click.stop="openSessionMenu(session.id)"
+                  >
+                    <More2Icon />
+                  </IconButton>
+                </template>
               </div>
             </RouterLink>
             <button
@@ -337,9 +419,13 @@ onMounted(async () => {
       :open="sessionMenuOpen"
       :style="sessionMenuStyle"
       :width="180"
-      :height="36"
+      :height="66"
       aria-label="Session options"
     >
+      <button type="button" class="menu-item" role="menuitem" @click="beginRename(sessions.find(s => s.id === selectedSessionId))">
+        <FileEditIcon />
+        Rename
+      </button>
       <button type="button" class="menu-item" role="menuitem" @click="removeSelectedSession">
         <DeleteBinIcon />
         Delete session
@@ -538,6 +624,12 @@ onMounted(async () => {
 .session-list__item.is-active:hover {
   background: var(--ui-surface-selected);
 }
+.session-list__item.is-renaming {
+  padding-right: 8px;
+}
+.session-list__item.is-renaming:hover .session-list__title {
+  transform: none;
+}
 .session-list__title {
   flex: 1 1 auto;
   min-width: 0;
@@ -573,6 +665,27 @@ onMounted(async () => {
 }
 .session-list__item:is(:hover, .is-menu-open) .session-list__age {
   opacity: 0;
+}
+.session-list__rename-input {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  vertical-align: middle;
+}
+.session-list__rename-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  margin-inline-start: 6px;
 }
 .session-list__more {
   display: block;

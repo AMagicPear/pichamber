@@ -14,6 +14,7 @@ import type {
   GitStashRefRequest,
   GitStatus,
   ListResult,
+  OpenFileResult,
   ProviderQuota,
   ProviderDescriptor,
   PiBehaviorSettings,
@@ -73,6 +74,13 @@ export const deleteSession = (sessionId: string) =>
     jsonOrThrow<{ ok: true }>(r),
   );
 
+export const renameSession = (sessionId: string, name: string) =>
+  fetch(`${BASE}/sessions/${sessionId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  }).then((r) => jsonOrThrow<{ ok: true }>(r));
+
 export const browseProjectDirectories = (path?: string) => {
   const params = new URLSearchParams();
   if (path) params.set("path", path);
@@ -112,6 +120,13 @@ export const searchFiles = async (sessionId: string | null | undefined, query: s
   const qs = withSessionId(params, sessionId);
   const r = await fetch(`${BASE}/fs/search?${qs}`);
   return await jsonOrThrow<SearchResult>(r);
+};
+
+export const openFile = async (sessionId: string | null | undefined, path: string) => {
+  const params = new URLSearchParams({ path });
+  const qs = withSessionId(params, sessionId);
+  const r = await fetch(`${BASE}/fs/open?${qs}`);
+  return await jsonOrThrow<OpenFileResult>(r);
 };
 
 // ─── Git (Git pane) ───────────────────────────────────────────────────

@@ -152,6 +152,22 @@ export const deleteSession = async (
   }
 };
 
+/** Set the user-facing display name of a session by appending a
+ *  `session_info` entry. Reuses the active runtime's SessionManager when the
+ *  session is open, otherwise opens the persisted JSONL file directly. */
+export const renameSession = async (id: string, name: string): Promise<boolean> => {
+  const active = activeSessions.get(id);
+  if (active) {
+    active.session.sessionManager.appendSessionInfo(name);
+    return true;
+  }
+  const sessionFile = await getSessionFileWithId(id);
+  if (!sessionFile) return false;
+  const sessionManager = SessionManager.open(sessionFile);
+  sessionManager.appendSessionInfo(name);
+  return true;
+};
+
 export const createSessionWithCwd = async (cwd: string): Promise<AgentSessionRuntime> => {
   const sessionManager = SessionManager.create(cwd);
   const runtime = await createAgentSessionRuntime(createRuntime, {
