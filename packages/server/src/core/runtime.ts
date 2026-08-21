@@ -29,12 +29,44 @@ import type {
   SlashCommandInfo,
   SourceInfo,
 } from "@earendil-works/pi-coding-agent";
+import { createSyntheticSourceInfo } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { PromptImage } from "@pichamber/shared";
 
 export type { AgentSessionEvent, SourceInfo };
 
 export type SessionRuntimeType = "sdk" | "rpc";
+
+/** Curated subset of Pi's `BUILTIN_SLASH_COMMANDS` that maps cleanly to GUI
+ *  concepts. The web client shows them in the slash-command shelf so users
+ *  can discover them, but they don't auto-execute: typing `/compact` still
+ *  just sends the text, since the SDK session doesn't intercept built-ins
+ *  the way the TUI does. That matches the "label, not action" intent of the
+ *  shelf — keeping the picker honest about what each entry will do. Skip
+ *  TUI-only flows (`/settings`, `/login`, `/hotkeys`, `/quit`, …) and
+ *  anything with an existing GUI control (`/model` → ModelSelector,
+ *  `/new` → + new session button). */
+type BuiltinSlashCommand = Omit<SlashCommandInfo, "source"> & { source: "builtin" };
+
+const guiBuiltinSourceInfo = (name: string): SourceInfo =>
+  createSyntheticSourceInfo(`builtin:${name}`, { source: "pi-builtin" });
+
+const GUI_BUILTIN_COMMANDS: readonly BuiltinSlashCommand[] = [
+  { name: "compact", description: "Manually compact the session context", source: "builtin", sourceInfo: guiBuiltinSourceInfo("compact") },
+  { name: "new", description: "Start a new session", source: "builtin", sourceInfo: guiBuiltinSourceInfo("new") },
+  { name: "name", description: "Set session display name", source: "builtin", sourceInfo: guiBuiltinSourceInfo("name") },
+  { name: "resume", description: "Resume a different session", source: "builtin", sourceInfo: guiBuiltinSourceInfo("resume") },
+  { name: "fork", description: "Create a new fork from a previous user message", source: "builtin", sourceInfo: guiBuiltinSourceInfo("fork") },
+  { name: "clone", description: "Duplicate the current session at the current position", source: "builtin", sourceInfo: guiBuiltinSourceInfo("clone") },
+  { name: "reload", description: "Reload extensions, prompts, themes, and context files", source: "builtin", sourceInfo: guiBuiltinSourceInfo("reload") },
+];
+
+/** `SlashCommandSource` doesn't include "builtin" (Pi keeps that union
+ *  for runtime-discovered commands only); cast once here so callers get a
+ *  plain `SlashCommandInfo[]` they can spread alongside extension/prompt/
+ *  skill commands without further fuss. */
+export const guiBuiltinSlashCommands = (): SlashCommandInfo[] =>
+  GUI_BUILTIN_COMMANDS as unknown as SlashCommandInfo[];
 
 export type RuntimeToolInfo = {
   name: string;

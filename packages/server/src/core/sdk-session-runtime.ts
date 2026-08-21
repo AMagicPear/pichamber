@@ -27,6 +27,7 @@ import type {
   RuntimeResources,
   SessionRuntime,
 } from "./runtime";
+import { guiBuiltinSlashCommands } from "./runtime";
 import { providerName } from "../providers/providers";
 import { getLastAssistantUsage } from "@earendil-works/pi-coding-agent";
 
@@ -66,9 +67,14 @@ const modelInfoFromAgentSession = (session: AgentSession): RuntimeModelInfo[] =>
 const snapshotResources = (session: AgentSession): RuntimeResources => {
   const result = session.resourceLoader.getExtensions();
   const activeTools = new Set(result.runtime.getActiveTools());
-  const commands = session.settingsManager.getEnableSkillCommands()
+  // The SDK never reports built-ins (Pi's TUI folds them into its own
+  // autocomplete). Prepend a curated GUI-relevant subset so users can
+  // discover `/compact`, `/new`, etc. alongside their extensions.
+  const builtinCommands = guiBuiltinSlashCommands();
+  const extensionCommands = session.settingsManager.getEnableSkillCommands()
     ? result.runtime.getCommands()
     : result.runtime.getCommands().filter((command) => command.source !== "skill");
+  const commands = [...builtinCommands, ...extensionCommands];
   return {
     commands,
     tools: result.runtime.getAllTools().map((tool) => ({

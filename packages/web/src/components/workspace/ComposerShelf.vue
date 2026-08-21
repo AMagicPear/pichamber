@@ -218,6 +218,7 @@ defineExpose({ move, choose });
 .composer-shelf__source.is-extension { background: var(--ui-extension-bg); color: var(--ui-extension-fg); }
 .composer-shelf__source.is-skill { background: var(--ui-skill-bg); color: var(--ui-skill-fg); }
 .composer-shelf__source.is-prompt { background: var(--ui-prompt-bg); color: var(--ui-prompt-fg); }
+.composer-shelf__source.is-builtin { background: var(--ui-builtin-bg); color: var(--ui-builtin-fg); }
 .composer-shelf__state {
   margin: 0;
   padding: 18px 12px;

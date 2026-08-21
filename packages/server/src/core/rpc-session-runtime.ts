@@ -34,6 +34,7 @@ import {
   type RuntimePromptOptions,
   type RuntimeResources,
   type SessionRuntime,
+  guiBuiltinSlashCommands,
 } from "./runtime";
 import { resolveExternalPi } from "../settings/server-settings";
 import { SessionManager as SessionManagerCtor } from "@earendil-works/pi-coding-agent";
@@ -599,11 +600,14 @@ export const createRpcSessionRuntime = async ({
 
     async getResources(): Promise<RuntimeResources> {
       // RPC exposes slash commands but not the extension/tool inventory.
-      const commands = (await send({ type: "get_commands" })) as
+      const payload = (await send({ type: "get_commands" })) as
         | { commands?: RuntimeResources["commands"] }
         | undefined;
+      // Prepend the same GUI builtins the SDK path surfaces, so RPC
+      // backends present an identical shelf regardless of which runtime
+      // backs the session.
       return {
-        commands: commands?.commands ?? [],
+        commands: [...guiBuiltinSlashCommands(), ...(payload?.commands ?? [])],
         tools: [],
         extensions: [],
         diagnostics: [],

@@ -102,6 +102,8 @@ const rightPanel = computed(() => ({
   --ui-skill-fg: #476548;
   --ui-prompt-bg: #f2eade;
   --ui-prompt-fg: #765a34;
+  --ui-builtin-bg: #dfe5eb;
+  --ui-builtin-fg: #4a5868;
   --ui-code-inline-bg: #eeece7;
   --ui-code-inline-fg: #4e4a43;
   --ui-table-header-bg: #f0eee8;
@@ -146,6 +148,8 @@ const rightPanel = computed(() => ({
   --ui-skill-fg: #879b88;
   --ui-prompt-bg: #302a23;
   --ui-prompt-fg: #a08d72;
+  --ui-builtin-bg: #262c33;
+  --ui-builtin-fg: #9eb0c4;
   --ui-code-inline-bg: #292927;
   --ui-code-inline-fg: #b7b3ac;
   --ui-table-header-bg: #292927;
