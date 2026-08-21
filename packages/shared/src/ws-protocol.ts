@@ -37,11 +37,6 @@ export type PendingMessages = {
   followUp: string[];
 };
 
-/** Inline image attachment — the official `ImageContent` from pi-ai
- *  (base64 body without the data: URL prefix). The server additionally
- *  validates the MIME union at the socket boundary. */
-export type PromptImage = ImageContent;
-
 export type RuntimeToolInfo = {
   name: string;
   description: string;
@@ -350,7 +345,7 @@ export type ServerMessage =
 
 /** JSON messages the client sends to the session WebSocket server. */
 export type ClientMessage =
-  | { type: "prompt"; message: string; images?: PromptImage[]; streamingBehavior?: "steer" | "followUp" }
+  | { type: "prompt"; message: string; images?: ImageContent[]; streamingBehavior?: "steer" | "followUp" }
   | { type: "abort"; restorePending?: boolean }
   | { type: "restore_pending" }
   | { type: "compact"; customInstructions?: string }

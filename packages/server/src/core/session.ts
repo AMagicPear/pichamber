@@ -15,7 +15,6 @@ import {
   type SessionRuntime,
   createSessionRuntime,
 } from "./runtime";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 const sessionFileLookup = new Map<string, string>();
 const activeSessions = new Map<string, SessionRuntime>();
@@ -87,14 +86,6 @@ export const getSessionCwd = async (id: string): Promise<string | null> => {
 
 export const getSessionFile = (id: string): string | undefined =>
   sessionFileLookup.get(id);
-
-export const getConversationEntries = (runtime: SessionRuntime): Promise<SessionEntry[]> =>
-  runtime.buildConversationEntries();
-
-/** Snapshot helper for the WS layer: official `AgentMessage[]` derived
- *  from the authoritative session entry list (compaction-aware). */
-import { conversationMessages } from "./conversation";
-export { conversationMessages };
 
 export const deactivateSession = async (id: string) => {
   const runtime = activeSessions.get(id);

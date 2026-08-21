@@ -6,16 +6,23 @@
  * both SDK and RPC backends) plus the list of connected client sockets.
  *
  * The wire protocol is identical to the SDK-only implementation:
- * snapshot on connect, item/state broadcasts thereafter, and UI
+ * snapshot on connect, official event/state broadcasts thereafter, and UI
  * requests proxied through the extension bridge.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { RpcExtensionUIRequest, RpcExtensionUIResponse, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import {
+  buildContextEntries,
+  sessionEntryToContextMessages,
+  type AgentSessionEvent,
+  type RpcExtensionUIRequest,
+  type RpcExtensionUIResponse,
+  type SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import type {
   AgentActivity,
+  ImageContent,
   ModelDescriptor,
   PendingMessages,
-  PromptImage,
   RuntimeResources,
   ServerMessage,
   WebExtensionUIRequest,
@@ -29,7 +36,6 @@ import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
 import { normalizeWidgetRequest } from "../extensions/widget-lines";
 import { computeSessionStatsView } from "./context";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
-import { conversationMessages } from "./conversation";
 import { deactivateSession, getSession } from "./session";
 import type { SessionRuntime } from "./runtime";
 
@@ -121,11 +127,11 @@ type SessionChannel = {
  *  prompt + steer/followUp after compaction ends. */
 type CompactionQueuedMessage = {
   text: string;
-  images?: PromptImage[];
+  images?: ImageContent[];
   mode: "steer" | "followUp";
 };
 
-const SUPPORTED_IMAGE_MIME_TYPES = new Set<PromptImage["mimeType"]>([
+const SUPPORTED_IMAGE_MIME_TYPES = new Set<ImageContent["mimeType"]>([
   "image/png",
   "image/jpeg",
   "image/webp",
@@ -138,25 +144,25 @@ const MAX_PROMPT_IMAGES_BYTES = 25 * 1024 * 1024;
 const base64ByteLength = (data: string) =>
   (data.length / 4) * 3 - (data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0);
 
-const parsePromptImages = (value: unknown): PromptImage[] | null => {
+const parsePromptImages = (value: unknown): ImageContent[] | null => {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > MAX_PROMPT_IMAGES) return null;
   let totalBytes = 0;
-  const images: PromptImage[] = [];
+  const images: ImageContent[] = [];
   for (const image of value) {
     if (
       !image ||
       typeof image !== "object" ||
       (image as { type?: unknown }).type !== "image" ||
       typeof (image as { data?: unknown }).data !== "string" ||
-      !SUPPORTED_IMAGE_MIME_TYPES.has((image as { mimeType?: PromptImage["mimeType"] }).mimeType as PromptImage["mimeType"])
+      !SUPPORTED_IMAGE_MIME_TYPES.has((image as { mimeType?: ImageContent["mimeType"] }).mimeType as ImageContent["mimeType"])
     ) return null;
     const data = (image as { data: string }).data;
     if (!data || data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(data)) return null;
     const bytes = base64ByteLength(data);
     totalBytes += bytes;
     if (bytes > MAX_PROMPT_IMAGE_BYTES || totalBytes > MAX_PROMPT_IMAGES_BYTES) return null;
-    images.push(image as PromptImage);
+    images.push(image as ImageContent);
   }
   return images;
 };
@@ -254,6 +260,12 @@ const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean =
 /** Pull the conversation entries through the runtime. RPC mode hits the
  *  subprocess once; SDK mode reuses the in-memory session manager. */
 const fetchEntries = (runtime: SessionRuntime) => runtime.buildConversationEntries();
+
+/** Ordered, compaction-aware official `AgentMessage[]` for one session,
+ *  via pi's own conversion helpers (compaction summaries / custom messages
+ *  / branch summaries all land as official `AgentMessage` roles). */
+const conversationMessages = (entries: SessionEntry[]): AgentMessage[] =>
+  buildContextEntries(entries).flatMap(sessionEntryToContextMessages);
 
 /** `reconcile` rebuilds the official `AgentMessage[]` from the authoritative
  *  runtime entries (compaction-aware, via pi's own conversion helpers). */

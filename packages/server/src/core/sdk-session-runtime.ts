@@ -18,7 +18,6 @@ import {
   SessionManager as SessionManagerCtor,
 } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { ImageContent } from "@earendil-works/pi-ai";
 import type {
   RuntimeClearedQueue,
   RuntimeModelDescriptor,
@@ -158,14 +157,9 @@ export const createSdkSessionRuntime = async (
     },
 
     async prompt(message: string, options?: RuntimePromptOptions) {
-      const images: ImageContent[] | undefined = options?.images?.map((image) => ({
-        type: "image",
-        mimeType: image.mimeType,
-        data: image.data,
-      }));
       await session.prompt(message, {
         streamingBehavior: options?.streamingBehavior,
-        images,
+        images: options?.images,
       });
     },
     async steer(message: string) {

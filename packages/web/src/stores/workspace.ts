@@ -8,9 +8,9 @@ import type {
   AgentSessionEvent,
   ExtensionWidget,
   ExtensionWidgetPlacement,
+  ImageContent,
   ModelDescriptor,
   PendingMessages,
-  PromptImage,
   RuntimeResources,
   ServerMessage,
   SessionInfo,
@@ -135,7 +135,7 @@ export const updateWorkspace = async (sessionId: string) => {
 
 /** 输入框草稿。 */
 export const draft = ref<string | undefined>();
-export type DraftImage = PromptImage & { id: string; aspectRatio: number };
+export type DraftImage = ImageContent & { id: string; aspectRatio: number };
 export const images = ref<DraftImage[]>([]);
 export const connected = ref(false);
 
