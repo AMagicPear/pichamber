@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentActivity, ExtensionWidget, ModelDescriptor, PendingMessages, SlashCommandInfo } from "@pichamber/shared";
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
 import MicIcon from "@/assets/icons/Mic.svg";
 import SendIcon from "@/assets/icons/SendPlane2.svg";
@@ -53,6 +53,45 @@ const shelfMode = ref<"files" | "commands" | null>(null);
 const shelfQuery = ref("");
 const dragDepth = ref(0);
 const isDraggingImage = computed(() => dragDepth.value > 0);
+
+const GOAL_COMMAND = "goal";
+const GOAL_PREFIX = `/${GOAL_COMMAND} `;
+/** Toggle lit by clicking the target icon; flips off the moment the next
+ *  message goes out (see `applyGoalPrefix`). The icon stays disabled until
+ *  some extension exposes the command, matching how the shelf filters. */
+const goalMode = ref(false);
+const goalAvailable = computed(() =>
+  props.commands.some((command) => command.name === GOAL_COMMAND),
+);
+const goalLabel = computed(() =>
+  goalAvailable.value
+    ? (goalMode.value ? "Cancel /goal prefix" : "Send next message as /goal")
+    : "Goal mode (requires an extension that provides /goal)",
+);
+/** If the extension providing `/goal` goes away mid-session, drop the lit
+ *  state so we never silently prepend a prefix the runtime no longer
+ *  recognizes. */
+watch(goalAvailable, (available) => {
+  if (!available) goalMode.value = false;
+});
+
+/** Prepend `/goal ` to the outgoing message once, then reset the toggle.
+ *  Skips when the draft already starts with the prefix so the user can
+ *  type `/goal …` by hand (or pick it from the shelf) without getting
+ *  it doubled. Mutates `draft` before emitting `send` so the parent's
+ *  send handler reads the prefixed text synchronously — no DOM flash
+ *  because Vue batches the change with the subsequent clear. */
+const applyGoalPrefix = () => {
+  if (!goalMode.value) return;
+  const text = draft.value ?? "";
+  draft.value = text.startsWith(GOAL_PREFIX) ? text : `${GOAL_PREFIX}${text}`;
+  goalMode.value = false;
+};
+
+const emitSend = (behavior?: "steer" | "followUp") => {
+  applyGoalPrefix();
+  emit("send", behavior);
+};
 
 const MAX_IMAGES = 8;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -169,7 +208,7 @@ const onKeydown = (event: KeyboardEvent) => {
     if (!shouldSubmit) return;
     event.preventDefault();
     if (shelfMode.value) shelf.value?.choose();
-    else emit("send", props.busy ? (event.altKey ? "followUp" : submitMode.value) : undefined);
+    else emitSend(props.busy ? (event.altKey ? "followUp" : submitMode.value) : undefined);
   }
 };
 
@@ -383,7 +422,14 @@ const placeholder = computed(() => {
           <!-- Compact works at any time: the SDK's compact() aborts the
                current turn first (same as Pi's /compact), then summarizes. -->
           <IconButton size="compact" label="Compact context" @click="emit('compact')"><StackIcon /></IconButton>
-          <IconButton size="compact" label="Goal mode" disabled><TargetIcon /></IconButton>
+          <IconButton
+            size="compact"
+            :label="goalLabel"
+            :title="goalLabel"
+            :pressed="goalMode"
+            :disabled="!goalAvailable"
+            @click="goalMode = !goalMode"
+          ><TargetIcon /></IconButton>
         </div>
         <div class="composer__footer-trailing">
           <div class="composer__models">
@@ -434,7 +480,7 @@ const placeholder = computed(() => {
             size="compact"
             :label="busy ? (submitMode === 'steer' ? 'Steer agent' : 'Queue follow-up') : 'Send'"
             :disabled="!canSend"
-            @click="emit('send', busy ? submitMode : undefined)"
+            @click="emitSend(busy ? submitMode : undefined)"
           ><SendIcon /></IconButton>
         </div>
       </div>
