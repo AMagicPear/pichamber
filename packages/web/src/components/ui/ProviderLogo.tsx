@@ -96,23 +96,21 @@ export default defineComponent({
     class: { type: String, default: "" },
   },
   setup(props) {
-    return () => {
-      const Logo = resolveLogo(props.providerId, props.modelId);
-      return (
-        <Logo
-          class={["provider-logo", props.class]}
-          role="img"
-          aria-label={props.alt || `${props.providerId || "model"} logo`}
-          style={{
-            color: "var(--ui-text)",
-            fill: "currentColor",
-            display: "block",
-            width: toPixels(props.size),
-            height: toPixels(props.size),
-            flex: "0 0 auto",
-          }}
-        />
-      );
-    };
+    const Logo = resolveLogo(props.providerId, props.modelId);
+    return () => (
+      <Logo
+        class={["provider-logo", props.class]}
+        role="img"
+        aria-label={props.alt || `${props.providerId || "model"} logo`}
+        style={{
+          color: "var(--ui-text)",
+          fill: "currentColor",
+          display: "block",
+          width: toPixels(props.size),
+          height: toPixels(props.size),
+          flex: "0 0 auto",
+        }}
+      />
+    );
   },
 });
