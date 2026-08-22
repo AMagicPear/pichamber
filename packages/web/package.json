@@ -1,44 +1,39 @@
 {
   "name": "@amagicpear/pichamber-web",
-  "version": "0.9.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "run-p type-check \"build-only {@}\" --",
+    "build": "vite build",
     "preview": "vite preview",
-    "build-only": "vite build",
     "predev": "node scripts/build-catppuccin-sprite.mjs",
     "prebuild": "node scripts/build-catppuccin-sprite.mjs",
-    "sprite": "node scripts/build-catppuccin-sprite.mjs",
-    "type-check": "node ../../scripts/vue-tsc.mjs --build --force"
+    "sprite": "node scripts/build-catppuccin-sprite.mjs"
   },
   "dependencies": {
     "@amagicpear/pichamber-shared": "workspace:*",
     "ghostty-web": "^0.4.0",
-    "katex": "^0.18.1",
-    "markstream-vue": "^1.0.7",
-    "mermaid": "^11.16.0",
+    "katex": "^0.18.4",
+    "markstream-vue": "^2.0.1",
+    "mermaid": "^11.17.0",
     "stream-diffs": "^0.0.2",
-    "vue": "^3.6.0-rc.2",
+    "vue": "^3.6.0-rc.5",
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
-    "@tsconfig/node24": "^24.0.4",
+    "@tsconfig/node24": "catalog:",
     "@types/babel__core": "^7.20.5",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vitejs/plugin-vue-jsx": "^5.1.6",
     "@vue/tsconfig": "^0.9.1",
     "catppuccin-vsc-icons": "github:catppuccin/vscode-icons#b6915da9f6889b683a110aa747de96c2820a537d",
     "jiti": "^2.7.0",
-    "npm-run-all2": "^9.0.2",
-    "typescript": "~7.0.2",
-    "vite": "^8.1.5",
+    "typescript": "catalog:",
+    "vite": "^8.2.2",
     "vite-plugin-vue-devtools": "^8.2.1",
-    "vite-svg-loader": "^5.1.1",
-    "vue-tsc": "^3.3.8"
+    "vite-svg-loader": "^5.1.1"
   }
 }

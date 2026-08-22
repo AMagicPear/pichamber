@@ -32,20 +32,20 @@
   "catalog": {
     "@earendil-works/pi-agent-core": "^0.84.2",
     "@earendil-works/pi-ai": "^0.84.2",
-    "@earendil-works/pi-coding-agent": "^0.84.2"
+    "@earendil-works/pi-coding-agent": "^0.84.2",
+    "@tsconfig/node24": "^24.0.5",
+    "bun-pty": "^0.4.10",
+    "typescript": "~7.0.2"
   },
   "scripts": {
-    "dev": "concurrently -k -n \"SERVER,WEB\" -c \"cyan,magenta\" \"bun run dev:server\" \"bun run dev:web\"",
-    "dev:web": "bun --filter @amagicpear/pichamber-web dev",
-    "dev:server": "bun --filter @amagicpear/pichamber-server dev",
+    "dev": "bun run --filter @amagicpear/pichamber-server --filter @amagicpear/pichamber-web dev",
     "build": "bun --filter '*' build",
     "build:web": "bun --filter @amagicpear/pichamber-web build",
     "build:server": "bun --filter @amagicpear/pichamber-server build",
     "test": "bun test",
     "type-check": "bun --filter '*' type-check",
     "lint": "oxlint . --fix",
-    "package": "node scripts/package.mjs",
-    "prepack": "bun run package"
+    "prepack": "bun run build:web && rm -rf dist dist-web && mkdir -p dist && bun build packages/server/src/index.ts --outfile dist/server.js --target bun --external bun-pty --external @earendil-works/pi-coding-agent && cp -r packages/web/dist dist-web"
   },
   "bin": {
     "pichamber": "bin/pichamber.js"
@@ -61,21 +61,21 @@
     "package.json"
   ],
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.2",
-    "bun-pty": "^0.4.10",
+    "@earendil-works/pi-coding-agent": "catalog:",
+    "bun-pty": "catalog:",
     "commander": "^15.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
     "bun-types": "^1.4.0",
-    "concurrently": "^10.0.5",
     "oxlint": "~1.79.0",
-    "typescript": "~7.0.2",
-    "typescript6": "npm:@typescript/typescript6@^6.0.2",
-    "vue-tsc": "^3.3.11"
+    "typescript": "catalog:"
   },
   "engines": {
     "node": "^22.18.0 || >=24.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "overrides": {
     "vue": "rc",

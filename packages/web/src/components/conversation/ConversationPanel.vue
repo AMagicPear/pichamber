@@ -11,8 +11,6 @@ import IconButton from "@/components/ui/IconButton.vue";
 import ConversationMessages from "@/components/conversation/messages/ConversationMessages.vue";
 import UserInputBlock from "@/components/conversation/composer/UserInputBlock.vue";
 import ExtensionUiHost from "@/components/conversation/ExtensionUiHost.vue";
-import type { WidgetPlacement } from "@earendil-works/pi-coding-agent";
-import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { dismissNotification, extensionUi } from "@/stores/extensionUi";
 import { workspace } from "@/stores/workspace";
@@ -63,66 +61,6 @@ const onSend = (behavior?: "steer" | "followUp") => {
 
 const hasConversation = computed(() => conversation.value.length > 0);
 
-/* Temporary front-end data for tuning the Activity card. It sits at the
- * same boundary as the real extension UI payload, so Activity receives
- * the exact wire shape. This is dev-only and does not change the server
- * or WebSocket protocol; remove this block after visual tuning. */
-const debugActivityStatuses: Record<string, string> = {
-  mcp: "MCP: 5 servers enabled",
-  runtime: "Background dispatch active",
-};
-const debugActivityWidgets: Record<string, { widget: ExtensionWidget; placement: WidgetPlacement }> = {
-  workflow: {
-    placement: "aboveEditor",
-    widget: {
-      kind: "tree",
-      nodes: [
-        {
-          id: "debug-scout",
-          kind: "workflow",
-          label: "Workspace review",
-          state: "running",
-          activity: { toolCount: 7, currentTool: "grep" },
-          children: [
-            {
-              id: "debug-main",
-              kind: "subagent",
-              label: "Inspect project structure",
-              state: "running",
-              activity: { toolCount: 4, currentTool: "fd" },
-            },
-            {
-              id: "debug-tests",
-              kind: "step",
-              label: "Check existing tests",
-              state: "complete",
-              activity: { toolCount: 3 },
-            },
-            {
-              id: "debug-next",
-              kind: "step",
-              label: "Prepare implementation plan",
-              state: "queued",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  output: {
-    placement: "belowEditor",
-    widget: {
-      kind: "lines",
-      lines: ["Indexing workspace files", "Waiting for language server"],
-    },
-  },
-};
-/* Preview is opt-in in the current browser only. Normal dev sessions keep
- * consuming real extension data; enable it while tuning with
- * `localStorage.setItem("pichamber.activityPreview", "1")`, then reload. */
-const useDebugActivity = import.meta.env.DEV
-  && localStorage.getItem("pichamber.activityPreview") === "1";
-
 watch(
   () => workspace.sessionId,
   (sessionId) => {
@@ -147,8 +85,8 @@ watch(
       :pending="pending"
       :can-restore-pending="canRestorePending"
       :commands="shelfCommands"
-      :extension-statuses="useDebugActivity ? debugActivityStatuses : extensionUi.statuses"
-      :extension-widgets="useDebugActivity ? debugActivityWidgets : extensionUi.widgets"
+      :extension-statuses="extensionUi.statuses"
+      :extension-widgets="extensionUi.widgets"
       :model="model"
       :available-models="availableModels"
       :thinking-level="thinking.level"

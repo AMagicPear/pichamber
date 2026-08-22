@@ -7,10 +7,10 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "@tsconfig/node24": "^24.0.4",
+    "@tsconfig/node24": "catalog:",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "@earendil-works/pi-coding-agent": "catalog:",
-    "typescript": "~7.0.2"
+    "typescript": "catalog:"
   }
 }

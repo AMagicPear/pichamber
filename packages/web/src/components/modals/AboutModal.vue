@@ -6,13 +6,13 @@ import IconButton from "@/components/ui/IconButton.vue";
 import CloseIcon from "@/assets/icons/Close.svg";
 import GithubIcon from "@/assets/icons/Github.svg";
 import { getVersion } from "@/api/client";
-import { version as APP_VERSION } from "../../../package.json";
+import { version as APP_VERSION } from "../../../../../package.json";
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits<{ close: [] }>();
 
-// pi runs on the server, so its version comes from /api/version; the app's
-// own version is this package's.
+// pi runs on the server, so its version comes from /api/version; the app
+// version is defined once in the root package.json.
 const piVersion = ref<string | null>(null);
 onMounted(async () => {
   piVersion.value = (await getVersion().catch(() => null))?.pi ?? null;

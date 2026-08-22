@@ -34,6 +34,7 @@ bun run dev         # server(:3000) + Vite(:5173)
 bun run type-check
 bun run lint
 bun run build
+bun publish   # 发布（prepack 自动构建 + catalog 解析）
 ```
 
 浏览器调试：Kimi WebBridge `http://127.0.0.1:10086`。
