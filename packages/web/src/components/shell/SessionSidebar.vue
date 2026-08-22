@@ -284,84 +284,67 @@ onMounted(async () => {
 
     <div class="sidebar__actions" aria-label="Workspace actions">
       <div>
-        <IconButton label="Add project" @click="projectPickerOpen = true"><FolderAddIcon /></IconButton>
+        <IconButton label="Add project" @click="projectPickerOpen = true">
+          <FolderAddIcon />
+        </IconButton>
         <IconButton label="New session" @click="startProjectSession(workspace.cwd ?? '~')">
           <ChatNewIcon />
         </IconButton>
       </div>
       <div>
-        <IconButton label="Search sessions" :pressed="searchOpen" @click="toggleSessionSearch"><SearchIcon /></IconButton>
-        <IconButton label="Select sessions" disabled><CheckboxMultipleIcon /></IconButton>
-        <IconButton label="Sort projects" disabled><SortDescIcon /></IconButton>
+        <IconButton label="Search sessions" :pressed="searchOpen" @click="toggleSessionSearch">
+          <SearchIcon />
+        </IconButton>
+        <IconButton label="Select sessions" disabled>
+          <CheckboxMultipleIcon />
+        </IconButton>
+        <IconButton label="Sort projects" disabled>
+          <SortDescIcon />
+        </IconButton>
       </div>
     </div>
 
     <div class="sidebar__searchbar" :class="{ 'is-open': searchOpen }">
-      <SearchBox v-if="searchOpen" v-model="sessionSearch" placeholder="Search sessions..." label="Search sessions" autoFocus />
+      <SearchBox v-if="searchOpen" v-model="sessionSearch" placeholder="Search sessions..." label="Search sessions"
+        autoFocus />
     </div>
 
     <section ref="sessionListRoot" class="session-list scroll-fade-bottom">
       <p v-if="sessionsLoading" class="session-list__state">Loading sessions...</p>
       <p v-else-if="sessionsError" class="session-list__state session-list__state--error">{{ sessionsError }}</p>
       <p v-else-if="sessions.length === 0" class="session-list__state">No sessions yet.</p>
-      <p v-else-if="visibleSessions.length === 0" class="session-list__state">No sessions match &quot;{{ sessionSearch }}&quot;.</p>
+      <p v-else-if="visibleSessions.length === 0" class="session-list__state">No sessions match &quot;{{ sessionSearch
+        }}&quot;.</p>
 
       <template v-else>
         <section v-for="project in projectGroups" :key="project.cwd" class="session-list__section">
           <div class="session-list__project-header">
-            <button
-              type="button"
-              class="session-list__project"
-              :aria-expanded="!collapsedProjects.has(project.cwd)"
-              @click="toggleProject(project.cwd)"
-            >
+            <button type="button" class="session-list__project" :aria-expanded="!collapsedProjects.has(project.cwd)"
+              @click="toggleProject(project.cwd)">
               <span class="session-list__project-folder">
-                <MorphIcon
-                  :icon="collapsedProjects.has(project.cwd) ? lucideIcon('folder') : lucideIcon('folder-open')"
-                  :size="14"
-                  spring="snappy"
-                  reduced-motion="user"
-                />
+                <MorphIcon :icon="collapsedProjects.has(project.cwd) ? lucideIcon('folder') : lucideIcon('folder-open')"
+                  :size="14" spring="snappy" reduced-motion="user" />
               </span>
               <span class="session-list__project-title">{{ projectName(project.cwd) }}</span>
             </button>
-            <IconButton
-              class="session-list__project-new"
-              label="New session in project"
-              size="compact"
-              @click.stop="startProjectSession(project.cwd)"
-            >
+            <IconButton class="session-list__project-new" label="New session in project" size="compact"
+              @click.stop="startProjectSession(project.cwd)">
               <AddIcon />
             </IconButton>
           </div>
           <template v-if="!collapsedProjects.has(project.cwd)">
-            <RouterLink
-              v-for="session in visibleProjectSessions(project.cwd, project.sessions)"
-              :key="session.id"
-              custom
-              :to="{ name: 'session', params: { sessionId: session.id } }"
-              v-slot="{ navigate, isActive }"
-            >
-              <div
-                class="session-list__item"
-                :class="[
-                  {
-                    'is-active': isActive,
-                    'is-menu-open': sessionMenuOpen && selectedSessionId === session.id,
-                    'is-renaming': renamingSessionId === session.id,
-                  },
-                ]"
-                @click="closeSessionMenu(); navigate()"
-              >
+            <RouterLink v-for="session in visibleProjectSessions(project.cwd, project.sessions)" :key="session.id"
+              custom :to="{ name: 'session', params: { sessionId: session.id } }" v-slot="{ navigate, isActive }">
+              <div class="session-list__item" :class="[
+                {
+                  'is-active': isActive,
+                  'is-menu-open': sessionMenuOpen && selectedSessionId === session.id,
+                  'is-renaming': renamingSessionId === session.id,
+                },
+              ]" @click="closeSessionMenu(); navigate()">
                 <template v-if="renamingSessionId === session.id">
-                  <input
-                    ref="renamingRef"
-                    v-model="renameInput"
-                    class="session-list__rename-input"
-                    aria-label="Rename session"
-                    @click.stop
-                    @keydown="onRenameEnter"
-                  />
+                  <input ref="renamingRef" v-model="renameInput" class="session-list__rename-input"
+                    aria-label="Rename session" @click.stop @keydown="onRenameEnter" />
                   <span class="session-list__rename-controls">
                     <IconButton size="mini" label="Apply rename" @click.stop="applyRename">
                       <Check />
@@ -379,24 +362,16 @@ onMounted(async () => {
                     </template>
                   </span>
                   <span class="session-list__age">{{ sessionAge(session) }}</span>
-                  <IconButton
-                    class="session-list__menu-trigger"
+                  <IconButton class="session-list__menu-trigger"
                     :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === session.id }"
-                    label="Session options"
-                    size="compact"
-                    @click.stop="openSessionMenu(session.id)"
-                  >
+                    label="Session options" size="compact" @click.stop="openSessionMenu(session.id)">
                     <More2Icon />
                   </IconButton>
                 </template>
               </div>
             </RouterLink>
-            <button
-              v-if="project.sessions.length > visibleProjectSessions(project.cwd, project.sessions).length"
-              type="button"
-              class="session-list__more"
-              @click="showMoreSessions(project.cwd)"
-            >
+            <button v-if="project.sessions.length > visibleProjectSessions(project.cwd, project.sessions).length"
+              type="button" class="session-list__more" @click="showMoreSessions(project.cwd)">
               Show more sessions
             </button>
           </template>
@@ -404,14 +379,9 @@ onMounted(async () => {
       </template>
     </section>
 
-    <MenuPanel
-      :open="sessionMenuOpen"
-      :style="sessionMenuStyle"
-      :width="180"
-      :height="66"
-      aria-label="Session options"
-    >
-      <button type="button" class="menu-item" role="menuitem" @click="beginRename(sessions.find(s => s.id === selectedSessionId))">
+    <MenuPanel :open="sessionMenuOpen" :style="sessionMenuStyle" :width="180" :height="66" aria-label="Session options">
+      <button type="button" class="menu-item" role="menuitem"
+        @click="beginRename(sessions.find(s => s.id === selectedSessionId))">
         <FileEditIcon />
         Rename
       </button>
@@ -422,11 +392,15 @@ onMounted(async () => {
     </MenuPanel>
 
     <footer class="sidebar__footer">
-      <IconButton size="large" label="Settings" @click="ui.settingsOpen = true">
+      <IconButton size="standard" label="Settings" @click="ui.settingsOpen = true">
         <SettingsIcon />
       </IconButton>
-      <IconButton size="large" label="Keyboard shortcuts" disabled><QuestionIcon /></IconButton>
-      <IconButton size="large" label="About" @click="aboutOpen = true"><InformationIcon /></IconButton>
+      <IconButton size="standard" label="Keyboard shortcuts" disabled>
+        <QuestionIcon />
+      </IconButton>
+      <IconButton size="standard" label="About" @click="aboutOpen = true">
+        <InformationIcon />
+      </IconButton>
     </footer>
 
     <AboutModal :show="aboutOpen" @close="aboutOpen = false" />
@@ -446,47 +420,58 @@ onMounted(async () => {
   color: var(--ui-text);
   font-size: 14px;
 }
+
 .sidebar__topbar,
 .sidebar__actions,
-.sidebar__actions > div,
+.sidebar__actions>div,
 .sidebar__footer {
   display: flex;
   align-items: center;
 }
+
 .sidebar__topbar {
   padding-left: 52px;
 }
+
 .sidebar__searchbar {
   height: 0;
   padding: 0;
   overflow: hidden;
   transition: height var(--ui-duration-medium) var(--ui-ease-emphasized), padding var(--ui-duration-medium) var(--ui-ease-emphasized);
 }
+
 .sidebar__searchbar.is-open {
   height: calc(var(--ui-input-height) + 8px);
   padding: 6px var(--sidebar-gutter) 2px;
 }
+
 .sidebar__actions {
   justify-content: space-between;
   padding: 4px var(--sidebar-gutter);
 }
-.sidebar__actions > div {
+
+.sidebar__actions>div {
   gap: 2px;
 }
-.sidebar__actions > div + div {
+
+.sidebar__actions>div+div {
   padding-left: 8px;
 }
+
 .session-list {
   min-height: 0;
   padding: 6px var(--sidebar-gutter) 8px;
   overflow: auto;
 }
-.session-list__section + .session-list__section {
+
+.session-list__section+.session-list__section {
   margin-top: 6px;
 }
+
 .session-list__project-header {
   position: relative;
 }
+
 .session-list__project {
   display: flex;
   align-items: center;
@@ -510,6 +495,7 @@ onMounted(async () => {
     background-color 120ms ease,
     color 120ms ease;
 }
+
 .session-list__project-new,
 .session-list__menu-trigger {
   position: absolute;
@@ -526,11 +512,13 @@ onMounted(async () => {
     transform 150ms ease-out,
     opacity 150ms ease-out;
 }
+
 .session-list__project-new :deep(svg),
 .session-list__menu-trigger :deep(svg) {
   width: 13px;
   height: 13px;
 }
+
 .session-list__project-header:is(:hover, :focus-within) .session-list__project-new,
 .session-list__item:is(:hover, .is-menu-open) .session-list__menu-trigger {
   opacity: 1;
@@ -538,20 +526,22 @@ onMounted(async () => {
   transform: translate(0, -50%);
   color: var(--ui-text-strong);
 }
+
 .session-list__project-header:is(:hover, :focus-within) .session-list__project {
   background: var(--ui-surface-hover);
 }
-.session-list__project-header:is(:hover, :focus-within) :is(
-  .session-list__project-folder,
-  .session-list__project-title
-) {
+
+.session-list__project-header:is(:hover, :focus-within) :is(.session-list__project-folder,
+  .session-list__project-title) {
   transform: translateX(1px);
 }
+
 .session-list__project-new:hover:not(:disabled),
 .session-list__menu-trigger:hover:not(:disabled) {
   background: transparent;
   box-shadow: none;
 }
+
 .session-list__project-folder {
   position: relative;
   display: block;
@@ -561,9 +551,11 @@ onMounted(async () => {
   flex: 0 0 auto;
   transition: transform 150ms ease-out;
 }
+
 .session-list__project-title {
   transition: transform 150ms ease-out;
 }
+
 .session-list__item {
   display: flex;
   position: relative;
@@ -581,16 +573,20 @@ onMounted(async () => {
   cursor: pointer;
   transition: background-color 120ms ease;
 }
+
 .session-list__item.is-active,
 .session-list__item.is-active:hover {
   background: var(--ui-surface-selected);
 }
+
 .session-list__item.is-renaming {
   padding-right: 8px;
 }
+
 .session-list__item.is-renaming:hover .session-list__title {
   transform: none;
 }
+
 .session-list__title {
   flex: 1 1 auto;
   min-width: 0;
@@ -601,16 +597,19 @@ onMounted(async () => {
     transform 150ms ease-out;
   white-space: nowrap;
 }
+
 .session-list__hit {
   padding: 0 1px;
   border-radius: 2px;
   background: var(--ui-accent-soft);
   color: var(--ui-accent-text);
 }
+
 .session-list__item:hover .session-list__title {
   color: var(--ui-text-strong);
   transform: translateX(1px);
 }
+
 .session-list__age {
   position: absolute;
   top: 50%;
@@ -624,9 +623,11 @@ onMounted(async () => {
   white-space: nowrap;
   transition: opacity 120ms ease-out;
 }
+
 .session-list__item:is(:hover, .is-menu-open) .session-list__age {
   opacity: 0;
 }
+
 .session-list__rename-input {
   box-sizing: border-box;
   flex: 1 1 auto;
@@ -641,6 +642,7 @@ onMounted(async () => {
   font: inherit;
   vertical-align: middle;
 }
+
 .session-list__rename-controls {
   display: flex;
   align-items: center;
@@ -648,6 +650,7 @@ onMounted(async () => {
   flex: 0 0 auto;
   margin-inline-start: 6px;
 }
+
 .session-list__more {
   display: block;
   margin-left: 20px;
@@ -660,17 +663,21 @@ onMounted(async () => {
     background-color 120ms ease,
     color 120ms ease;
 }
+
 .session-list__more:hover {
   background: var(--ui-surface-hover);
 }
+
 .session-list__state {
   margin: 12px 8px 0 28px;
   color: var(--ui-text-muted);
   font-size: 12px;
 }
+
 .session-list__state--error {
   color: #b3261e;
 }
+
 .sidebar__footer {
   gap: 2px;
   padding: 5px var(--sidebar-gutter);
