@@ -183,15 +183,14 @@ watch(
         >
           <span class="terminal__tab-icon-wrap">
             <TerminalIcon class="terminal__tab-icon" />
-            <button
-              type="button"
-              class="ui-icon-button-mini terminal__tab-icon-close"
-              aria-label="Close terminal tab"
-              title="Close terminal tab"
+            <IconButton
+              class="terminal__tab-icon-close"
+              size="mini"
+              label="Close terminal tab"
               @click.stop="closeTab(tab.id)"
             >
               <CloseIcon />
-            </button>
+            </IconButton>
           </span>
           <span class="terminal__tab-title">{{ tab.title }}</span>
         </div>

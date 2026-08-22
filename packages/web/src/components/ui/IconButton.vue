@@ -6,7 +6,7 @@ const emit = defineEmits<{
 withDefaults(
   defineProps<{
     label: string;
-    size?: "compact" | "standard" | "large";
+    size?: "mini" | "compact" | "standard" | "large";
     pressed?: boolean;
     disabled?: boolean;
     /** Color tone override. `danger` tints the icon red (for stop/cancel)
@@ -58,6 +58,27 @@ withDefaults(
     box-shadow var(--ui-duration-fast) var(--ui-ease-standard),
     color var(--ui-duration-fast) var(--ui-ease-standard),
     transform 80ms ease;
+}
+.icon-button--mini {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  color: var(--ui-text-muted);
+}
+/* Extra `.icon-button` class to out-specify the base `.icon-button :deep(svg)`
+ * rule (equal specificity, but base comes later in source order and would
+ * otherwise win) — keeps the mini icon at 13px. */
+.icon-button.icon-button--mini :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+.icon-button--mini:hover:not(:disabled),
+.icon-button--mini:focus-visible {
+  box-shadow: none;
+  color: var(--ui-text-strong);
+}
+.icon-button--mini.icon-button--tone-danger {
+  color: var(--ui-error-strong);
 }
 .icon-button--compact {
   width: 24px;

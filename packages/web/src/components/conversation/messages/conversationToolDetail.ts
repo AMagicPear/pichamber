@@ -34,7 +34,6 @@ type ToolDetailInput = {
   args?: unknown;
   output: string;
   isError?: boolean;
-  fallbackPreview: string;
   /** 来自 message 的图片附件（read 图片文件时填充）。 */
   images?: ToolImage[];
 };
@@ -55,7 +54,6 @@ export const conversationToolDetail = ({
   args,
   output,
   isError,
-  fallbackPreview,
   images,
 }: ToolDetailInput): ConversationToolDetail => {
   const failed = isError === true;
@@ -63,7 +61,7 @@ export const conversationToolDetail = ({
   if (toolName === "bash") {
     return {
       label: failed ? errorLabel("Shell Command") : "Shell Command",
-      preview: command ?? inline(fallbackPreview),
+      preview: command ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: TerminalIcon,
       timeout: numberArg(args, "timeout"),
@@ -88,7 +86,7 @@ export const conversationToolDetail = ({
     const summary = typeof args === "object" && args !== null ? patchOpsSummary((args as { input?: unknown }).input as string) : undefined;
     return {
       label: failed ? errorLabel(toolName) : "Apply Patch",
-      preview: summary ?? inline(fallbackPreview),
+      preview: summary ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: FileEditIcon,
       isError: failed,
@@ -99,7 +97,7 @@ export const conversationToolDetail = ({
     const relative = path ? displayPath(path) : undefined;
     return {
       label: failed ? errorLabel("ls") : path ? "List Directory" : "List Files",
-      preview: relative ?? inline(fallbackPreview),
+      preview: relative ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: FolderIcon,
       isError: failed,
@@ -110,7 +108,7 @@ export const conversationToolDetail = ({
     const relative = path ? displayPath(path) : undefined;
     return {
       label: failed ? errorLabel("find") : "Find Files",
-      preview: relative ?? inline(fallbackPreview),
+      preview: relative ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: SearchIcon,
       isError: failed,
@@ -120,7 +118,7 @@ export const conversationToolDetail = ({
   if (toolName === "grep") {
     return {
       label: failed ? errorLabel("grep") : "Grep",
-      preview: inline(fallbackPreview),
+      preview: inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: SearchEyeIcon,
       isError: failed,
@@ -129,7 +127,7 @@ export const conversationToolDetail = ({
 
   return {
     label: failed ? errorLabel(toolName) : toolName || "Tool",
-    preview: inline(fallbackPreview),
+    preview: inline(output),
     body: toolBody({ toolName, args, output, isError }),
     isError: failed,
   };

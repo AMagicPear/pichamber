@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import CloseIcon from "@/assets/icons/Close.svg";
 import SearchIcon from "@/assets/icons/Search.svg";
+import IconButton from "@/components/ui/IconButton.vue";
 import { onMounted, ref } from "vue";
 
 const props = defineProps<{
@@ -41,16 +42,15 @@ const clear = () => emit("update:modelValue", "");
       :autofocus="autoFocus"
       @input="onInput"
     />
-    <button
+    <IconButton
       v-if="modelValue"
-      type="button"
-      class="ui-icon-button-mini search-box__clear"
-      :aria-label="`Clear ${label ?? 'search'}`"
-      :title="`Clear ${label ?? 'search'}`"
+      class="search-box__clear"
+      size="mini"
+      :label="`Clear ${label ?? 'search'}`"
       @click="clear"
     >
       <CloseIcon />
-    </button>
+    </IconButton>
   </div>
 </template>
 

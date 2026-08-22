@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
+import MessageActions from "./MessageActions.vue";
 import ChatMarkdown from "./ChatMarkdown.vue";
 import { messageImages, messageText } from "./messageContent";
 import SkillBlockChip from "./SkillBlockChip.vue";
+
+const emit = defineEmits<{ fork: []; copy: [text: string] }>();
+
+/** Toggled by hovering the message; drives the `<Transition>` that
+ *  shows/hides the action buttons. */
+const actionsVisible = ref(false);
 
 type SkillChip = { name: string; location: string };
 
@@ -57,7 +64,11 @@ const parts = computed<{ skill: SkillChip | null; text: string }>(() => {
 </script>
 
 <template>
-  <article class="conversation-message conversation-message--user">
+  <article
+    class="conversation-message conversation-message--user"
+    @mouseenter="actionsVisible = true"
+    @mouseleave="actionsVisible = false"
+  >
     <!-- Each attachment lives in its own container, outside the text
          bubble. Image and skill chip don't share a layout box; the
          bubble below only ever carries text the user actually wrote. -->
@@ -79,17 +90,38 @@ const parts = computed<{ skill: SkillChip | null; text: string }>(() => {
     <div v-if="parts.text" class="conversation-message__user">
       <ChatMarkdown :content="parts.text" />
     </div>
-    <p v-if="timestampText" class="conversation-message__timestamp">{{ timestampText }}</p>
+    <div v-if="timestampText" class="conversation-message__footer">
+      <MessageActions
+        :show="{ fork: true, copy: !!parts.text }"
+        :open="actionsVisible"
+        @fork="emit('fork')"
+        @copy="emit('copy', parts.text)"
+      />
+      <p class="conversation-message__timestamp">{{ timestampText }}</p>
+    </div>
   </article>
 </template>
 
 <style scoped>
 .conversation-message--user { display: flex; flex-direction: column; align-items: flex-end; }
 
+/* Footer line: timestamp plus the fork/copy buttons on the same row,
+ * right-aligned. The buttons use `IconButton` at `size="mini"` and are
+ * shown/hidden via Vue's `<Transition>` on a hovered state. */
+.conversation-message__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 6px 0 0;
+  min-height: 16px;
+}
+
+
 /* Timestamp footer: tucked to the right edge under the right-anchored
  * bubble so it reads as a quiet metadata note, not content. */
 .conversation-message__timestamp {
-  margin: 6px 0 0;
+  margin: 0;
   color: var(--ui-text-muted);
   font-size: 11px;
   line-height: 1.4;

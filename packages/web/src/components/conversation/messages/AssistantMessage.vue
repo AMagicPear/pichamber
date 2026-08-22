@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
 import BrainAi3Icon from "@/assets/icons/BrainAi3.svg";
 import ChatMarkdown from "./ChatMarkdown.vue";
 import ConversationDetail from "./ConversationDetail.vue";
+import MessageActions from "./MessageActions.vue";
 import ProviderLogo from "../../ui/ProviderLogo";
 import { inline, messageText, thinkingStreaming as thinkingStreamingOf, thinkingText } from "./messageContent";
+
+const emit = defineEmits<{ fork: []; copy: [text: string] }>();
+
+/** Toggled by hovering the model-name row; drives the `<Transition>` that
+ *  shows/hides the action buttons. */
+const actionsVisible = ref(false);
 
 /** 从 AgentMessage union 里取 assistant 消息（pi-ai 类型带真实字段）。 */
 const asAssistant = (message: AgentMessage | undefined): AssistantMessage | undefined =>
@@ -46,10 +53,8 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
 </script>
 
 <template>
-  <article
-    class="conversation-message conversation-message--assistant"
-    :class="{ 'conversation-message--assistant-error': error }"
-  >
+  <article class="conversation-message conversation-message--assistant"
+    :class="{ 'conversation-message--assistant-error': error }">
     <template v-if="error">
       <header class="conversation-message__author conversation-message__author--error">
         <ProviderLogo :provider-id="provider" :model-id="modelId" :size="16" />
@@ -59,20 +64,16 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
       <p class="conversation-message__error-text">{{ error.message }}</p>
     </template>
     <template v-else>
-      <header class="conversation-message__author">
+      <header class="conversation-message__author" @mouseenter="actionsVisible = true"
+        @mouseleave="actionsVisible = false">
         <ProviderLogo :provider-id="provider" :model-id="modelId" :size="16" /> {{ label }}
         <time v-if="showTimestamp && timestampText" class="conversation-message__time">{{ timestampText }}</time>
+        <MessageActions :show="{ fork: true, copy: !!text }" :open="actionsVisible" @fork="emit('fork')"
+          @copy="emit('copy', text)" />
       </header>
-      <ConversationDetail
-        v-if="thinking"
-        class="conversation-message__details"
-        :icon="BrainAi3Icon"
-        label="Thinking"
-        :preview="inline(thinking)"
-        :body="{ kind: 'markdown', content: thinking }"
-        :auto-expand="thinkingStreaming"
-        hide-preview-on-expand
-      />
+      <ConversationDetail v-if="thinking" class="conversation-message__details" :icon="BrainAi3Icon" label="Thinking"
+        :preview="inline(thinking)" :body="{ kind: 'markdown', content: thinking }" :auto-expand="thinkingStreaming"
+        hide-preview-on-expand />
       <ChatMarkdown v-if="text" class="conversation-message__content" :content="text" :final="final" />
     </template>
   </article>
@@ -88,29 +89,44 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   font-size: 15px;
   font-weight: 700;
 }
-.conversation-message__author svg {
+
+/* The two action buttons (fork/copy) sit inline in the model-name row via the
+ * shared `MessageActions` component (IconButton at `size="mini"`), so they
+ * never grow the line height or lift the name. Show/hide is driven by a
+ * hovered state through that component's `<Transition>`. */
+
+/* ProviderLogo sizes itself via inline style; this only guards against any
+ * stray descendant svg (e.g. inside the mini action buttons, which keep their
+ * own 13px icon) being stretched to 16px. */
+.conversation-message__author>svg {
   flex: 0 0 16px;
   width: 16px;
   height: 16px;
 }
-.conversation-message__author + .conversation-message__content,
-.conversation-message__author + .conversation-message__details,
-.conversation-message__author--error + .conversation-message__error-text {
+
+.conversation-message__author+.conversation-message__content,
+.conversation-message__author+.conversation-message__details,
+.conversation-message__author--error+.conversation-message__error-text {
   margin-top: 12px;
 }
-.conversation-message__details + .conversation-message__content {
+
+.conversation-message__details+.conversation-message__content {
   margin-top: 12px;
 }
+
 .conversation-message__content :deep(.conversation-code-block) {
   margin-block: 12px;
 }
+
 .conversation-message__content {
   --ms-flow-paragraph-y: 0px;
 }
+
 .conversation-message__content :deep(.list-node) {
   --ms-flow-list-y: 12px;
   margin-block: 12px;
 }
+
 .conversation-message__content :deep(.list-item) {
   --ms-flow-list-item-y: 2px;
   margin-block: 2px;
@@ -124,6 +140,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   gap: 8px;
   color: var(--ui-error-strong);
 }
+
 .conversation-message__error-tag {
   padding: 1px 8px;
   border: 1px solid var(--ui-error-border);
@@ -134,6 +151,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
 .conversation-message__error-text {
   margin: 0;
   color: var(--ui-error-fg);

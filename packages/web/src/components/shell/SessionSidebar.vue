@@ -362,24 +362,12 @@ onMounted(async () => {
                     @keydown="onRenameEnter"
                   />
                   <span class="session-list__rename-controls">
-                    <button
-                      type="button"
-                      class="ui-icon-button-mini"
-                      aria-label="Apply rename"
-                      title="Apply rename"
-                      @click.stop="applyRename"
-                    >
+                    <IconButton size="mini" label="Apply rename" @click.stop="applyRename">
                       <Check />
-                    </button>
-                    <button
-                      type="button"
-                      class="ui-icon-button-mini"
-                      aria-label="Cancel rename"
-                      title="Cancel rename"
-                      @click.stop="cancelRename"
-                    >
+                    </IconButton>
+                    <IconButton size="mini" label="Cancel rename" @click.stop="cancelRename">
                       <CloseIcon />
-                    </button>
+                    </IconButton>
                   </span>
                 </template>
                 <template v-else>

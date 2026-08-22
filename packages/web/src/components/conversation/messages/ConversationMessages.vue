@@ -17,6 +17,10 @@ const props = defineProps<{
   showTimestamps?: boolean;
 }>();
 
+/** Forward per-message menu actions (fork/copy) up to the conversation panel.
+ *  No logic here — the panel decides what to do. */
+const emit = defineEmits<{ fork: []; copy: [text: string] }>();
+
 /* ── Scroll anchoring (event-driven, following the StackBlitz
  * `use-stick-to-bottom` pattern used by chat apps) ─────────────
  *
@@ -150,8 +154,9 @@ const computeToolDetail = (
   const messageMeta = message as { toolName?: unknown; isError?: unknown } | undefined;
   // 提交后 message 是权威输出；live 阶段 tool.result 是 pi 的 `{content,
   // details}` 进度封套——取文本而非序列化整个 JSON，实时显示才能和提交后一致。
+  const text = messageText(message);
   const output = message
-    ? messageText(message) || JSON.stringify(message, null, 2)
+    ? text || JSON.stringify(message, null, 2)
     : tool.result !== undefined
       ? toolResultText(tool.result)
       : "";
@@ -166,7 +171,6 @@ const computeToolDetail = (
       args: tool.args,
       output,
       isError: messageMeta?.isError === true || tool.isError === true,
-      fallbackPreview: messageText(message) || JSON.stringify(tool.args),
       images,
     }),
     running: tool.running,
@@ -204,6 +208,8 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
           v-if="item.kind === 'message' && item.message.role === 'user'"
           :message="item.message"
           :timestamp-text="props.showTimestamps ? messageTimestampText(item.message) : undefined"
+          @fork="emit('fork')"
+          @copy="(text) => emit('copy', text)"
         />
         <AssistantMessage
           v-else-if="item.kind === 'message' && item.message.role === 'assistant'"
@@ -212,6 +218,8 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
           :model-name="modelNameFor(item.message)"
           :show-timestamp="!!props.showTimestamps"
           :timestamp-text="messageTimestampText(item.message)"
+          @fork="emit('fork')"
+          @copy="(text) => emit('copy', text)"
         />
         <CompactionSummaryMessage
           v-else-if="item.kind === 'message' && item.message.role === 'compactionSummary'"

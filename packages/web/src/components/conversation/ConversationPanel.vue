@@ -12,7 +12,7 @@ import ConversationMessages from "@/components/conversation/messages/Conversatio
 import UserInputBlock from "@/components/conversation/composer/UserInputBlock.vue";
 import ExtensionUiHost from "@/components/conversation/ExtensionUiHost.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
-import { dismissNotification, extensionUi } from "@/stores/extensionUi";
+import { dismissNotification, extensionUi, pushInfoToast, pushErrorToast } from "@/stores/extensionUi";
 import { workspace } from "@/stores/workspace";
 import {
   activity,
@@ -61,6 +61,23 @@ const onSend = (behavior?: "steer" | "followUp") => {
 
 const hasConversation = computed(() => conversation.value.length > 0);
 
+/** Per-message menu placeholders. The actual fork/copy behavior is not wired
+ *  yet — these exist so the UI pattern has an explicit handling point. */
+const onMessageFork = () => {
+  // TODO: fork conversation at the targeted message.
+};
+
+/** Copy the targeted message's text to the system clipboard, with a small
+ *  confirmation toast on success / error toast on failure. */
+const onMessageCopy = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    pushInfoToast("Copied message to clipboard");
+  } catch {
+    pushErrorToast("Failed to copy message");
+  }
+};
+
 watch(
   () => workspace.sessionId,
   (sessionId) => {
@@ -73,7 +90,14 @@ watch(
 
 <template>
   <section class="conversation" :class="{ 'conversation--active': hasConversation }">
-    <ConversationMessages v-if="hasConversation" :items="conversation" :available-models="availableModels" :show-timestamps="settings.showTimestamps" />
+    <ConversationMessages
+      v-if="hasConversation"
+      :items="conversation"
+      :available-models="availableModels"
+      :show-timestamps="settings.showTimestamps"
+      @fork="onMessageFork"
+      @copy="onMessageCopy"
+    />
     <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
 
     <UserInputBlock

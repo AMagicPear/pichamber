@@ -40,6 +40,14 @@ export const pushErrorToast = (message: string) => {
   setTimeout(() => dismissNotification(id), TOAST_TTL_MS);
 };
 
+/** Push a neutral confirmation toast (e.g. "Copied to clipboard") onto the
+ *  same shared queue. */
+export const pushInfoToast = (message: string) => {
+  const id = `info-${crypto.randomUUID()}`;
+  extensionUi.notifications.push({ id, message, type: "info" });
+  setTimeout(() => dismissNotification(id), TOAST_TTL_MS);
+};
+
 export const dismissNotification = (id: string) => {
   const index = extensionUi.notifications.findIndex((n) => n.id === id);
   if (index !== -1) extensionUi.notifications.splice(index, 1);
