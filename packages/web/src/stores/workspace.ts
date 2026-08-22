@@ -493,6 +493,22 @@ const notifyAgentSettled = () => {
 let lastSeq = 0;
 let resyncPending = false;
 
+/** 推进 activity 并检测“非空闲 → 空闲”的回合结束边界（agent_settled /
+ *  compaction_end）。服务端在 settleChannel 里先把 activity 置为 idle，再
+ *  依次发 snapshot（携带 idle）和 state（携带 idle），所以这个翻转可能由
+ *  任一帧承载——必须在 snapshot 与 state 两处都走这里，否则先到的
+ *  snapshot 已经吞掉翻转，后到的 state 看到已是 idle 就跳过了刷新。
+ *  wasWorking 只防一次会话内的重复 settle 反复刷新/提醒；全新连接恢复成
+ *  idle 时活动本为 idle，不会误触发。 */
+const advanceActivity = (next: AgentActivity): void => {
+  const wasWorking = activity.value.phase !== "idle";
+  activity.value = next;
+  if (wasWorking && next.phase === "idle") {
+    void refreshSessions();
+    notifyAgentSettled();
+  }
+};
+
 const requestResync = (resync: () => void) => {
   if (resyncPending) return;
   resyncPending = true;
@@ -504,7 +520,7 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
     case "snapshot": {
       resyncPending = false;
       connected.value = true;
-      activity.value = message.activity;
+      advanceActivity(message.activity);
       pending.value = message.pending;
       canRestorePending.value = message.canRestorePending;
       lastSeq = message.seq;
@@ -532,17 +548,7 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
         break;
       }
       lastSeq = message.seq;
-      if (message.activity) {
-        const wasWorking = activity.value.phase !== "idle";
-        activity.value = message.activity;
-        // 服务器只在 agent_settled / compaction_end 广播 activity=idle：
-        // 回合跑完刷新侧栏 + 完成通知。disconnect 的本地翻转不经过这里，
-        // 不会误响。wasWorking 防重复 settle 重复提醒。
-        if (wasWorking && message.activity.phase === "idle") {
-          void refreshSessions();
-          notifyAgentSettled();
-        }
-      }
+      if (message.activity) advanceActivity(message.activity);
       if (message.pending) pending.value = message.pending;
       if (message.resources) resources.value = message.resources;
       if ("model" in message) model.value = message.model;
