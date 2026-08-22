@@ -76,7 +76,6 @@ Remote-host and Pi runtime decisions are documented in
 ## Prerequisites
 
 - [Bun](https://bun.sh) ≥ 1.3
-- Node ≥ 22.18 (only needed for tooling that runs through Node — the server itself uses Bun)
 
 ## Setup
 

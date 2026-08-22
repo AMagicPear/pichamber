@@ -6,9 +6,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "predev": "node scripts/build-catppuccin-sprite.mjs",
-    "prebuild": "node scripts/build-catppuccin-sprite.mjs",
-    "sprite": "node scripts/build-catppuccin-sprite.mjs"
+    "predev": "bun scripts/build-catppuccin-sprite.mjs",
+    "prebuild": "bun scripts/build-catppuccin-sprite.mjs",
+    "sprite": "bun scripts/build-catppuccin-sprite.mjs"
   },
   "dependencies": {
     "@amagicpear/pichamber-shared": "workspace:*",
