@@ -78,7 +78,7 @@ const placeholder = computed(() => {
       aria-haspopup="listbox"
       @click="toggle"
     >
-      <ProviderLogo class="model-selector__icon" :provider-id="model?.provider ?? ''" :model-id="model?.id ?? ''" :size="16" />
+      <ProviderLogo class="model-selector__icon" :provider-id="model?.provider" :model-id="model?.id" :size="16" />
       <span class="model-selector__name">{{ placeholder }}</span>
       <ArrowDownSIcon class="model-selector__chevron" />
     </button>

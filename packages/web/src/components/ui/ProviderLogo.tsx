@@ -1,7 +1,9 @@
 import { defineComponent, type PropType } from "vue";
 import type { FunctionalComponent, SVGAttributes } from "vue";
+import fallbackLogoSrc from "lucide-static/icons/bot-message-square.svg";
 
 type LogoComponent = FunctionalComponent<SVGAttributes>;
+const fallbackLogo = fallbackLogoSrc as unknown as LogoComponent;
 
 // Bundled as Vue components (vite-svg-loader) so each logo renders as a real
 // inline <svg> — no <img> shell, no remote fetch, no scattered CSS. The
@@ -20,7 +22,7 @@ for (const [path, component] of Object.entries(localLogoModules)) {
   if (match?.[1] && component) localLogos.set(match[1].toLowerCase(), component);
 }
 
-const fallbackLogo = localLogos.get("fallback")!;
+// const fallbackLogo = localLogos.get("fallback")!;
 
 const aliases = new Map([
   ["codex", "openai"],
@@ -50,7 +52,8 @@ const normalize = (value: string) =>
 
 /** Candidates derived from the provider id alone — aliases, normalized
  *  provider string, and its primary segment. */
-const providerCandidates = (providerId: string) => {
+const providerCandidates = (providerId: string | undefined) => {
+  if (!providerId) return [];
   const normalized = normalize(providerId);
   if (!normalized) return [];
   const compact = normalized.replace(/[^a-z0-9_\-./:]/g, "");
@@ -73,10 +76,14 @@ const modelIdFallback = (modelId: string) => {
 
 /** Resolve the bundled logo component for a provider/model. Falls back to the
  *  models.dev fallback mark when nothing matches. */
-const resolveLogo = (providerId: string, modelId = ""): LogoComponent => {
+const resolveLogo = (
+  providerId: string | undefined,
+  modelId: string | undefined,
+): LogoComponent => {
   const candidates = providerCandidates(providerId);
   const fromProvider = candidates.map((c) => localLogos.get(c)).find(Boolean);
   if (fromProvider) return fromProvider;
+  if (!modelId) return fallbackLogo;
   const fromModel = modelIdFallback(modelId)
     .map((c) => localLogos.get(c))
     .find(Boolean);
@@ -89,8 +96,8 @@ export default defineComponent({
   name: "ProviderLogo",
   inheritAttrs: false,
   props: {
-    providerId: { type: String, default: "" },
-    modelId: { type: String, default: "" },
+    providerId: { type: String, default: undefined },
+    modelId: { type: String, default: undefined },
     size: { type: [Number, String] as PropType<number | string>, default: 16 },
     alt: { type: String, default: "" },
     class: { type: String, default: "" },
@@ -104,7 +111,6 @@ export default defineComponent({
         aria-label={props.alt || `${props.providerId || "model"} logo`}
         style={{
           color: "var(--ui-text)",
-          fill: "currentColor",
           display: "block",
           width: toPixels(props.size),
           height: toPixels(props.size),
