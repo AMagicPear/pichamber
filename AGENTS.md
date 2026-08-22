@@ -31,7 +31,7 @@ Vue 3 + Bun 薄壳，wrap `pi` coding agent + 真实 shell 终端。
 
 ```bash
 bun run dev         # server(:3000) + Vite(:5173)
-bun run type-check
+bun run type-check  # 仅 shared + server；web 的 vue-tsc 与 TS7 不兼容，暂不查
 bun run lint
 bun run build
 bun publish   # 发布（prepack 自动构建 + catalog 解析）

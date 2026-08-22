@@ -73,13 +73,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
         :auto-expand="thinkingStreaming"
         hide-preview-on-expand
       />
-      <ChatMarkdown
-        v-if="text"
-        class="conversation-message__content"
-        :content="text"
-        :final="final"
-        :code-block-monaco-options="{ disableFileHeader: true }"
-      />
+      <ChatMarkdown v-if="text" class="conversation-message__content" :content="text" :final="final" />
     </template>
   </article>
 </template>
