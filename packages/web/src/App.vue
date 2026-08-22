@@ -120,6 +120,8 @@ const rightPanel = computed(() => ({
   --ui-accent-text: #765f45;
   --ui-status-text: #8a735b;
   --ui-thinking-text: #8a8062;
+  --ui-icon-folder: #d9936c;
+  --ui-icon-file: #399cf0;
   --ui-shadow-raised: 0 8px 24px rgb(35 32 27 / 10%);
   --ui-shadow-control: 0 1px 2px rgb(36 33 28 / 18%);
   --ui-duration-fast: 120ms;
@@ -166,6 +168,8 @@ const rightPanel = computed(() => ({
   --ui-accent-text: #d2b991;
   --ui-status-text: #c4aa88;
   --ui-thinking-text: #b9aa7b;
+  --ui-icon-folder: #d9a384;
+  --ui-icon-file: #7ab0e6;
   --ui-shadow-raised: 0 10px 28px rgb(0 0 0 / 32%);
   --ui-shadow-control: 0 1px 2px rgb(0 0 0 / 28%);
 }

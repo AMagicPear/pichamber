@@ -82,8 +82,6 @@ const {
   width: 280,
   height: 320,
   onOpen: () => {
-    // Lazy-fetch the branch list the first time the menu opens so
-    // users with no remote don't pay for the for-each-ref roundtrip.
     if (!branches.value) void loadBranches();
   },
 });
@@ -98,6 +96,8 @@ const selectBranch = async (branch: GitBranch) => {
 };
 
 // ── Load helpers ─────────────────────────────────────────────────────
+let refreshTimeoutId: number | undefined; // 增加定时器引用
+
 const loadStatus = async (): Promise<void> => {
   loading.value = true;
   try {
@@ -115,7 +115,6 @@ const loadStatus = async (): Promise<void> => {
         diff.value = "";
       }
     }
-    // Branch list may have changed (we switched); refetch in background.
     if (branches.value) void loadBranches();
   } catch (err) {
     status.value = null;
@@ -143,9 +142,13 @@ const loadStashes = async (): Promise<void> => {
 };
 
 const load = async () => {
+  // 清除旧的定时器，防止连续点击导致的动画竞态
+  window.clearTimeout(refreshTimeoutId);
   refreshIcon.value = 'refresh-ccw';
+
   await Promise.all([loadStatus(), loadStashes()]);
-  setTimeout(() => {
+
+  refreshTimeoutId = window.setTimeout(() => {
     refreshIcon.value = 'refresh-cw';
   }, 240);
 };
@@ -254,17 +257,26 @@ const hasStaged = computed(() => status.value?.changes.some((c) => c.staged) ?? 
 const hasChanges = computed(() => (status.value?.changes.length ?? 0) > 0);
 const hasStashes = computed(() => (stashes.value?.stashes.length ?? 0) > 0);
 
-const badge = (change: GitChange): string =>
-  ({ modified: "M", added: "A", deleted: "D", renamed: "R", untracked: "?" })[change.status];
+// 将映射表提取为纯静态常量 (Record)，避免每次执行函数时进行高频 GC 回收
+const BADGE_MAP = {
+  modified: "M",
+  added: "A",
+  deleted: "D",
+  renamed: "R",
+  untracked: "?",
+} as const;
 
-const badgeTitle = (change: GitChange): string =>
-  ({ modified: "Modified", added: "Added", deleted: "Deleted", renamed: "Renamed", untracked: "Untracked" })[
-  change.status
-  ];
+const BADGE_TITLE_MAP = {
+  modified: "Modified",
+  added: "Added",
+  deleted: "Deleted",
+  renamed: "Renamed",
+  untracked: "Untracked",
+} as const;
 
-/** Pull/Push icons morph into `loader-circle` while the sync op is in
- *  flight, so the user gets the same spring transition they see on the
- *  refresh button instead of a hard icon→"…" text swap. */
+const badge = (change: GitChange): string => BADGE_MAP[change.status];
+const badgeTitle = (change: GitChange): string => BADGE_TITLE_MAP[change.status];
+
 const pullIcon = computed<LucideIconName>(() =>
   syncBusy.value === "pull" ? "loader-circle" : "chevron-down",
 );
@@ -274,9 +286,6 @@ const pushIcon = computed<LucideIconName>(() =>
 
 const refreshIcon = ref<'refresh-cw' | 'refresh-ccw'>('refresh-cw');
 
-// Reload whenever the session workspace changes, so the pane tracks the
-// same cwd the files panel and terminal use. Also reload branch/stash
-// data so post-switch state is fresh.
 onMounted(load);
 watch(() => workspace.cwd, () => {
   branches.value = null;

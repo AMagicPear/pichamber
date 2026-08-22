@@ -1,76 +1,18 @@
 <script lang="tsx">
-import { computed, defineComponent, onMounted, ref, watch, type PropType } from "vue";
+import { computed, defineComponent, onMounted, provide, ref, watch } from "vue";
 import FileAddIcon from "lucide-static/icons/file-plus.svg";
 import FolderAddIcon from "lucide-static/icons/folder-plus.svg";
-import RefreshIcon from "lucide-static/icons/refresh-cw.svg";
 import SearchBox from "@/components/ui/SearchBox.vue";
 import type { DirEntry } from "@amagicpear/pichamber-shared";
-import { listDirectory, toMessage } from "@/api/client";
+import { listDirectory, searchFiles, toMessage } from "@/api/client";
 import IconButton from "@/components/ui/IconButton.vue";
 import { workspace } from "@/stores/workspace";
-import { getEntryIcon } from "../ui/fileIcon";
 import { MorphIcon } from "morphicons/vue";
 import { lucideIcon } from "../ui/lucideIcons";
+import FileTreeNode, { FILE_TREE_REFRESH_KEY } from "./FileTreeNode.vue";
+import FileSearchResult from "./FileSearchResult.vue";
 
-const FileTreeNode = defineComponent({
-  name: "FileTreeNode",
-  props: {
-    entry: { type: Object as PropType<DirEntry>, required: true },
-  },
-  setup(props) {
-    const expanded = ref(false);
-    const children = ref<DirEntry[] | null>(null);
-    const error = ref<string | null>(null);
-
-    const loadChildren = async () => {
-      if (!props.entry.isDirectory || children.value !== null) return;
-      children.value = [];
-      error.value = null;
-      try {
-        children.value = (await listDirectory(workspace.sessionId, props.entry.path)).entries;
-      } catch (err) {
-        children.value = null;
-        error.value = toMessage(err);
-        console.error("[files] failed to list", props.entry.path, err);
-      }
-    };
-
-    const toggle = () => {
-      if (!props.entry.isDirectory) return;
-      expanded.value = !expanded.value;
-      if (expanded.value && children.value === null) loadChildren();
-    };
-
-    return () => {
-      const EntryIcon = getEntryIcon(props.entry.name, props.entry.isDirectory, expanded.value);
-
-      return (
-        <li class="file-tree__item">
-          <button
-            type="button"
-            class="file-tree__row ui-list-row"
-            aria-expanded={props.entry.isDirectory ? expanded.value : undefined}
-            onClick={toggle}
-          >
-            <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}>
-              <svg aria-hidden="true"><use href={EntryIcon} /></svg>
-            </span>
-            <span class="file-tree__name">{props.entry.name}</span>
-          </button>
-          {expanded.value && (
-            <ul class="file-tree__list file-tree__children">
-              {error.value ? (
-                <li class="file-tree__state file-tree__state--error">{error.value}</li>
-              ) : (
-                children.value?.map((child) => <FileTreeNode key={child.path} entry={child} />)
-              )}
-            </ul>
-          )}
-        </li>
-      );
-    };
-  },
-});
+const SEARCH_DEBOUNCE_MS = 120;
 
 export default defineComponent({
   name: "FileTree",
@@ -79,36 +21,93 @@ export default defineComponent({
     const error = ref<string | null>(null);
     const search = ref("");
     const refreshIcon = ref<'refresh-cw' | 'refresh-ccw'>('refresh-cw');
+    const refreshTrigger = ref(0);
+    provide(FILE_TREE_REFRESH_KEY, refreshTrigger);
+
+    const searchResults = ref<DirEntry[]>([]);
+    const searchLoading = ref(false);
+    const searchError = ref<string | null>(null);
+    /** Increments on every `runSearch` call (incl. resets) so any in-flight
+     *  fetch from a stale query — or a previous workspace — is discarded
+     *  instead of overwriting the current results. */
+    let searchRequestVersion = 0;
+    let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
     let requestVersion = 0;
 
-    const load = async () => {
+    /** `reset` clears the visible list before fetching — only needed when
+     *  the previous listing belongs to a different cwd (initial mount /
+     *  workspace change). The refresh button calls without `reset` so
+     *  Vue's `:key`-based diffing reuses existing `FileTreeNode` instances
+     *  and preserves their expanded state. */
+    const load = async (reset = false) => {
       refreshIcon.value = 'refresh-ccw';
       const currentRequest = ++requestVersion;
       error.value = null;
-      entries.value = [];
+      if (reset) entries.value = [];
       try {
         const result = await listDirectory(workspace.sessionId);
         if (currentRequest !== requestVersion) return;
         entries.value = result.entries;
+        refreshTrigger.value++;
       } catch (err) {
         if (currentRequest !== requestVersion) return;
+        entries.value = [];
         error.value = toMessage(err);
         console.error("[files] failed to list workspace root", err);
       } finally {
         setTimeout(() => {
-          refreshIcon.value = 'refresh-cw';
+          if (currentRequest === requestVersion) refreshIcon.value = 'refresh-cw';
         }, 240);
       }
     };
 
-    const visibleEntries = computed(() => {
-      const query = search.value.trim().toLowerCase();
-      if (!query) return entries.value;
-      return entries.value.filter((entry) => entry.relativePath.toLowerCase().includes(query));
+    /** Same debounce + requestVersion pattern as `ComposerShelf`: a slow
+     *  earlier fetch must not overwrite a newer query's results. */
+    const runSearch = async (query: string) => {
+      const current = ++searchRequestVersion;
+      const trimmed = query.trim();
+      if (!trimmed) {
+        searchResults.value = [];
+        searchError.value = null;
+        searchLoading.value = false;
+        return;
+      }
+      searchLoading.value = true;
+      searchError.value = null;
+      try {
+        const result = await searchFiles(workspace.sessionId, trimmed);
+        if (current !== searchRequestVersion) return;
+        searchResults.value = result.entries;
+      } catch (err) {
+        if (current !== searchRequestVersion) return;
+        searchError.value = toMessage(err);
+        searchResults.value = [];
+      } finally {
+        if (current === searchRequestVersion) searchLoading.value = false;
+      }
+    };
+
+    watch(search, (query) => {
+      clearTimeout(searchTimer);
+      // Empty query: clear immediately so the tree reappears without
+      // waiting out the debounce; non-empty: debounce rapid typing.
+      if (!query.trim()) {
+        void runSearch(query);
+      } else {
+        searchTimer = setTimeout(() => void runSearch(query), SEARCH_DEBOUNCE_MS);
+      }
     });
 
-    onMounted(load);
-    watch(() => workspace.cwd, load);
+    const isSearching = computed(() => search.value.trim().length > 0);
+
+    onMounted(() => load(true));
+    watch(() => workspace.cwd, () => {
+      // Previous search results belong to the old cwd; reset so the tree
+      // reappears cleanly under the new workspace.
+      search.value = "";
+      load(true);
+    });
 
     return () => (
       <div class="file-tree file-tree--root">
@@ -128,7 +127,7 @@ export default defineComponent({
             <IconButton size="standard" label="New folder" disabled>
               <FolderAddIcon />
             </IconButton>
-            <IconButton size="standard" label="Reload" onClick={load}>
+            <IconButton size="standard" label="Reload" onClick={() => load()}>
               <MorphIcon icon={lucideIcon(refreshIcon.value)} spring="snappy" />
             </IconButton>
           </div>
@@ -136,16 +135,28 @@ export default defineComponent({
 
         {error.value ? (
           <p class="file-tree__state file-tree__state--error">{error.value}</p>
-        ) : visibleEntries.value.length > 0 ? (
+        ) : isSearching.value ? (
+          searchError.value ? (
+            <p class="file-tree__state file-tree__state--error">{searchError.value}</p>
+          ) : searchLoading.value ? (
+            <p class="file-tree__state">Searching…</p>
+          ) : searchResults.value.length > 0 ? (
+            <ul class="file-tree__list">
+              {searchResults.value.map((entry) => (
+                <FileSearchResult key={entry.path} entry={entry} />
+              ))}
+            </ul>
+          ) : (
+            <p class="file-tree__state">No files match "{search.value}"</p>
+          )
+        ) : entries.value.length > 0 ? (
           <ul class="file-tree__list">
-            {visibleEntries.value.map((entry) => (
+            {entries.value.map((entry) => (
               <FileTreeNode key={entry.path} entry={entry} />
             ))}
           </ul>
         ) : (
-          <p class="file-tree__state">
-            {search.value ? `No files match "${search.value}"` : "No files"}
-          </p>
+          <p class="file-tree__state">No files</p>
         )}
       </div>
     );
@@ -235,6 +246,10 @@ export default defineComponent({
   outline-offset: -2px;
 }
 
+.file-tree__row--search {
+  cursor: default;
+}
+
 .file-tree__icon {
   display: inline-flex;
   width: 18px;
@@ -242,11 +257,11 @@ export default defineComponent({
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  color: #d9936c;
+  color: var(--ui-icon-folder);
 }
 
 .file-tree__icon:not(.is-folder) {
-  color: #399cf0;
+  color: var(--ui-icon-file);
 }
 
 .file-tree__icon svg {
@@ -268,6 +283,11 @@ export default defineComponent({
   white-space: nowrap;
 }
 
+.file-tree__path {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
 .file-tree__state {
   margin: 0;
   padding: 14px;
@@ -276,6 +296,6 @@ export default defineComponent({
 }
 
 .file-tree__state--error {
-  color: #a33;
+  color: var(--ui-error-strong);
 }
 </style>
