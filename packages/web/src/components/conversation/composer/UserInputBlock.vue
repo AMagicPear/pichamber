@@ -16,7 +16,7 @@ import ThinkingLevelSelector from "@/components/ui/ThinkingLevelSelector.vue";
 import ComposerActivityStack from "@/components/conversation/composer/ComposerActivityStack.vue";
 import { messageText } from "@/components/conversation/messages/messageContent";
 import type { SendKey } from "@/stores/settings";
-import { conversation, type DraftImage } from "@/stores/workspace";
+import { conversation, working, type DraftImage } from "@/stores/workspace";
 import AttachmentIcon from "@/assets/icons/Attachment2.svg";
 import CloseIcon from "@/assets/icons/Close.svg";
 
@@ -34,7 +34,6 @@ const emit = defineEmits<{
 
 const props = defineProps<{
   canSend: boolean;
-  busy: boolean;
   activity: AgentActivity;
   pending: PendingMessages;
   canRestorePending: boolean;
@@ -193,7 +192,7 @@ const onKeydown = (event: KeyboardEvent) => {
   if (event.key === "Escape") {
     event.preventDefault();
     if (shelfMode.value) shelfMode.value = null;
-    else if (props.busy) emit("abort");
+    else if (working) emit("abort");
     return;
   }
   if (event.key === "Enter") {
@@ -392,128 +391,94 @@ const placeholder = computed(() => {
 
 <template>
   <div class="composer-shell">
-    <ComposerActivityStack
-      :widgets="activityWidgets"
-      :show-status="busy || auxiliaryItems.length > 0"
-    >
+    <ComposerActivityStack :widgets="activityWidgets" :show-status="working || auxiliaryItems.length > 0">
       <template #composer>
-      <div
-        class="composer"
-        :class="{ 'is-busy': busy, 'has-shelf': !!shelfMode, 'is-dragging-image': isDraggingImage }"
-        @dragenter="onDragEnter"
-        @dragover.prevent
-        @dragleave="onDragLeave"
-        @drop.prevent="onDrop"
-      >
-      <ComposerShelf
-        ref="shelf"
-        :mode="shelfMode"
-        :query="shelfQuery"
-        :commands="commands"
-        @select-file="onPickFile"
-        @select-command="onPickCommand"
-      />
-      <div v-if="isDraggingImage" class="composer__drop-indicator" aria-hidden="true"><AttachmentIcon /></div>
-      <textarea
-        ref="inputEl"
-        v-model="draft"
-        class="composer__input"
-        :placeholder="placeholder"
-        rows="1"
-        @input="detectTrigger"
-        @keydown="onKeydown"
-        @click="detectTrigger"
-        @paste="onPaste"
-      />
-      <div v-if="images.length" class="composer__images" aria-label="Attached images">
-        <div v-for="image in images" :key="image.id" class="composer__image" :style="{ '--image-aspect': image.aspectRatio }">
-          <div class="composer__image-content">
-            <img :src="`data:${image.mimeType};base64,${image.data}`" alt="Attached image" />
-            <button type="button" aria-label="Remove image" title="Remove image" @click="removeImage(image.id)"><CloseIcon /></button>
+        <div class="composer"
+          :class="{ 'working': working, 'has-shelf': !!shelfMode, 'is-dragging-image': isDraggingImage }"
+          @dragenter="onDragEnter" @dragover.prevent @dragleave="onDragLeave" @drop.prevent="onDrop">
+          <ComposerShelf ref="shelf" :mode="shelfMode" :query="shelfQuery" :commands="commands"
+            @select-file="onPickFile" @select-command="onPickCommand" />
+          <div v-if="isDraggingImage" class="composer__drop-indicator" aria-hidden="true">
+            <AttachmentIcon />
           </div>
-        </div>
-      </div>
-      <div v-if="pendingCount" class="composer__queue">
-        <div v-for="(message, index) in pending.steering" :key="`steer:${index}:${message}`">
-          <span>Steer</span><p>{{ message }}</p>
-        </div>
-        <div v-for="(message, index) in pending.followUp" :key="`follow:${index}:${message}`">
-          <span>Follow up</span><p>{{ message }}</p>
-        </div>
-        <button v-if="canRestorePending" type="button" @click="emit('restorePending')">Restore all</button>
-      </div>
-      <div class="composer__footer">
-        <div class="composer__footer-leading">
-          <div class="composer__attach">
-            <IconButton size="compact" label="Attach files" :aria-expanded="shelfMode === 'files'" @click="openFiles">
-              <AddCircleIcon />
-            </IconButton>
+          <textarea ref="inputEl" v-model="draft" class="composer__input" :placeholder="placeholder" rows="1"
+            @input="detectTrigger" @keydown="onKeydown" @click="detectTrigger" @paste="onPaste" />
+          <div v-if="images.length" class="composer__images" aria-label="Attached images">
+            <div v-for="image in images" :key="image.id" class="composer__image"
+              :style="{ '--image-aspect': image.aspectRatio }">
+              <div class="composer__image-content">
+                <img :src="`data:${image.mimeType};base64,${image.data}`" alt="Attached image" />
+                <button type="button" aria-label="Remove image" title="Remove image" @click="removeImage(image.id)">
+                  <CloseIcon />
+                </button>
+              </div>
+            </div>
           </div>
-          <!-- Compact works at any time: the SDK's compact() aborts the
+          <div v-if="pendingCount" class="composer__queue">
+            <div v-for="(message, index) in pending.steering" :key="`steer:${index}:${message}`">
+              <span>Steer</span>
+              <p>{{ message }}</p>
+            </div>
+            <div v-for="(message, index) in pending.followUp" :key="`follow:${index}:${message}`">
+              <span>Follow up</span>
+              <p>{{ message }}</p>
+            </div>
+            <button v-if="canRestorePending" type="button" @click="emit('restorePending')">Restore all</button>
+          </div>
+          <div class="composer__footer">
+            <div class="composer__footer-leading">
+              <div class="composer__attach">
+                <IconButton size="compact" label="Attach files" :aria-expanded="shelfMode === 'files'"
+                  @click="openFiles">
+                  <AddCircleIcon />
+                </IconButton>
+              </div>
+              <!-- Compact works at any time: the SDK's compact() aborts the
                current turn first (same as Pi's /compact), then summarizes. -->
-          <IconButton size="compact" label="Compact context" @click="emit('compact')"><StackIcon /></IconButton>
-          <IconButton
-            size="compact"
-            :label="goalLabel"
-            :title="goalLabel"
-            :pressed="goalMode"
-            :disabled="!goalAvailable"
-            @click="goalMode = !goalMode"
-          ><TargetIcon /></IconButton>
-        </div>
-        <div class="composer__footer-trailing">
-          <div class="composer__models">
-            <ModelSelector
-              :model="model"
-              :available-models="availableModels"
-              @select="emit('selectModel', $event)"
-            />
-            <ThinkingLevelSelector
-              :level="thinkingLevel"
-              :available-levels="availableThinkingLevels"
-              @select="emit('selectThinkingLevel', $event)"
-            />
-          </div>
-          <!-- Mode toggle lives next to the action buttons now that it's
+              <IconButton size="compact" label="Compact context" @click="emit('compact')">
+                <StackIcon />
+              </IconButton>
+              <IconButton size="compact" :label="goalLabel" :title="goalLabel" :pressed="goalMode"
+                :disabled="!goalAvailable" @click="goalMode = !goalMode">
+                <TargetIcon />
+              </IconButton>
+            </div>
+            <div class="composer__footer-trailing">
+              <div class="composer__models">
+                <ModelSelector :model="model" :available-models="availableModels"
+                  @select="emit('selectModel', $event)" />
+                <ThinkingLevelSelector :level="thinkingLevel" :available-levels="availableThinkingLevels"
+                  @select="emit('selectThinkingLevel', $event)" />
+              </div>
+              <!-- Mode toggle lives next to the action buttons now that it's
                only meaningful while the agent is busy. -->
-          <div v-if="busy" class="composer__mode" role="tablist" aria-label="Send mode">
-            <button
-              type="button"
-              role="tab"
-              :aria-selected="submitMode === 'steer'"
-              :class="{ 'is-active': submitMode === 'steer' }"
-              @click="submitMode = 'steer'"
-            >Steer</button>
-            <button
-              type="button"
-              role="tab"
-              :aria-selected="submitMode === 'followUp'"
-              :class="{ 'is-active': submitMode === 'followUp' }"
-              @click="submitMode = 'followUp'"
-            >Follow up</button>
+              <div v-if="working" class="composer__mode" role="tablist" aria-label="Send mode">
+                <button type="button" role="tab" :aria-selected="submitMode === 'steer'"
+                  :class="{ 'is-active': submitMode === 'steer' }" @click="submitMode = 'steer'">Steer</button>
+                <button type="button" role="tab" :aria-selected="submitMode === 'followUp'"
+                  :class="{ 'is-active': submitMode === 'followUp' }" @click="submitMode = 'followUp'">Follow
+                  up</button>
+              </div>
+              <IconButton size="compact" label="Dictation" disabled>
+                <MicIcon />
+              </IconButton>
+              <IconButton v-if="working" size="compact" label="Stop agent" tone="danger" @click="emit('abort')">
+                <StopIcon />
+              </IconButton>
+              <IconButton size="compact"
+                :label="working ? (submitMode === 'steer' ? 'Steer agent' : 'Queue follow-up') : 'Send'"
+                :disabled="!canSend" @click="emitSend(submitMode)">
+                <SendIcon />
+              </IconButton>
+            </div>
           </div>
-          <IconButton size="compact" label="Dictation" disabled><MicIcon /></IconButton>
-          <IconButton
-            v-if="busy"
-            size="compact"
-            label="Stop agent"
-            tone="danger"
-            @click="emit('abort')"
-          ><StopIcon /></IconButton>
-          <IconButton
-            size="compact"
-            :label="busy ? (submitMode === 'steer' ? 'Steer agent' : 'Queue follow-up') : 'Send'"
-            :disabled="!canSend"
-            @click="emitSend(submitMode)"
-          ><SendIcon /></IconButton>
         </div>
-      </div>
-      </div>
       </template>
       <template #status>
-        <span v-if="busy" class="composer__activity"><i />{{ activityText }}</span>
+        <span v-if="working" class="composer__activity"><i />{{ activityText }}</span>
         <template v-for="(item, index) in auxiliaryItems" :key="item.id">
-          <span v-if="busy || activityWidgetCount > 0 || index > 0" class="composer__status-sep" aria-hidden="true">·</span>
+          <span v-if="working || activityWidgetCount > 0 || index > 0" class="composer__status-sep"
+            aria-hidden="true">·</span>
           <span class="composer__status-text" :data-source="item.source">{{ item.text }}</span>
         </template>
       </template>
@@ -528,11 +493,10 @@ const placeholder = computed(() => {
 .composer-shell {
   display: flex;
   flex-direction: column;
-  width: min(
-    calc(100% - var(--conversation-inline-gutter) - var(--conversation-inline-gutter)),
-    var(--conversation-content-width)
-  );
+  width: min(calc(100% - var(--conversation-inline-gutter) - var(--conversation-inline-gutter)),
+      var(--conversation-content-width));
 }
+
 .composer {
   position: relative;
   display: flex;
@@ -545,20 +509,24 @@ const placeholder = computed(() => {
   z-index: 2;
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
+
 .composer:focus-within {
   border-color: var(--ui-border-focus);
   box-shadow: 0 2px 12px rgb(35 32 25 / 5%);
 }
-.composer.is-busy {
+
+.composer.working {
   /* Warm neutral border, not blue — keeps the busy state visible without
    * pulling any cool color into the input surface. */
   border-color: #c8bfae;
 }
+
 .composer.is-dragging-image {
   border-color: var(--ui-border-focus);
   border-style: dashed;
   box-shadow: 0 0 0 2px var(--ui-focus);
 }
+
 .composer__drop-indicator {
   position: absolute;
   z-index: 3;
@@ -571,10 +539,16 @@ const placeholder = computed(() => {
   color: var(--ui-text-muted);
   pointer-events: none;
 }
-.composer__drop-indicator :deep(svg) { width: 24px; height: 24px; }
+
+.composer__drop-indicator :deep(svg) {
+  width: 24px;
+  height: 24px;
+}
+
 .composer.has-shelf {
   border-radius: 0 0 13px 13px;
 }
+
 .composer__input {
   display: block;
   flex: 0 0 auto;
@@ -596,9 +570,11 @@ const placeholder = computed(() => {
   line-height: 1.55;
   background: transparent;
 }
+
 .composer__input::placeholder {
   color: var(--ui-text-muted);
 }
+
 .composer__images {
   display: flex;
   flex-wrap: wrap;
@@ -606,6 +582,7 @@ const placeholder = computed(() => {
   gap: 7px;
   padding: 0 12px 10px;
 }
+
 .composer__image {
   width: 42px;
   height: 42px;
@@ -613,12 +590,14 @@ const placeholder = computed(() => {
   height: min(42px, calc(42px / var(--image-aspect)));
   animation: composer-image-enter 140ms var(--ui-ease-emphasized) both;
 }
+
 .composer__image-content {
   position: relative;
   width: 100%;
   height: 100%;
   transition: transform 140ms var(--ui-ease-emphasized);
 }
+
 .composer__image img {
   display: block;
   width: 100%;
@@ -627,6 +606,7 @@ const placeholder = computed(() => {
   border-radius: 5px;
   object-fit: cover;
 }
+
 .composer__image button {
   position: absolute;
   top: -5px;
@@ -643,18 +623,44 @@ const placeholder = computed(() => {
   color: var(--ui-text-muted);
   cursor: pointer;
 }
-.composer__image button:hover { color: var(--ui-text-strong); background: var(--ui-surface-hover); }
-.composer__image button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 1px; }
-.composer__image button :deep(svg) { width: 10px; height: 10px; }
+
+.composer__image button:hover {
+  color: var(--ui-text-strong);
+  background: var(--ui-surface-hover);
+}
+
+.composer__image button:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.composer__image button :deep(svg) {
+  width: 10px;
+  height: 10px;
+}
+
 @keyframes composer-image-enter {
-  from { opacity: 0; transform: translateY(2px) scale(0.9); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
+
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .composer__image:has(img:hover) .composer__image-content { transform: rotate(-1deg) scale(1.04); }
+  .composer__image:has(img:hover) .composer__image-content {
+    transform: rotate(-1deg) scale(1.04);
+  }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .composer__image { animation: none; }
+  .composer__image {
+    animation: none;
+  }
 }
 
 /* Pending messages are separated from the editor by a quiet divider. */
@@ -680,13 +686,16 @@ const placeholder = computed(() => {
   position: relative;
   z-index: 1;
 }
+
 .composer__status-sep {
   opacity: 0.55;
 }
+
 .composer__status-text {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
 .composer__activity {
   display: inline-flex;
   align-items: center;
@@ -694,6 +703,7 @@ const placeholder = computed(() => {
   color: var(--ui-text-muted);
   white-space: nowrap;
 }
+
 .composer__activity i {
   width: 5px;
   height: 5px;
@@ -702,8 +712,11 @@ const placeholder = computed(() => {
   background: var(--ui-status-text);
   animation: activity-pulse 1.4s ease-in-out infinite;
 }
+
 @keyframes activity-pulse {
-  50% { opacity: 0.35; }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 /* Pending message queue (steer/follow-up messages waiting to flush). */
@@ -712,7 +725,8 @@ const placeholder = computed(() => {
   gap: 3px;
   padding: 6px 9px;
 }
-.composer__queue > div {
+
+.composer__queue>div {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);
   align-items: baseline;
@@ -723,9 +737,20 @@ const placeholder = computed(() => {
   color: var(--ui-text-muted);
   font-size: 11px;
 }
-.composer__queue > div span { color: var(--ui-status-text); font-weight: 600; }
-.composer__queue > div p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.composer__queue > button {
+
+.composer__queue>div span {
+  color: var(--ui-status-text);
+  font-weight: 600;
+}
+
+.composer__queue>div p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__queue>button {
   justify-self: end;
   padding: 3px 6px;
   border: 0;
@@ -748,20 +773,24 @@ const placeholder = computed(() => {
   gap: 6px;
   padding: 6px 8px 6px 10px;
 }
+
 .composer__footer-leading,
 .composer__footer-trailing,
 .composer__models {
   display: flex;
   align-items: center;
 }
+
 .composer__attach {
   position: relative;
   display: inline-flex;
 }
+
 .composer__footer-leading {
   flex: 0 0 auto;
   gap: 6px;
 }
+
 .composer__footer-trailing {
   display: flex;
   flex: 1 1 auto;
@@ -770,6 +799,7 @@ const placeholder = computed(() => {
   justify-content: flex-end;
   gap: 6px;
 }
+
 .composer__models {
   flex: 1 1 auto;
   min-width: 0;
@@ -790,6 +820,7 @@ const placeholder = computed(() => {
   background: var(--ui-surface-selected);
   margin-left: 2px;
 }
+
 .composer__mode button {
   height: 20px;
   padding: 0 9px;
@@ -804,6 +835,7 @@ const placeholder = computed(() => {
   white-space: nowrap;
   cursor: pointer;
 }
+
 .composer__mode button.is-active {
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow-control);

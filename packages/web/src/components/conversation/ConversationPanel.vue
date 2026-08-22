@@ -22,7 +22,7 @@ import {
   conversation,
   draft,
   images,
-  isBusy,
+  working,
   model,
   pending,
   shelfCommands,
@@ -104,7 +104,6 @@ watch(
       v-model="draft"
       v-model:images="images"
       :can-send="canSend"
-      :busy="isBusy"
       :activity="activity"
       :pending="pending"
       :can-restore-pending="canRestorePending"

@@ -109,9 +109,7 @@ export const refreshSessions = () => {
 export const renameSessionInStore = async (sessionId: string, name: string) => {
   const trimmed = name.trim();
   await renameSession(sessionId, trimmed);
-  sessions.value = sessions.value.map((s) =>
-    s.id === sessionId ? { ...s, name: trimmed } : s,
-  );
+  sessions.value = sessions.value.map((s) => (s.id === sessionId ? { ...s, name: trimmed } : s));
   if (workspace.sessionId === sessionId) workspace.sessionName = trimmed;
   return trimmed;
 };
@@ -154,7 +152,7 @@ export const connected = ref(false);
  *  compaction_start / auto_retry_start → 非 idle，settlement → idle，
  *  与旧 busy 完全等价（agent loop 恒先发 agent_start 再发 user/assistant
  *  message_start，所以没有需要防御翻转的窗口）。 */
-export const isBusy = computed(() => activity.value.phase !== "idle");
+export const working = computed(() => activity.value.phase !== "idle");
 
 export const activity = ref<AgentActivity>({ phase: "idle" });
 export const pending = ref<PendingMessages>({ steering: [], followUp: [] });
