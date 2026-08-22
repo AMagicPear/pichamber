@@ -9,12 +9,14 @@ import type {
   ModelDescriptor,
   PendingMessages,
   RuntimeResources,
+  RuntimeSlashCommand,
   ServerMessage,
   SessionInfo,
   SessionStatsView,
   ThinkingState,
   WebExtensionUIRequest,
 } from "@amagicpear/pichamber-shared";
+import { BUILTIN_COMMANDS } from "@/composables/builtin-commands";
 import { settings } from "@/stores/settings";
 import { applyExtensionUiRequest, pushErrorToast, resetExtensionUi } from "@/stores/extensionUi";
 
@@ -149,7 +151,12 @@ export type DraftImage = ImageContent & { id: string; aspectRatio: number };
 export const images = ref<DraftImage[]>([]);
 export const connected = ref(false);
 
-export const busy = ref(false);
+/** 是否在工作 = activity 不是 idle。服务端不单独发 busy 了：agent_start /
+ *  compaction_start / auto_retry_start → 非 idle，settlement → idle，
+ *  与旧 busy 完全等价（agent loop 恒先发 agent_start 再发 user/assistant
+ *  message_start，所以没有需要防御翻转的窗口）。 */
+export const isBusy = computed(() => activity.value.phase !== "idle");
+
 export const activity = ref<AgentActivity>({ phase: "idle" });
 export const pending = ref<PendingMessages>({ steering: [], followUp: [] });
 export const canRestorePending = ref(true);
@@ -160,6 +167,14 @@ export const resources = ref<RuntimeResources>({
   diagnostics: [],
   extensionInventoryAvailable: false,
 });
+
+/** 命令选择器 shelf 的完整列表：前端内置命令 + 服务端下发的扩展/prompt/
+ *  skill 命令。builtin 定义在 `@/composables/builtin-commands`，服务端不再
+ * 下发它们。 */
+export const shelfCommands = computed<RuntimeSlashCommand[]>(() => [
+  ...BUILTIN_COMMANDS,
+  ...resources.value.commands,
+]);
 
 // extensionUi（reactive + 对话框/通知队列）已挪到 @/stores/extensionUi.ts
 
@@ -269,10 +284,17 @@ const replaceItem = (index: number, item: ConversationItem) => {
 };
 
 /** 应用一条官方 `AgentSessionEvent`（镜像 TUI handleEvent 的消息/工具
- *  分支；busy/activity/pending 由 `state` 帧承载，这里不管）。 */
+ *  分支；activity/pending 由 `state` 帧承载，compaction 失败提示在这里
+ *  弹——事件本身带 errorMessage，不需要服务端伪造 notify 帧）。 */
 const applyEvent = (event: AgentSessionEvent) => {
   const items = conversation.value;
   switch (event.type) {
+    case "compaction_end": {
+      if (typeof event.errorMessage === "string" && event.errorMessage) {
+        pushErrorToast(event.errorMessage.replace(/^Compaction failed: /, ""));
+      }
+      break;
+    }
     case "message_start": {
       const { role } = event.message;
       if (role === "toolResult") break; // 结果在 message_end 合并进工具条目
@@ -395,8 +417,8 @@ watch(
 
 // ─── Turn-completion notifications ──────────────────────────────────
 //
-// Fired when the server broadcasts `busy: false` (agent_settled /
-// compaction_end). Disconnect flips busy locally without a server frame,
+// Fired when the server broadcasts `activity: idle` (agent_settled /
+// compaction_end). Disconnect flips activity locally without a server frame,
 // so session swaps never ping.
 
 // Short Web Audio two-note "ding-dong". Most browsers suspend an
@@ -483,7 +505,6 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
     case "snapshot": {
       resyncPending = false;
       connected.value = true;
-      busy.value = message.busy;
       activity.value = message.activity;
       pending.value = message.pending;
       canRestorePending.value = message.canRestorePending;
@@ -512,20 +533,23 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
         break;
       }
       lastSeq = message.seq;
-      if (message.busy !== undefined) busy.value = message.busy;
-      if (message.activity) activity.value = message.activity;
+      if (message.activity) {
+        const wasWorking = activity.value.phase !== "idle";
+        activity.value = message.activity;
+        // 服务器只在 agent_settled / compaction_end 广播 activity=idle：
+        // 回合跑完刷新侧栏 + 完成通知。disconnect 的本地翻转不经过这里，
+        // 不会误响。wasWorking 防重复 settle 重复提醒。
+        if (wasWorking && message.activity.phase === "idle") {
+          void refreshSessions();
+          notifyAgentSettled();
+        }
+      }
       if (message.pending) pending.value = message.pending;
       if (message.resources) resources.value = message.resources;
       if ("model" in message) model.value = message.model;
       if (message.availableModels) availableModels.value = message.availableModels;
       if (message.thinking) thinking.value = message.thinking;
       if (message.stats) stats.value = message.stats;
-      // 服务器只在 agent_settled / compaction_end 广播 busy=false
-      // 回合跑完刷新侧栏 + 完成通知。disconnect 的本地翻转不经过这里，不会误响。
-      if (message.busy === false) {
-        void refreshSessions();
-        notifyAgentSettled();
-      }
       break;
     }
     case "ui_request": {
@@ -559,7 +583,6 @@ export const resetSessionState = () => {
   connected.value = false;
   conversation.value = [];
   images.value = [];
-  busy.value = false;
   activity.value = { phase: "idle" };
   pending.value = { steering: [], followUp: [] };
   canRestorePending.value = true;

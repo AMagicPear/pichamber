@@ -4,9 +4,12 @@
  * One `SessionChannel` per active session, backed by Pi's official
  * `AgentSessionRuntime`. Every channel subscribes to the runtime's
  * official `AgentSessionEvent` stream and forwards events verbatim to
- * clients; the surrounding state (busy / activity / pending / model /
- * thinking / stats / resources) is computed on the server and emitted
- * through partial `state` frames.
+ * clients; the surrounding state (activity / pending / model / thinking /
+ * stats / resources) is computed on the server and emitted through
+ * partial `state` frames. `activity.phase === "idle"` is the sole
+ * not-working signal — there is no separate `busy` flag (the agent loop
+ * always emits `agent_start` before any user/assistant `message_start`,
+ * so busy would just duplicate activity).
  *
  * SDK is the first-class path — `AgentSessionRuntime` is consumed
  * directly without a wrapper interface.
@@ -20,8 +23,6 @@ import {
   type RpcExtensionUIRequest,
   type RpcExtensionUIResponse,
   type SessionEntry,
-  type SourceInfo,
-  createSyntheticSourceInfo,
 } from "@earendil-works/pi-coding-agent";
 import type {
   AgentActivity,
@@ -31,7 +32,6 @@ import type {
   ModelDescriptor,
   PendingMessages,
   RuntimeResources,
-  RuntimeSlashCommand,
   RuntimeToolInfo,
   ServerMessage,
   SessionStatsView,
@@ -94,7 +94,6 @@ type ExtensionUiState = {
 type ChannelState = {
   /** Latest official `AgentMessage[]` rebuilt from session entries. */
   messages: AgentMessage[];
-  busy: boolean;
   activity: AgentActivity;
   pending: PendingMessages;
   /** Monotonic broadcast sequence; clients detect gaps and resync. */
@@ -173,25 +172,11 @@ const parsePromptImages = (value: unknown): ImageContent[] | null => {
 
 const channelsBySession = new Map<string, SessionChannel>();
 
-/** Build the GUI builtin command shelf (mirrors the SDK path's old
- *  `guiBuiltinSlashCommands`). Pi's TUI folds builtins into its own
- *  autocomplete; the web client needs them surfaced so users can
- *  discover /compact, /new, etc. The wire type `RuntimeSlashCommand`
- *  widens the official `SlashCommandInfo.source` union with "builtin",
- *  so no cast is needed here. */
-const builtinSourceInfo = (name: string): SourceInfo =>
-  createSyntheticSourceInfo(`builtin:${name}`, { source: "pi-builtin" });
-
-const GUI_BUILTIN_COMMANDS: RuntimeSlashCommand[] = [
-  { name: "compact", description: "Manually compact the session context", source: "builtin", sourceInfo: builtinSourceInfo("compact") },
-  { name: "new", description: "Start a new session", source: "builtin", sourceInfo: builtinSourceInfo("new") },
-  { name: "name", description: "Set session display name", source: "builtin", sourceInfo: builtinSourceInfo("name") },
-  { name: "resume", description: "Resume a different session", source: "builtin", sourceInfo: builtinSourceInfo("resume") },
-  { name: "fork", description: "Create a new fork from a previous user message", source: "builtin", sourceInfo: builtinSourceInfo("fork") },
-  { name: "clone", description: "Duplicate the current session at the current position", source: "builtin", sourceInfo: builtinSourceInfo("clone") },
-  { name: "reload", description: "Reload extensions, prompts, themes, and context files", source: "builtin", sourceInfo: builtinSourceInfo("reload") },
-];
-
+/** Build the resource inventory for one session: runtime extension
+ *  commands / tools / extensions, without any client-side builtin shelf
+ *  (the GUI built-ins like `/compact` live in the web client and are
+ *  merged into the command picker there — see
+ *  `packages/web/src/composables/builtin-commands.ts`). */
 const snapshotResources = (runtime: AgentSessionRuntime): RuntimeResources => {
   const session = runtime.session;
   const result = session.resourceLoader.getExtensions();
@@ -201,7 +186,7 @@ const snapshotResources = (runtime: AgentSessionRuntime): RuntimeResources => {
     ? result.runtime.getCommands()
     : result.runtime.getCommands().filter((command) => command.source !== "skill");
   return {
-    commands: [...GUI_BUILTIN_COMMANDS, ...extensionCommands],
+    commands: extensionCommands,
     tools: result.runtime.getAllTools().map((tool) => ({
       name: tool.name,
       description: tool.description ?? "",
@@ -225,7 +210,6 @@ const snapshotResources = (runtime: AgentSessionRuntime): RuntimeResources => {
  *  The client detects gaps in `seq` and requests a resync, so every message
  *  through this function is monotonic. */
 type StateFields = {
-  busy?: boolean;
   activity?: AgentActivity;
   pending?: PendingMessages;
   model?: ModelDescriptor;
@@ -329,12 +313,11 @@ const reconcile = async (channel: SessionChannel): Promise<boolean> => {
 };
 
 const snapshotMessage = (channel: SessionChannel): ServerMessage => {
-  const { seq, busy, activity, pending, messages, model, availableModels, thinking, stats, resources } =
+  const { seq, activity, pending, messages, model, availableModels, thinking, stats, resources } =
     channel.state;
   return {
     type: "snapshot",
     seq,
-    busy,
     activity,
     pending,
     canRestorePending: true,
@@ -404,45 +387,6 @@ const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
   }
 };
 
-/** External Pi's RPC mode used to wrap labels in ANSI color codes; web
- *  clients need semantic text only. SDK never produces ANSI, but the
- *  normalization runs anyway so a future RPC adapter that pipes through
- *  this same channel renders identically. */
-const stripExtensionUiAnsi = (request: RpcExtensionUIRequest): WebExtensionUIRequest => {
-  const strip = (text: string) => Bun.stripANSI(text);
-  switch (request.method) {
-    case "select":
-      return { ...request, title: strip(request.title), options: request.options.map(strip) };
-    case "confirm":
-      return { ...request, title: strip(request.title), message: strip(request.message) };
-    case "input":
-      return {
-        ...request,
-        title: strip(request.title),
-        placeholder: request.placeholder === undefined ? undefined : strip(request.placeholder),
-      };
-    case "editor":
-      return {
-        ...request,
-        title: strip(request.title),
-        prefill: request.prefill === undefined ? undefined : strip(request.prefill),
-      };
-    case "notify":
-      return { ...request, message: strip(request.message) };
-    case "setStatus":
-      return {
-        ...request,
-        statusText: request.statusText === undefined ? undefined : strip(request.statusText),
-      };
-    case "setWidget":
-      return normalizeWidgetRequest({ ...request, widgetLines: request.widgetLines?.map(strip) });
-    case "setTitle":
-      return { ...request, title: strip(request.title) };
-    case "set_editor_text":
-      return { ...request, text: strip(request.text) };
-  }
-};
-
 const attachListener = (sessionId: string, runtime: AgentSessionRuntime): SessionChannel => {
   const existing = channelsBySession.get(sessionId);
   if (existing) return existing;
@@ -481,7 +425,6 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     unsubscribe: () => undefined,
     state: {
       messages: [],
-      busy: false,
       activity: { phase: "idle" },
       pending: { steering: [], followUp: [] },
       seq: 0,
@@ -509,34 +452,26 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     channel.state.seq += 1;
     broadcast(snapshotMessage(channel));
   };
+  /** 扩展 UI 请求归一化后转发。除 setWidget 外的请求原样透传（ANSI 剥离
+   *  已移除：UiBridge / SDK RPC context 都原样透传扩展字符串，webTheme
+   *  的样式方法直接返回文本，链路上没有 ANSI 产生源）；setWidget 需要把
+   *  widget 行解析成结构化 `ExtensionWidget`（task-tree / lines）。 */
   const broadcastUiRequest = (request: RpcExtensionUIRequest) => {
-    const normalized = stripExtensionUiAnsi(request);
+    const normalized: WebExtensionUIRequest =
+      request.method === "setWidget" ? normalizeWidgetRequest(request) : request;
     applyExtensionUiRequest(channel.extensionUi, normalized);
     broadcast({ type: "ui_request", request: normalized });
   };
 
   /** Common settlement shape shared by `compaction_end` and `agent_settled`:
-   *  reset busy/activity, rebuild messages against the authoritative runtime,
+   *  reset activity, rebuild messages against the authoritative runtime,
    *  refresh stats + resources, and broadcast the new state.
-   *  Compaction additionally surfaces SDK errors as toasts and flushes its
-   *  message queue before settling. */
-  const settleChannel = async (options?: { errorMessage?: string; flushQueue?: boolean }) => {
+   *  Compaction additionally flushes its queued messages before settling.
+   *  Compaction errors are NOT toasted here — the `compaction_end` event is
+   *  forwarded verbatim and the client surfaces `errorMessage` itself. */
+  const settleChannel = async (options?: { flushQueue?: boolean }) => {
     const state = channel.state;
-    state.busy = false;
     state.activity = { phase: "idle" };
-
-    if (options?.errorMessage) {
-      broadcast({
-        type: "ui_request",
-        request: {
-          type: "extension_ui_request",
-          id: crypto.randomUUID(),
-          method: "notify",
-          message: options.errorMessage.replace(/^Compaction failed: /, ""),
-          notifyType: "error",
-        },
-      } satisfies ServerMessage);
-    }
 
     if (options?.flushQueue && channel.compactionQueue.length > 0) {
       const [first, ...rest] = channel.compactionQueue;
@@ -556,13 +491,11 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     const settledStats = await computeSessionStatsView(runtime);
     state.resources = snapshotResources(runtime);
     const fields: {
-      busy: boolean;
       activity: AgentActivity;
       pending: PendingMessages;
       stats?: SessionStatsView;
       resources: RuntimeResources;
     } = {
-      busy: state.busy,
       activity: state.activity,
       pending: pendingWithQueue(channel),
       resources: state.resources,
@@ -604,28 +537,22 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     const state = channel.state;
     switch (event.type) {
       case "agent_start": {
-        state.busy = true;
         state.activity = { phase: "working" };
-        broadcastState(channel, { busy: true, activity: state.activity });
+        broadcastState(channel, { activity: state.activity });
         break;
       }
       // Conversation content events (official `AgentSessionEvent`) are
       // forwarded verbatim; the client mirrors TUI's handleEvent and builds
-      // the conversation view from them. busy/activity/pending are carried
-      // by `state` frames (server-computed display state). activity only
+      // the conversation view from them. activity/pending are carried by
+      // `state` frames (server-computed display state); activity only
       // follows the TUI StatusIndicator: agent_start → working,
       // compaction_start → compacting, auto_retry_start → retrying,
-      // settlement → idle. message/tool events don't touch it (fine-grained
+      // settlement → idle, and `idle` doubles as the not-busy signal
+      // (the agent loop always emits agent_start before any
+      // user/assistant message_start, so no defensive busy flip is
+      // needed here). message/tool events don't touch it (fine-grained
       // status is rendered by the message stream).
-      case "message_start": {
-        const { role } = event.message;
-        if ((role === "user" || role === "assistant") && !state.busy) {
-          state.busy = true;
-          broadcastState(channel, { busy: true });
-        }
-        broadcastEvent(event);
-        break;
-      }
+      case "message_start":
       case "message_update":
         broadcastEvent(event);
         break;
@@ -644,28 +571,26 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
         break;
       }
       case "compaction_start": {
-        state.busy = true;
         state.activity = { phase: "compacting" };
         channel.compactionQueue = [];
-        broadcastState(channel, { busy: true, activity: state.activity });
+        broadcastState(channel, { activity: state.activity });
         break;
       }
       case "compaction_end": {
-        const errorMessage = (event as { errorMessage?: unknown }).errorMessage;
-        void settleChannel({
-          errorMessage: typeof errorMessage === "string" && errorMessage ? errorMessage : undefined,
-          flushQueue: true,
-        });
+        // Forward the official event verbatim: the client toasts
+        // `errorMessage` itself (pushErrorToast) instead of the server
+        // fabricating an extension `notify` frame.
+        broadcastEvent(event);
+        void settleChannel({ flushQueue: true });
         break;
       }
       case "auto_retry_start": {
-        state.busy = true;
         state.activity = {
           phase: "retrying",
           attempt: event.attempt,
           maxAttempts: event.maxAttempts,
         };
-        broadcastState(channel, { busy: true, activity: state.activity });
+        broadcastState(channel, { activity: state.activity });
         break;
       }
       case "agent_settled": {
@@ -834,7 +759,7 @@ export const sessionWsHandler: WsHandler = {
         // Streaming behaviour is decided server-side: the client's request is
         // only a preference. Whether we're actually streaming is determined
         // by `runtime.session.isStreaming` — don't trust the client's
-        // local busy snapshot (broadcasts may lag). Non-streaming prompts
+        // local activity snapshot (broadcasts may lag). Non-streaming prompts
         // always start a new turn.
         const requested = input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
           ? input.streamingBehavior

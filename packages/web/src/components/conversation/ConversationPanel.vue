@@ -18,15 +18,15 @@ import { workspace } from "@/stores/workspace";
 import {
   activity,
   availableModels,
-  busy,
   canRestorePending,
   canSend,
   conversation,
   draft,
   images,
+  isBusy,
   model,
   pending,
-  resources,
+  shelfCommands,
   thinking,
 } from "@/stores/workspace";
 import { settings } from "@/stores/settings";
@@ -141,11 +141,11 @@ watch(
       v-model="draft"
       v-model:images="images"
       :can-send="canSend"
-      :busy="busy"
+      :busy="isBusy"
       :activity="activity"
       :pending="pending"
       :can-restore-pending="canRestorePending"
-      :commands="resources.commands"
+      :commands="shelfCommands"
       :extension-statuses="useDebugActivity ? debugActivityStatuses : extensionUi.statuses"
       :extension-widgets="useDebugActivity ? debugActivityWidgets : extensionUi.widgets"
       :model="model"

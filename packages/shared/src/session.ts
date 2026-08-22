@@ -86,12 +86,11 @@ export type WebExtensionUIRequest = Exclude<RpcExtensionUIRequest, { method: "se
   widgetPlacement?: WidgetPlacement;
 };
 
-/** Wire command shape for the slash-command shelf. The official
- *  `SlashCommandInfo` can't express pichamber's GUI built-in shelf entries
- *  (`SlashCommandSource` is only "extension" | "prompt" | "skill"), so the
- *  wire type widens `source` with "builtin". Official runtime commands and
- *  pichamber's curated built-ins both assign to it without casts; the
- *  client renders `source` as a label only and never branches on it. */
+/** Wire command shape for the slash-command shelf. Built-ins are defined
+ *  client-side (`packages/web/src/composables/builtin-commands.ts`), so the
+ *  server never emits `source: "builtin"` — but the widened union lets the
+ *  client shelf type server commands and its own built-ins without casts.
+ *  The client renders `source` as a label only and never branches on it. */
 export type RuntimeSlashCommand = Omit<SlashCommandInfo, "source"> & {
   source: SlashCommandSource | "builtin";
 };
@@ -190,7 +189,6 @@ export type ServerMessage =
   | {
       type: "snapshot";
       seq: number;
-      busy: boolean;
       activity: AgentActivity;
       pending: PendingMessages;
       /** Whether pending messages can be removed and restored without
@@ -213,7 +211,6 @@ export type ServerMessage =
   | {
       type: "state";
       seq: number;
-      busy?: boolean;
       activity?: AgentActivity;
       pending?: PendingMessages;
       model?: ModelDescriptor;
