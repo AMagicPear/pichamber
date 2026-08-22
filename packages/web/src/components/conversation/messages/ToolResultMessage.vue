@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import ToolIcon from "@/assets/icons/Tool.svg";
 import { settings } from "@/stores/settings";
 import type { ConversationToolDetail } from "./conversationToolDetail";
 import ConversationDetail from "./ConversationDetail.vue";
@@ -16,7 +15,7 @@ defineProps<{
   >
     <ConversationDetail
       class="conversation-message__details"
-      :icon="detail.icon ?? ToolIcon"
+      :icon="detail.icon ?? 'wrench'"
       :label="detail.label"
       :preview="detail.preview"
       :path="detail.path"

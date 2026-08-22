@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch, type Component } from "vue";
-import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { MorphIcon } from "morphicons/vue";
+import type { IconNode } from "morphicons";
 import FilePathLabel from "@/components/ui/FilePathLabel.vue";
+import { lucideIcon, type LucideIconName } from "@/components/ui/lucideIcons";
 import { type ToolBody } from "./toolBody";
 import ToolBodyView from "./ToolBodyView";
 
 const props = defineProps<{
-  icon?: Component | string;
+  /** Lucide icon name (e.g. `"square-terminal"`); resolved via
+   *  `useLucideIcon` and morphed to a chevron on hover/expand. */
+  icon?: LucideIconName;
   label: string;
   preview?: string;
   /** Full file path — rendered filename-first via FilePathLabel. */
@@ -39,7 +43,23 @@ const props = defineProps<{
 // watcher below only kicks in for callers that flip `autoExpand` during
 // the lifetime (Thinking during streaming); tool-result callers leave it
 // undefined and never trip the watcher.
+/** Lucide chevron icons, sourced from `lucide-static` (the same SVG
+ *  files `lucide-vue-next` exports). Single subpath each, so the 90° turn
+ *  between them morphs cleanly under morphicons' Procrustes alignment. */
+const chevronDown = lucideIcon("chevron-down");
+const chevronRight = lucideIcon("chevron-right");
+const toolIcon = lucideIcon(props.icon ?? "wrench");
+
 const expanded = ref(!!props.defaultExpanded);
+// Hover mirrors the old CSS `:hover` affordance: while collapsed, hovering
+// morphs the tool icon into a right-pointing chevron; leaving returns it.
+const hovered = ref(false);
+/** Single morphicons icon: tool icon when idle, chevron on hover/expand. */
+const currentIcon = computed<IconNode>(() => {
+  if (expanded.value) return chevronDown;
+  if (hovered.value) return chevronRight;
+  return toolIcon;
+});
 // immediate: mounts mid-stream start expanded; flips drive open/close.
 watch(
   () => props.autoExpand,
@@ -85,28 +105,18 @@ const elapsed = computed(() => {
 
 <template>
   <section class="conversation-detail" :class="{ 'is-expanded': expanded }">
-    <button type="button" class="conversation-detail__summary" :aria-expanded="expanded" @click="expanded = !expanded">
+    <button type="button" class="conversation-detail__summary" :aria-expanded="expanded" @click="expanded = !expanded"
+      @mouseenter="hovered = true" @mouseleave="hovered = false">
       <span class="conversation-detail__icon-slot" aria-hidden="true">
-        <component :is="icon" class="conversation-detail__icon" />
-        <ArrowDownIcon class="conversation-detail__arrow" />
+        <MorphIcon :icon="currentIcon" :size="16" spring="snappy" reduced-motion="user"
+          class="conversation-detail__icon" />
       </span>
       <span class="conversation-detail__label">{{ label }}</span>
-      <FilePathLabel
-        v-if="path"
-        class="conversation-detail__preview"
-        :path="path"
-        :show-prefix="!expanded"
-      />
-      <span
-        v-else-if="preview"
-        class="conversation-detail__preview conversation-detail__preview--plain"
-        v-show="!expanded || !hidePreviewOnExpand"
-      >{{ preview }}</span>
-      <span
-        v-if="remaining !== undefined"
-        class="conversation-detail__timeout"
-        :title="`Timeout ${timeout}s; running for ${elapsed ?? 0}s`"
-      >
+      <FilePathLabel v-if="path" class="conversation-detail__preview" :path="path" :show-prefix="!expanded" />
+      <span v-else-if="preview" class="conversation-detail__preview conversation-detail__preview--plain"
+        v-show="!expanded || !hidePreviewOnExpand">{{ preview }}</span>
+      <span v-if="remaining !== undefined" class="conversation-detail__timeout"
+        :title="`Timeout ${timeout}s; running for ${elapsed ?? 0}s`">
         <template v-if="elapsed !== undefined">{{ elapsed }}s / </template>{{ remaining }}s
       </span>
     </button>
@@ -126,6 +136,7 @@ const elapsed = computed(() => {
   color: var(--ui-text);
   font-size: 14px;
 }
+
 .conversation-detail__summary {
   display: flex;
   width: 100%;
@@ -140,6 +151,7 @@ const elapsed = computed(() => {
   background: transparent;
   cursor: pointer;
 }
+
 .conversation-detail__icon-slot {
   position: relative;
   display: block;
@@ -147,41 +159,19 @@ const elapsed = computed(() => {
   width: 16px;
   height: 16px;
 }
+
 .conversation-detail__icon {
   display: block;
-  position: absolute;
-  inset: 0;
   width: 16px;
   height: 16px;
-  object-fit: contain;
-  transition: opacity 160ms ease;
+  overflow: visible;
 }
-.conversation-detail__arrow {
-  position: absolute;
-  inset: 0;
-  width: 16px;
-  height: 16px;
-  opacity: 0;
-  transform: rotate(-90deg);
-  transition: opacity 160ms ease, transform 180ms ease;
-}
-.conversation-detail:hover .conversation-detail__icon {
-  opacity: 0;
-}
-.conversation-detail:hover .conversation-detail__arrow {
-  opacity: 1;
-}
-.conversation-detail.is-expanded .conversation-detail__icon {
-  opacity: 0;
-}
-.conversation-detail.is-expanded .conversation-detail__arrow {
-  opacity: 1;
-  transform: rotate(0deg);
-}
+
 .conversation-detail__label {
   flex: none;
   font-weight: 400;
 }
+
 /* Both the path label and plain previews share this muted, ellipsizing slot.
    Note: must stay a block-level flex item (not `display: flex` itself) so
    `text-overflow: ellipsis` applies to the text. FilePathLabel brings its
@@ -193,9 +183,11 @@ const elapsed = computed(() => {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
 .conversation-detail__preview--plain {
   color: var(--ui-text-muted);
 }
+
 /* bash 行尾的 timeout 胶囊：mono + 圆角描边，复用 match-line 的视觉词汇；
  * flex: none 不参与省略号截断，长命令被省略号吃掉时它仍完整可见。 */
 .conversation-detail__timeout {
@@ -209,6 +201,7 @@ const elapsed = computed(() => {
   line-height: 1.5;
   white-space: nowrap;
 }
+
 .conversation-detail__body {
   display: grid;
   grid-template-rows: 0fr;
@@ -216,15 +209,18 @@ const elapsed = computed(() => {
   opacity: 0;
   transition: grid-template-rows 180ms ease, margin-top 180ms ease, opacity 140ms ease;
 }
+
 .conversation-detail__body-inner {
   min-height: 0;
   overflow: hidden;
 }
+
 .conversation-detail.is-expanded .conversation-detail__body {
   grid-template-rows: 1fr;
   margin-top: 8px;
   opacity: 1;
 }
+
 .conversation-detail.is-expanded .conversation-detail__body-inner {
   padding-left: 24px;
   border-left: 1px solid var(--ui-border);

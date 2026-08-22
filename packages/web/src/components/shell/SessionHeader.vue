@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import AiAgentIcon from "@/assets/icons/AiAgent.svg";
 import GlobalIcon from "@/assets/icons/Global.svg";
-import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalBoxIcon from "@/assets/icons/TerminalBox.svg";
 import FileListIcon from "@/assets/icons/FileList2.svg";
-import FolderIcon from "@/assets/icons/Folder.svg";
+import FolderIcon from "lucide-static/icons/folder.svg";
 import GitBranchIcon from "@/assets/icons/GitBranch.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";

@@ -3,7 +3,7 @@ import type { VNode } from "vue";
 // vite-svg-loader turns each .svg into a Vue component at build time, but the
 // bare `*.svg` module type here is `string`; cast to the component contract so
 // the JSX/<FolderIcon/> usage type-checks.
-import FolderIconSrc from "@/assets/icons/Folder.svg";
+import FolderIconSrc from "lucide-static/icons/folder.svg";
 import FileTextIconSrc from "@/assets/icons/FileText.svg";
 import { getEntryIcon } from "../../ui/fileIcon";
 import CodeView from "../../ui/CodeView.vue";
@@ -13,9 +13,8 @@ import { displayPath } from "./toolDiff";
 import { type ToolBody } from "./toolBody";
 import "./ToolBodyView.css";
 
-type Svg = FunctionalComponent<SVGAttributes>;
-const FolderIcon = FolderIconSrc as unknown as Svg;
-const FileTextIcon = FileTextIconSrc as unknown as Svg;
+const FolderIcon = FolderIconSrc as unknown as FunctionalComponent<SVGAttributes>;
+const FileTextIcon = FileTextIconSrc as unknown as FunctionalComponent<SVGAttributes>;
 
 /* ── Tool-result body renderer (TSX) ─────────────────────────────
  *

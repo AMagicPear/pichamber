@@ -14,8 +14,10 @@
     "@amagicpear/pichamber-shared": "workspace:*",
     "ghostty-web": "^0.4.0",
     "katex": "^0.18.4",
+    "lucide-static": "^1.33.0",
     "markstream-vue": "^2.0.1",
     "mermaid": "^11.17.0",
+    "morphicons": "^1.7.0",
     "stream-diffs": "^0.0.2",
     "vue": "^3.6.0-rc.5",
     "vue-router": "^5.2.0"

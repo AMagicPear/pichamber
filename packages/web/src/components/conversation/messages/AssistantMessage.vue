@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
-import BrainAi3Icon from "@/assets/icons/BrainAi3.svg";
 import ChatMarkdown from "./ChatMarkdown.vue";
 import ConversationDetail from "./ConversationDetail.vue";
 import MessageActions from "./MessageActions.vue";
@@ -71,7 +70,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
         <MessageActions :show="{ fork: true, copy: !!text }" :open="actionsVisible" @fork="emit('fork')"
           @copy="emit('copy', text)" />
       </header>
-      <ConversationDetail v-if="thinking" class="conversation-message__details" :icon="BrainAi3Icon" label="Thinking"
+      <ConversationDetail v-if="thinking" class="conversation-message__details" icon="brain" label="Thinking"
         :preview="inline(thinking)" :body="{ kind: 'markdown', content: thinking }" :auto-expand="thinkingStreaming"
         hide-preview-on-expand />
       <ChatMarkdown v-if="text" class="conversation-message__content" :content="text" :final="final" />

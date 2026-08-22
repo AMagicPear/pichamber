@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FolderIcon from "@/assets/icons/Folder.svg";
+import FolderIcon from "lucide-static/icons/folder.svg";
 import FileTree from "@/components/panels/FileTree.vue";
 import { workspace } from "@/stores/workspace";
 </script>

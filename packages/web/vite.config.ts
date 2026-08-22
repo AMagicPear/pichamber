@@ -10,7 +10,25 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 export default defineConfig({
   plugins: [
     vue(),
-    svgLoader(),
+    // vite-svg-loader runs svgo by default; svgo's `preset-default` activates
+    // `removeViewBox`, which strips `viewBox` from every imported svg. That's
+    // wrong for every shape-aware icon in this project (lucide-static/*,
+    // assets/icons/*, assets/provider-logos/* all rely on viewBox for clean
+    // scaling into a sized box). Disable just that one optimisation.
+    svgLoader({
+      svgoConfig: {
+        plugins: [
+          {
+            name: 'preset-default',
+            params: {
+              overrides: {
+                removeViewBox: false,
+              },
+            },
+          },
+        ],
+      },
+    }),
     vueJsx(),
     vueDevTools(),
   ],

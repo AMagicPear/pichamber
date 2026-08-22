@@ -1,14 +1,7 @@
-import type { Component } from "vue";
-import FileAddIcon from "@/assets/icons/FileAdd.svg";
-import FileEditIcon from "@/assets/icons/FileEdit.svg";
-import FileTextIcon from "@/assets/icons/FileText.svg";
-import FolderIcon from "@/assets/icons/Folders.svg";
-import SearchEyeIcon from "@/assets/icons/SearchEye.svg";
-import SearchIcon from "@/assets/icons/Search.svg";
-import TerminalIcon from "@/assets/icons/TerminalBox.svg";
 import { inline } from "./messageContent";
 import { displayPath, isFileTool, numberArg, patchOpsSummary, stringArg } from "./toolDiff";
 import { type ToolBody, type ToolImage, toolBody } from "./toolBody";
+import type { LucideIconName } from "@/components/ui/lucideIcons";
 
 export type ConversationToolDetail = {
   label: string;
@@ -16,8 +9,9 @@ export type ConversationToolDetail = {
   preview?: string;
   /** Body shape; consumed by `<ConversationDetail>` for the expanded area. */
   body: ToolBody;
-  /** Fixed icon for file tools — read/edit/write each have their own. */
-  icon?: Component | string;
+  /** Lucide icon name (e.g. `"square-terminal"`) resolved by
+   *  `<ConversationDetail>` via `useLucideIcon` at render time. */
+  icon?: LucideIconName;
   /** Full file path — rendered with filename-first styling. */
   path?: string;
   /** 显式执行时长限制（bash 传了 timeout 参数时才有），渲染成行尾小胶囊。 */
@@ -38,8 +32,8 @@ type ToolDetailInput = {
   images?: ToolImage[];
 };
 
-const fileToolIcon = (toolName: string): Component | string =>
-  toolName === "edit" ? FileEditIcon : toolName === "write" ? FileAddIcon : FileTextIcon;
+const fileToolIcon = (toolName: string) =>
+  toolName === "edit" ? "file-pen" : toolName === "write" ? "file-plus" : "file-text";
 
 const fileLabel = (toolName: string) =>
   `${toolName.charAt(0).toUpperCase()}${toolName.slice(1)} File`;
@@ -63,7 +57,7 @@ export const conversationToolDetail = ({
       label: failed ? errorLabel("Shell Command") : "Shell Command",
       preview: command ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
-      icon: TerminalIcon,
+      icon: "square-terminal",
       timeout: numberArg(args, "timeout"),
       isError: failed,
     };
@@ -83,12 +77,15 @@ export const conversationToolDetail = ({
   }
 
   if (toolName === "apply_patch") {
-    const summary = typeof args === "object" && args !== null ? patchOpsSummary((args as { input?: unknown }).input as string) : undefined;
+    const summary =
+      typeof args === "object" && args !== null
+        ? patchOpsSummary((args as { input?: unknown }).input as string)
+        : undefined;
     return {
       label: failed ? errorLabel(toolName) : "Apply Patch",
       preview: summary ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
-      icon: FileEditIcon,
+      icon: "file-pen",
       isError: failed,
     };
   }
@@ -99,7 +96,7 @@ export const conversationToolDetail = ({
       label: failed ? errorLabel("ls") : path ? "List Directory" : "List Files",
       preview: relative ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
-      icon: FolderIcon,
+      icon: "folders",
       isError: failed,
     };
   }
@@ -110,7 +107,7 @@ export const conversationToolDetail = ({
       label: failed ? errorLabel("find") : "Find Files",
       preview: relative ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
-      icon: SearchIcon,
+      icon: "search",
       isError: failed,
     };
   }
@@ -120,7 +117,7 @@ export const conversationToolDetail = ({
       label: failed ? errorLabel("grep") : "Grep",
       preview: inline(output),
       body: toolBody({ toolName, args, output, isError }),
-      icon: SearchEyeIcon,
+      icon: "search-check",
       isError: failed,
     };
   }

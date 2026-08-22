@@ -5,8 +5,7 @@ import CheckboxMultipleIcon from "@/assets/icons/CheckboxMultiple.svg";
 import DeleteBinIcon from "@/assets/icons/DeleteBin.svg";
 import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
 import FileEditIcon from "@/assets/icons/FileEdit.svg";
-import FolderIcon from "@/assets/icons/Folder.svg";
-import FolderOpenIcon from "@/assets/icons/FolderOpen.svg";
+import { MorphIcon } from "morphicons/vue";
 import InformationIcon from "@/assets/icons/Information.svg";
 import More2Icon from "@/assets/icons/More2.svg";
 import QuestionIcon from "@/assets/icons/Question.svg";
@@ -40,6 +39,7 @@ import {
 } from "@/stores/workspace";
 import { settings } from "@/stores/settings";
 import { deleteSession, toMessage } from "@/api/client";
+import { lucideIcon } from "@/components/ui/lucideIcons";
 
 const searchOpen = ref(false);
 const sessionSearch = ref("");
@@ -315,12 +315,13 @@ onMounted(async () => {
               :aria-expanded="!collapsedProjects.has(project.cwd)"
               @click="toggleProject(project.cwd)"
             >
-              <span
-                class="session-list__project-folder"
-                :class="{ 'is-open': !collapsedProjects.has(project.cwd) }"
-              >
-                <FolderIcon class="session-list__project-folder-icon session-list__project-folder-icon--closed" />
-                <FolderOpenIcon class="session-list__project-folder-icon session-list__project-folder-icon--open" />
+              <span class="session-list__project-folder">
+                <MorphIcon
+                  :icon="collapsedProjects.has(project.cwd) ? lucideIcon('folder') : lucideIcon('folder-open')"
+                  :size="14"
+                  spring="snappy"
+                  reduced-motion="user"
+                />
               </span>
               <span class="session-list__project-title">{{ projectName(project.cwd) }}</span>
             </button>
@@ -556,37 +557,9 @@ onMounted(async () => {
   display: block;
   width: 14px;
   height: 14px;
-  color: var(--ui-text-muted);
+  color: inherit;
   flex: 0 0 auto;
-  transform-origin: 30% 65%;
-  transition: transform 150ms ease-out, color 150ms ease-out;
-}
-.session-list__project-folder-icon {
-  position: absolute;
-  inset: 0;
-  width: 14px;
-  height: 14px;
-  transform-origin: 30% 65%;
-  overflow: visible;
-  transition:
-    opacity 150ms ease-out,
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.session-list__project-folder-icon--closed {
-  opacity: 1;
-  transform: scale(1);
-}
-.session-list__project-folder-icon--open {
-  opacity: 0;
-  transform: translate(1px, 1px) scale(0.82);
-}
-.session-list__project-folder.is-open .session-list__project-folder-icon--closed {
-  opacity: 0;
-  transform: translate(-1px, -1px) scale(0.82);
-}
-.session-list__project-folder.is-open .session-list__project-folder-icon--open {
-  opacity: 1;
-  transform: translate(0) scale(1);
+  transition: transform 150ms ease-out;
 }
 .session-list__project-title {
   transition: transform 150ms ease-out;
@@ -704,8 +677,7 @@ onMounted(async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .session-list__project-folder,
-  .session-list__project-folder-icon {
+  .session-list__project-folder {
     transition: none;
   }
 }
