@@ -7,14 +7,10 @@ A browser-based workspace for the Pi Coding Agent. Vue 3 + Bun thin shell wrappi
 Requires [Bun](https://bun.sh) (the backend runs on it).
 
 ```sh
-npm i -g @amagicpear/pichamber
-cd your-project
-pichamber
+bun i -g @amagicpear/pichamber
 ```
 
-The command starts a local background server when needed, creates a session for
-the current directory, and opens it in your browser. Later invocations reuse the
-same server.
+Run `pichamber --help` for all options.
 
 ```sh
 pichamber open                # open the current workspace
@@ -28,7 +24,7 @@ pichamber stop                # stop it cleanly
 pichamber serve --host 127.0.0.1 --port 3000
 ```
 
-Run `pichamber --help` for all options. State and logs are stored under
+State and logs are stored under
 `~/Library/Application Support/pichamber` on macOS,
 `$XDG_STATE_HOME/pichamber` on Linux, and `%LOCALAPPDATA%\\pichamber` on
 Windows. Set `PICHAMBER_STATE_DIR` to override that location or
@@ -65,10 +61,10 @@ pichamber/
     └── server/               # Bun HTTP server (@amagicpear/pichamber-server)
 ```
 
-| Package                                  | Stack                                | Purpose     |
-| ---------------------------------------- | ------------------------------------ | ----------- |
+| Package                                             | Stack                                  | Purpose     |
+| --------------------------------------------------- | -------------------------------------- | ----------- |
 | [`@amagicpear/pichamber-web`](./packages/web)       | Vue 3 (rc) · Vite · Pinia · Vue Router | Browser SPA |
-| [`@amagicpear/pichamber-server`](./packages/server) | Bun runtime                          | HTTP server |
+| [`@amagicpear/pichamber-server`](./packages/server) | Bun runtime                            | HTTP server |
 
 Remote-host and Pi runtime decisions are documented in
 [`docs/architecture.md`](./docs/architecture.md).
