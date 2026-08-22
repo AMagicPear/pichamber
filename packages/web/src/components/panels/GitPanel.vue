@@ -27,7 +27,6 @@ import {
 } from "@/api/client";
 import GitBranchIcon from "lucide-static/icons/git-branch.svg";
 import ArrowDownSIcon from "lucide-static/icons/chevron-down.svg";
-import ArrowUpSIcon from "lucide-static/icons/chevron-up.svg";
 import DeleteBinIcon from "lucide-static/icons/trash-2.svg";
 import RefreshIcon from "lucide-static/icons/refresh-cw.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
@@ -39,6 +38,8 @@ import MenuPanel from "@/components/ui/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 import { workspace } from "@/stores/workspace";
 import { setGitBranch } from "@/stores/git";
+import { lucideIcon, type LucideIconName } from "../ui/lucideIcons";
+import { MorphIcon } from "morphicons/vue";
 
 type SyncKind = "pull" | "push" | "stash" | "stash-pop" | "stash-drop" | "init" | "checkout";
 
@@ -141,7 +142,11 @@ const loadStashes = async (): Promise<void> => {
 };
 
 const load = async () => {
+  refreshIcon.value = 'refresh-ccw';
   await Promise.all([loadStatus(), loadStashes()]);
+  setTimeout(() => {
+    refreshIcon.value = 'refresh-cw';
+  }, 240);
 };
 
 const reloadAfterSync = async (next?: unknown) => {
@@ -256,6 +261,18 @@ const badgeTitle = (change: GitChange): string =>
   change.status
   ];
 
+/** Pull/Push icons morph into `loader-circle` while the sync op is in
+ *  flight, so the user gets the same spring transition they see on the
+ *  refresh button instead of a hard icon→"…" text swap. */
+const pullIcon = computed<LucideIconName>(() =>
+  syncBusy.value === "pull" ? "loader-circle" : "chevron-down",
+);
+const pushIcon = computed<LucideIconName>(() =>
+  syncBusy.value === "push" ? "loader-circle" : "chevron-up",
+);
+
+const refreshIcon = ref<'refresh-cw' | 'refresh-ccw'>('refresh-cw');
+
 // Reload whenever the session workspace changes, so the pane tracks the
 // same cwd the files panel and terminal use. Also reload branch/stash
 // data so post-switch state is fresh.
@@ -343,8 +360,7 @@ watch(() => workspace.cwd, () => {
             :disabled="syncBusy !== null"
             @click="doPull"
           >
-            <ArrowDownSIcon v-if="syncBusy !== 'pull'" />
-            <span v-else class="git-pane__busy">…</span>
+            <MorphIcon :icon="lucideIcon(pullIcon)" spring="snappy" />
           </IconButton>
           <IconButton
             size="compact"
@@ -352,11 +368,10 @@ watch(() => workspace.cwd, () => {
             :disabled="syncBusy !== null"
             @click="doPush"
           >
-            <ArrowUpSIcon v-if="syncBusy !== 'push'" />
-            <span v-else class="git-pane__busy">…</span>
+            <MorphIcon :icon="lucideIcon(pushIcon)" spring="snappy" />
           </IconButton>
           <IconButton size="compact" label="Refresh" :disabled="loading" @click="load">
-            <RefreshIcon />
+            <MorphIcon :icon="lucideIcon(refreshIcon)" spring="snappy" />
           </IconButton>
         </div>
       </div>
@@ -596,15 +611,6 @@ watch(() => workspace.cwd, () => {
   flex: 0 0 auto;
   align-items: center;
   gap: 2px;
-}
-
-.git-pane__busy {
-  display: inline-block;
-  min-width: 16px;
-  text-align: center;
-  color: var(--ui-text-muted);
-  font-family: var(--ui-font-mono);
-  font-size: 13px;
 }
 
 /* Branch switcher menu */

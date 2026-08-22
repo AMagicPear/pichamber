@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import AiAgentIcon from "lucide-static/icons/bot.svg";
-import GlobalIcon from "lucide-static/icons/globe.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 import TerminalBoxIcon from "lucide-static/icons/square-terminal.svg";
-import FileListIcon from "lucide-static/icons/list.svg";
+import ContextIcon from "lucide-static/icons/square-text.svg";
 import FolderIcon from "lucide-static/icons/folder.svg";
 import GitBranchIcon from "lucide-static/icons/git-branch.svg";
 import IconButton from "@/components/ui/IconButton.vue";
@@ -77,9 +76,6 @@ const onProvidersClick = () => {
       <IconButton label="Toggle terminal panel" :pressed="ui.panels.bottom.open" @click="ui.toggle('bottom')">
         <TerminalBoxIcon />
       </IconButton>
-      <IconButton label="Web" disabled>
-        <GlobalIcon />
-      </IconButton>
       <IconButton label="Git panel" :pressed="ui.panels.right.open && ui.activeRightPanel === 'git'"
         @click="ui.selectRightPanel('git')">
         <GitBranchIcon />
@@ -90,10 +86,7 @@ const onProvidersClick = () => {
       </IconButton>
       <IconButton label="Context panel" :pressed="ui.panels.right.open && ui.activeRightPanel === 'context'"
         @click="ui.selectRightPanel('context')">
-        <FileListIcon />
-      </IconButton>
-      <IconButton label="Account" disabled>
-        <AiAgentIcon class="account-icon" />
+        <ContextIcon />
       </IconButton>
     </nav>
   </header>

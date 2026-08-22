@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import LayoutLeftIcon from "lucide-static/icons/layout-panel-left.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import SplitPane from "@/components/shell/SplitPane.vue";
 import Modal from "@/components/ui/Modal.vue";
@@ -8,6 +7,8 @@ import SessionHeader from "@/components/shell/SessionHeader.vue";
 import SessionSidebar from "@/components/shell/SessionSidebar.vue";
 import { RouterView } from "vue-router";
 import { computed, defineAsyncComponent, KeepAlive } from "vue";
+import { MorphIcon } from "morphicons/vue";
+import { lucideIcon } from "@/components/ui/lucideIcons";
 
 // On-demand panels and modal: their heavy deps (diff viewer, terminal/ghostty
 // WASM, the full settings surface) are split into lazy chunks and only fetched
@@ -32,7 +33,7 @@ const rightPanel = computed(() => ({
 <template>
   <div class="app-shell">
     <IconButton class="app-shell__sidebar-toggle" label="Toggle left sidebar" @click="ui.toggle('left')">
-      <LayoutLeftIcon />
+      <MorphIcon :icon="lucideIcon(ui.panels.left.open ? 'panel-left-close' : 'panel-left')" spring="snappy"/>
     </IconButton>
 
     <SplitPane mode="left" :open="ui.panels.left.open" :size="ui.panels.left.size"
@@ -240,6 +241,7 @@ button {
   overflow: hidden;
   background: var(--ui-surface);
 }
+
 .app-shell__sidebar-toggle {
   position: absolute;
   top: 11px;
@@ -271,6 +273,7 @@ button {
     opacity 150ms ease,
     transform 150ms ease;
 }
+
 .popover-enter-from,
 .popover-leave-to {
   opacity: 0;

@@ -15,7 +15,7 @@ import SortDescIcon from "lucide-static/icons/arrow-down-wide-narrow.svg";
 import CloseIcon from "lucide-static/icons/x.svg";
 import LogoMark, { LOGO_MARK_VIEW_BOX } from "@/components/ui/LogoMark";
 import IconButton from "@/components/ui/IconButton.vue";
-import { Check } from "@/components/ui/Check";
+import CheckIcon from "lucide-static/icons/check.svg";
 import SearchBox from "@/components/ui/SearchBox.vue";
 import { splitHighlight } from "@/composables/highlight";
 import AboutModal from "@/components/modals/AboutModal.vue";
@@ -314,7 +314,7 @@ onMounted(async () => {
       <p v-else-if="sessionsError" class="session-list__state session-list__state--error">{{ sessionsError }}</p>
       <p v-else-if="sessions.length === 0" class="session-list__state">No sessions yet.</p>
       <p v-else-if="visibleSessions.length === 0" class="session-list__state">No sessions match &quot;{{ sessionSearch
-        }}&quot;.</p>
+      }}&quot;.</p>
 
       <template v-else>
         <section v-for="project in projectGroups" :key="project.cwd" class="session-list__section">
@@ -347,7 +347,7 @@ onMounted(async () => {
                     aria-label="Rename session" @click.stop @keydown="onRenameEnter" />
                   <span class="session-list__rename-controls">
                     <IconButton size="mini" label="Apply rename" @click.stop="applyRename">
-                      <Check />
+                      <CheckIcon />
                     </IconButton>
                     <IconButton size="mini" label="Cancel rename" @click.stop="cancelRename">
                       <CloseIcon />

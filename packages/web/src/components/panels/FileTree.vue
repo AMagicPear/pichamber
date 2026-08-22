@@ -9,6 +9,8 @@ import { listDirectory, toMessage } from "@/api/client";
 import IconButton from "@/components/ui/IconButton.vue";
 import { workspace } from "@/stores/workspace";
 import { getEntryIcon } from "../ui/fileIcon";
+import { MorphIcon } from "morphicons/vue";
+import { lucideIcon } from "../ui/lucideIcons";
 
 const FileTreeNode = defineComponent({
   name: "FileTreeNode",
@@ -50,7 +52,7 @@ const FileTreeNode = defineComponent({
             aria-expanded={props.entry.isDirectory ? expanded.value : undefined}
             onClick={toggle}
           >
-            <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}> 
+            <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}>
               <svg aria-hidden="true"><use href={EntryIcon} /></svg>
             </span>
             <span class="file-tree__name">{props.entry.name}</span>
@@ -76,9 +78,11 @@ export default defineComponent({
     const entries = ref<DirEntry[]>([]);
     const error = ref<string | null>(null);
     const search = ref("");
+    const refreshIcon = ref<'refresh-cw' | 'refresh-ccw'>('refresh-cw');
     let requestVersion = 0;
 
     const load = async () => {
+      refreshIcon.value = 'refresh-ccw';
       const currentRequest = ++requestVersion;
       error.value = null;
       entries.value = [];
@@ -90,6 +94,10 @@ export default defineComponent({
         if (currentRequest !== requestVersion) return;
         error.value = toMessage(err);
         console.error("[files] failed to list workspace root", err);
+      } finally {
+        setTimeout(() => {
+          refreshIcon.value = 'refresh-cw';
+        }, 240);
       }
     };
 
@@ -121,7 +129,7 @@ export default defineComponent({
               <FolderAddIcon />
             </IconButton>
             <IconButton size="standard" label="Reload" onClick={load}>
-              <RefreshIcon />
+              <MorphIcon icon={lucideIcon(refreshIcon.value)} spring="snappy" />
             </IconButton>
           </div>
         </div>
@@ -151,9 +159,11 @@ export default defineComponent({
   flex-direction: column;
   min-height: 0;
 }
+
 .file-tree--root {
   height: 100%;
 }
+
 .file-tree__toolbar {
   display: flex;
   align-items: center;
@@ -161,11 +171,13 @@ export default defineComponent({
   padding: 10px 12px;
   border-bottom: 1px solid var(--ui-border-subtle);
 }
+
 .file-tree__actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .file-tree__list {
   flex: 1;
   min-height: 0;
@@ -174,6 +186,7 @@ export default defineComponent({
   list-style: none;
   overflow: auto;
 }
+
 .file-tree__children {
   position: relative;
   margin: 0 0 0 12px;
@@ -181,7 +194,8 @@ export default defineComponent({
   border-left: 1px solid var(--ui-border-subtle);
   overflow: visible;
 }
-.file-tree__children > .file-tree__item::before {
+
+.file-tree__children>.file-tree__item::before {
   position: absolute;
   top: 14px;
   left: -12px;
@@ -190,7 +204,8 @@ export default defineComponent({
   background: var(--ui-border-subtle);
   content: "";
 }
-.file-tree__children > .file-tree__item:last-child::after {
+
+.file-tree__children>.file-tree__item:last-child::after {
   position: absolute;
   top: 15px;
   bottom: 0;
@@ -199,9 +214,11 @@ export default defineComponent({
   background: var(--ui-surface);
   content: "";
 }
+
 .file-tree__item {
   position: relative;
 }
+
 .file-tree__row {
   width: 100%;
   gap: 7px;
@@ -209,10 +226,12 @@ export default defineComponent({
   border-radius: var(--ui-radius-md);
   font-size: 13px;
 }
+
 .file-tree__row:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: -2px;
 }
+
 .file-tree__icon {
   display: inline-flex;
   width: 18px;
@@ -222,18 +241,22 @@ export default defineComponent({
   flex: 0 0 auto;
   color: #d9936c;
 }
+
 .file-tree__icon:not(.is-folder) {
   color: #399cf0;
 }
+
 .file-tree__icon svg {
   width: 18px;
   height: 18px;
 }
+
 .file-tree__icon img {
   display: block;
   width: 18px;
   height: 18px;
 }
+
 .file-tree__name {
   flex: 1;
   min-width: 0;
@@ -241,12 +264,14 @@ export default defineComponent({
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .file-tree__state {
   margin: 0;
   padding: 14px;
   color: var(--ui-text-muted);
   font-size: 13px;
 }
+
 .file-tree__state--error {
   color: #a33;
 }

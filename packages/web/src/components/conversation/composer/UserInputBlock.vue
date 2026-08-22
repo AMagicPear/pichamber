@@ -382,7 +382,7 @@ const workingDetail = computed<"thinking" | "responding" | { tool: string } | un
  *  scheme don't have to dig through Settings. Kept short — the chevron isn't
  *  a full shortcut hint. */
 const placeholder = computed(() => {
-  const base = "Ask Pi anything. Type @ for files or / for commands.";
+  const base = "Ask Pi anything. Type @ for files or / for commands. Drag images to attach.";
   return props.sendKey === "enter"
     ? base
     : `${base} Submit with ⌘/Ctrl + Enter.`;

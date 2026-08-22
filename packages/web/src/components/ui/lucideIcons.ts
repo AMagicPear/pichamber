@@ -10,6 +10,7 @@ import type { IconNode } from "morphicons";
 import brainRaw from "lucide-static/icons/brain.svg?raw";
 import chevronDownRaw from "lucide-static/icons/chevron-down.svg?raw";
 import chevronRightRaw from "lucide-static/icons/chevron-right.svg?raw";
+import chevronUpRaw from "lucide-static/icons/chevron-up.svg?raw";
 import filePenRaw from "lucide-static/icons/file-pen.svg?raw";
 import filePlusRaw from "lucide-static/icons/file-plus.svg?raw";
 import fileTextRaw from "lucide-static/icons/file-text.svg?raw";
@@ -20,6 +21,13 @@ import squareTerminalRaw from "lucide-static/icons/square-terminal.svg?raw";
 import wrenchRaw from "lucide-static/icons/wrench.svg?raw";
 import folderRaw from "lucide-static/icons/folder.svg?raw";
 import folderOpenRaw from "lucide-static/icons/folder-open.svg?raw";
+import copyRaw from "lucide-static/icons/copy.svg?raw";
+import loaderCircleRaw from "lucide-static/icons/loader-circle.svg?raw";
+import CheckRaw from "lucide-static/icons/check.svg?raw";
+import panelLeftCloseRaw from "lucide-static/icons/panel-left-close.svg?raw";
+import panelLeft from "lucide-static/icons/panel-left.svg?raw";
+import refreshCwRaw from "lucide-static/icons/refresh-cw.svg?raw";
+import refreshCcWRaw from "lucide-static/icons/refresh-ccw.svg?raw";
 
 /** Raw SVG strings keyed by Lucide name. Each entry comes from an
  *  explicit `?raw` import above — Vite drops unused icons from the bundle.
@@ -38,6 +46,14 @@ const RAWS = {
   wrench: wrenchRaw,
   folder: folderRaw,
   "folder-open": folderOpenRaw,
+  copy: copyRaw,
+  "chevron-up": chevronUpRaw,
+  "loader-circle": loaderCircleRaw,
+  check: CheckRaw,
+  "panel-left-close": panelLeftCloseRaw,
+  "panel-left": panelLeft,
+  "refresh-cw": refreshCwRaw,
+  "refresh-ccw": refreshCcWRaw,
 } as const;
 
 /** Lucide icon name union. Restricts `icon?: string` props so typos
