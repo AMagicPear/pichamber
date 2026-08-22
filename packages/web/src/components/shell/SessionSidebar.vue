@@ -39,7 +39,7 @@ import {
 } from "@/stores/workspace";
 import { settings } from "@/stores/settings";
 import { deleteSession, toMessage } from "@/api/client";
-import { lucideIcon } from "@/components/ui/lucideIcons";
+import { lucideIcon } from "@/components/ui/morphIcons";
 
 const searchOpen = ref(false);
 const sessionSearch = ref("");

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { MorphIcon } from "morphicons/vue";
 import type { IconNode } from "morphicons";
 import FilePathLabel from "@/components/ui/FilePathLabel.vue";
-import { lucideIcon, type LucideIconName } from "@/components/ui/lucideIcons";
+import { lucideIcon, type LucideIconName } from "@/components/ui/morphIcons";
 import { type ToolBody } from "./toolBody";
 import ToolBodyView from "./ToolBodyView";
 

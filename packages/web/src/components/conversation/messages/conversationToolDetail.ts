@@ -1,7 +1,13 @@
 import { inline } from "./messageContent";
 import { displayPath, isFileTool, numberArg, patchOpsSummary, stringArg } from "./toolDiff";
 import { type ToolBody, type ToolImage, toolBody } from "./toolBody";
-import type { LucideIconName } from "@/components/ui/lucideIcons";
+import type { LucideIconName } from "@/components/ui/morphIcons";
+
+/** Tool names registered by `pi-mcp-adapter` — rendered as "MCP" with the
+ *  MCP icon. Covers the proxy (`mcp`) and batch-script (`mcpScript`)
+ *  entry points. Direct-mode tools (`<server>_<tool>`) intentionally not
+ *  matched here — they're indistinguishable from user extensions by name. */
+const MCP_TOOL_NAMES = new Set(["mcp", "mcpScript"]);
 
 export type ConversationToolDetail = {
   label: string;
@@ -10,7 +16,7 @@ export type ConversationToolDetail = {
   /** Body shape; consumed by `<ConversationDetail>` for the expanded area. */
   body: ToolBody;
   /** Lucide icon name (e.g. `"square-terminal"`) resolved by
-   *  `<ConversationDetail>` via `useLucideIcon` at render time. */
+   *  `<ConversationDetail>` via `lucideIcon` at render time. */
   icon?: LucideIconName;
   /** Full file path — rendered with filename-first styling. */
   path?: string;
@@ -118,6 +124,18 @@ export const conversationToolDetail = ({
       preview: inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: "search-check",
+      isError: failed,
+    };
+  }
+
+  // MCP adapter tools (registered by `pi-mcp-adapter`): unified display
+  // name and icon, regardless of which MCP server is behind them.
+  if (MCP_TOOL_NAMES.has(toolName)) {
+    return {
+      label: failed ? "MCP" : "MCP",
+      preview: command ?? inline(output),
+      body: toolBody({ toolName, args, output, isError }),
+      icon: "mcp",
       isError: failed,
     };
   }

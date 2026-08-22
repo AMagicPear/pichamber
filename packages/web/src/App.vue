@@ -8,7 +8,7 @@ import SessionSidebar from "@/components/shell/SessionSidebar.vue";
 import { RouterView } from "vue-router";
 import { computed, defineAsyncComponent, KeepAlive } from "vue";
 import { MorphIcon } from "morphicons/vue";
-import { lucideIcon } from "@/components/ui/lucideIcons";
+import { lucideIcon } from "@/components/ui/morphIcons";
 
 // On-demand panels and modal: their heavy deps (diff viewer, terminal/ghostty
 // WASM, the full settings surface) are split into lazy chunks and only fetched

@@ -39,7 +39,7 @@ import SearchBox from "@/components/ui/SearchBox.vue";
 import { usePopover } from "@/composables/usePopover";
 import { workspace } from "@/stores/workspace";
 import { setGitBranch } from "@/stores/git";
-import { lucideIcon, type LucideIconName } from "../ui/lucideIcons";
+import { lucideIcon, type LucideIconName } from "../ui/morphIcons";
 import { MorphIcon } from "morphicons/vue";
 
 type SyncKind = "pull" | "push" | "stash" | "stash-pop" | "stash-drop" | "init" | "checkout";

@@ -8,7 +8,7 @@ import { listDirectory, searchFiles, toMessage } from "@/api/client";
 import IconButton from "@/components/ui/IconButton.vue";
 import { workspace } from "@/stores/workspace";
 import { MorphIcon } from "morphicons/vue";
-import { lucideIcon } from "../ui/lucideIcons";
+import { lucideIcon } from "../ui/morphIcons.ts";
 import FileTreeNode, { FILE_TREE_REFRESH_KEY } from "./FileTreeNode.vue";
 import FileSearchResult from "./FileSearchResult.vue";
 

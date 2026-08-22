@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import GitForkIcon from "lucide-static/icons/git-fork.svg";
 import IconButton from "@/components/ui/IconButton.vue";
-import { lucideIcon } from "@/components/ui/lucideIcons";
+import { lucideIcon } from "@/components/ui/morphIcons";
 import { MorphIcon } from "morphicons/vue";
 import { reactive } from "vue";
 
