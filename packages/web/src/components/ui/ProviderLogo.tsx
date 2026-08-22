@@ -1,15 +1,11 @@
-import { defineComponent, type PropType } from "vue";
+import { computed, defineComponent, type PropType } from "vue";
 import type { FunctionalComponent, SVGAttributes } from "vue";
 import fallbackLogoSrc from "lucide-static/icons/bot-message-square.svg";
 
 type LogoComponent = FunctionalComponent<SVGAttributes>;
 const fallbackLogo = fallbackLogoSrc as unknown as LogoComponent;
 
-// Bundled as Vue components (vite-svg-loader) so each logo renders as a real
-// inline <svg> — no <img> shell, no remote fetch, no scattered CSS. The
-// component owns its sizing + theming: fills ride currentColor and the svg
-// inherits the theme's --ui-text, so light/dark flips natively. The logos
-// (provider marks + the models.dev fallback mark) all come out of one glob.
+// 批量导入本地 SVG
 const localLogoModules = import.meta.glob<LogoComponent>("../../assets/provider-logos/*.svg", {
   eager: true,
   import: "default",
@@ -22,25 +18,45 @@ for (const [path, component] of Object.entries(localLogoModules)) {
   if (match?.[1] && component) localLogos.set(match[1].toLowerCase(), component);
 }
 
-// const fallbackLogo = localLogos.get("fallback")!;
+// 统一的 Provider 候选名称/关键词映射表
+const providerAliases = {
+  // 包含所有的精确别名和关键词别名
+  "z.ai": "zai",
+  azure: "azureai",
+  codex: "openai",
+  chatgpt: "openai",
+  claude: "anthropic",
+  google: "gemini",
+  ollama: "ollama",
+  evroc: "evroc",
+  zai: "zai",
+  moonshotai: "moonshotai",
+  kimi: "moonshotai",
+  volcengine: "volcengine",
+  ark: "volcengine",
+  xiaomi: "xiaomimimo",
+  cloudflare: "cloudflare",
+  opencode: "opencode",
+  qwen: "qwen",
+  minimax: "minimax",
+  vercel: "vercel",
+  xai: "grok",
+  wafer: "wafer.ai",
+} as const;
 
-const aliases = new Map([
-  ["codex", "openai"],
-  ["chatgpt", "openai"],
-  ["claude", "anthropic"],
-  ["gemini", "google"],
-  ["evroc-ai", "evroc"],
-  ["evrocai", "evroc"],
-  ["ollama-cloud", "ollama"],
-  ["wafer", "wafer.ai"],
-]);
-
-const namePrefixes = new Map([
-  ["gpt-", "openai"],
-  ["o1", "openai"],
-  ["o3", "openai"],
-  ["o4", "openai"],
-]);
+// Model 前缀映射表
+const modelPrefixes = {
+  gpt: "openai",
+  o1: "openai",
+  o3: "openai",
+  o4: "openai",
+  minimax: "minimax",
+  deepseek: "deepseek",
+  kimi: "moonshotai",
+  k3: "moonshotai",
+  glm: "zai",
+  doubao: "doubao",
+} as const;
 
 const normalize = (value: string) =>
   value
@@ -50,45 +66,48 @@ const normalize = (value: string) =>
     .replace(/^provider\./, "")
     .replace(/\s+/g, "-");
 
-/** Candidates derived from the provider id alone — aliases, normalized
- *  provider string, and its primary segment. */
-const providerCandidates = (providerId: string | undefined) => {
-  if (!providerId) return [];
+const logoFromProvider = (providerId: string | undefined): LogoComponent | undefined => {
+  if (!providerId) return undefined;
   const normalized = normalize(providerId);
-  if (!normalized) return [];
-  const compact = normalized.replace(/[^a-z0-9_\-./:]/g, "");
-  const primary = compact.split(/[/:]/)[0] || compact;
-  return [
-    ...new Set([aliases.get(compact), aliases.get(primary), compact, primary].filter(Boolean)),
-  ] as string[];
+  if (!normalized) return undefined;
+
+  // 1. 完美匹配：优先进行文件名精确匹配
+  const direct = localLogos.get(normalized);
+  if (direct) return direct;
+
+  // 2. 候选名称精确匹配：看别名表里有没有完整命中的
+  const exactAlias = (providerAliases as Record<string, string>)[normalized];
+  if (exactAlias) {
+    const logo = localLogos.get(exactAlias);
+    if (logo) return logo;
+  }
+
+  // 3. 候选名称关键词匹配：作为 provider 的降级方案
+  for (const [keyword, logoKey] of Object.entries(providerAliases)) {
+    if (normalized.includes(keyword)) {
+      const logo = localLogos.get(logoKey);
+      if (logo) return logo;
+    }
+  }
+
+  return undefined;
 };
 
-/** When the provider side yields nothing, fall back to a brand lookup by
- *  model id prefix (e.g. "gpt-4o" → "openai"). Returns a single-element
- *  candidate list — the brand key — or [] when no prefix matches. */
-const modelIdFallback = (modelId: string) => {
-  const normalized = normalize(modelId);
-  if (!normalized) return [];
-  const compact = normalized.replace(/[^a-z0-9_\-./:]/g, "");
-  const hit = [...namePrefixes.entries()].find(([prefix]) => compact.startsWith(prefix))?.[1];
-  return hit ? [hit] : [];
+const logoFromModel = (modelId: string | undefined): LogoComponent | undefined => {
+  if (!modelId) return undefined;
+  const compact = normalize(modelId).replace(/[^a-z0-9_\-./:]/g, "");
+  if (!compact) return undefined;
+
+  // 4. Model 名称前缀匹配
+  for (const [prefix, logoKey] of Object.entries(modelPrefixes)) {
+    if (compact.startsWith(prefix)) return localLogos.get(logoKey);
+  }
+  return undefined;
 };
 
-/** Resolve the bundled logo component for a provider/model. Falls back to the
- *  models.dev fallback mark when nothing matches. */
-const resolveLogo = (
-  providerId: string | undefined,
-  modelId: string | undefined,
-): LogoComponent => {
-  const candidates = providerCandidates(providerId);
-  const fromProvider = candidates.map((c) => localLogos.get(c)).find(Boolean);
-  if (fromProvider) return fromProvider;
-  if (!modelId) return fallbackLogo;
-  const fromModel = modelIdFallback(modelId)
-    .map((c) => localLogos.get(c))
-    .find(Boolean);
-  return fromModel ?? fallbackLogo;
-};
+const resolveLogo = (providerId: string | undefined, modelId: string | undefined): LogoComponent =>
+  // 严格遵循优先级：先试 Provider，全失败了再试 Model，最后 fallback
+  logoFromProvider(providerId) ?? logoFromModel(modelId) ?? fallbackLogo;
 
 const toPixels = (size: number | string) => (typeof size === "number" ? `${size}px` : size);
 
@@ -103,20 +122,23 @@ export default defineComponent({
     class: { type: String, default: "" },
   },
   setup(props) {
-    const Logo = resolveLogo(props.providerId, props.modelId);
-    return () => (
-      <Logo
-        class={["provider-logo", props.class]}
-        role="img"
-        aria-label={props.alt || `${props.providerId || "model"} logo`}
-        style={{
-          color: "var(--ui-text)",
-          display: "block",
-          width: toPixels(props.size),
-          height: toPixels(props.size),
-          flex: "0 0 auto",
-        }}
-      />
-    );
+    const Logo = computed(() => resolveLogo(props.providerId, props.modelId));
+    return () => {
+      const ResolvedLogo = Logo.value;
+      return (
+        <ResolvedLogo
+          class={["provider-logo", props.class]}
+          role="img"
+          aria-label={props.alt || `${props.providerId || "model"} logo`}
+          style={{
+            color: "var(--ui-text)",
+            display: "block",
+            width: toPixels(props.size),
+            height: toPixels(props.size),
+            flex: "0 0 auto",
+          }}
+        />
+      );
+    };
   },
 });

@@ -4,16 +4,24 @@ import SearchIcon from "lucide-static/icons/search.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import { onMounted, ref } from "vue";
 
-const props = defineProps<{
-  modelValue: string;
-  placeholder?: string;
-  label?: string;
-  autoFocus?: boolean;
-}>();
+const modelValue = defineModel<string>({ required: true });
 
-const emit = defineEmits<{
-  "update:modelValue": [value: string];
-}>();
+const props = withDefaults(
+  defineProps<{
+    placeholder?: string;
+    label?: string;
+    type?: "text" | "search" | "password";
+    autoFocus?: boolean;
+    disabled?: boolean;
+    /** Show the × clear button when the input is non-empty. */
+    clearable?: boolean;
+    /** Compact height (matches --ui-row-height). Default uses --ui-input-height. */
+    size?: "default" | "compact";
+  }>(),
+  { type: "search", clearable: true, size: "default" },
+);
+
+const emit = defineEmits(["enter"]);
 
 const inputEl = ref<HTMLInputElement | null>(null);
 
@@ -21,29 +29,35 @@ onMounted(() => {
   if (props.autoFocus && inputEl.value) inputEl.value.focus();
 });
 
-const onInput = (event: Event) => {
-  emit("update:modelValue", (event.target as HTMLInputElement).value);
+const clear = () => {
+  modelValue.value = "";
 };
 
-const clear = () => emit("update:modelValue", "");
+defineExpose({
+  focus: () => inputEl.value?.focus(),
+  select: () => inputEl.value?.select(),
+  blur: () => inputEl.value?.blur(),
+});
 </script>
 
 <template>
-  <div class="search-box">
-    <span class="search-box__icon">
+  <div class="search-box" :class="[`is-${size}`, { 'is-disabled': disabled }]">
+    <span v-if="type === 'search'" class="search-box__icon" aria-hidden="true">
       <SearchIcon />
     </span>
     <input
       ref="inputEl"
-      :value="modelValue"
-      type="search"
+      v-model="modelValue"
+      :type="type"
       :placeholder="placeholder"
       :aria-label="label"
       :autofocus="autoFocus"
-      @input="onInput"
+      :disabled="disabled"
+      class="search-box__input"
+      @keydown.enter="emit('enter')"
     />
     <IconButton
-      v-if="modelValue"
+      v-if="clearable && modelValue && !disabled"
       class="search-box__clear"
       size="mini"
       :label="`Clear ${label ?? 'search'}`"
@@ -57,7 +71,6 @@ const clear = () => emit("update:modelValue", "");
 <style scoped>
 .search-box {
   display: flex;
-  flex: 1;
   align-items: center;
   gap: 6px;
   height: var(--ui-input-height);
@@ -66,13 +79,21 @@ const clear = () => emit("update:modelValue", "");
   border: 1px solid var(--ui-border-subtle);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface-subtle);
+  box-sizing: border-box;
   transition:
     border-color var(--ui-duration-fast) var(--ui-ease-standard),
     background-color var(--ui-duration-fast) var(--ui-ease-standard);
 }
+.search-box.is-compact {
+  height: var(--ui-row-height);
+}
 .search-box:focus-within {
   border-color: var(--ui-border-focus);
   background: var(--ui-surface);
+}
+.search-box.is-disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .search-box__icon {
   width: 16px;
@@ -85,7 +106,7 @@ const clear = () => emit("update:modelValue", "");
   width: 100%;
   height: 100%;
 }
-.search-box input {
+.search-box__input {
   flex: 1;
   min-width: 0;
   height: 100%;
@@ -96,12 +117,14 @@ const clear = () => emit("update:modelValue", "");
   font: inherit;
   font-size: 13px;
 }
-.search-box input::-webkit-search-cancel-button {
+.search-box__input::-webkit-search-cancel-button {
   display: none;
   appearance: none;
 }
-.search-box input::placeholder {
+.search-box__input::placeholder {
   color: var(--ui-text-muted);
 }
-
+.search-box__input:disabled {
+  cursor: default;
+}
 </style>

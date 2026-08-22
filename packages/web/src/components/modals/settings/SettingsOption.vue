@@ -26,9 +26,8 @@ withDefaults(
 .settings-option__control { display: inline-flex; flex: 0 0 auto; align-items: center; min-height: 20px; }
 .settings-option:not(.settings-option--inline) .settings-option__control { margin-top: 2px; }
 .settings-option :deep(input[type="checkbox"]) { width: 16px; height: 16px; margin: 0; accent-color: var(--ui-text-strong); }
-.settings-option :deep(select), .settings-option :deep(input[type="number"]), .settings-option :deep(input[type="text"]) { height: 30px; min-width: 150px; padding: 0 7px; border: 1px solid var(--ui-border); border-radius: 5px; outline: 0; background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: 12px; }
+.settings-option :deep(select), .settings-option :deep(input[type="number"]) { height: 30px; min-width: 150px; padding: 0 7px; border: 1px solid var(--ui-border); border-radius: 5px; outline: 0; background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: 12px; }
 .settings-option :deep(input[type="number"]) { width: 130px; }
-.settings-option :deep(select:focus), .settings-option :deep(input:focus) { outline: 2px solid var(--ui-focus); outline-offset: 1px; }
 .settings-option :deep(input:disabled), .settings-option :deep(select:disabled) { cursor: default; opacity: 0.55; }
 @media (max-width: 640px) { .settings-option--inline { align-items: flex-start; flex-direction: column; gap: 8px; } }
 </style>

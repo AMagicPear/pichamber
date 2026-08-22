@@ -5,6 +5,7 @@ import { fetchPiProviders, removePiProviderCredential, setPiProviderApiKey, toMe
 import { workspace } from "@/stores/workspace";
 import ProviderLogo from "@/components/ui/ProviderLogo";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
+import SearchBox from "@/components/ui/SearchBox.vue";
 
 const providers = ref<PiProviderSettings[]>([]);
 const loading = ref(false);
@@ -96,12 +97,15 @@ watch(() => workspace.sessionId, load, { immediate: true });
       </div>
       <div v-if="provider.auth.supportsApiKey" class="provider-settings__actions">
         <template v-if="editingProviderId === provider.id">
-          <input
+          <SearchBox
             v-model="apiKey"
             type="password"
+            size="compact"
+            :clearable="false"
             :disabled="saving"
             :placeholder="`${provider.name} API key`"
-            @keydown.enter="saveApiKey(provider.id)"
+            :label="`${provider.name} API key`"
+            @enter="saveApiKey(provider.id)"
             @keydown.esc="editingProviderId = null"
           />
           <button type="button" :disabled="saving || !apiKey.trim()" @click="saveApiKey(provider.id)">Save</button>
@@ -137,8 +141,7 @@ watch(() => workspace.sessionId, load, { immediate: true });
 .provider-settings__meta > span { color: var(--ui-text-muted); font-size: 12px; }
 .provider-settings__meta > span.is-ready { color: var(--ui-extension-fg); }
 .provider-settings__actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; min-width: 190px; }
-.provider-settings__actions input { width: 170px; height: 28px; min-width: 0; padding: 0 8px; border: 1px solid var(--ui-border); border-radius: 5px; outline: 0; background: var(--ui-surface); color: var(--ui-text); font: inherit; font-size: 12px; }
-.provider-settings__actions input:focus { border-color: var(--ui-border-focus); }
+.provider-settings__actions > .search-box { width: 170px; flex: 0 0 auto; }
 .provider-settings__actions button { min-height: 27px; padding: 3px 7px; border-radius: 5px; color: var(--ui-text-muted); font: inherit; font-size: 11px; }
 .provider-settings__actions button:hover:not(:disabled) { background: var(--ui-surface-hover); color: var(--ui-text-strong); }
 .provider-settings__actions button.is-danger:hover:not(:disabled) { background: var(--ui-error-hover); color: var(--ui-error-strong); }

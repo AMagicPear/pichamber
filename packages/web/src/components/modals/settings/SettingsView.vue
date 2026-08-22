@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, toRef } from "vue";
 import SplitPane from "@/components/shell/SplitPane.vue";
 import IconButton from "@/components/ui/IconButton.vue";
+import SearchBox from "@/components/ui/SearchBox.vue";
 import AiAgentIcon from "lucide-static/icons/bot.svg";
 import AiGenerate2Icon from "lucide-static/icons/sparkles.svg";
 import BookOpenIcon from "lucide-static/icons/book-open.svg";
@@ -19,7 +20,6 @@ import GitBranchIcon from "lucide-static/icons/git-branch.svg";
 import GlobalIcon from "lucide-static/icons/globe.svg";
 import Notification3Icon from "lucide-static/icons/bell-ring.svg";
 import PaletteIcon from "lucide-static/icons/palette.svg";
-import SearchIcon from "lucide-static/icons/search.svg";
 import ServerIcon from "lucide-static/icons/server.svg";
 import SlashCommands2Icon from "lucide-static/icons/square-asterisk.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
@@ -162,15 +162,7 @@ const selectItem = (key: string) => {
   >
     <template #sidebar>
       <aside class="settings-nav">
-        <div class="settings-nav__search">
-          <SearchIcon class="settings-nav__search-icon" />
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search settings"
-            aria-label="Search settings"
-          />
-        </div>
+        <SearchBox v-model="searchQuery" placeholder="Search settings…" label="Search settings" />
 
         <ul class="settings-nav__list">
           <li
@@ -301,36 +293,10 @@ const selectItem = (key: string) => {
   background: var(--ui-surface);
   font-size: 14px;
 }
-.settings-nav__search {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
+.settings-nav > :deep(.search-box) {
   margin: 12px 10px 4px;
-  padding: 0 10px;
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  background: var(--ui-surface);
-  color: var(--ui-text-muted);
 }
-.settings-nav__search-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-.settings-nav__search input {
-  flex: 1 1 0;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-}
-.settings-nav__search input::placeholder {
-  color: var(--ui-text-muted);
-}
+
 
 .settings-nav__list {
   flex: 1 1 0;

@@ -4,6 +4,7 @@ import ArrowDownSIcon from "lucide-static/icons/chevron-down.svg";
 import type { ModelDescriptor } from "@amagicpear/pichamber-shared";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
 import ProviderLogo from "./ProviderLogo";
+import SearchBox from "@/components/ui/SearchBox.vue";
 import { usePopover } from "@/composables/usePopover";
 
 const props = defineProps<{
@@ -18,7 +19,7 @@ const emit = defineEmits<{
 
 const root = ref<HTMLElement | null>(null);
 const search = ref("");
-const searchInput = ref<HTMLInputElement | null>(null);
+const searchInput = ref<InstanceType<typeof SearchBox> | null>(null);
 
 const { open, style, close: closePopover, toggle } = usePopover({
   root,
@@ -91,12 +92,12 @@ const placeholder = computed(() => {
       role="listbox"
     >
       <div class="model-selector__search">
-        <input
+        <SearchBox
           ref="searchInput"
           v-model="search"
           type="text"
           placeholder="Filter models…"
-          aria-label="Filter models"
+          label="Filter models"
           @keydown.esc="close"
         />
       </div>
@@ -177,24 +178,8 @@ const placeholder = computed(() => {
   padding: 8px;
   border-bottom: 1px solid var(--ui-border-subtle);
 }
-.model-selector__search input {
-  width: 100%;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  outline: 0;
-  font: inherit;
-  font-size: 13px;
-  background: var(--ui-surface-subtle);
-  transition: border-color var(--ui-duration-fast) var(--ui-ease-standard);
-}
-.model-selector__search input:focus {
-  border-color: var(--ui-border-focus);
+.model-selector__search > .search-box {
   background: var(--ui-surface);
-}
-.model-selector__search input::placeholder {
-  color: var(--ui-text-muted);
 }
 .model-selector__list {
   flex: 1 1 0;

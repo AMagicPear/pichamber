@@ -13,6 +13,7 @@ import {
 import { workspace } from "@/stores/workspace";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsOption from "./SettingsOption.vue";
+import SearchBox from "@/components/ui/SearchBox.vue";
 
 const overview = ref<ExtensionsOverview | null>(null);
 const loading = ref(false);
@@ -200,12 +201,14 @@ onMounted(async () => {
       </div>
       <SettingsOption inline title="Add source" description="Use npm:, git:, a URL, or a local package path.">
         <span class="extension-manager__add">
-          <input
+          <SearchBox
             v-model="newSource"
             type="text"
+            size="compact"
             :disabled="saving"
             placeholder="npm:package or ./extension"
-            @keydown.enter="addSource"
+            label="Extension source"
+            @enter="addSource"
           />
           <select v-model="newScope" :disabled="saving">
             <option value="user">Global</option>
@@ -314,9 +317,9 @@ onMounted(async () => {
 .extension-manager__resources { display: flex; flex-wrap: wrap; gap: 4px; }
 .extension-manager__resources code { padding: 2px 5px; border-radius: 4px; background: var(--ui-accent-soft); color: var(--ui-accent-text); font-size: 10px; overflow-wrap: anywhere; }
 .extension-manager__add { display: flex; align-items: center; gap: 5px; }
+.extension-manager__add > .search-box { width: 220px; flex: 0 0 auto; }
 .extension-manager__update-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: var(--ui-text-muted); font-size: 12px; }
 .extension-manager__update-bar strong { color: var(--ui-status-text); font-weight: 600; }
-.extension-manager__add input { width: 220px; min-width: 0; }
 .extension-manager__add select { min-width: 82px !important; }
 .extension-manager__add button, .extension-manager__actions button { min-height: 27px; padding: 3px 10px; border-radius: 5px; color: var(--ui-text-muted); font: inherit; font-size: 11px; }
 .extension-manager__add button:hover:not(:disabled), .extension-manager__actions button:hover:not(:disabled) { background: var(--ui-surface-hover); color: var(--ui-text-strong); }
@@ -327,6 +330,6 @@ onMounted(async () => {
   .extension-manager__actions { width: 100%; }
   .extension-manager__active-row header { align-items: flex-start; flex-direction: column; gap: 2px; }
   .extension-manager__add { width: 100%; flex-wrap: wrap; }
-  .extension-manager__add input { flex: 1 1 100%; width: 100%; }
+  .extension-manager__add > .search-box { flex: 1 1 100%; width: 100%; }
 }
 </style>

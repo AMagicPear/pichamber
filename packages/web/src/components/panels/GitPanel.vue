@@ -35,6 +35,7 @@ import DiffView from "@/components/panels/DiffView.vue";
 import IconButton from "@/components/ui/IconButton.vue";
 import FilePathLabel from "@/components/ui/FilePathLabel.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
+import SearchBox from "@/components/ui/SearchBox.vue";
 import { usePopover } from "@/composables/usePopover";
 import { workspace } from "@/stores/workspace";
 import { setGitBranch } from "@/stores/git";
@@ -478,12 +479,13 @@ watch(() => workspace.cwd, () => {
           </h3>
         </header>
         <div class="git-pane__stash-form">
-          <input
+          <SearchBox
             v-model="stashMsg"
             type="text"
-            class="git-pane__stash-input ui-input"
+            size="compact"
             placeholder="Optional message"
-            @keydown.enter="doStashPush"
+            label="Stash message"
+            @enter="doStashPush"
           />
           <button
             type="button"
@@ -897,13 +899,8 @@ watch(() => workspace.cwd, () => {
   display: flex;
   gap: 6px;
 }
-
-.git-pane__stash-input {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 13px;
+.git-pane__stash-form > :deep(.search-box) {
+  flex: 1;
 }
 
 .git-pane__stash-list {

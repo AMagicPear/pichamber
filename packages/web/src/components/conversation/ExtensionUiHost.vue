@@ -3,6 +3,7 @@ import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@earendil-wo
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import CloseIcon from "lucide-static/icons/x.svg";
 import Modal from "@/components/ui/Modal.vue";
+import SearchBox from "@/components/ui/SearchBox.vue";
 
 type DialogRequest = Extract<
   RpcExtensionUIRequest,
@@ -77,12 +78,14 @@ const confirm = (confirmed: boolean) => {
           </button>
         </div>
 
-        <input
+        <SearchBox
           v-else-if="dialog.method === 'input'"
           v-model="value"
-          autofocus
+          type="text"
+          autoFocus
           :placeholder="dialog.placeholder"
-          @keydown.enter="submitValue"
+          :label="dialog.title"
+          @enter="submitValue"
         />
         <textarea
           v-else-if="dialog.method === 'editor'"
@@ -155,7 +158,6 @@ const confirm = (confirmed: boolean) => {
   overflow-y: auto;
 }
 .extension-dialog p { margin: 0; color: var(--ui-text-muted); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
-.extension-dialog input,
 .extension-dialog textarea {
   width: 100%;
   padding: 8px 9px;
@@ -168,7 +170,6 @@ const confirm = (confirmed: boolean) => {
   resize: vertical;
   background: var(--ui-surface);
 }
-.extension-dialog input:focus,
 .extension-dialog textarea:focus { border-color: var(--ui-border-focus); box-shadow: 0 0 0 2px rgb(168 146 116 / 12%); }
 .extension-dialog__options { display: grid; gap: 3px; }
 .extension-dialog__options button {

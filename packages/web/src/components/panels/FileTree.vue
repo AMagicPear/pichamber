@@ -171,6 +171,9 @@ export default defineComponent({
   padding: 10px 12px;
   border-bottom: 1px solid var(--ui-border-subtle);
 }
+.file-tree__toolbar > :deep(.search-box) {
+  flex: 1;
+}
 
 .file-tree__actions {
   display: flex;
