@@ -1,10 +1,6 @@
 import { reactive } from "vue";
-import type { RpcExtensionUIRequest } from "@earendil-works/pi-coding-agent";
-import type {
-  ExtensionWidget,
-  WebExtensionUIRequest,
-  WidgetPlacement,
-} from "@amagicpear/pichamber-shared";
+import type { RpcExtensionUIRequest, WidgetPlacement } from "@earendil-works/pi-coding-agent";
+import { normalizeExtensionWidget, type ExtensionWidget } from "@/composables/extensionWidgets";
 
 /** 扩展 UI 装饰（对话框队列、toast、status / widget 落点）。
  *  与会话运行时状态不同生命周期，单独成模块；WS `ui_request` 帧
@@ -49,8 +45,10 @@ export const dismissNotification = (id: string) => {
   if (index !== -1) extensionUi.notifications.splice(index, 1);
 };
 
-/** 扩展 `ui.*` 请求里属于扩展 UI 装饰的分支（对话框、toast、status、widget）。 */
-export const applyExtensionUiRequest = (request: WebExtensionUIRequest) => {
+/** 扩展 `ui.*` 请求里属于扩展 UI 装饰的分支（对话框、toast、status、widget）。
+ *  请求是官方 RPC 形状原样转发；setWidget 的 widget 行在这里解析成
+ *  结构化 `ExtensionWidget`（tree / lines）。 */
+export const applyExtensionUiRequest = (request: RpcExtensionUIRequest) => {
   switch (request.method) {
     case "select":
     case "confirm":
@@ -72,11 +70,14 @@ export const applyExtensionUiRequest = (request: WebExtensionUIRequest) => {
       else delete extensionUi.statuses[request.statusKey];
       break;
     case "setWidget":
-      if (request.widget) {
-        extensionUi.widgets[request.widgetKey] = {
-          widget: request.widget,
-          placement: request.widgetPlacement ?? "aboveEditor",
-        };
+      if (request.widgetLines) {
+        const widget = normalizeExtensionWidget(request.widgetKey, request.widgetLines);
+        if (widget) {
+          extensionUi.widgets[request.widgetKey] = {
+            widget,
+            placement: request.widgetPlacement ?? "aboveEditor",
+          };
+        } else delete extensionUi.widgets[request.widgetKey];
       } else delete extensionUi.widgets[request.widgetKey];
       break;
     case "setTitle":

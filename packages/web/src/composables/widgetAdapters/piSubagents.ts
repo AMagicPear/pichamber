@@ -1,6 +1,13 @@
-/* Parse Pi extension widget payloads at the server boundary so browsers receive typed data. */
-import type { ExtensionWidget, ActivityNode } from "@amagicpear/pichamber-shared";
-import type { RpcExtensionUIRequest } from "@earendil-works/pi-coding-agent";
+/**
+ * pi-subagents 扩展的 widget 适配器。
+ *
+ * 它把子代理任务快照编码成 `PI_SUBAGENT_ASYNC_JSON:` 前缀行（协议自带
+ * kind/version，见 pi-subagents 的 async-status-snapshot.ts），另有
+ * `PI_SUBAGENT_INSPECT_JSON:` 机器行。这里把快照解析成通用 `tree`
+ * 渲染形状（复用 ActivityTree），其余行过滤机器前缀后作为 lines。
+ * 协议不是稳定规范：快照 version 不识别时整体不显示（行会被过滤）。
+ */
+import type { ActivityNode, ExtensionWidget, WidgetParser } from "../extensionWidgets";
 
 const ASYNC_PREFIX = "PI_SUBAGENT_ASYNC_JSON:";
 const INSPECT_PREFIX = "PI_SUBAGENT_INSPECT_JSON:";
@@ -10,7 +17,7 @@ const nodeKinds = new Set<ActivityNode["kind"]>(["subagent", "workflow", "step"]
 const optionalNumber = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 
-const optionalString = (value: unknown) => typeof value === "string" ? value : undefined;
+const optionalString = (value: unknown) => (typeof value === "string" ? value : undefined);
 
 const isNode = (value: unknown): value is Record<string, unknown> & {
   id: string;
@@ -68,12 +75,12 @@ const parseAsyncSnapshot = (line: string): ExtensionWidget | undefined => {
       omitted?: { runs?: unknown; children?: unknown };
     };
     if (snapshot.kind !== "pi-subagents.async-status-snapshot" || snapshot.version !== 1 || !Array.isArray(snapshot.runs)) return undefined;
-    const runs = snapshot.runs.map(normalizeNode).filter((run): run is ActivityNode => !!run);
+    const nodes = snapshot.runs.map(normalizeNode).filter((run): run is ActivityNode => !!run);
     const omitted = optionalNumber(snapshot.omitted?.runs) ?? 0;
     const omittedChildren = optionalNumber(snapshot.omitted?.children) ?? 0;
     return {
-      kind: "task-tree",
-      runs,
+      kind: "tree",
+      nodes,
       ...(omitted + omittedChildren > 0 ? { omitted: omitted + omittedChildren } : {}),
     };
   } catch {
@@ -81,23 +88,12 @@ const parseAsyncSnapshot = (line: string): ExtensionWidget | undefined => {
   }
 };
 
-export const normalizeExtensionWidget = (
-  request: Extract<RpcExtensionUIRequest, { method: "setWidget" }>,
-): ExtensionWidget | undefined => {
-  if (!request.widgetLines) return undefined;
-  const taskTree = request.widgetLines.map(parseAsyncSnapshot).find((widget): widget is Extract<ExtensionWidget, { kind: "task-tree" }> => widget?.kind === "task-tree");
-  if (taskTree) return taskTree;
-  const lines = request.widgetLines.filter((line) => !line.startsWith(INSPECT_PREFIX) && !line.startsWith(ASYNC_PREFIX));
-  return lines.length ? { kind: "lines", lines } : undefined;
+/** pi-subagents 适配器：ASYNC 快照 → tree；其余行过滤机器前缀 → lines。 */
+export const parsePiSubagentsWidget: WidgetParser = (_key, lines) => {
+  const tree = lines
+    .map(parseAsyncSnapshot)
+    .find((widget): widget is Extract<ExtensionWidget, { kind: "tree" }> => widget?.kind === "tree");
+  if (tree) return tree;
+  const visible = lines.filter((line) => !line.startsWith(INSPECT_PREFIX) && !line.startsWith(ASYNC_PREFIX));
+  return visible.length > 0 ? { kind: "lines", lines: visible } : undefined;
 };
-
-export const normalizeWidgetRequest = (
-  request: Extract<RpcExtensionUIRequest, { method: "setWidget" }>,
-) => ({
-  type: "extension_ui_request" as const,
-  id: request.id,
-  method: "setWidget" as const,
-  widgetKey: request.widgetKey,
-  widget: normalizeExtensionWidget(request),
-  widgetPlacement: request.widgetPlacement,
-});

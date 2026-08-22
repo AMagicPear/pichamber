@@ -14,7 +14,6 @@ import type {
   SessionInfo,
   SessionStatsView,
   ThinkingState,
-  WebExtensionUIRequest,
 } from "@amagicpear/pichamber-shared";
 import { BUILTIN_COMMANDS } from "@/composables/builtin-commands";
 import { settings } from "@/stores/settings";
@@ -555,7 +554,7 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
     case "ui_request": {
       // setTitle / set_editor_text 改的是 workspace 自己拥有的 state，
       // 其余扩展 UI 装饰交给 extensionUi store。
-      const req = message.request as WebExtensionUIRequest;
+      const req = message.request;
       if (req.method === "setTitle") {
         windowTitle.value = req.title || undefined;
       } else if (req.method === "set_editor_text") {

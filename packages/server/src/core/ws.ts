@@ -27,7 +27,6 @@ import {
 import type {
   AgentActivity,
   ExtensionInfo,
-  ExtensionWidget,
   ImageContent,
   ModelDescriptor,
   PendingMessages,
@@ -36,12 +35,10 @@ import type {
   ServerMessage,
   SessionStatsView,
   ThinkingState,
-  WebExtensionUIRequest,
 } from "@amagicpear/pichamber-shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
 import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
-import { normalizeWidgetRequest } from "../extensions/widget-lines";
 import { computeSessionStatsView } from "./context";
 import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { deactivateSession, getSession } from "./session";
@@ -87,7 +84,7 @@ type BunWS = ServerWebSocket<SessionWsData>;
  *  browser socket has attached. */
 type ExtensionUiState = {
   statuses: Record<string, string>;
-  widgets: Record<string, { widget: ExtensionWidget; placement: "aboveEditor" | "belowEditor" }>;
+  widgets: Record<string, { widgetLines: string[] | undefined; placement: "aboveEditor" | "belowEditor" }>;
   title?: string;
 };
 
@@ -333,14 +330,14 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
 /** Store the extension operations whose meaning is "set current value".
  *  Notifications and dialogs are intentionally not retained: replaying
  *  either one on reconnect would produce duplicate toasts or prompts. */
-const applyExtensionUiRequest = (state: ExtensionUiState, request: WebExtensionUIRequest) => {
+const applyExtensionUiRequest = (state: ExtensionUiState, request: RpcExtensionUIRequest) => {
   if (request.method === "setStatus") {
     if (request.statusText) state.statuses[request.statusKey] = request.statusText;
     else delete state.statuses[request.statusKey];
   } else if (request.method === "setWidget") {
-    if (request.widget) {
+    if (request.widgetLines) {
       state.widgets[request.widgetKey] = {
-        widget: request.widget,
+        widgetLines: request.widgetLines,
         placement: request.widgetPlacement ?? "aboveEditor",
       };
     } else delete state.widgets[request.widgetKey];
@@ -353,7 +350,7 @@ const applyExtensionUiRequest = (state: ExtensionUiState, request: WebExtensionU
  *  from the session snapshot because extension UI is event-shaped in the
  *  public protocol, while the client already applies these setters idempotently. */
 const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
-  const send = (request: WebExtensionUIRequest) => {
+  const send = (request: RpcExtensionUIRequest) => {
     if (socket.readyState === 1) {
       socket.send(JSON.stringify({ type: "ui_request", request } satisfies ServerMessage));
     }
@@ -373,7 +370,7 @@ const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
       id: crypto.randomUUID(),
       method: "setWidget",
       widgetKey,
-      widget: widget.widget,
+      widgetLines: widget.widgetLines,
       widgetPlacement: widget.placement,
     });
   }
@@ -452,15 +449,12 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     channel.state.seq += 1;
     broadcast(snapshotMessage(channel));
   };
-  /** 扩展 UI 请求归一化后转发。除 setWidget 外的请求原样透传（ANSI 剥离
-   *  已移除：UiBridge / SDK RPC context 都原样透传扩展字符串，webTheme
-   *  的样式方法直接返回文本，链路上没有 ANSI 产生源）；setWidget 需要把
-   *  widget 行解析成结构化 `ExtensionWidget`（task-tree / lines）。 */
+  /** 扩展 UI 请求原样转发。服务端不解析扩展的私有 widget 协议（如
+   *  pi-subagents 的 `PI_SUBAGENT_*` 前缀）——setWidget 的 widget 行由
+   *  前端消费方解析成结构化 `ExtensionWidget`。 */
   const broadcastUiRequest = (request: RpcExtensionUIRequest) => {
-    const normalized: WebExtensionUIRequest =
-      request.method === "setWidget" ? normalizeWidgetRequest(request) : request;
-    applyExtensionUiRequest(channel.extensionUi, normalized);
-    broadcast({ type: "ui_request", request: normalized });
+    applyExtensionUiRequest(channel.extensionUi, request);
+    broadcast({ type: "ui_request", request });
   };
 
   /** Common settlement shape shared by `compaction_end` and `agent_settled`:

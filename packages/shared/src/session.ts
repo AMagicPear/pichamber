@@ -2,7 +2,7 @@
  * 会话 WS 协议与 pi 会话相关的 wire 类型。
  *
  * 只放「活会话」相关的东西：ServerMessage/ClientMessage 帧、会话显示状态
- * （activity/pending/model/thinking/stats/resources）、扩展 UI 归一化类型。
+ * （activity/pending/model/thinking/stats/resources）、扩展 UI 原样转发帧。
  * 凡官方已有同构类型（AgentMessage/AgentSessionEvent/ImageContent/
  * WidgetPlacement/…）一律直接复用官方 import，不自造。
  * 提供商/配额/扩展设置见 `providers.ts`；git/fs/pty/服务端设置等
@@ -16,7 +16,6 @@ import type {
   SlashCommandInfo,
   SlashCommandSource,
   SourceInfo,
-  WidgetPlacement,
 } from "@earendil-works/pi-coding-agent";
 import type { ImageContent } from "@earendil-works/pi-ai";
 
@@ -50,40 +49,6 @@ export type ExtensionInfo = {
   sourceInfo: SourceInfo;
   commands: string[];
   tools: string[];
-};
-
-export type ActivityNode = {
-  id: string;
-  kind: "subagent" | "workflow" | "step";
-  label: string;
-  state: string;
-  startedAt?: number;
-  updatedAt?: number;
-  endedAt?: number;
-  activity?: {
-    state?: string;
-    currentTool?: string;
-    lastActivityAt?: number;
-    currentToolStartedAt?: number;
-    turnCount?: number;
-    toolCount?: number;
-  };
-  children?: ActivityNode[];
-};
-
-/** 浏览器侧归一化的扩展 widget 内容（官方 ExtensionWidgetOptions 只有
- *  placement，widget 正文是 pichamber 的 wire 形状）。 */
-export type ExtensionWidget =
-  | { kind: "lines"; lines: string[] }
-  | { kind: "task-tree"; runs: ActivityNode[]; omitted?: number };
-
-export type WebExtensionUIRequest = Exclude<RpcExtensionUIRequest, { method: "setWidget" }> | {
-  type: "extension_ui_request";
-  id: string;
-  method: "setWidget";
-  widgetKey: string;
-  widget?: ExtensionWidget;
-  widgetPlacement?: WidgetPlacement;
 };
 
 /** Wire command shape for the slash-command shelf. Built-ins are defined
@@ -219,8 +184,9 @@ export type ServerMessage =
       stats?: SessionStatsView;
       resources?: RuntimeResources;
     }
-  /** Extension UI request normalized for browser rendering. */
-  | { type: "ui_request"; request: WebExtensionUIRequest }
+  /** 扩展 UI 请求原样转发（官方 RPC 形状；setWidget 的 widget 行解析由
+   *  前端消费方负责——服务端不懂扩展的私有前缀协议）。 */
+  | { type: "ui_request"; request: RpcExtensionUIRequest }
   | { type: "draft_restore"; messages: string[] }
   | { type: "error"; error: string };
 

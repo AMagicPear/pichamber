@@ -5,18 +5,18 @@
     "": {
       "name": "@amagicpear/pichamber",
       "dependencies": {
-        "@earendil-works/pi-coding-agent": "latest",
-        "bun-pty": "latest",
-        "commander": "latest",
+        "@earendil-works/pi-coding-agent": "^0.84.2",
+        "bun-pty": "^0.4.10",
+        "commander": "^15.0.0",
       },
       "devDependencies": {
-        "@types/node": "latest",
-        "bun-types": "latest",
-        "concurrently": "latest",
-        "oxlint": "latest",
-        "typescript": "latest",
-        "typescript6": "npm:@typescript/typescript6@latest",
-        "vue-tsc": "latest",
+        "@types/node": "^26.2.0",
+        "bun-types": "^1.4.0",
+        "concurrently": "^10.0.5",
+        "oxlint": "~1.79.0",
+        "typescript": "~7.0.2",
+        "typescript6": "npm:@typescript/typescript6@^6.0.2",
+        "vue-tsc": "^3.3.11",
       },
     },
     "packages/server": {
@@ -45,7 +45,7 @@
     },
     "packages/web": {
       "name": "@amagicpear/pichamber-web",
-      "version": "0.8.0",
+      "version": "0.9.1",
       "dependencies": {
         "@amagicpear/pichamber-shared": "workspace:*",
         "ghostty-web": "^0.4.0",

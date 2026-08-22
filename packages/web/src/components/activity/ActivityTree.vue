@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ActivityNode } from "@amagicpear/pichamber-shared";
+import type { ActivityNode } from "@/composables/extensionWidgets";
 
 defineProps<{ node: ActivityNode }>();
 </script>

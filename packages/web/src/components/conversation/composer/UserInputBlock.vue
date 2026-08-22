@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { AgentActivity, ExtensionWidget, ModelDescriptor, PendingMessages, RuntimeSlashCommand } from "@amagicpear/pichamber-shared";
+import type { AgentActivity, ModelDescriptor, PendingMessages, RuntimeSlashCommand } from "@amagicpear/pichamber-shared";
+import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import { computed, nextTick, ref, watch } from "vue";
 import AddCircleIcon from "@/assets/icons/AddCircle.svg";
 import MicIcon from "@/assets/icons/Mic.svg";
@@ -308,8 +309,9 @@ const openFiles = () => {
 };
 
 const pendingCount = computed(() => props.pending.steering.length + props.pending.followUp.length);
-type TaskTreeEntry = {
-  widget: Extract<ExtensionWidget, { kind: "task-tree" }>;
+/** 结构化 widget（非 lines）进活动卡片区；lines 走状态脚注（见下）。 */
+type CardEntry = {
+  widget: Exclude<ExtensionWidget, { kind: "lines" }>;
   placement: "aboveEditor" | "belowEditor";
 };
 type AuxiliaryItem = {
@@ -318,9 +320,9 @@ type AuxiliaryItem = {
   placement: "aboveEditor" | "belowEditor";
   text: string;
 };
-const activityWidgets = computed<Record<string, TaskTreeEntry>>(() => Object.fromEntries(
-  Object.entries(props.extensionWidgets).filter(([, entry]) => entry.widget.kind === "task-tree"),
-) as Record<string, TaskTreeEntry>);
+const activityWidgets = computed<Record<string, CardEntry>>(() => Object.fromEntries(
+  Object.entries(props.extensionWidgets).filter(([, entry]) => entry.widget.kind !== "lines"),
+) as Record<string, CardEntry>);
 const activityWidgetCount = computed(() => Object.keys(activityWidgets.value).length);
 const auxiliaryItems = computed<AuxiliaryItem[]>(() => [
   ...Object.entries(props.extensionStatuses).map(([key, text]) => ({

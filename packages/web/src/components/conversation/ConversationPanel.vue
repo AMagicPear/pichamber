@@ -11,7 +11,8 @@ import IconButton from "@/components/ui/IconButton.vue";
 import ConversationMessages from "@/components/conversation/messages/ConversationMessages.vue";
 import UserInputBlock from "@/components/conversation/composer/UserInputBlock.vue";
 import ExtensionUiHost from "@/components/conversation/ExtensionUiHost.vue";
-import type { ExtensionWidget, WidgetPlacement } from "@amagicpear/pichamber-shared";
+import type { WidgetPlacement } from "@earendil-works/pi-coding-agent";
+import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import { useConversationSession } from "@/composables/useConversationSession";
 import { dismissNotification, extensionUi } from "@/stores/extensionUi";
 import { workspace } from "@/stores/workspace";
@@ -74,8 +75,8 @@ const debugActivityWidgets: Record<string, { widget: ExtensionWidget; placement:
   workflow: {
     placement: "aboveEditor",
     widget: {
-      kind: "task-tree",
-      runs: [
+      kind: "tree",
+      nodes: [
         {
           id: "debug-scout",
           kind: "workflow",

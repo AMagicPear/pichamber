@@ -1,14 +1,13 @@
 <script setup lang="ts">
-/* Pure Activity card. The surrounding composer stack owns placement,
- * animation, trigger state, and dismissal; this component only presents
- * the task-tree widget vocabulary. */
-import type { ExtensionWidget } from "@amagicpear/pichamber-shared";
+/* 活动卡片面板：渲染结构化 widget（非 lines，即适配器解析出的 tree 等）。
+ * 周围由 ComposerActivityStack 负责弹层/开关，这里只按 kind 分发渲染。 */
+import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import CloseIcon from "@/assets/icons/Close.svg";
 import ActivityTree from "./ActivityTree.vue";
 
 defineProps<{
   widgets: Record<string, {
-    widget: Extract<ExtensionWidget, { kind: "task-tree" }>;
+    widget: Exclude<ExtensionWidget, { kind: "lines" }>;
     placement: "aboveEditor" | "belowEditor";
   }>;
 }>();
@@ -25,8 +24,11 @@ defineEmits<{ close: [] }>();
     </header>
     <div class="activity-panel__body">
       <article v-for="[key, entry] in Object.entries(widgets)" :key="key" class="activity-panel__widget">
-        <ActivityTree v-for="run in entry.widget.runs" :key="run.id" :node="run" />
-        <p v-if="entry.widget.omitted" class="activity-panel__omitted">+{{ entry.widget.omitted }} more</p>
+        <!-- 新增结构化 kind 时在这里加一个渲染分支。 -->
+        <template v-if="entry.widget.kind === 'tree'">
+          <ActivityTree v-for="node in entry.widget.nodes" :key="node.id" :node="node" />
+          <p v-if="entry.widget.omitted" class="activity-panel__omitted">+{{ entry.widget.omitted }} more</p>
+        </template>
       </article>
     </div>
   </section>
