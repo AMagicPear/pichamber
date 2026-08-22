@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import AiAgentIcon from "@/assets/icons/AiAgent.svg";
-import GlobalIcon from "@/assets/icons/Global.svg";
+import AiAgentIcon from "lucide-static/icons/bot.svg";
+import GlobalIcon from "lucide-static/icons/globe.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
-import TerminalBoxIcon from "@/assets/icons/TerminalBox.svg";
-import FileListIcon from "@/assets/icons/FileList2.svg";
+import TerminalBoxIcon from "lucide-static/icons/square-terminal.svg";
+import FileListIcon from "lucide-static/icons/list.svg";
 import FolderIcon from "lucide-static/icons/folder.svg";
-import GitBranchIcon from "@/assets/icons/GitBranch.svg";
+import GitBranchIcon from "lucide-static/icons/git-branch.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
 import ProviderQuotaPanel from "@/components/ui/ProviderQuotaPanel.vue";

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import CloseIcon from "@/assets/icons/Close.svg";
-import SearchIcon from "@/assets/icons/Search.svg";
+import CloseIcon from "lucide-static/icons/x.svg";
+import SearchIcon from "lucide-static/icons/search.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import { onMounted, ref } from "vue";
 

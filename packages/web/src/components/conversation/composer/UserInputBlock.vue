@@ -3,12 +3,12 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentActivity, ModelDescriptor, PendingMessages, RuntimeSlashCommand } from "@amagicpear/pichamber-shared";
 import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import { computed, nextTick, ref, watch } from "vue";
-import AddCircleIcon from "@/assets/icons/AddCircle.svg";
-import MicIcon from "@/assets/icons/Mic.svg";
-import SendIcon from "@/assets/icons/SendPlane2.svg";
+import AddCircleIcon from "lucide-static/icons/circle-plus.svg";
+import MicIcon from "lucide-static/icons/mic.svg";
+import SendIcon from "lucide-static/icons/send.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
-import StopIcon from "@/assets/icons/Stop.svg";
-import TargetIcon from "@/assets/icons/Target.svg";
+import StopIcon from "lucide-static/icons/square.svg";
+import TargetIcon from "lucide-static/icons/target.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import ComposerShelf from "@/components/conversation/composer/ComposerShelf.vue";
 import ModelSelector from "@/components/ui/ModelSelector.vue";
@@ -17,8 +17,8 @@ import ComposerActivityStack from "@/components/conversation/composer/ComposerAc
 import { messageText } from "@/components/conversation/messages/messageContent";
 import type { SendKey } from "@/stores/settings";
 import { conversation, working, type DraftImage } from "@/stores/workspace";
-import AttachmentIcon from "@/assets/icons/Attachment2.svg";
-import CloseIcon from "@/assets/icons/Close.svg";
+import AttachmentIcon from "lucide-static/icons/paperclip.svg";
+import CloseIcon from "lucide-static/icons/x.svg";
 
 const draft = defineModel<string | undefined>({ required: true });
 const images = defineModel<DraftImage[]>("images", { required: true });

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import GitBranchIcon from "@/assets/icons/GitBranch.svg";
-import FileTextIcon from "@/assets/icons/FileText.svg";
+import GitBranchIcon from "lucide-static/icons/git-branch.svg";
+import FileTextIcon from "lucide-static/icons/file-text.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 
 const props = defineProps<{

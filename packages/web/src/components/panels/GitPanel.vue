@@ -25,13 +25,13 @@ import {
   toMessage,
   unstageGitPaths,
 } from "@/api/client";
-import GitBranchIcon from "@/assets/icons/GitBranch.svg";
-import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
-import ArrowUpSIcon from "@/assets/icons/ArrowUpS.svg";
-import DeleteBinIcon from "@/assets/icons/DeleteBin.svg";
-import RefreshIcon from "@/assets/icons/Refresh2.svg";
+import GitBranchIcon from "lucide-static/icons/git-branch.svg";
+import ArrowDownSIcon from "lucide-static/icons/chevron-down.svg";
+import ArrowUpSIcon from "lucide-static/icons/chevron-up.svg";
+import DeleteBinIcon from "lucide-static/icons/trash-2.svg";
+import RefreshIcon from "lucide-static/icons/refresh-cw.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
-import PlusIcon from "@/assets/icons/AddCircle.svg";
+import PlusIcon from "lucide-static/icons/circle-plus.svg";
 import DiffView from "@/components/panels/DiffView.vue";
 import IconButton from "@/components/ui/IconButton.vue";
 import FilePathLabel from "@/components/ui/FilePathLabel.vue";

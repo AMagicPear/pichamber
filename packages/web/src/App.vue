@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import LayoutLeftIcon from "@/assets/icons/LayoutLeft.svg";
+import LayoutLeftIcon from "lucide-static/icons/layout-panel-left.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import SplitPane from "@/components/shell/SplitPane.vue";
 import Modal from "@/components/ui/Modal.vue";

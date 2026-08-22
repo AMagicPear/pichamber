@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
-import ArrowDownIcon from "@/assets/icons/ArrowDownS.svg";
+import ArrowDownIcon from "lucide-static/icons/chevron-down.svg";
 import FolderIcon from "lucide-static/icons/folder.svg";
 import Modal from "@/components/ui/Modal.vue";
 import { browseProjectDirectories, toMessage } from "@/api/client";

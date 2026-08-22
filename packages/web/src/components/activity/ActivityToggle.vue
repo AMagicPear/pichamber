@@ -2,7 +2,7 @@
 /* Pure presentation button. The activity feature owns its own open
  * state inside ActivityPanel, so the toggle just renders a button and
  * emits `toggle` when clicked — no refs, no logic. */
-import ArrowUpIcon from "@/assets/icons/ArrowUpS.svg";
+import ArrowUpIcon from "lucide-static/icons/chevron-up.svg";
 import StackIcon from "@/assets/icons/Stack.svg";
 
 defineProps<{

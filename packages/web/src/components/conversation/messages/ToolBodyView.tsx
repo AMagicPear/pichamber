@@ -4,7 +4,7 @@ import type { VNode } from "vue";
 // bare `*.svg` module type here is `string`; cast to the component contract so
 // the JSX/<FolderIcon/> usage type-checks.
 import FolderIconSrc from "lucide-static/icons/folder.svg";
-import FileTextIconSrc from "@/assets/icons/FileText.svg";
+import FileTextIconSrc from "lucide-static/icons/file-text.svg";
 import { getEntryIcon } from "../../ui/fileIcon";
 import CodeView from "../../ui/CodeView.vue";
 import DiffView from "../../panels/DiffView.vue";

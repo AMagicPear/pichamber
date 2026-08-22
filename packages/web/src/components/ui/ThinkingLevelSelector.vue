@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { computed, ref } from "vue";
-import AiGenerate2Icon from "@/assets/icons/AiGenerate2.svg";
-import ArrowDownSIcon from "@/assets/icons/ArrowDownS.svg";
+import AiGenerate2Icon from "lucide-static/icons/sparkles.svg";
+import ArrowDownSIcon from "lucide-static/icons/chevron-down.svg";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 

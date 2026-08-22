@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import CloseIcon from "@/assets/icons/Close.svg";
+import CloseIcon from "lucide-static/icons/x.svg";
 import Modal from "@/components/ui/Modal.vue";
 
 type DialogRequest = Extract<

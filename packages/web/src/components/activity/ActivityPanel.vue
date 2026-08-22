@@ -2,7 +2,7 @@
 /* 活动卡片面板：渲染结构化 widget（非 lines，即适配器解析出的 tree 等）。
  * 周围由 ComposerActivityStack 负责弹层/开关，这里只按 kind 分发渲染。 */
 import type { ExtensionWidget } from "@/composables/extensionWidgets";
-import CloseIcon from "@/assets/icons/Close.svg";
+import CloseIcon from "lucide-static/icons/x.svg";
 import ActivityTree from "./ActivityTree.vue";
 
 defineProps<{

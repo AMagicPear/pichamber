@@ -23,11 +23,11 @@
  */
 
 import { computed, ref, watch } from "vue";
-import AddIcon from "@/assets/icons/Add.svg";
-import CloseIcon from "@/assets/icons/Close.svg";
-import FullscreenIcon from "@/assets/icons/Fullscreen.svg";
-import FullscreenExitIcon from "@/assets/icons/FullscreenExit.svg";
-import TerminalIcon from "@/assets/icons/Terminal.svg";
+import AddIcon from "lucide-static/icons/plus.svg";
+import CloseIcon from "lucide-static/icons/x.svg";
+import FullscreenIcon from "lucide-static/icons/fullscreen.svg";
+import FullscreenExitIcon from "lucide-static/icons/minimize.svg";
+import TerminalIcon from "lucide-static/icons/terminal.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import TerminalView from "@/components/panels/TerminalView.vue";
 import { startPty, stopPty, toMessage } from "@/api/client";

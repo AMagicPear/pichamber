@@ -1,8 +1,8 @@
 <script lang="tsx">
 import { computed, defineComponent, onMounted, ref, watch, type PropType } from "vue";
-import FileAddIcon from "@/assets/icons/FileAdd.svg";
-import FolderAddIcon from "@/assets/icons/FolderAdd.svg";
-import RefreshIcon from "@/assets/icons/Refresh2.svg";
+import FileAddIcon from "lucide-static/icons/file-plus.svg";
+import FolderAddIcon from "lucide-static/icons/folder-plus.svg";
+import RefreshIcon from "lucide-static/icons/refresh-cw.svg";
 import SearchBox from "@/components/ui/SearchBox.vue";
 import type { DirEntry } from "@amagicpear/pichamber-shared";
 import { listDirectory, toMessage } from "@/api/client";

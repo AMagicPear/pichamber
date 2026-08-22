@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { DirEntry, RuntimeSlashCommand } from "@amagicpear/pichamber-shared";
 import { computed, nextTick, ref, watch } from "vue";
-import AttachmentIcon from "@/assets/icons/Attachment2.svg";
-import CommandIcon from "@/assets/icons/Command.svg";
+import AttachmentIcon from "lucide-static/icons/paperclip.svg";
+import CommandIcon from "lucide-static/icons/command.svg";
 import { listDirectory, searchFiles, toMessage } from "@/api/client";
 import { getEntryIcon } from "@/components/ui/fileIcon";
 import { workspace } from "@/stores/workspace";

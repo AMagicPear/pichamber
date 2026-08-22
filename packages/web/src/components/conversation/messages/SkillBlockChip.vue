@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FileIcon from "@/assets/icons/FileText.svg";
+import FileIcon from "lucide-static/icons/file-text.svg";
 
 defineProps<{
   name: string;
