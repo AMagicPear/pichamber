@@ -9,22 +9,10 @@ defineProps<{
 </script>
 
 <template>
-  <article
-    class="conversation-message conversation-message--tool-result"
-    :class="{ 'conversation-message--tool-error': detail.isError }"
-  >
-    <ConversationDetail
-      class="conversation-message__details"
-      :icon="detail.icon ?? 'wrench'"
-      :label="detail.label"
-      :preview="detail.preview"
-      :path="detail.path"
-      :timeout="detail.timeout"
-      :running="detail.running"
-      :started-at="detail.startedAt"
-      :body="detail.body"
-      :default-expanded="settings.expandedToolResults"
-    />
+  <article class="conversation-message conversation-message--tool-result"
+    :class="{ 'conversation-message--tool-error': detail.isError }">
+    <ConversationDetail class="conversation-message__details" v-bind="detail"
+      :default-expanded="settings.expandedToolResults" />
   </article>
 </template>
 
