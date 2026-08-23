@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 import type { RpcExtensionUIRequest, WidgetPlacement } from "@earendil-works/pi-coding-agent";
 import { normalizeExtensionWidget, type ExtensionWidget } from "@/composables/extensionWidgets";
+import { createId } from "@/utils/id";
 
 /** 扩展 UI 装饰（对话框队列、toast、status / widget 落点）。
  *  与会话运行时状态不同生命周期，单独成模块；WS `ui_request` 帧
@@ -35,7 +36,7 @@ export const showNextExtensionDialog = () => {
  *  shared toast queue. The toast auto-dismisses after 5s and can be closed
  *  manually, matching the lifecycle of extension notifications. */
 export const pushErrorToast = (message: string) => {
-  const id = `error-${crypto.randomUUID()}`;
+  const id = `error-${createId()}`;
   extensionUi.notifications.push({ id, message, type: "error" });
   setTimeout(() => dismissNotification(id), TOAST_TTL_MS);
 };
@@ -43,7 +44,7 @@ export const pushErrorToast = (message: string) => {
 /** Push a neutral confirmation toast (e.g. "Copied to clipboard") onto the
  *  same shared queue. */
 export const pushInfoToast = (message: string) => {
-  const id = `info-${crypto.randomUUID()}`;
+  const id = `info-${createId()}`;
   extensionUi.notifications.push({ id, message, type: "info" });
   setTimeout(() => dismissNotification(id), TOAST_TTL_MS);
 };

@@ -17,6 +17,7 @@ import ComposerActivityStack from "@/components/conversation/composer/ComposerAc
 import { messageText } from "@/components/conversation/messages/messageContent";
 import type { SendKey } from "@/stores/settings";
 import { conversation, working, type DraftImage } from "@/stores/workspace";
+import { createId } from "@/utils/id";
 import AttachmentIcon from "lucide-static/icons/paperclip.svg";
 import CloseIcon from "lucide-static/icons/x.svg";
 
@@ -157,7 +158,7 @@ const addImages = async (candidates: File[]) => {
     }
   }
   const added = await Promise.all(files.map(async (file) => ({
-    id: crypto.randomUUID(),
+    id: createId(),
     type: "image" as const,
     mimeType: file.type as DraftImage["mimeType"],
     data: await fileData(file),

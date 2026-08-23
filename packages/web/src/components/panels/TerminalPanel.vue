@@ -33,6 +33,7 @@ import TerminalView from "@/components/panels/TerminalView.vue";
 import { startPty, stopPty, toMessage } from "@/api/client";
 import { ui } from "@/stores/ui";
 import { workspace } from "@/stores/workspace";
+import { createId } from "@/utils/id";
 
 type TabStatus = "creating" | "ready" | "closed" | "error";
 
@@ -65,7 +66,7 @@ const createTab = async () => {
   // tab starts with `ptyId: null`; on success we mutate the existing entry's
   // ptyId in place — the tab's `id` (used as Vue's :key) never changes, so
   // TerminalView doesn't unmount and we don't leak a phantom PTY.
-  const localId = `local-${crypto.randomUUID()}`;
+  const localId = `local-${createId()}`;
   const tab: Tab = {
     id: localId,
     ptyId: null,
