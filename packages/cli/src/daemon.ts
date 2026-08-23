@@ -1,5 +1,3 @@
-import { Command } from "commander";
-import { spawn, spawnSync } from "node:child_process";
 import {
   closeSync,
   createReadStream,
@@ -14,16 +12,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { connect } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkgRoot = join(__dirname, "..");
+const pkgRoot = join(__dirname, "..", "..", "..");
 const serverEntry = join(pkgRoot, "dist", "server.js");
 const packageJson = JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8"));
-const VERSION = packageJson.version;
-const DEFAULT_PORT = 3000;
+export const VERSION = packageJson.version;
+export const DEFAULT_PORT = 3000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,30 +62,25 @@ const withLock = async (paths, fn) => {
   try { return await fn(); } finally { rmSync(paths.lock, { recursive: true, force: true }); }
 };
 
-const requestJson = async (url, init = {}, timeout = 800) => {
+const requestJson = async (url, init = {}, timeout = 800): Promise<any> => {
   const res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
-  const data = await res.json().catch(() => ({}));
+  const data: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
   return data;
 };
 
-const isPortOpen = (port) => new Promise((r) => {
-  const s = connect({ host: "127.0.0.1", port });
-  s.setTimeout(300, () => r(false));
-  s.once("connect", () => { s.destroy(); r(true); });
-  s.once("error", () => { s.destroy(); r(false); });
-});
+const isPortOpen = async (port) => {
+  try {
+    await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(300) });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const probe = async (port) => {
   try { const h = await requestJson(`http://127.0.0.1:${port}/api/health`); return h?.app === "pichamber" ? { kind: "pichamber", health: h } : { kind: "occupied" }; }
   catch { return { kind: (await isPortOpen(port)) ? "occupied" : "free" }; }
-};
-
-const findBun = () => {
-  const exe = process.platform === "win32" ? "bun.exe" : "bun";
-  const r = spawnSync(exe, ["--version"], { encoding: "utf8", windowsHide: true });
-  if (r.error || r.status !== 0) throw new Error("Bun is required. Install it from https://bun.sh and try again.");
-  return exe;
 };
 
 const assertPackage = () => { if (!existsSync(serverEntry)) throw new Error(`server build not found at ${serverEntry}. Reinstall pichamber and try again.`); };
@@ -115,12 +107,11 @@ const ensureDaemon = async (port, quiet = false) => {
     }
     if (current.kind === "occupied") throw new Error(`port ${port} is already in use by another application`);
 
-    const bun = findBun();
     const token = crypto.randomUUID();
     const instanceId = crypto.randomUUID();
     const logFd = openSync(paths.log, "a", 0o600);
-    const child = spawn(bun, ["run", serverEntry], {
-      detached: true, stdio: ["ignore", logFd, logFd], windowsHide: true,
+    const child = Bun.spawn([process.execPath, serverEntry], {
+      detached: true, stdin: "ignore", stdout: logFd, stderr: logFd,
       env: { ...process.env, PICHAMBER_HOST: "127.0.0.1", PICHAMBER_PORT: String(port), PICHAMBER_VERSION: VERSION, PICHAMBER_INSTANCE_ID: instanceId, PICHAMBER_DAEMON_TOKEN: token },
     });
     closeSync(logFd); child.unref();
@@ -137,8 +128,8 @@ const ensureDaemon = async (port, quiet = false) => {
 
 const openBrowser = (url) => {
   const [cmd, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd.exe", ["/d", "/s", "/c", `start "" "${url.replaceAll('"', '\\"')}"`]] : ["xdg-open", [url]];
-  const child = spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: true });
-  child.on("error", () => console.warn(`Could not open a browser. Visit ${url}`)); child.unref();
+  const child = Bun.spawn([cmd, ...args], { detached: true, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+  child.unref();
 };
 
 const workspacePath = (input) => {
@@ -165,89 +156,31 @@ const showLogs = async (port, lines, follow) => {
     createReadStream(path, { start: offset, end: size - 1 }).pipe(process.stdout, { end: false });
     offset = size;
   });
-  await new Promise(() => {});
+  await new Promise<void>(() => {});
 };
 
 const runServe = async (options) => {
   assertPackage();
-  const bun = findBun();
-  const child = spawn(bun, ["run", serverEntry], {
-    stdio: "inherit", windowsHide: true,
+  const child = Bun.spawn([process.execPath, serverEntry], {
+    stdin: "inherit", stdout: "inherit", stderr: "inherit",
     env: { ...process.env, PICHAMBER_HOST: options.host, PICHAMBER_PORT: String(options.port), PICHAMBER_VERSION: VERSION },
   });
   const fwd = (s) => child.kill(s);
   process.once("SIGINT", fwd); process.once("SIGTERM", fwd);
-  await new Promise((res, rej) => {
-    child.once("error", rej);
-    child.once("exit", (code, signal) => {
-      if (signal === "SIGINT" || signal === "SIGTERM") res();
-      else if (signal) rej(new Error(`server stopped by ${signal}`));
-      else if (code) rej(new Error(`server exited with code ${code}`));
-      else res();
-    });
-  });
+  const code = await child.exited;
+  process.off("SIGINT", fwd); process.off("SIGTERM", fwd);
+  if (code !== 0) throw new Error(`server exited with code ${code}`);
 };
-
-// ─── CLI ──────────────────────────────────────────────────────────────────────
-
-const program = new Command();
-program
-  .name("pichamber")
-  .version(VERSION)
-  .description("A browser-based workspace for the Pi Coding Agent")
-  .exitOverride()
-  .option("-p, --port <port>", "server port", String(DEFAULT_PORT))
-  .option("--json", "emit machine-readable JSON output");
-
-program
-  .command("open [path]")
-  .description("Open a new session for path (defaults to cwd)")
-  .action(async (path) => {
-    const opts = program.opts();
-    const daemon = await ensureDaemon(Number(opts.port), opts.json);
-    const cwd = workspacePath(path);
-    const session = await requestJson(`${daemon.url}/api/sessions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cwd }) }, 15_000);
-    const url = `${daemon.url}/${encodeURIComponent(session.sessionId)}`;
-    emit({ url, cwd: session.cwd, sessionId: session.sessionId, message: `Opened ${session.cwd}\n${url}` }, opts.json);
-    if (!opts.json) openBrowser(url);
-  });
-
-program.command("start").description("Start the background server").action(async () => {
-  const opts = program.opts();
-  const daemon = await ensureDaemon(Number(opts.port), opts.json);
-  emit({ running: true, url: daemon.url, pid: daemon.health.pid, version: daemon.health.version, message: `pichamber is running at ${daemon.url}` }, opts.json);
-});
-
-program.command("stop").description("Stop the background server").action(async () => {
-  const opts = program.opts();
-  const port = Number(opts.port); const paths = pathsFor(port); const state = readState(paths.state); const current = await probe(port);
-  if (current.kind !== "pichamber") { rmSync(paths.state, { force: true }); emit({ stopped: false, port, message: `pichamber is not running on port ${port}` }, opts.json); return; }
-  if (!state || state.instanceId !== current.health.instanceId || !state.token) throw new Error(`pichamber on port ${port} was not started by this CLI and cannot be stopped safely`);
-  await stopManaged(state, opts.json); rmSync(paths.state, { force: true });
-  if (opts.json) console.log(JSON.stringify({ stopped: true, port }));
-});
-
-program.command("status").description("Show background server status").action(async () => {
-  const opts = program.opts();
-  const port = Number(opts.port); const state = readState(pathsFor(port).state); const current = await probe(port);
-  if (current.kind !== "pichamber") { if (current.kind === "free") rmSync(pathsFor(port).state, { force: true }); emit({ running: false, port, message: `pichamber is not running on port ${port}` }, opts.json); process.exitCode = 1; return; }
-  const managed = state?.instanceId === current.health.instanceId;
-  emit({ running: true, managed, url: `http://127.0.0.1:${port}`, pid: current.health.pid, version: current.health.version, startedAt: current.health.startedAt, log: managed ? state.log : undefined, message: `pichamber ${current.health.version} is running (PID ${current.health.pid}) at http://127.0.0.1:${port}` }, opts.json);
-});
-
-program.command("logs").option("-f, --follow", "follow log output").option("-n, --lines <count>", "number of log lines to show", "80").description("Show background server logs").action(async (options) => {
-  await showLogs(Number(program.opts().port), Number(options.lines), options.follow);
-});
-
-program.command("serve").option("--host <host>", "bind address", "127.0.0.1").description("Run the server in the foreground").action(async (options) => {
-  await runServe({ port: Number(program.opts().port), host: options.host });
-});
-
-export const runCli = () => {
-  program.parseAsync(process.argv).catch((e) => {
-    if (e.code === "commander.version") process.exit(0);
-    if (e.code === "commander.help") process.exit(0);
-    console.error(`pichamber: ${e.message}`);
-    process.exit(e.exitCode ?? 1);
-  });
+export {
+  emit,
+  ensureDaemon,
+  openBrowser,
+  pathsFor,
+  probe,
+  readState,
+  requestJson,
+  runServe,
+  showLogs,
+  stopManaged,
+  workspacePath,
 };

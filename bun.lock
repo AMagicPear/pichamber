@@ -16,6 +16,13 @@
         "typescript": "catalog:",
       },
     },
+    "packages/cli": {
+      "name": "@amagicpear/pichamber-cli",
+      "devDependencies": {
+        "@tsconfig/node24": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/server": {
       "name": "@amagicpear/pichamber-server",
       "dependencies": {
@@ -96,6 +103,8 @@
     "typescript": "~7.0.2",
   },
   "packages": {
+    "@amagicpear/pichamber-cli": ["@amagicpear/pichamber-cli@workspace:packages/cli"],
+
     "@amagicpear/pichamber-server": ["@amagicpear/pichamber-server@workspace:packages/server"],
 
     "@amagicpear/pichamber-shared": ["@amagicpear/pichamber-shared@workspace:packages/shared"],

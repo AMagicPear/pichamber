@@ -1,6 +1,6 @@
 {
   "name": "@amagicpear/pichamber",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "A browser-based workspace for the Pi Coding Agent",
   "license": "MIT",
   "type": "module",
@@ -48,13 +48,12 @@
     "prepack": "bun run build:web && rm -rf dist dist-web && mkdir -p dist && bun build packages/server/src/index.ts --outfile dist/server.js --target bun --external bun-pty --external @earendil-works/pi-coding-agent && cp -r packages/web/dist dist-web"
   },
   "bin": {
-    "pichamber": "bin/pichamber.js"
+    "pichamber": "packages/cli/src/index.ts"
   },
   "files": [
     "dist",
     "dist-web",
-    "bin/pichamber.js",
-    "bin/cli.js",
+    "packages/cli/src",
     "LICENSE",
     "THIRD_PARTY_LICENSES.md",
     "README.md",

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 const runCli = async (...args) => {
-  const proc = Bun.spawn([process.execPath, join(import.meta.dir, "pichamber.js"), ...args], {
-    cwd: join(import.meta.dir, ".."),
+  const proc = Bun.spawn([process.execPath, join(import.meta.dir, "../src/index.ts"), ...args], {
+    cwd: join(import.meta.dir, "../../.."),
     stdout: "pipe",
     stderr: "pipe",
   });
