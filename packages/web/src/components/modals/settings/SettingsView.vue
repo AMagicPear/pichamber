@@ -26,6 +26,7 @@ import { settings } from "@/stores/settings";
 import { preference as themePreference, setTheme, themeOptions } from "@/stores/theme";
 import { persistedState } from "@/stores/persisted";
 import PiBehaviorSettings from "@/components/modals/settings/PiBehaviorSettings.vue";
+import RuntimeSettings from "@/components/modals/settings/RuntimeSettings.vue";
 import PiProvidersSettings from "@/components/modals/settings/PiProvidersSettings.vue";
 import SettingsGroup from "@/components/modals/settings/SettingsGroup.vue";
 import SettingsOption from "@/components/modals/settings/SettingsOption.vue";
@@ -56,6 +57,7 @@ const navItems: NavItem[] = [
   { key: "remote-instances", label: "Remote Instances", icon: ServerIcon },
   { key: "agents", label: "Agents", icon: AiAgentIcon },
   { key: "behavior", label: "Behavior", icon: BrainIcon, enabled: true },
+  { key: "runtime", label: "Runtime", icon: ServerIcon, enabled: true },
   { key: "commands", label: "Commands", icon: SlashCommands2Icon },
   { key: "mcp", label: "MCP", icon: McpIcon },
   { key: "extensions", label: "Extensions", icon: CodeBoxIcon, enabled: true },
@@ -285,6 +287,7 @@ const selectItem = (key: string) => {
           <PiProvidersSettings v-else-if="activeKey === 'providers'" />
 
           <PiBehaviorSettings v-else-if="activeKey === 'behavior'" />
+          <RuntimeSettings v-else-if="activeKey === 'runtime'" />
         </div>
       </section>
     </template>

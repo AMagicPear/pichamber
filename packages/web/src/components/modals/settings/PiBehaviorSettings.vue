@@ -33,7 +33,12 @@ const save = async (update: Partial<PiBehaviorSettings>) => {
   saving.value = true;
   error.value = null;
   try {
-    behavior.value = await updatePiBehavior(sessionId, update);
+    const result = await updatePiBehavior(sessionId, update);
+    if (result.reload) {
+      window.location.reload();
+      return;
+    }
+    behavior.value = result;
   } catch (cause) {
     error.value = toMessage(cause);
   } finally {
@@ -45,6 +50,7 @@ const saveIdleTimeout = (event: Event) => {
   const value = Number((event.target as HTMLInputElement).value);
   if (Number.isInteger(value) && value >= 0) void save({ httpIdleTimeoutMs: value });
 };
+
 
 watch(() => workspace.sessionId, load, { immediate: true });
 </script>

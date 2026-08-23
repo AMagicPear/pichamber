@@ -1,17 +1,11 @@
 /**
- * Session lifecycle helpers.
- *
- * Owns the per-session `AgentSessionRuntime` map and exposes the few queries
- * the HTTP/WS layer needs (resolve by id, cwd lookup, listing). Every
- * session is backed by Pi's official `AgentSessionRuntime`; the module-scope
- * `createRuntime` factory is what the runtime stores so /new /resume /fork
- * flows can rebuild it against the same cwd-bound services.
+ * Pichamber's session registry. The registry owns the Pi execution mode and
+ * lifecycle; providers, extensions, and quota services stay outside it.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import {
-  type AgentSessionRuntime,
   type CreateAgentSessionRuntimeFactory,
   type SessionInfo,
   SessionManager,
@@ -21,10 +15,13 @@ import {
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { toMessage } from "../error";
+import { getRuntimeMode, loadAppConfig, setRuntimeMode } from "../settings/app-config";
+import { RpcSessionDriver, SdkSessionDriver, type SessionDriver, type SessionDriverMode } from "./driver";
 
 const sessionFileLookup = new Map<string, string>();
-const activeSessions = new Map<string, AgentSessionRuntime>();
-const openingSessions = new Map<string, Promise<AgentSessionRuntime | null>>();
+const activeSessions = new Map<string, SessionDriver>();
+const openingSessions = new Map<string, Promise<SessionDriver | null>>();
+let runtimeTransition: Promise<void> | null = null;
 
 const createRuntime: CreateAgentSessionRuntimeFactory = async ({
   cwd,
@@ -37,11 +34,18 @@ const createRuntime: CreateAgentSessionRuntimeFactory = async ({
   return { ...result, services, diagnostics: services.diagnostics };
 };
 
-const removeRuntime = (runtime: AgentSessionRuntime) => {
-  for (const [id, active] of activeSessions) {
-    if (active === runtime) activeSessions.delete(id);
-  }
-};
+const createSdkDriver = (id: string, sessionFile: string, cwd: string) =>
+  new SdkSessionDriver(id, sessionFile, cwd, async () => {
+    const sessionManager = SessionManager.open(sessionFile);
+    return createAgentSessionRuntime(createRuntime, {
+      cwd: sessionManager.getCwd(),
+      agentDir: getAgentDir(),
+      sessionManager,
+    });
+  });
+
+const createDriver = (id: string, sessionFile: string, cwd: string, mode: SessionDriverMode): SessionDriver =>
+  mode === "sdk" ? createSdkDriver(id, sessionFile, cwd) : new RpcSessionDriver(id, sessionFile, cwd);
 
 const getSessionFileWithId = async (id: string): Promise<string | null> => {
   let sessionFile = sessionFileLookup.get(id);
@@ -53,123 +57,132 @@ const getSessionFileWithId = async (id: string): Promise<string | null> => {
 };
 
 export const listAllSessions = async (): Promise<SessionInfo[]> => {
-  const sessions: SessionInfo[] = await SessionManager.listAll();
+  const sessions = await SessionManager.listAll();
   sessionFileLookup.clear();
-  for (const session of sessions) {
-    sessionFileLookup.set(session.id, session.path);
-  }
+  for (const session of sessions) sessionFileLookup.set(session.id, session.path);
   return sessions;
 };
 
-/** Activate (or fetch) the runtime for a session id. Cached by id; concurrent
- *  callers share one open promise. */
-export const getSession = async (id: string): Promise<AgentSessionRuntime | null> => {
+/** Activate a session once. Concurrent callers share the same driver open. */
+export const getSessionDriver = async (id: string): Promise<SessionDriver | null> => {
+  await loadAppConfig();
+  if (runtimeTransition) await runtimeTransition;
   const cached = activeSessions.get(id);
   if (cached) return cached;
   const opening = openingSessions.get(id);
   if (opening) return opening;
 
-  const create = (async () => {
+  const open = (async () => {
     const sessionFile = await getSessionFileWithId(id);
     if (!sessionFile) return null;
-    // Resume the file: its header cwd is authoritative.
-    const sessionManager = SessionManager.open(sessionFile);
-    const runtime = await createAgentSessionRuntime(createRuntime, {
-      cwd: sessionManager.getCwd(),
-      agentDir: getAgentDir(),
-      sessionManager,
-    });
-    activeSessions.set(id, runtime);
-    if (runtime.session.sessionId !== id) activeSessions.set(runtime.session.sessionId, runtime);
-    return runtime;
+    const cwd = SessionManager.open(sessionFile).getCwd();
+    const driver = createDriver(id, sessionFile, cwd, getRuntimeMode());
+    await driver.start();
+    activeSessions.set(id, driver);
+    return driver;
   })();
-  openingSessions.set(id, create);
+  openingSessions.set(id, open);
   try {
-    return await create;
+    return await open;
   } finally {
     openingSessions.delete(id);
   }
 };
 
+export { getRuntimeMode } from "../settings/app-config";
+
 export const getSessionCwd = async (id: string): Promise<string | null> => {
   const active = activeSessions.get(id);
-  if (active) return active.services.cwd;
+  if (active) return active.cwd;
   const sessionFile = await getSessionFileWithId(id);
-  if (!sessionFile) return null;
-  return SessionManager.open(sessionFile).getCwd();
+  return sessionFile ? SessionManager.open(sessionFile).getCwd() : null;
 };
 
 export const deactivateSession = async (id: string) => {
-  const runtime = activeSessions.get(id);
-  if (!runtime) return;
-  await runtime.dispose();
-  removeRuntime(runtime);
+  const driver = activeSessions.get(id);
+  if (!driver) return;
+  activeSessions.delete(id);
+  await driver.dispose();
 };
 
 export const deleteSession = async (
   id: string,
 ): Promise<{ ok: boolean; method: "trash" | "unlink" | "inmemory"; error?: string }> => {
-  const session = activeSessions.get(id);
-  if (session) {
-    await session.dispose();
-    removeRuntime(session);
+  const driver = activeSessions.get(id);
+  if (driver) {
+    activeSessions.delete(id);
+    await driver.dispose();
   }
-  const sessionPath = session?.session.sessionFile ?? sessionFileLookup.get(id);
+  const sessionPath = driver?.sessionFile ?? sessionFileLookup.get(id);
   if (!sessionPath) {
     sessionFileLookup.delete(id);
     return { ok: true, method: "inmemory" };
   }
   const trashArgs = sessionPath.startsWith("-") ? ["--", sessionPath] : [sessionPath];
   const trashResult = spawnSync("trash", trashArgs, { encoding: "utf-8" });
-
-  const getTrashErrorHint = (): string | null => {
-    const parts: string[] = [];
-    if (trashResult.error) parts.push(trashResult.error.message);
-    const stderr = trashResult.stderr?.trim();
-    if (stderr) parts.push(stderr.split("\n")[0] ?? stderr);
-    return parts.length === 0 ? null : `trash: ${parts.join(" · ").slice(0, 200)}`;
-  };
-
   if (trashResult.status === 0 || !existsSync(sessionPath)) {
     sessionFileLookup.delete(id);
     return { ok: true, method: "trash" };
   }
-
   try {
     await unlink(sessionPath);
     sessionFileLookup.delete(id);
     return { ok: true, method: "unlink" };
   } catch (err) {
-    const unlinkError = toMessage(err);
-    const trashErrorHint = getTrashErrorHint();
-    const error = trashErrorHint ? `${unlinkError} (${trashErrorHint})` : unlinkError;
-    return { ok: false, method: "unlink", error };
+    const stderr = trashResult.stderr?.trim();
+    const hint = stderr ? ` (trash: ${stderr.split("\n")[0]})` : "";
+    return { ok: false, method: "unlink", error: `${toMessage(err)}${hint}` };
   }
 };
 
-/** Set the user-facing display name of a session by appending a
- *  `session_info` entry. Reuses the active runtime's SessionManager when the
- *  session is open, otherwise opens the persisted JSONL file directly. */
 export const renameSession = async (id: string, name: string): Promise<boolean> => {
-  const active = activeSessions.get(id);
-  if (active) {
-    active.session.sessionManager.appendSessionInfo(name);
+  const driver = activeSessions.get(id);
+  if (driver instanceof SdkSessionDriver) {
+    driver.session.sessionManager.appendSessionInfo(name);
     return true;
   }
   const sessionFile = await getSessionFileWithId(id);
   if (!sessionFile) return false;
-  const sessionManager = SessionManager.open(sessionFile);
-  sessionManager.appendSessionInfo(name);
+  SessionManager.open(sessionFile).appendSessionInfo(name);
   return true;
 };
 
-export const createSessionWithCwd = async (cwd: string): Promise<AgentSessionRuntime> => {
+export const createSessionWithCwd = async (cwd: string): Promise<SdkSessionDriver> => {
   const sessionManager = SessionManager.create(cwd);
-  const runtime = await createAgentSessionRuntime(createRuntime, {
-    cwd,
-    agentDir: getAgentDir(),
-    sessionManager,
-  });
-  activeSessions.set(runtime.session.sessionId, runtime);
-  return runtime;
+  const sessionFile = sessionManager.getSessionFile();
+  if (!sessionFile) throw new Error("Pi did not create a session file");
+  const id = sessionManager.getSessionId();
+  const driver = createSdkDriver(id, sessionFile, cwd);
+  await driver.start();
+  activeSessions.set(id, driver);
+  sessionFileLookup.set(id, sessionFile);
+  return driver;
+};
+
+export const switchRuntimeMode = async (
+  mode: SessionDriverMode,
+  closeChannel: (sessionId: string) => Promise<void>,
+) => {
+  await loadAppConfig();
+  if (runtimeTransition) await runtimeTransition;
+  if (mode === getRuntimeMode()) return;
+
+  const drivers = [...activeSessions.entries()];
+  const transition = (async () => {
+    await Promise.all(drivers.map(async ([, driver]) => {
+      await driver.abort().catch(() => undefined);
+    }));
+    await Promise.all(drivers.map(([sessionId]) => closeChannel(sessionId)));
+    activeSessions.clear();
+    await Promise.all(drivers.map(async ([, driver]) => {
+      await driver.dispose();
+    }));
+    await setRuntimeMode(mode);
+  })();
+  runtimeTransition = transition;
+  try {
+    await transition;
+  } finally {
+    runtimeTransition = null;
+  }
 };

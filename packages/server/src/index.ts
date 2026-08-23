@@ -23,8 +23,10 @@ import {
   createSessionWithCwd,
   deleteSession,
   getSessionCwd,
+  getSessionDriver,
   listAllSessions,
   renameSession,
+  switchRuntimeMode,
 } from "./core/session";
 import {
   hasPty,
@@ -41,8 +43,9 @@ import { refreshSessionModelState } from "./core/ws";
 import { type PtyWsData, type SessionWsData, type WsData, type WsHandler } from "./core/ws";
 import { browseProjectDirectories } from "./services/projects";
 import { getProviderQuota, listQuotaProviders } from "./providers/quota";
-import { getSession } from "./core/session";
-import { toMessage } from "./error";
+import { SdkSessionDriver } from "./core/driver";
+import { RuntimeModeError, toMessage } from "./error";
+import { getRuntimeMode, loadAppConfig } from "./settings/app-config";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./services/workspace";
 import type { ExtensionsOverview, LoadedExtensionInfo } from "@amagicpear/pichamber-shared";
 import {
@@ -107,9 +110,13 @@ const requestCwd = async (sessionId?: string | null) => {
 };
 
 const getSdkSession = async (sessionId: string) => {
-  const runtime = await getSession(sessionId);
-  if (!runtime) return { error: "session not found", status: 404 } as const;
-  return { session: runtime.session, cwd: runtime.services.cwd } as const;
+  const driver = await getSessionDriver(sessionId);
+  if (!driver) return { error: "session not found", status: 404 } as const;
+  if (!(driver instanceof SdkSessionDriver)) {
+    const error = new RuntimeModeError("sdk");
+    return { error: error.message, status: error.status } as const;
+  }
+  return { session: driver.session, cwd: driver.cwd } as const;
 };
 
 const ptyWsHandler: WsHandler = {
@@ -191,12 +198,12 @@ const server = Bun.serve({
       POST: async (req) => {
         const { cwd } = (await req.json()) as { cwd: string };
         const workspace = await canonicalWorkspace(cwd);
-        const runtime = await createSessionWithCwd(workspace);
+        const driver = await createSessionWithCwd(workspace);
         return Response.json({
-          sessionId: runtime.session.sessionId,
+          sessionId: driver.sessionId,
           cwd: workspace,
-          sessionFile: runtime.session.sessionFile,
-          tools: runtime.session.getActiveToolNames(),
+          sessionFile: driver.sessionFile,
+          tools: driver.session.getActiveToolNames(),
         });
       },
     },
@@ -241,24 +248,47 @@ const server = Bun.serve({
         }
       },
     },
+    "/api/settings/runtime": {
+      GET: async () => {
+        await loadAppConfig();
+        return Response.json({ runtimeMode: getRuntimeMode() });
+      },
+      PUT: async (req) => {
+        const body = (await req.json().catch(() => ({}))) as { runtimeMode?: unknown };
+        if (body.runtimeMode !== "sdk" && body.runtimeMode !== "rpc") {
+          return Response.json({ error: "runtimeMode must be sdk or rpc" }, { status: 400 });
+        }
+        try {
+          await switchRuntimeMode(body.runtimeMode, closeSessionSockets);
+          return Response.json({ runtimeMode: body.runtimeMode, reload: true });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 500 });
+        }
+      },
+    },
     "/api/pi/behavior": {
       GET: async (req) => {
         const sessionId = new URL(req.url).searchParams.get("sessionId");
         if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
-        const result = await getSdkSession(sessionId);
-        if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-        return Response.json(getPiBehaviorSettings(result.session));
+        const driver = await getSessionDriver(sessionId);
+        if (!driver) return Response.json({ error: "session not found" }, { status: 404 });
+        if (!(driver instanceof SdkSessionDriver)) return Response.json({ error: new RuntimeModeError("sdk").message }, { status: 409 });
+        return Response.json(getPiBehaviorSettings(driver.session));
       },
       PUT: async (req) => {
         const sessionId = new URL(req.url).searchParams.get("sessionId");
         if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
         try {
-          const result = await getSdkSession(sessionId);
-          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
           const update = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-          return Response.json(await updatePiBehaviorSettings(result.session, update));
+          const current = await getSessionDriver(sessionId);
+          if (!current) return Response.json({ error: "session not found" }, { status: 404 });
+          if (getRuntimeMode() !== "sdk") {
+            const error = new RuntimeModeError("sdk");
+            return Response.json({ error: error.message }, { status: error.status });
+          }
+          return Response.json(await updatePiBehaviorSettings((current as SdkSessionDriver).session, update));
         } catch (error) {
-          return Response.json({ error: toMessage(error) }, { status: 400 });
+          return Response.json({ error: toMessage(error) }, { status: 500 });
         }
       },
     },
@@ -308,10 +338,10 @@ const server = Bun.serve({
         const sessionId = new URL(req.url).searchParams.get("sessionId");
         if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
         try {
-          const runtime = await getSession(sessionId);
-          if (!runtime) return Response.json({ error: "session not found" }, { status: 404 });
-          const resources = runtime.session.resourceLoader.getExtensions();
-          const sources = listPiExtensionSources(runtime.session, runtime.services.cwd);
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const resources = result.session.resourceLoader.getExtensions();
+          const sources = listPiExtensionSources(result.session, result.cwd);
           const builtins = listBuiltinExtensions();
           const overview: ExtensionsOverview = {
             builtins,
@@ -432,9 +462,9 @@ const server = Bun.serve({
       GET: async (req) => {
         const sessionId = new URL(req.url).searchParams.get("sessionId");
         if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
-        const runtime = await getSession(sessionId);
-        if (!runtime) return Response.json({ error: "session not found" }, { status: 404 });
-        return Response.json({ providers: listQuotaProviders(runtime.session) });
+        const result = await getSdkSession(sessionId);
+        if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+        return Response.json({ providers: listQuotaProviders(result.session) });
       },
     },
     "/api/quota/:provider": {
@@ -445,9 +475,9 @@ const server = Bun.serve({
           return Response.json({ error: "sessionId required" }, { status: 400 });
         }
         try {
-          const runtime = await getSession(sessionId);
-          if (!runtime) return Response.json({ error: "session not found" }, { status: 404 });
-          return Response.json(await getProviderQuota(provider, runtime.session));
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          return Response.json(await getProviderQuota(provider, result.session));
         } catch (err) {
           return Response.json({ error: toMessage(err) }, { status: 500 });
         }

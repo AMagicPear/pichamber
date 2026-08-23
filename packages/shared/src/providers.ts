@@ -67,7 +67,7 @@ export type PiProviderSettings = {
   };
 };
 
-/** Runtime behavior settings backed by Pi's SettingsManager setters. */
+/** Pi runtime behavior settings persisted by Pi's SettingsManager. */
 export type PiBehaviorSettings = {
   autoCompaction: boolean;
   autoRetry: boolean;

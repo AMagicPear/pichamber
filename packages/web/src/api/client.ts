@@ -281,7 +281,16 @@ export const updatePiBehavior = (sessionId: string, next: Partial<PiBehaviorSett
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(next),
-  }).then((r) => jsonOrThrow<PiBehaviorSettings>(r));
+  }).then((r) => jsonOrThrow<PiBehaviorSettings & { reload?: boolean }>(r));
+
+export const fetchRuntimeMode = () => fetch(`${BASE}/settings/runtime`).then((r) => jsonOrThrow<{ runtimeMode: "sdk" | "rpc" }>(r));
+
+export const updateRuntimeMode = (runtimeMode: "sdk" | "rpc") =>
+  fetch(`${BASE}/settings/runtime`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ runtimeMode }),
+  }).then((r) => jsonOrThrow<{ runtimeMode: "sdk" | "rpc"; reload: boolean }>(r));
 
 export const fetchPiExtensionSources = (sessionId: string) =>
   fetch(`${BASE}/pi/extensions?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>

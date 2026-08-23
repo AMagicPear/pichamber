@@ -5,6 +5,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type {
   AgentActivity,
   AgentSessionEvent,
+  JsonAgentSessionEvent,
   ImageContent,
   ModelDescriptor,
   PendingMessages,
@@ -283,7 +284,7 @@ const replaceItem = (index: number, item: ConversationItem) => {
 /** 应用一条官方 `AgentSessionEvent`（镜像 TUI handleEvent 的消息/工具
  *  分支；activity/pending 由 `state` 帧承载，compaction 失败提示在这里
  *  弹——事件本身带 errorMessage，不需要服务端伪造 notify 帧）。 */
-const applyEvent = (event: AgentSessionEvent) => {
+const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent) => {
   const items = conversation.value;
   switch (event.type) {
     case "compaction_end": {
@@ -307,6 +308,39 @@ const applyEvent = (event: AgentSessionEvent) => {
       break;
     }
     case "message_update": {
+      if (!("message" in event)) {
+        const delta = event.assistantMessageEvent as {
+          type: string;
+          contentIndex?: number;
+          delta?: string;
+          content?: string;
+        };
+        let index = -1;
+        for (let i = items.length - 1; i >= 0; i--) {
+          const item = items[i];
+          if (item?.kind === "message" && item.streaming && item.message.role === "assistant") {
+            index = i;
+            break;
+          }
+        }
+        const item = index === -1 ? undefined : items[index];
+        if (item?.kind === "message" && item.message.role === "assistant") {
+          const message = JSON.parse(JSON.stringify(item.message)) as typeof item.message;
+          const content = message.content as Array<{ type: string; text?: string; thinking?: string }>;
+          const contentIndex = delta.contentIndex ?? 0;
+          const block = content[contentIndex];
+          if (delta.type === "text_start" && !block) content[contentIndex] = { type: "text", text: "" };
+          if (delta.type === "text_delta") {
+            if (!content[contentIndex]) content[contentIndex] = { type: "text", text: "" };
+            content[contentIndex]!.text = `${content[contentIndex]!.text ?? ""}${delta.delta ?? ""}`;
+          }
+          if (delta.type === "text_end" && content[contentIndex]) {
+            content[contentIndex]!.text = delta.content ?? content[contentIndex]!.text ?? "";
+          }
+          replaceItem(index, { ...item, message });
+        }
+        break;
+      }
       for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i];
         if (
@@ -564,7 +598,7 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
       pushErrorToast(message.error);
       break;
     default: {
-      const event = message;
+      const event = message as (AgentSessionEvent | JsonAgentSessionEvent) & { seq: number };
       if (message.seq !== lastSeq + 1) {
         requestResync(resync);
         break;

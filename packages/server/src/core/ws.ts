@@ -14,12 +14,9 @@
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
-  buildContextEntries,
-  sessionEntryToContextMessages,
   type AgentSessionEvent,
-  type AgentSessionRuntime,
+  type JsonAgentSessionEvent,
   type RpcExtensionUIRequest,
-  type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import type {
   AgentActivity,
@@ -37,9 +34,8 @@ import type {
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
 import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
-import { computeSessionStatsView } from "./context";
-import { deactivateSession, getSession } from "./session";
-import { providerName } from "../providers/providers";
+import { deactivateSession, getSessionDriver } from "./session";
+import { RpcSessionDriver, SdkSessionDriver, type SessionDriver } from "./driver";
 
 // ─── WebSocket protocol multiplexing types ─────────────────────────────
 //
@@ -116,8 +112,8 @@ type SessionChannel = {
   ready: Promise<void>;
   /** Messages submitted while compaction is running; flushed on compaction_end. */
   compactionQueue: CompactionQueuedMessage[];
-  /** Runtime backing this channel — captured for reconcile/stats helpers. */
-  runtime: AgentSessionRuntime;
+  /** Driver backing this channel — captured for snapshot helpers. */
+  driver: SessionDriver;
 };
 
 /** A message held while compaction is running, mirroring the TUI's
@@ -166,14 +162,33 @@ const parsePromptImages = (value: unknown): ImageContent[] | null => {
 };
 
 const channelsBySession = new Map<string, SessionChannel>();
+const ansiControlSequence = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "g");
+const stripAnsi = (text: string) => text.replace(ansiControlSequence, "");
+
+const sanitizeUiRequest = (request: RpcExtensionUIRequest): RpcExtensionUIRequest => {
+  switch (request.method) {
+    case "setStatus":
+      return { ...request, statusText: stripAnsi(request.statusText ?? "") };
+    case "setWidget":
+      return { ...request, widgetLines: request.widgetLines?.map(stripAnsi) };
+    case "notify":
+      return { ...request, message: stripAnsi(request.message) };
+    case "setTitle":
+      return { ...request, title: stripAnsi(request.title) };
+    case "set_editor_text":
+      return { ...request, text: stripAnsi(request.text) };
+    default:
+      return request;
+  }
+};
 
 /** Build the resource inventory for one session: runtime extension
  *  commands / tools / extensions, without any client-side builtin shelf
  *  (the GUI built-ins like `/compact` live in the web client and are
  *  merged into the command picker there — see
  *  `packages/web/src/composables/builtin-commands.ts`). */
-const snapshotResources = (runtime: AgentSessionRuntime): RuntimeResources => {
-  const session = runtime.session;
+const snapshotResources = (driver: SdkSessionDriver): RuntimeResources => {
+  const session = driver.session;
   const result = session.resourceLoader.getExtensions();
   const activeTools = new Set(result.runtime.getActiveTools());
   const includeSkills = session.settingsManager.getEnableSkillCommands();
@@ -198,37 +213,6 @@ const snapshotResources = (runtime: AgentSessionRuntime): RuntimeResources => {
       } satisfies ExtensionInfo)),
     diagnostics: result.errors,
     extensionInventoryAvailable: true,
-  };
-};
-
-const getModelState = (runtime: AgentSessionRuntime) => {
-  const session = runtime.session;
-  const availableModels = session.modelRuntime.getAvailableSnapshot().map((model) => ({
-    provider: model.provider,
-    providerName: providerName(session, model.provider) || model.provider,
-    id: model.id,
-    name: model.name || model.id,
-    reasoning: Boolean(model.reasoning),
-  }));
-  const current = session.model;
-  if (!current) return { model: undefined, availableModels };
-  const matchIndex = availableModels.findIndex(
-    (model) => model.provider === current.provider && model.id === current.id,
-  );
-  if (matchIndex !== -1 && current.name) {
-    availableModels[matchIndex] = { ...availableModels[matchIndex]!, name: current.name };
-  }
-  return {
-    model: matchIndex === -1
-      ? {
-          provider: current.provider,
-          providerName: providerName(session, current.provider) || current.provider,
-          id: current.id,
-          name: current.name || current.id,
-          reasoning: Boolean(current.reasoning),
-        }
-      : availableModels[matchIndex],
-    availableModels,
   };
 };
 
@@ -319,18 +303,11 @@ const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean =
   return false;
 };
 
-/** Ordered, compaction-aware official `AgentMessage[]` for one session,
- *  via pi's own conversion helpers (compaction summaries / custom messages
- *  / branch summaries all land as official `AgentMessage` roles). */
-const conversationMessages = (entries: SessionEntry[]): AgentMessage[] =>
-  buildContextEntries(entries).flatMap(sessionEntryToContextMessages);
-
 /** `reconcile` rebuilds the official `AgentMessage[]` from the authoritative
  *  session entries (compaction-aware, via pi's own conversion helpers). */
-const reconcile = async (channel: SessionChannel): Promise<boolean> => {
+const reconcile = async (channel: SessionChannel, messages?: AgentMessage[]): Promise<boolean> => {
   const state = channel.state;
-  const entries = channel.runtime.session.sessionManager.buildContextEntries();
-  const next = conversationMessages(entries);
+  const next = messages ?? (await channel.driver.getSnapshot()).messages;
   const changed =
     next.length !== state.messages.length ||
     next.some((message, i) => message !== state.messages[i]);
@@ -346,7 +323,7 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
     seq,
     activity,
     pending,
-    canRestorePending: true,
+    canRestorePending: channel.driver.mode === "sdk",
     messages,
     model,
     availableModels,
@@ -413,10 +390,10 @@ const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
   }
 };
 
-const attachListener = (sessionId: string, runtime: AgentSessionRuntime): SessionChannel => {
+const attachListener = (sessionId: string, driver: SessionDriver): SessionChannel => {
   const existing = channelsBySession.get(sessionId);
   if (existing) return existing;
-  const session = runtime.session;
+  const sdkDriver = driver instanceof SdkSessionDriver ? driver : undefined;
 
   let modelStateBroadcastQueued = false;
   const queueModelStateBroadcast = () => {
@@ -428,17 +405,14 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
         const channel = channelsBySession.get(sessionId);
         if (!channel) return;
         try {
-          const { model, availableModels } = getModelState(runtime);
-          channel.state.model = model;
-          channel.state.availableModels = availableModels;
-          channel.state.thinking = {
-            level: session.thinkingLevel,
-            availableLevels: session.getAvailableThinkingLevels(),
-          };
-          channel.state.stats = await computeSessionStatsView(runtime);
+          const snapshot = await driver.getSnapshot();
+          channel.state.model = snapshot.model;
+          channel.state.availableModels = snapshot.availableModels;
+          channel.state.thinking = snapshot.thinking;
+          channel.state.stats = snapshot.stats;
           broadcastState(channel, {
-            model,
-            availableModels,
+            model: snapshot.model,
+            availableModels: snapshot.availableModels,
             thinking: channel.state.thinking,
             stats: channel.state.stats,
           });
@@ -464,7 +438,7 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     compactionQueue: [],
     extensionUi: { statuses: {}, widgets: {} },
     uiBridge: createUiBridge((request) => broadcastUiRequest(request)),
-    runtime,
+    driver,
   };
   const broadcast = (msg: ServerMessage) => {
     const payload = JSON.stringify(msg);
@@ -473,7 +447,7 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     }
   };
   /** Forward one official event with only the WS sequence metadata added. */
-  const broadcastEvent = (event: AgentSessionEvent) => {
+  const broadcastEvent = (event: AgentSessionEvent | JsonAgentSessionEvent) => {
     channel.state.seq += 1;
     broadcast({ ...event, seq: channel.state.seq } satisfies ServerMessage);
   };
@@ -481,12 +455,11 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     channel.state.seq += 1;
     broadcast(snapshotMessage(channel));
   };
-  /** 扩展 UI 请求原样转发。服务端不解析扩展的私有 widget 协议（如
-   *  pi-subagents 的 `PI_SUBAGENT_*` 前缀）——setWidget 的 widget 行由
-   *  前端消费方解析成结构化 `ExtensionWidget`。 */
+  /** RPC extensions may emit TUI-formatted text; browsers receive plain text. */
   const broadcastUiRequest = (request: RpcExtensionUIRequest) => {
-    applyExtensionUiRequest(channel.extensionUi, request);
-    broadcast(request);
+    const cleanRequest = sanitizeUiRequest(request);
+    applyExtensionUiRequest(channel.extensionUi, cleanRequest);
+    broadcast(cleanRequest);
   };
 
   /** Common settlement shape shared by `compaction_end` and `agent_settled`:
@@ -502,20 +475,24 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     if (options?.flushQueue && channel.compactionQueue.length > 0) {
       const [first, ...rest] = channel.compactionQueue;
       channel.compactionQueue = [];
-      session
+      driver
         .prompt(first.text, first.images ? { images: first.images } : undefined)
         .catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
       for (const m of rest) {
         const submit = m.mode === "followUp"
-          ? session.prompt(m.text, { streamingBehavior: "followUp", images: m.images })
-          : session.prompt(m.text, { streamingBehavior: "steer", images: m.images });
+          ? driver.prompt(m.text, { streamingBehavior: "followUp", images: m.images })
+          : driver.prompt(m.text, { streamingBehavior: "steer", images: m.images });
         submit.catch((err: unknown) => console.error("flush queued message failed", sessionId, err));
       }
     }
 
-    if (await reconcile(channel)) broadcastSnapshot();
-    const settledStats = await computeSessionStatsView(runtime);
-    state.resources = snapshotResources(runtime);
+    const snapshot = await driver.getSnapshot();
+    if (await reconcile(channel, snapshot.messages)) broadcastSnapshot();
+    state.model = snapshot.model;
+    state.availableModels = snapshot.availableModels;
+    state.thinking = snapshot.thinking;
+    const settledStats = snapshot.stats;
+    state.resources = sdkDriver ? snapshotResources(sdkDriver) : initialModelState().resources;
     const fields: {
       activity: AgentActivity;
       pending: PendingMessages;
@@ -545,7 +522,7 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
       while (statsRefreshPending) {
         statsRefreshPending = false;
         try {
-          const stats = await computeSessionStatsView(runtime);
+          const stats = (await driver.getSnapshot()).stats;
           if (statsChanged(channel.state.stats, stats)) {
             channel.state.stats = stats;
             broadcastState(channel, { stats });
@@ -559,8 +536,12 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     })();
   };
 
-  channel.unsubscribe = session.subscribe((event) => {
+  channel.unsubscribe = driver.subscribe((event) => {
     const state = channel.state;
+    if ((event as unknown as { type?: string }).type === "extension_ui_request") {
+      broadcastUiRequest(event as unknown as RpcExtensionUIRequest);
+      return;
+    }
     switch (event.type) {
       case "agent_start": {
         state.activity = { phase: "working" };
@@ -620,6 +601,7 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
         break;
       }
       case "agent_settled": {
+        broadcastEvent(event);
         void settleChannel();
         break;
       }
@@ -651,15 +633,17 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
     } catch (error) {
       console.error("Failed to reconcile session", sessionId, error);
     }
-    try {
-      await session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
-    } catch (error) {
-      console.error("Failed to bind extensions", sessionId, error);
-    }
-    try {
-      channel.state.resources = snapshotResources(runtime);
-    } catch (error) {
-      console.error("Failed to snapshot resources", sessionId, error);
+    if (sdkDriver) {
+      try {
+        await sdkDriver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
+      } catch (error) {
+        console.error("Failed to bind extensions", sessionId, error);
+      }
+      try {
+        channel.state.resources = snapshotResources(sdkDriver);
+      } catch (error) {
+        console.error("Failed to snapshot resources", sessionId, error);
+      }
     }
   })();
   return channel;
@@ -711,7 +695,7 @@ export const sessionWsHandler: WsHandler = {
     const bunWS = ws as BunWS;
     const { sessionId } = bunWS.data;
     bunWS.data.closed = false;
-    const runtime = await getSession(sessionId);
+    const driver = await getSessionDriver(sessionId);
     if (bunWS.data.closed) {
       if (!channelsBySession.has(sessionId)) {
         deactivateSession(sessionId).catch((error) => {
@@ -720,25 +704,22 @@ export const sessionWsHandler: WsHandler = {
       }
       return;
     }
-    if (!runtime) {
+    if (!driver) {
       sendError(bunWS, "session not found");
       bunWS.close();
       return;
     }
-    const channel = attachListener(sessionId, runtime);
+    const channel = attachListener(sessionId, driver);
     channel.sockets.add(bunWS);
     bunWS.data.attached = true;
     await channel.ready;
     if (bunWS.data.closed || !bunWS.data.attached) return;
     try {
-      const { model, availableModels } = getModelState(runtime);
-      channel.state.model = model;
-      channel.state.availableModels = availableModels;
-      channel.state.thinking = {
-        level: runtime.session.thinkingLevel,
-        availableLevels: runtime.session.getAvailableThinkingLevels(),
-      };
-      channel.state.stats = await computeSessionStatsView(runtime);
+      const snapshot = await driver.getSnapshot();
+      channel.state.model = snapshot.model;
+      channel.state.availableModels = snapshot.availableModels;
+      channel.state.thinking = snapshot.thinking;
+      channel.state.stats = snapshot.stats;
     } catch (error) {
       console.error("Failed to load model snapshot", sessionId, error);
     }
@@ -762,9 +743,9 @@ export const sessionWsHandler: WsHandler = {
     }
     const input = msg as ClientMessage;
     const { sessionId } = bunWS.data;
-    const runtime = await getSession(sessionId);
+    const driver = await getSessionDriver(sessionId);
     if (bunWS.data.closed) return;
-    if (!runtime) {
+    if (!driver) {
       sendError(bunWS, "session not found");
       return;
     }
@@ -789,10 +770,11 @@ export const sessionWsHandler: WsHandler = {
         // by the backend's current state — don't trust the client's
         // local activity snapshot (broadcasts may lag). Non-streaming prompts
         // always start a new turn.
-        const requested = input.streamingBehavior;
-        const streamingBehavior = runtime.session.isStreaming ? requested ?? "steer" : undefined;
         const channel = channelsBySession.get(sessionId);
-        if (runtime.session.isCompacting && channel) {
+        const requested = input.streamingBehavior;
+        const runtimeSnapshot = await driver.getSnapshot();
+        const streamingBehavior = runtimeSnapshot.activity.phase !== "idle" ? requested ?? "steer" : undefined;
+        if (runtimeSnapshot.activity.phase === "compacting" && channel) {
           if (!input.message.startsWith("/")) {
             channel.compactionQueue.push({
               text: input.message,
@@ -801,13 +783,13 @@ export const sessionWsHandler: WsHandler = {
             });
             broadcastState(channel, { pending: pendingWithQueue(channel) });
           } else {
-            runtime.session
+            driver
               .prompt(input.message, images.length > 0 ? { images } : undefined)
               .catch((err: unknown) => sendError(bunWS, toMessage(err)));
           }
           return;
         }
-        runtime.session
+        driver
           .prompt(input.message, {
             streamingBehavior,
             images: images.length > 0 ? images : undefined,
@@ -815,14 +797,20 @@ export const sessionWsHandler: WsHandler = {
           .finally(() => {
             const channel = channelsBySession.get(sessionId);
             if (!channel) return;
-            channel.state.resources = snapshotResources(runtime);
-            broadcastState(channel, { resources: channel.state.resources });
+            if (driver instanceof SdkSessionDriver) {
+              channel.state.resources = snapshotResources(driver);
+              broadcastState(channel, { resources: channel.state.resources });
+            }
           })
           .catch((err: unknown) => sendError(bunWS, toMessage(err)));
         return;
       }
       case "restore_pending": {
-        const restored = runtime.session.clearQueue();
+        if (!(driver instanceof SdkSessionDriver)) {
+          sendError(bunWS, "Restoring pending messages is not supported by the RPC runtime.");
+          return;
+        }
+        const restored = driver.clearQueue();
         const messages = [...restored.steering, ...restored.followUp];
         if (messages.length > 0 && bunWS.readyState === 1) {
           bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
@@ -830,14 +818,14 @@ export const sessionWsHandler: WsHandler = {
         return;
       }
       case "abort": {
-        if (input.restorePending !== false) {
-          const restored = runtime.session.clearQueue();
+        if (input.restorePending !== false && driver instanceof SdkSessionDriver) {
+          const restored = driver.clearQueue();
           const messages = [...restored.steering, ...restored.followUp];
           if (messages.length > 0 && bunWS.readyState === 1) {
             bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
           }
         }
-        runtime.session.abort().catch((error) => sendError(bunWS, toMessage(error)));
+        driver.abort().catch((error) => sendError(bunWS, toMessage(error)));
         return;
       }
       case "compact": {
@@ -845,22 +833,26 @@ export const sessionWsHandler: WsHandler = {
           typeof input.customInstructions === "string" && input.customInstructions.trim()
             ? input.customInstructions.trim()
             : undefined;
-        runtime.session
+        driver
           .compact(customInstructions)
           .catch((err: unknown) => console.error("compact failed", sessionId, toMessage(err)));
         return;
       }
       case "reload": {
-        if (runtime.session.isStreaming) {
+        if (!(driver instanceof SdkSessionDriver)) {
+          sendError(bunWS, "Reload requires the SDK runtime.");
+          return;
+        }
+        if (driver.session.isStreaming) {
           sendError(bunWS, "Wait for the current response to finish before reloading.");
           return;
         }
-        if (runtime.session.isCompacting) {
+        if (driver.session.isCompacting) {
           sendError(bunWS, "Wait for compaction to finish before reloading.");
           return;
         }
         try {
-          await runtime.session.reload();
+          await driver.reload();
         } catch (err) {
           sendError(bunWS, toMessage(err));
           return;
@@ -871,12 +863,12 @@ export const sessionWsHandler: WsHandler = {
         const channel = channelsBySession.get(sessionId);
         if (channel) {
           try {
-            await runtime.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
+            await driver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
           } catch (err) {
             console.error("Failed to re-bind extensions after reload", sessionId, err);
           }
           try {
-            channel.state.resources = snapshotResources(runtime);
+            channel.state.resources = snapshotResources(driver);
           } catch (err) {
             console.error("Failed to snapshot resources after reload", sessionId, err);
           }
@@ -890,9 +882,7 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         try {
-          const model = runtime.session.modelRuntime.getModel(input.provider, input.modelId);
-          if (!model) throw new Error(`Unknown model: ${input.provider}/${input.modelId}`);
-          await runtime.session.setModel(model);
+          await driver.setModel(input.provider, input.modelId);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
@@ -905,7 +895,7 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         try {
-          runtime.session.setThinkingLevel(input.level);
+          await driver.setThinkingLevel(input.level);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
@@ -923,7 +913,13 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         const channel = channelsBySession.get(sessionId);
-        channel?.uiBridge.handleResponse(input);
+        if (driver instanceof RpcSessionDriver) {
+          try {
+            driver.respondExtensionUi(input);
+          } catch (error) {
+            sendError(bunWS, toMessage(error));
+          }
+        } else channel?.uiBridge.handleResponse(input);
         return;
       }
       default:

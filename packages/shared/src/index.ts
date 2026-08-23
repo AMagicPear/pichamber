@@ -16,6 +16,7 @@ export * from "./server";
 export type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 export type {
   AgentSessionEvent,
+  JsonAgentSessionEvent,
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
   SessionEntry,

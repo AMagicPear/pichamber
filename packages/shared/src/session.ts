@@ -11,6 +11,7 @@
 import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type {
   AgentSessionEvent,
+  JsonAgentSessionEvent,
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
   SlashCommandInfo,
@@ -150,7 +151,7 @@ export type SessionStatsView = {
  *  会话内容直接复用官方的 `AgentSessionEvent` 事件流与
  *  `AgentMessage` 消息模型（`snapshot.messages`），不再自造 item 协议；
  *  事件帧只额外添加 WS 顺序号，其他帧承载服务器算好的显示状态。 */
-export type ServerEventMessage = AgentSessionEvent & { seq: number };
+export type ServerEventMessage = (AgentSessionEvent | JsonAgentSessionEvent) & { seq: number };
 
 export type ServerMessage =
   | {
