@@ -531,15 +531,6 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
       resources.value = message.resources;
       break;
     }
-    case "event": {
-      if (message.seq !== lastSeq + 1) {
-        requestResync(resync);
-        break;
-      }
-      lastSeq = message.seq;
-      applyEvent(message.event);
-      break;
-    }
     case "state": {
       if (message.seq !== lastSeq + 1) {
         requestResync(resync);
@@ -555,10 +546,8 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
       if (message.stats) stats.value = message.stats;
       break;
     }
-    case "ui_request": {
-      // setTitle / set_editor_text 改的是 workspace 自己拥有的 state，
-      // 其余扩展 UI 装饰交给 extensionUi store。
-      const req = message.request;
+    case "extension_ui_request": {
+      const req = message;
       if (req.method === "setTitle") {
         windowTitle.value = req.title || undefined;
       } else if (req.method === "set_editor_text") {
@@ -574,6 +563,16 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
     case "error":
       pushErrorToast(message.error);
       break;
+    default: {
+      const event = message;
+      if (message.seq !== lastSeq + 1) {
+        requestResync(resync);
+        break;
+      }
+      lastSeq = message.seq;
+      applyEvent(event);
+      break;
+    }
   }
 };
 

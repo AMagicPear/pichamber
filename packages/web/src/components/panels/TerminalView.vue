@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { FitAddon, Terminal, type Ghostty, type IDisposable } from "ghostty-web";
-import { connectPtyWs, type WsHandle } from "@/api/ws";
+import { connectPtyWs, type PtyMessage, type WsHandle } from "@/api/ws";
 import { toMessage } from "@/api/client";
 import { useGhosttyInit } from "@/composables/useGhostty";
 import { releaseTerminalCleanup, replaceTerminalCleanup } from "@/composables/terminalRegistry";
@@ -16,7 +16,7 @@ const errorMessage = ref<string | null>(null);
 
 const disposers: IDisposable[] = [];
 let terminal: Terminal | undefined;
-let ws: WsHandle | null = null;
+let ws: WsHandle<PtyMessage> | null = null;
 let registeredHost: HTMLElement | undefined;
 let disposed = false;
 let pendingOutput = "";

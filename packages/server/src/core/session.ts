@@ -26,11 +26,6 @@ const sessionFileLookup = new Map<string, string>();
 const activeSessions = new Map<string, AgentSessionRuntime>();
 const openingSessions = new Map<string, Promise<AgentSessionRuntime | null>>();
 
-/** Recreate cwd-bound services for a session. Shared by every session; the
- *  returned `services` + `diagnostics` are what make this a
- *  `CreateAgentSessionRuntimeFactory` (vs the plain
- *  `createAgentSessionFromServices`) so future /new /resume /fork flows can
- *  rebuild the runtime against the same services. */
 const createRuntime: CreateAgentSessionRuntimeFactory = async ({
   cwd,
   agentDir,

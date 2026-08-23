@@ -16,7 +16,7 @@ type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : n
 export type UiBridge = {
   /** 作为官方 ExtensionUIContext 绑定到 session（bindExtensions）。 */
   context: ExtensionUIContext;
-  /** 处理客户端的 ui_response，派发给挂起的对话框。 */
+  /** 处理客户端的 extension_ui_response，派发给挂起的对话框。 */
   handleResponse: (response: RpcExtensionUIResponse) => void;
   /** 频道销毁时取消所有挂起请求（按取消语义 resolve 默认值）。 */
   cancelPending: () => void;
@@ -24,7 +24,8 @@ export type UiBridge = {
 
 /**
  * 移植官方 RPC 模式（rpc-mode.js createExtensionUIContext）：扩展的 ui.*
- * 调用转发为 ui_request 消息，等客户端 ui_response 应答；超时/中止按官方
+ * 调用转发为官方 extension_ui_request 消息，等客户端 extension_ui_response
+ * 应答；超时/中止按官方
  * 语义 resolve 默认值。帧结构与官方 extension_ui_request/response 完全同构，
  * 未来切换到 RPC 模式时协议零改动。
  */

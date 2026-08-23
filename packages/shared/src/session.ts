@@ -147,9 +147,11 @@ export type SessionStatsView = {
 /** JSON messages the server sends to session WebSocket clients.
  *  每个消息都携带单调递增的 seq；客户端发现 seq 不连续即请求 resync。
  *
- *  会话内容直接复用官方的 `AgentSessionEvent` 事件流（`event` 帧）与
+ *  会话内容直接复用官方的 `AgentSessionEvent` 事件流与
  *  `AgentMessage` 消息模型（`snapshot.messages`），不再自造 item 协议；
- *  其余帧只承载服务器算好的显示状态（model/stats/resources…）。 */
+ *  事件帧只额外添加 WS 顺序号，其他帧承载服务器算好的显示状态。 */
+export type ServerEventMessage = AgentSessionEvent & { seq: number };
+
 export type ServerMessage =
   | {
       type: "snapshot";
@@ -169,10 +171,10 @@ export type ServerMessage =
       stats?: SessionStatsView;
       resources: RuntimeResources;
     }
-  /** 官方会话事件原样转发（message_start/update/end、
+  /** 官方会话事件原样转发，并添加 WS 顺序号（message_start/update/end、
    *  tool_execution_*、queue_update、agent_start/settled、compaction_*、
    *  auto_retry_*、entry_appended…）。 */
-  | { type: "event"; seq: number; event: AgentSessionEvent }
+  | ServerEventMessage
   | {
       type: "state";
       seq: number;
@@ -184,9 +186,9 @@ export type ServerMessage =
       stats?: SessionStatsView;
       resources?: RuntimeResources;
     }
-  /** 扩展 UI 请求原样转发（官方 RPC 形状；setWidget 的 widget 行解析由
+  /** 扩展 UI 请求直接使用官方 RPC 形状；setWidget 的 widget 行解析由
    *  前端消费方负责——服务端不懂扩展的私有前缀协议）。 */
-  | { type: "ui_request"; request: RpcExtensionUIRequest }
+  | RpcExtensionUIRequest
   | { type: "draft_restore"; messages: string[] }
   | { type: "error"; error: string };
 
@@ -200,5 +202,5 @@ export type ClientMessage =
   | { type: "set_model"; provider: string; modelId: string }
   | { type: "set_thinking_level"; level: ThinkingLevel }
   | { type: "resync" }
-  /** 扩展 UI 应答（官方 RPC 模式 extension_ui_response 帧原样转发）。 */
-  | { type: "ui_response"; response: RpcExtensionUIResponse };
+  /** 扩展 UI 应答直接使用官方 RPC 形状。 */
+  | RpcExtensionUIResponse;

@@ -13,7 +13,7 @@ import {
   resetSessionState,
   thinking,
 } from "@/stores/workspace";
-import type { ModelDescriptor, ServerMessage } from "@amagicpear/pichamber-shared";
+import type { ClientMessage, ModelDescriptor, ServerMessage } from "@amagicpear/pichamber-shared";
 
 /* ── WS 生命周期与协议动作 ─────────────────────────────────────────
  *  这里不定义任何会话状态 —— 所有会话状态与事件应用都在
@@ -23,7 +23,7 @@ import type { ModelDescriptor, ServerMessage } from "@amagicpear/pichamber-share
  *  直接 import workspace store，不需要调用本 composable。
  * ─────────────────────────────────────────────────────────────────── */
 
-let ws: WsHandle | null = null;
+let ws: WsHandle<ClientMessage> | null = null;
 let activeSessionId: string | null = null;
 
 /** Number of components currently subscribed via the composable. The
@@ -86,7 +86,7 @@ const compact = (customInstructions?: string) => ws?.send({ type: "compact", cus
 const reload = () => ws?.send({ type: "reload" });
 
 const respondToExtension = (response: RpcExtensionUIResponse) => {
-  ws?.send({ type: "ui_response", response });
+  ws?.send(response);
   showNextExtensionDialog();
 };
 

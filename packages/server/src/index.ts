@@ -41,10 +41,7 @@ import { closeSessionSockets, sessionWsHandler } from "./core/ws";
 import { refreshSessionModelState } from "./core/ws";
 import { type PtyWsData, type SessionWsData, type WsData, type WsHandler } from "./core/ws";
 import { browseProjectDirectories } from "./services/projects";
-import {
-  getProviderQuota,
-  listQuotaProviders,
-} from "./providers/quota";
+import { getProviderQuota, listQuotaProviders } from "./providers/quota";
 import { getSession } from "./core/session";
 import { toMessage } from "./error";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./services/workspace";
@@ -113,7 +110,7 @@ const requestCwd = async (sessionId?: string | null) => {
 const getSdkSession = async (sessionId: string) => {
   const runtime = await getSession(sessionId);
   if (!runtime) return { error: "session not found", status: 404 } as const;
-  return { session: runtime.session } as const;
+  return { session: runtime.session, cwd: runtime.services.cwd } as const;
 };
 
 const ptyWsHandler: WsHandler = {
@@ -195,12 +192,12 @@ const server = Bun.serve({
       POST: async (req) => {
         const { cwd } = (await req.json()) as { cwd: string };
         const workspace = await canonicalWorkspace(cwd);
-        const session = await createSessionWithCwd(workspace);
+        const runtime = await createSessionWithCwd(workspace);
         return Response.json({
-          sessionId: session.session.sessionId,
+          sessionId: runtime.session.sessionId,
           cwd: workspace,
-          sessionFile: session.session.sessionFile,
-          tools: session.session.getActiveToolNames(),
+          sessionFile: runtime.session.sessionFile,
+          tools: runtime.session.getActiveToolNames(),
         });
       },
     },
@@ -272,9 +269,7 @@ const server = Bun.serve({
         if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
         const result = await getSdkSession(sessionId);
         if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-        const cwd = await getSessionCwd(sessionId);
-        if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
-        return Response.json({ sources: listPiExtensionSources(result.session, cwd) });
+        return Response.json({ sources: listPiExtensionSources(result.session, result.cwd) });
       },
       POST: async (req) => {
         const sessionId = new URL(req.url).searchParams.get("sessionId");
@@ -286,9 +281,7 @@ const server = Bun.serve({
         try {
           const result = await getSdkSession(sessionId);
           if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-          const cwd = await getSessionCwd(sessionId);
-          if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
-          const sources = await installPiExtensionSource(result.session, cwd, body.source.trim(), body.scope === "project");
+          const sources = await installPiExtensionSource(result.session, result.cwd, body.source.trim(), body.scope === "project");
           return Response.json({ sources });
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 400 });
@@ -304,9 +297,7 @@ const server = Bun.serve({
         try {
           const result = await getSdkSession(sessionId);
           if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-          const cwd = await getSessionCwd(sessionId);
-          if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
-          const sources = await removePiExtensionSource(result.session, cwd, body.source.trim(), body.scope === "project");
+          const sources = await removePiExtensionSource(result.session, result.cwd, body.source.trim(), body.scope === "project");
           return Response.json({ sources });
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 400 });
@@ -320,10 +311,8 @@ const server = Bun.serve({
         try {
           const runtime = await getSession(sessionId);
           if (!runtime) return Response.json({ error: "session not found" }, { status: 404 });
-          const cwd = await getSessionCwd(sessionId);
-          if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
           const resources = runtime.session.resourceLoader.getExtensions();
-          const sources = listPiExtensionSources(runtime.session, cwd);
+          const sources = listPiExtensionSources(runtime.session, runtime.services.cwd);
           const builtins = listBuiltinExtensions();
           const overview: ExtensionsOverview = {
             builtins,
@@ -360,9 +349,7 @@ const server = Bun.serve({
         try {
           const result = await getSdkSession(sessionId);
           if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-          const cwd = await getSessionCwd(sessionId);
-          if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
-          return Response.json({ updates: await checkPiExtensionUpdates(result.session, cwd) });
+          return Response.json({ updates: await checkPiExtensionUpdates(result.session, result.cwd) });
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 400 });
         }
@@ -377,11 +364,9 @@ const server = Bun.serve({
         try {
           const result = await getSdkSession(sessionId);
           if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
-          const cwd = await getSessionCwd(sessionId);
-          if (!cwd) return Response.json({ error: "session not found" }, { status: 404 });
-          await updatePiExtensions(result.session, cwd, body.source?.trim() || undefined);
+          await updatePiExtensions(result.session, result.cwd, body.source?.trim() || undefined);
           await result.session.reload();
-          return Response.json({ updates: await checkPiExtensionUpdates(result.session, cwd) });
+          return Response.json({ updates: await checkPiExtensionUpdates(result.session, result.cwd) });
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 400 });
         }

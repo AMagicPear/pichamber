@@ -1,12 +1,12 @@
-import type { ServerMessage } from "@amagicpear/pichamber-shared";
+import type { ClientMessage, ServerMessage } from "@amagicpear/pichamber-shared";
 
-export type WsHandle = {
-  send: (message: unknown) => void;
+export type WsHandle<Outgoing> = {
+  send: (message: Outgoing) => void;
   close: () => void;
 };
 
 /** Connection lifecycle status — distilled from transport events only.
- *  Protocol messages (snapshot/item/state/error) go straight to onMessage. */
+ *  Protocol messages (snapshot/event/state/error) go straight to onMessage. */
 export type WsStatus =
   | { type: "ready" }
   | { type: "error"; error: string }
@@ -23,13 +23,13 @@ export const wsUrl = (path: string) => {
  * status. `onMessage` receives each text frame; `encode` serializes what
  * `send()` passes (JSON for the session protocol, raw stdin for the PTY).
  */
-const createSocket = (
+const createSocket = <Outgoing>(
   url: string,
   onMessage: (data: string) => void,
   onStatus?: (status: WsStatus) => void,
-  encode: (message: unknown) => string = (message) => JSON.stringify(message),
+  encode: (message: Outgoing) => string = (message) => JSON.stringify(message),
   onOpen?: () => void,
-): WsHandle => {
+): WsHandle<Outgoing> => {
   const socket = new WebSocket(url);
   socket.onopen = () => onOpen?.();
   socket.onmessage = (event) => onMessage(String(event.data));
@@ -47,10 +47,12 @@ export const connectSessionWs = (
   sessionId: string,
   onMessage: (message: ServerMessage) => void,
   onStatus?: (status: WsStatus) => void,
-): WsHandle =>
+): WsHandle<ClientMessage> =>
   createSocket(wsUrl(`/ws/${sessionId}`), (data) => {
     onMessage(JSON.parse(data) as ServerMessage);
   }, onStatus);
+
+export type PtyMessage = string | { type: "resize"; cols: number; rows: number };
 
 /** Connect to a PTY terminal WebSocket. Output is raw text; input accepts
  *  strings (stdin keystrokes) or objects (JSON control frames like resize).
@@ -60,7 +62,7 @@ export const connectPtyWs = (
   ptyId: string,
   onData: (data: string) => void,
   onStatus?: (status: WsStatus) => void,
-): WsHandle =>
+): WsHandle<PtyMessage> =>
   createSocket(
     wsUrl(`/ws/pty/${encodeURIComponent(ptyId)}`),
     onData,

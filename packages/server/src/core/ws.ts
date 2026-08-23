@@ -1,8 +1,8 @@
 /**
  * Session WebSocket handler.
  *
- * One `SessionChannel` per active session, backed by Pi's official
- * `AgentSessionRuntime`. Every channel subscribes to the runtime's
+ * One `SessionChannel` per active session, backed by Pi's official runtime.
+ * Every channel subscribes to the runtime's
  * official `AgentSessionEvent` stream and forwards events verbatim to
  * clients; the surrounding state (activity / pending / model / thinking /
  * stats / resources) is computed on the server and emitted through
@@ -11,8 +11,6 @@
  * always emits `agent_start` before any user/assistant `message_start`,
  * so busy would just duplicate activity).
  *
- * SDK is the first-class path — `AgentSessionRuntime` is consumed
- * directly without a wrapper interface.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
@@ -21,11 +19,11 @@ import {
   type AgentSessionEvent,
   type AgentSessionRuntime,
   type RpcExtensionUIRequest,
-  type RpcExtensionUIResponse,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import type {
   AgentActivity,
+  ClientMessage,
   ExtensionInfo,
   ImageContent,
   ModelDescriptor,
@@ -40,8 +38,8 @@ import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
 import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
 import { computeSessionStatsView } from "./context";
-import { getEffectiveModelDescriptor, getThinkingState } from "./models";
 import { deactivateSession, getSession } from "./session";
+import { providerName } from "../providers/providers";
 
 // ─── WebSocket protocol multiplexing types ─────────────────────────────
 //
@@ -118,7 +116,7 @@ type SessionChannel = {
   ready: Promise<void>;
   /** Messages submitted while compaction is running; flushed on compaction_end. */
   compactionQueue: CompactionQueuedMessage[];
-  /** Runtime backing this channel — captured for the reconcile/stats helpers. */
+  /** Runtime backing this channel — captured for reconcile/stats helpers. */
   runtime: AgentSessionRuntime;
 };
 
@@ -179,11 +177,11 @@ const snapshotResources = (runtime: AgentSessionRuntime): RuntimeResources => {
   const result = session.resourceLoader.getExtensions();
   const activeTools = new Set(result.runtime.getActiveTools());
   const includeSkills = session.settingsManager.getEnableSkillCommands();
-  const extensionCommands = includeSkills
+  const commands = includeSkills
     ? result.runtime.getCommands()
     : result.runtime.getCommands().filter((command) => command.source !== "skill");
   return {
-    commands: extensionCommands,
+    commands,
     tools: result.runtime.getAllTools().map((tool) => ({
       name: tool.name,
       description: tool.description ?? "",
@@ -200,6 +198,37 @@ const snapshotResources = (runtime: AgentSessionRuntime): RuntimeResources => {
       } satisfies ExtensionInfo)),
     diagnostics: result.errors,
     extensionInventoryAvailable: true,
+  };
+};
+
+const getModelState = (runtime: AgentSessionRuntime) => {
+  const session = runtime.session;
+  const availableModels = session.modelRuntime.getAvailableSnapshot().map((model) => ({
+    provider: model.provider,
+    providerName: providerName(session, model.provider) || model.provider,
+    id: model.id,
+    name: model.name || model.id,
+    reasoning: Boolean(model.reasoning),
+  }));
+  const current = session.model;
+  if (!current) return { model: undefined, availableModels };
+  const matchIndex = availableModels.findIndex(
+    (model) => model.provider === current.provider && model.id === current.id,
+  );
+  if (matchIndex !== -1 && current.name) {
+    availableModels[matchIndex] = { ...availableModels[matchIndex]!, name: current.name };
+  }
+  return {
+    model: matchIndex === -1
+      ? {
+          provider: current.provider,
+          providerName: providerName(session, current.provider) || current.provider,
+          id: current.id,
+          name: current.name || current.id,
+          reasoning: Boolean(current.reasoning),
+        }
+      : availableModels[matchIndex],
+    availableModels,
   };
 };
 
@@ -352,7 +381,7 @@ const applyExtensionUiRequest = (state: ExtensionUiState, request: RpcExtensionU
 const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
   const send = (request: RpcExtensionUIRequest) => {
     if (socket.readyState === 1) {
-      socket.send(JSON.stringify({ type: "ui_request", request } satisfies ServerMessage));
+      socket.send(JSON.stringify(request satisfies ServerMessage));
     }
   };
   for (const [statusKey, statusText] of Object.entries(channel.extensionUi.statuses)) {
@@ -399,10 +428,13 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
         const channel = channelsBySession.get(sessionId);
         if (!channel) return;
         try {
-          const { model, availableModels } = await getEffectiveModelDescriptor(runtime);
+          const { model, availableModels } = getModelState(runtime);
           channel.state.model = model;
           channel.state.availableModels = availableModels;
-          channel.state.thinking = getThinkingState(runtime);
+          channel.state.thinking = {
+            level: session.thinkingLevel,
+            availableLevels: session.getAvailableThinkingLevels(),
+          };
           channel.state.stats = await computeSessionStatsView(runtime);
           broadcastState(channel, {
             model,
@@ -440,10 +472,10 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
       if (bunWS.readyState === 1) bunWS.send(payload);
     }
   };
-  /** Forward one official `AgentSessionEvent` untouched. */
+  /** Forward one official event with only the WS sequence metadata added. */
   const broadcastEvent = (event: AgentSessionEvent) => {
     channel.state.seq += 1;
-    broadcast({ type: "event", seq: channel.state.seq, event } satisfies ServerMessage);
+    broadcast({ ...event, seq: channel.state.seq } satisfies ServerMessage);
   };
   const broadcastSnapshot = () => {
     channel.state.seq += 1;
@@ -454,7 +486,7 @@ const attachListener = (sessionId: string, runtime: AgentSessionRuntime): Sessio
    *  前端消费方解析成结构化 `ExtensionWidget`。 */
   const broadcastUiRequest = (request: RpcExtensionUIRequest) => {
     applyExtensionUiRequest(channel.extensionUi, request);
-    broadcast({ type: "ui_request", request });
+    broadcast(request);
   };
 
   /** Common settlement shape shared by `compaction_end` and `agent_settled`:
@@ -699,10 +731,13 @@ export const sessionWsHandler: WsHandler = {
     await channel.ready;
     if (bunWS.data.closed || !bunWS.data.attached) return;
     try {
-      const { model, availableModels } = await getEffectiveModelDescriptor(runtime);
+      const { model, availableModels } = getModelState(runtime);
       channel.state.model = model;
       channel.state.availableModels = availableModels;
-      channel.state.thinking = getThinkingState(runtime);
+      channel.state.thinking = {
+        level: runtime.session.thinkingLevel,
+        availableLevels: runtime.session.getAvailableThinkingLevels(),
+      };
       channel.state.stats = await computeSessionStatsView(runtime);
     } catch (error) {
       console.error("Failed to load model snapshot", sessionId, error);
@@ -725,7 +760,7 @@ export const sessionWsHandler: WsHandler = {
       sendError(bunWS, "message must be an object");
       return;
     }
-    const input = msg as { type?: unknown; [k: string]: unknown };
+    const input = msg as ClientMessage;
     const { sessionId } = bunWS.data;
     const runtime = await getSession(sessionId);
     if (bunWS.data.closed) return;
@@ -733,7 +768,6 @@ export const sessionWsHandler: WsHandler = {
       sendError(bunWS, "session not found");
       return;
     }
-    const session = runtime.session;
     switch (input.type) {
       case "prompt": {
         if (typeof input.message !== "string") {
@@ -752,15 +786,13 @@ export const sessionWsHandler: WsHandler = {
         if (bunWS.data.closed) return;
         // Streaming behaviour is decided server-side: the client's request is
         // only a preference. Whether we're actually streaming is determined
-        // by `runtime.session.isStreaming` — don't trust the client's
+        // by the backend's current state — don't trust the client's
         // local activity snapshot (broadcasts may lag). Non-streaming prompts
         // always start a new turn.
-        const requested = input.streamingBehavior === "steer" || input.streamingBehavior === "followUp"
-          ? input.streamingBehavior
-          : undefined;
-        const streamingBehavior = session.isStreaming ? requested ?? "steer" : undefined;
+        const requested = input.streamingBehavior;
+        const streamingBehavior = runtime.session.isStreaming ? requested ?? "steer" : undefined;
         const channel = channelsBySession.get(sessionId);
-        if (session.isCompacting && channel) {
+        if (runtime.session.isCompacting && channel) {
           if (!input.message.startsWith("/")) {
             channel.compactionQueue.push({
               text: input.message,
@@ -769,13 +801,13 @@ export const sessionWsHandler: WsHandler = {
             });
             broadcastState(channel, { pending: pendingWithQueue(channel) });
           } else {
-            session
+            runtime.session
               .prompt(input.message, images.length > 0 ? { images } : undefined)
               .catch((err: unknown) => sendError(bunWS, toMessage(err)));
           }
           return;
         }
-        session
+        runtime.session
           .prompt(input.message, {
             streamingBehavior,
             images: images.length > 0 ? images : undefined,
@@ -790,7 +822,7 @@ export const sessionWsHandler: WsHandler = {
         return;
       }
       case "restore_pending": {
-        const restored = session.clearQueue();
+        const restored = runtime.session.clearQueue();
         const messages = [...restored.steering, ...restored.followUp];
         if (messages.length > 0 && bunWS.readyState === 1) {
           bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
@@ -799,13 +831,13 @@ export const sessionWsHandler: WsHandler = {
       }
       case "abort": {
         if (input.restorePending !== false) {
-          const restored = session.clearQueue();
+          const restored = runtime.session.clearQueue();
           const messages = [...restored.steering, ...restored.followUp];
           if (messages.length > 0 && bunWS.readyState === 1) {
             bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
           }
         }
-        session.abort().catch((error) => sendError(bunWS, toMessage(error)));
+        runtime.session.abort().catch((error) => sendError(bunWS, toMessage(error)));
         return;
       }
       case "compact": {
@@ -813,22 +845,22 @@ export const sessionWsHandler: WsHandler = {
           typeof input.customInstructions === "string" && input.customInstructions.trim()
             ? input.customInstructions.trim()
             : undefined;
-        session
+        runtime.session
           .compact(customInstructions)
           .catch((err: unknown) => console.error("compact failed", sessionId, toMessage(err)));
         return;
       }
       case "reload": {
-        if (session.isStreaming) {
+        if (runtime.session.isStreaming) {
           sendError(bunWS, "Wait for the current response to finish before reloading.");
           return;
         }
-        if (session.isCompacting) {
+        if (runtime.session.isCompacting) {
           sendError(bunWS, "Wait for compaction to finish before reloading.");
           return;
         }
         try {
-          await session.reload();
+          await runtime.session.reload();
         } catch (err) {
           sendError(bunWS, toMessage(err));
           return;
@@ -839,7 +871,7 @@ export const sessionWsHandler: WsHandler = {
         const channel = channelsBySession.get(sessionId);
         if (channel) {
           try {
-            await session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
+            await runtime.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
           } catch (err) {
             console.error("Failed to re-bind extensions after reload", sessionId, err);
           }
@@ -858,9 +890,9 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         try {
-          const target = session.modelRuntime.getModel(input.provider, input.modelId);
-          if (!target) throw new Error(`Unknown model: ${input.provider}/${input.modelId}`);
-          await session.setModel(target);
+          const model = runtime.session.modelRuntime.getModel(input.provider, input.modelId);
+          if (!model) throw new Error(`Unknown model: ${input.provider}/${input.modelId}`);
+          await runtime.session.setModel(model);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
@@ -873,7 +905,7 @@ export const sessionWsHandler: WsHandler = {
           return;
         }
         try {
-          session.setThinkingLevel(input.level as Parameters<typeof session.setThinkingLevel>[0]);
+          runtime.session.setThinkingLevel(input.level);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
@@ -885,18 +917,13 @@ export const sessionWsHandler: WsHandler = {
         if (channel && bunWS.readyState === 1) bunWS.send(JSON.stringify(snapshotMessage(channel)));
         return;
       }
-      case "ui_response": {
-        const response = input.response as unknown;
-        if (
-          !response ||
-          typeof response !== "object" ||
-          typeof (response as { id?: unknown }).id !== "string"
-        ) {
-          sendError(bunWS, "ui_response requires an id");
+      case "extension_ui_response": {
+        if (typeof input.id !== "string") {
+          sendError(bunWS, "extension_ui_response requires an id");
           return;
         }
         const channel = channelsBySession.get(sessionId);
-        channel?.uiBridge.handleResponse(response as RpcExtensionUIResponse);
+        channel?.uiBridge.handleResponse(input);
         return;
       }
       default:
