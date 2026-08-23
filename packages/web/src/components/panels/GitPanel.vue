@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type {
   GitBranch,
   GitBranchList,
@@ -21,6 +21,7 @@ import {
   pushGit,
   pushGitStash,
   dropGitStash,
+  fetchGit,
   stageGitPaths,
   toMessage,
   unstageGitPaths,
@@ -40,6 +41,8 @@ import SearchBox from "@/components/ui/SearchBox.vue";
 import { usePopover } from "@/composables/usePopover";
 import { workspace } from "@/stores/workspace";
 import { setGitBranch } from "@/stores/git";
+import { settings } from "@/stores/settings";
+import { ui } from "@/stores/ui";
 import { lucideIcon, type LucideIconName } from "../ui/morphIcons";
 import { MorphIcon } from "morphicons/vue";
 
@@ -66,8 +69,14 @@ const commitMsg = ref("");
 const committing = ref(false);
 
 const stashMsg = ref("");
+const AUTO_FETCH_INTERVAL_MS = 60_000;
+const STATUS_REFRESH_INTERVAL_MS = 3_000;
+let autoFetchTimer: number | undefined;
+let statusRefreshTimer: number | undefined;
+const backgroundBusy = ref(false);
 
 const isRepo = computed(() => status.value !== null);
+const isVisible = computed(() => ui.panels.right.open && ui.activeRightPanel === "git");
 
 // ── Branch switcher popover ──────────────────────────────────────────
 const branchRoot = ref<HTMLElement | null>(null);
@@ -182,6 +191,57 @@ const load = async () => {
   refreshTimeoutId = window.setTimeout(() => {
     refreshIcon.value = 'refresh-cw';
   }, 240);
+};
+
+const runBackgroundTask = async (task: () => Promise<void>) => {
+  if (!isVisible.value || backgroundBusy.value || loading.value || syncBusy.value !== null) return;
+  backgroundBusy.value = true;
+  try {
+    await task();
+  } finally {
+    backgroundBusy.value = false;
+  }
+};
+
+const autoFetch = () => {
+  if (!settings.gitAutoFetch || !workspace.sessionId) return Promise.resolve();
+  return runBackgroundTask(async () => {
+    try {
+      await fetchGit(workspace.sessionId);
+      await loadStatus();
+    } catch {
+      // Background fetch failures are non-disruptive; explicit Git actions
+      // continue to surface their errors through the panel state.
+    }
+  });
+};
+
+const stopAutoFetch = () => {
+  if (autoFetchTimer) window.clearInterval(autoFetchTimer);
+  autoFetchTimer = undefined;
+};
+
+const configureAutoFetch = () => {
+  stopAutoFetch();
+  if (isVisible.value && settings.gitAutoFetch) {
+    autoFetchTimer = window.setInterval(() => void autoFetch(), AUTO_FETCH_INTERVAL_MS);
+  }
+};
+
+const refreshLocalStatus = () => {
+  void runBackgroundTask(loadStatus);
+};
+
+const stopStatusRefresh = () => {
+  if (statusRefreshTimer) window.clearInterval(statusRefreshTimer);
+  statusRefreshTimer = undefined;
+};
+
+const configureStatusRefresh = () => {
+  stopStatusRefresh();
+  if (isVisible.value) {
+    statusRefreshTimer = window.setInterval(refreshLocalStatus, STATUS_REFRESH_INTERVAL_MS);
+  }
 };
 
 const reloadAfterSync = async (next?: unknown) => {
@@ -317,10 +377,24 @@ const pushIcon = computed<LucideIconName>(() =>
 
 const refreshIcon = ref<'refresh-cw' | 'refresh-ccw'>('refresh-cw');
 
-onMounted(load);
+onMounted(() => {
+  configureAutoFetch();
+  configureStatusRefresh();
+  if (isVisible.value) void load();
+});
+onBeforeUnmount(() => {
+  stopAutoFetch();
+  stopStatusRefresh();
+});
+watch(() => settings.gitAutoFetch, configureAutoFetch);
+watch(isVisible, (visible) => {
+  configureAutoFetch();
+  configureStatusRefresh();
+  if (visible) void load();
+});
 watch(() => workspace.cwd, () => {
   branches.value = null;
-  load();
+  if (isVisible.value) void load();
 });
 </script>
 
@@ -929,6 +1003,7 @@ watch(() => workspace.cwd, () => {
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
+  line-clamp: 4;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   white-space: pre-wrap;

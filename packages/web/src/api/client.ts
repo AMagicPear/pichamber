@@ -203,6 +203,13 @@ export const pullGit = (sessionId?: string | null) =>
     body: JSON.stringify({ sessionId: sessionId ?? undefined } satisfies GitSessionRequest),
   }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
 
+export const fetchGit = (sessionId?: string | null) =>
+  fetch(`${BASE}/git/fetch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: sessionId ?? undefined } satisfies GitSessionRequest),
+  }).then((r) => jsonOrThrow<{ ok: boolean }>(r));
+
 export const listGitStashes = (sessionId?: string | null) =>
   fetch(`${BASE}/git/stashes?${withSessionId(new URLSearchParams(), sessionId)}`).then((r) =>
     jsonOrThrow<GitStashList>(r),

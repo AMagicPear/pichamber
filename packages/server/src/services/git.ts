@@ -270,6 +270,12 @@ export const pull = async (cwd: string | undefined): Promise<void> => {
   assertOk(result);
 };
 
+/** Refresh the configured remote without touching the working tree. */
+export const fetchRemotes = async (cwd: string | undefined): Promise<void> => {
+  const result = await runGit(cwd, ["fetch", "--prune"]);
+  assertOk(result);
+};
+
 /** Save the working tree + index as a stash entry. `-u` includes
  *  untracked so the common "stash everything" workflow is one click;
  *  callers can opt out by passing `includeUntracked: false`. */

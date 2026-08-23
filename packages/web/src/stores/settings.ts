@@ -15,6 +15,8 @@ export interface SettingsState {
   notifySound: boolean;
   /** Fire a desktop notification when the agent turn completes. */
   notifyDesktop: boolean;
+  /** Refresh remote Git refs while the Git panel is open. */
+  gitAutoFetch: boolean;
 }
 
 const isSendKey = (value: unknown): value is SendKey => value === "enter" || value === "modEnter";
@@ -28,6 +30,7 @@ const hydrate = (raw: Partial<SettingsState>): SettingsState => ({
     typeof raw.expandedToolResults === "boolean" ? raw.expandedToolResults : false,
   notifySound: typeof raw.notifySound === "boolean" ? raw.notifySound : false,
   notifyDesktop: typeof raw.notifyDesktop === "boolean" ? raw.notifyDesktop : false,
+  gitAutoFetch: typeof raw.gitAutoFetch === "boolean" ? raw.gitAutoFetch : true,
 });
 
 export const settings = persistedState<SettingsState>(
@@ -39,6 +42,7 @@ export const settings = persistedState<SettingsState>(
     expandedToolResults: false,
     notifySound: false,
     notifyDesktop: false,
+    gitAutoFetch: true,
   },
   hydrate,
 );

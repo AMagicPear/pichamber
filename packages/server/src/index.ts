@@ -6,6 +6,7 @@ import {
   checkout,
   commit,
   discardPaths,
+  fetchRemotes,
   getDiff,
   getStatus,
   init,
@@ -639,6 +640,17 @@ const server = Bun.serve({
         try {
           const cwd = await requestCwd(sessionId);
           await pull(cwd);
+          return Response.json({ ok: true });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    "/api/git/fetch": {
+      POST: async (req) => {
+        const { sessionId } = (await req.json().catch(() => ({}))) as { sessionId?: string };
+        try {
+          await fetchRemotes(await requestCwd(sessionId));
           return Response.json({ ok: true });
         } catch (err) {
           return fsErrorResponse(err);

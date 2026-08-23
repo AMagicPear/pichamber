@@ -49,7 +49,7 @@ const navItems: NavItem[] = [
   { key: "notifications", label: "Notifications", icon: Notification3Icon, enabled: true },
   { key: "sessions", label: "Sessions", icon: ChatHistoryIcon, enabled: true },
   { key: "shortcuts", label: "Shortcuts", icon: CommandIcon },
-  { key: "git", label: "Git", icon: GitBranchIcon },
+  { key: "git", label: "Git", icon: GitBranchIcon, enabled: true },
   { key: "magic-prompts", label: "Magic Prompts", icon: AiGenerate2Icon },
   { key: "snippets", label: "Snippets", icon: ChatThreadIcon },
   { key: "projects", label: "Projects", icon: FoldersIcon },
@@ -263,6 +263,16 @@ const selectItem = (key: string) => {
                   :disabled="permissionLabel.disabled"
                   @click="requestNotificationPermission"
                 >{{ permissionLabel.action }}</button>
+              </SettingsOption>
+            </SettingsGroup>
+          </template>
+
+          <template v-else-if="activeKey === 'git'">
+            <SettingsPageHeader title="Git" description="Control how Pichamber refreshes remote branch information." />
+
+            <SettingsGroup title="Remote updates">
+              <SettingsOption title="Automatically fetch remotes" description="Run git fetch periodically while the Git panel is open. This refreshes remote refs without changing your working tree.">
+                <input v-model="settings.gitAutoFetch" type="checkbox" />
               </SettingsOption>
             </SettingsGroup>
           </template>
