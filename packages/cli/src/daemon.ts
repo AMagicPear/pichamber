@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = join(__dirname, "..", "..", "..");
-const serverEntry = join(pkgRoot, "dist", "server.js");
+const serverEntry = join(pkgRoot, "packages", "server", "dist", "index.js");
 const packageJson = JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8"));
 export const VERSION = packageJson.version;
 export const DEFAULT_PORT = 3000;

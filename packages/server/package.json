@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "start": "bun src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build": "bun build src/index.ts --outdir dist --target bun --external bun-pty --external @earendil-works/pi-coding-agent",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

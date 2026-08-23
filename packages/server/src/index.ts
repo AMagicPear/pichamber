@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
 import { listDirectory, openFile, searchFiles } from "./services/fs";
@@ -768,22 +767,17 @@ const server = Bun.serve({
     }
 
     // ── Static web app (production) ─────────────────────────────
-    // Serve the built SPA when it exists: `dist-web/` in the npm package,
-    // `packages/web/dist` in the source repo. Dev uses Vite instead.
-    const webDist = [
-      join(import.meta.dir, "..", "dist-web"),
-      join(import.meta.dir, "..", "..", "web", "dist"),
-    ].find((dir) => existsSync(join(dir, "index.html")));
+    // Serve the built SPA from `packages/web/dist`. Dev uses Vite instead.
+    const webRoot = join(import.meta.dir, "..", "..", "web", "dist");
+    const webIndex = Bun.file(join(webRoot, "index.html"));
 
     const serveWeb = async (url: URL): Promise<Response | null> => {
-      if (!webDist) return null;
+      if (!(await webIndex.exists())) return null;
       const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
-      const file = Bun.file(join(webDist, pathname));
+      const file = Bun.file(join(webRoot, pathname));
       if (await file.exists()) return new Response(file);
       // SPA fallback: any unknown path serves the app shell.
-      const index = Bun.file(join(webDist, "index.html"));
-      if (await index.exists()) return new Response(index, { headers: { "Content-Type": "text/html" } });
-      return null;
+      return new Response(webIndex, { headers: { "Content-Type": "text/html" } });
     };
 
     if (req.method === "GET" || req.method === "HEAD") {

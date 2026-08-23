@@ -45,15 +45,16 @@
     "test": "bun test",
     "type-check": "bun --filter '*' type-check",
     "lint": "oxlint . --fix",
-    "prepack": "bun run build:web && rm -rf dist dist-web && mkdir -p dist && bun build packages/server/src/index.ts --outfile dist/server.js --target bun --external bun-pty --external @earendil-works/pi-coding-agent && cp -r packages/web/dist dist-web"
+    "preview": "bun run build && bun packages/cli/src/index.ts",
+    "prepack": "bun run build"
   },
   "bin": {
     "pichamber": "packages/cli/src/index.ts"
   },
   "files": [
-    "dist",
-    "dist-web",
     "packages/cli/src",
+    "packages/server/dist",
+    "packages/web/dist",
     "LICENSE",
     "THIRD_PARTY_LICENSES.md",
     "README.md",
