@@ -1,6 +1,7 @@
 /**
  * Pichamber's session registry. The registry owns the Pi execution mode and
  * lifecycle; providers, extensions, and quota services stay outside it.
+ * 注意：pi的行为是，创建新的 session 时，默认不创建本地文件，要等有了对话更新之后才会创建。
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -16,12 +17,39 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { toMessage } from "../error";
 import { getRuntimeMode, loadAppConfig, setRuntimeMode } from "../settings/app-config";
-import { RpcSessionDriver, SdkSessionDriver, type SessionDriver, type SessionDriverMode } from "./driver";
+import {
+  RpcSessionDriver,
+  SdkSessionDriver,
+  type SessionDriver,
+  type SessionDriverMode,
+} from "./driver";
 
 const sessionFileLookup = new Map<string, string>();
 const activeSessions = new Map<string, SessionDriver>();
 const openingSessions = new Map<string, Promise<SessionDriver | null>>();
 let runtimeTransition: Promise<void> | null = null;
+
+const sessionIdentity = (sessionManager: SessionManager) => {
+  const sessionFile = sessionManager.getSessionFile();
+  if (!sessionFile) throw new Error("Pi did not create a session file");
+  return {
+    id: sessionManager.getSessionId(),
+    sessionFile,
+    cwd: sessionManager.getCwd(),
+  };
+};
+
+const registerDriver = <T extends SessionDriver>(driver: T): T => {
+  activeSessions.set(driver.sessionId, driver);
+  sessionFileLookup.set(driver.sessionId, driver.sessionFile);
+  return driver;
+};
+
+const takeActiveDriver = (id: string) => {
+  const driver = activeSessions.get(id);
+  if (driver) activeSessions.delete(id);
+  return driver;
+};
 
 const createRuntime: CreateAgentSessionRuntimeFactory = async ({
   cwd,
@@ -30,22 +58,38 @@ const createRuntime: CreateAgentSessionRuntimeFactory = async ({
   sessionStartEvent,
 }) => {
   const services = await createAgentSessionServices({ cwd, agentDir });
-  const result = await createAgentSessionFromServices({ services, sessionManager, sessionStartEvent });
+  const result = await createAgentSessionFromServices({
+    services,
+    sessionManager,
+    sessionStartEvent,
+  });
   return { ...result, services, diagnostics: services.diagnostics };
 };
 
-const createSdkDriver = (id: string, sessionFile: string, cwd: string) =>
-  new SdkSessionDriver(id, sessionFile, cwd, async () => {
-    const sessionManager = SessionManager.open(sessionFile);
-    return createAgentSessionRuntime(createRuntime, {
-      cwd: sessionManager.getCwd(),
+export const createSdkDriver = (sessionManager: SessionManager) => {
+  const { id, sessionFile, cwd } = sessionIdentity(sessionManager);
+  return new SdkSessionDriver(id, sessionFile, cwd, () =>
+    createAgentSessionRuntime(createRuntime, {
+      cwd,
       agentDir: getAgentDir(),
       sessionManager,
-    });
-  });
+    }),
+  );
+};
 
-const createDriver = (id: string, sessionFile: string, cwd: string, mode: SessionDriverMode): SessionDriver =>
-  mode === "sdk" ? createSdkDriver(id, sessionFile, cwd) : new RpcSessionDriver(id, sessionFile, cwd);
+const createDriver = (sessionManager: SessionManager, mode: SessionDriverMode): SessionDriver => {
+  if (mode === "sdk") return createSdkDriver(sessionManager);
+  const { id, sessionFile, cwd } = sessionIdentity(sessionManager);
+  return new RpcSessionDriver({ sessionId: id, sessionFile, cwd });
+};
+
+const createNewDriver = (sessionManager: SessionManager, mode: SessionDriverMode) => {
+  if (mode === "sdk") return createSdkDriver(sessionManager);
+  return new RpcSessionDriver({
+    sessionId: sessionManager.getSessionId(),
+    cwd: sessionManager.getCwd(),
+  });
+};
 
 const getSessionFileWithId = async (id: string): Promise<string | null> => {
   let sessionFile = sessionFileLookup.get(id);
@@ -75,11 +119,9 @@ export const getSessionDriver = async (id: string): Promise<SessionDriver | null
   const open = (async () => {
     const sessionFile = await getSessionFileWithId(id);
     if (!sessionFile) return null;
-    const cwd = SessionManager.open(sessionFile).getCwd();
-    const driver = createDriver(id, sessionFile, cwd, getRuntimeMode());
+    const driver = createDriver(SessionManager.open(sessionFile), getRuntimeMode());
     await driver.start();
-    activeSessions.set(id, driver);
-    return driver;
+    return registerDriver(driver);
   })();
   openingSessions.set(id, open);
   try {
@@ -99,20 +141,16 @@ export const getSessionCwd = async (id: string): Promise<string | null> => {
 };
 
 export const deactivateSession = async (id: string) => {
-  const driver = activeSessions.get(id);
+  const driver = takeActiveDriver(id);
   if (!driver) return;
-  activeSessions.delete(id);
   await driver.dispose();
 };
 
 export const deleteSession = async (
   id: string,
 ): Promise<{ ok: boolean; method: "trash" | "unlink" | "inmemory"; error?: string }> => {
-  const driver = activeSessions.get(id);
-  if (driver) {
-    activeSessions.delete(id);
-    await driver.dispose();
-  }
+  const driver = takeActiveDriver(id);
+  if (driver) await driver.dispose();
   const sessionPath = driver?.sessionFile ?? sessionFileLookup.get(id);
   if (!sessionPath) {
     sessionFileLookup.delete(id);
@@ -147,16 +185,12 @@ export const renameSession = async (id: string, name: string): Promise<boolean> 
   return true;
 };
 
-export const createSessionWithCwd = async (cwd: string): Promise<SdkSessionDriver> => {
-  const sessionManager = SessionManager.create(cwd);
-  const sessionFile = sessionManager.getSessionFile();
-  if (!sessionFile) throw new Error("Pi did not create a session file");
-  const id = sessionManager.getSessionId();
-  const driver = createSdkDriver(id, sessionFile, cwd);
+export const createSessionWithCwd = async (cwd: string): Promise<SessionDriver> => {
+  await loadAppConfig();
+  if (runtimeTransition) await runtimeTransition;
+  const driver = createNewDriver(SessionManager.create(cwd), getRuntimeMode());
   await driver.start();
-  activeSessions.set(id, driver);
-  sessionFileLookup.set(id, sessionFile);
-  return driver;
+  return registerDriver(driver);
 };
 
 export const switchRuntimeMode = async (
@@ -167,16 +201,13 @@ export const switchRuntimeMode = async (
   if (runtimeTransition) await runtimeTransition;
   if (mode === getRuntimeMode()) return;
 
-  const drivers = [...activeSessions.entries()];
+  const sessions = [...activeSessions.entries()];
+  const drivers = sessions.map(([, driver]) => driver);
   const transition = (async () => {
-    await Promise.all(drivers.map(async ([, driver]) => {
-      await driver.abort().catch(() => undefined);
-    }));
-    await Promise.all(drivers.map(([sessionId]) => closeChannel(sessionId)));
+    await Promise.all(drivers.map((driver) => driver.abort().catch(() => undefined)));
+    await Promise.all(sessions.map(([sessionId]) => closeChannel(sessionId)));
     activeSessions.clear();
-    await Promise.all(drivers.map(async ([, driver]) => {
-      await driver.dispose();
-    }));
+    await Promise.all(drivers.map((driver) => driver.dispose()));
     await setRuntimeMode(mode);
   })();
   runtimeTransition = transition;

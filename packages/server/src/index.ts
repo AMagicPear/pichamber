@@ -203,7 +203,6 @@ const server = Bun.serve({
           sessionId: driver.sessionId,
           cwd: workspace,
           sessionFile: driver.sessionFile,
-          tools: driver.session.getActiveToolNames(),
         });
       },
     },

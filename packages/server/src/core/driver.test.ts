@@ -45,6 +45,7 @@ class FakeRpcClient {
       isStreaming: false,
       isCompacting: false,
       sessionId: "session-1",
+      sessionFile: "/tmp/session.jsonl",
       pendingMessageCount: 0,
     };
   }
@@ -55,7 +56,7 @@ class FakeRpcClient {
 }
 
 const createDriver = (client: FakeRpcClient) =>
-  new RpcSessionDriver("session-1", "/tmp/session.jsonl", "/tmp", (options) => {
+  new RpcSessionDriver({ sessionId: "session-1", sessionFile: "/tmp/session.jsonl", cwd: "/tmp" }, (options) => {
     client.options = options;
     return client as unknown as RpcClient;
   });
@@ -73,6 +74,18 @@ describe("RpcSessionDriver", () => {
     expect(snapshot.availableModels).toHaveLength(1);
     expect(snapshot.stats.messages.total).toBe(2);
     expect(snapshot.pending).toEqual({ steering: [], followUp: [] });
+  });
+
+  test("creates a new persistent session by id and adopts the RPC session file", async () => {
+    const client = new FakeRpcClient(undefined);
+    const driver = new RpcSessionDriver({ sessionId: "session-1", cwd: "/tmp" }, (options) => {
+      client.options = options;
+      return client as unknown as RpcClient;
+    });
+    await driver.start();
+
+    expect(client.options).toMatchObject({ cwd: "/tmp", args: ["--session-id", "session-1"] });
+    expect(driver.sessionFile).toBe("/tmp/session.jsonl");
   });
 
   test("forwards official JSON events without reshaping them", async () => {

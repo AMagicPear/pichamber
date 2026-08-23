@@ -200,16 +200,32 @@ export class SdkSessionDriver implements SessionDriver {
 }
 const rpcModelDescriptor = (model: ModelInfo) => descriptor(model);
 
+type RpcSessionTarget = {
+  sessionId: string;
+  sessionFile?: string;
+  cwd: string;
+};
+
 export class RpcSessionDriver implements SessionDriver {
   readonly mode = "rpc" as const;
   private client: RpcClient | null = null;
+  private currentSessionFile: string | undefined;
+  readonly sessionId: string;
+  readonly cwd: string;
 
   constructor(
-    readonly sessionId: string,
-    readonly sessionFile: string,
-    readonly cwd: string,
+    target: RpcSessionTarget,
     private readonly createClient: (options: ConstructorParameters<typeof RpcClient>[0]) => RpcClient = (options) => new RpcClient(options),
-  ) {}
+  ) {
+    this.sessionId = target.sessionId;
+    this.currentSessionFile = target.sessionFile;
+    this.cwd = target.cwd;
+  }
+
+  get sessionFile() {
+    if (!this.currentSessionFile) throw new Error("RPC session is not started");
+    return this.currentSessionFile;
+  }
 
   get rpcClient() {
     if (!this.client) throw new Error("RPC session is not started");
@@ -220,11 +236,19 @@ export class RpcSessionDriver implements SessionDriver {
     const client = this.createClient({
       cliPath: piCliPath,
       cwd: this.cwd,
-      args: ["--session", this.sessionFile],
+      args: this.currentSessionFile
+        ? ["--session", this.currentSessionFile]
+        : ["--session-id", this.sessionId],
     });
     this.client = client;
     try {
       await client.start();
+      const state = await client.getState();
+      if (state.sessionId !== this.sessionId) {
+        throw new Error(`RPC session id mismatch: expected ${this.sessionId}, received ${state.sessionId}`);
+      }
+      if (!state.sessionFile) throw new Error("Pi RPC did not create a session file");
+      this.currentSessionFile = state.sessionFile;
     } catch (error) {
       this.client = null;
       await client.stop().catch(() => undefined);
