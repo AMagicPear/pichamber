@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import MarkdownRender from "markstream-vue";
+import { activeTheme } from "@/stores/theme";
 
 const props = defineProps<{
   /** Markdown source. */
@@ -19,21 +20,37 @@ const isFinal = computed(() => props.final ?? true);
  *  scrollback on long/committed content. `undefined` defers to the
  *  component default so finalized surfaces are untouched. */
 const streaming = computed(() => !isFinal.value);
+
+/** Keep code-block theme selection in the official CodeBlockNode path. The
+ * renderer owns the streaming <pre> -> final File transition, so this only
+ * supplies stable presentation inputs and never remounts a code block. */
+const isDark = computed(() => activeTheme.value === "dark");
+const codeBlockProps = {
+  theme: { light: "vitesse-light", dark: "vitesse-dark" },
+};
+const codeBlockOptions = {
+  fontFamily: "var(--ui-font-mono)",
+  fontSize: 12,
+  lineHeight: 18,
+  maxHeight: 576,
+};
 </script>
 
 <template>
-  <!-- Common chat-mode props are hardcoded; extra class and props fall
-       through to the MarkdownRender root automatically. `viewport-priority`
-       is left at its default (auto) so the renderer's viewport-aware
-       scheduling stays enabled. During streaming, `max-live-nodes=0` plus
-       small render batches give the smooth per-token "typing" cadence the
-       README recommends for chats. -->
+  <!-- Keep the renderer in chat/incremental mode. Code blocks are left on
+       markstream-vue's built-in CodeBlockNode so it can keep the streaming
+       fallback visible and atomically promote it once the final surface is
+       ready. -->
   <MarkdownRender
     class="markdown-chat"
     mode="chat"
     :content="content"
     :final="isFinal"
     :fade="false"
+    smooth-streaming="auto"
+    :is-dark="isDark"
+    :code-block-props="codeBlockProps"
+    :code-block-options="codeBlockOptions"
     :max-live-nodes="streaming ? 0 : undefined"
     :render-batch-size="streaming ? 16 : undefined"
     :render-batch-delay="streaming ? 8 : undefined"

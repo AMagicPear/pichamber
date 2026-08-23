@@ -31,10 +31,6 @@
   --ms-flow-heading-5-mb: 6px;
   --ms-flow-heading-6-mt: 14px;
   --ms-flow-heading-6-mb: 6px;
-  --inline-code-bg: var(--ui-code-inline-bg);
-  --inline-code-fg: var(--ui-code-inline-fg);
-  --table-border: var(--ui-border);
-  --table-header-bg: var(--ui-table-header-bg);
   color: var(--ui-text);
   font-family: var(--ui-font-sans);
   /* Aggressive break for long URLs / file paths in mixed CJK+Latin user
@@ -49,11 +45,18 @@
   font-feature-settings: "kern", "liga", "calt";
 }
 
-/* Nested list items get their own renderer and otherwise reset body text to
- * markstream's 1rem default. Keep them at the chat scale. */
-.markdown-chat .markdown-renderer {
+/* Theme bridge for every markstream renderer boundary. The library declares
+ * semantic variables on each `.markstream-vue`, including nested renderers
+ * used by list items, so project overrides must target the boundary rather
+ * than individual Markdown nodes. */
+.markdown-chat.markstream-vue,
+.markdown-chat .markstream-vue {
   --ms-text-body: 14px;
   --ms-leading-body: 1.6;
+  --inline-code-bg: var(--ui-code-inline-bg);
+  --inline-code-fg: var(--ui-code-inline-fg);
+  --table-border: var(--ui-border);
+  --table-header-bg: var(--ui-table-header-bg);
 }
 
 .markdown-chat .table-node tbody tr:nth-child(2n) {
@@ -99,8 +102,3 @@
   text-decoration: underline;
   text-underline-offset: 0.2rem;
 }
-
-/* pichamber 用 setCustomComponents 把 code_block 渲染为 ConversationCodeBlock，
- * 不再走 markstream 默认的 CodeBlockNode。pierre File surface 默认渲染文件名
- * header（无语言时默认名 "code.txt"）——ConversationCodeBlock 的 finalize
- * 传 disableFileHeader: true 在渲染层禁掉，见该组件。 */

@@ -20,8 +20,8 @@ const render = async () => {
   controller?.dispose();
   if (!host.value) return;
 
-  // Same theme tokens as ConversationCodeBlock — keeps the pane on the
-  // same color baseline as the conversation surface it sits beside.
+  // Keep the diff pane on the same theme baseline as conversation code
+  // blocks without sharing a renderer implementation with markstream.
   const next = createDiffSurface({
     kind: "patch",
     patch: props.patch,

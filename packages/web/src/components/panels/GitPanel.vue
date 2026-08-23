@@ -175,9 +175,11 @@ const loadBranches = async (): Promise<void> => {
 const loadStashes = async (): Promise<void> => {
   try {
     stashes.value = await listGitStashes(workspace.sessionId);
-  } catch (err) {
+  } catch {
+    // Stashes are supplementary state. The status request owns repository
+    // errors; surfacing this passive refresh as a sync-operation failure
+    // leaves stale Git stderr visible after the workspace becomes a repo.
     stashes.value = { stashes: [] };
-    syncError.value = toMessage(err);
   }
 };
 
@@ -393,7 +395,14 @@ watch(isVisible, (visible) => {
   if (visible) void load();
 });
 watch(() => workspace.cwd, () => {
+  status.value = null;
   branches.value = null;
+  stashes.value = null;
+  selected.value = null;
+  diff.value = "";
+  diffError.value = null;
+  statusError.value = null;
+  syncError.value = null;
   if (isVisible.value) void load();
 });
 </script>
