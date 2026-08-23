@@ -34,6 +34,7 @@ import PlusIcon from "lucide-static/icons/circle-plus.svg";
 import DiffView from "@/components/panels/DiffView.vue";
 import IconButton from "@/components/ui/IconButton.vue";
 import FilePathLabel from "@/components/ui/FilePathLabel.vue";
+import FloatingPanel from "@/components/ui/FloatingPanel.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
 import { usePopover } from "@/composables/usePopover";
@@ -75,12 +76,13 @@ const {
   style: branchMenuStyle,
   toggle: toggleBranchMenu,
   close: closeBranchMenu,
+  updatePosition: updateBranchMenuPosition,
+  panelId: branchMenuPanelId,
 } = usePopover({
   root: branchRoot,
   trigger: ".git-pane__branch-trigger",
-  panel: ".menu-panel",
+  panel: ".floating-panel",
   width: 280,
-  height: 320,
   onOpen: () => {
     if (!branches.value) void loadBranches();
   },
@@ -88,6 +90,35 @@ const {
 
 const localBranches = computed(() => branches.value?.branches.filter((b) => !b.remote) ?? []);
 const remoteBranches = computed(() => branches.value?.branches.filter((b) => b.remote) ?? []);
+
+const branchGroups = computed(() => [
+  {
+    id: "local",
+    label: "Local branches",
+    items: localBranches.value.map((branch) => ({
+      id: branch.name,
+      label: branch.name,
+      value: branch,
+      active: branch.current,
+      disabled: branch.current || syncBusy.value === "checkout",
+      meta: branch.upstream ? branch.track || "↑↓" : undefined,
+    })),
+  },
+  {
+    id: "remote",
+    label: "Remote tracking",
+    items: remoteBranches.value.map((branch) => ({
+      id: branch.name,
+      label: branch.name,
+      value: branch,
+      disabled: syncBusy.value === "checkout",
+    })),
+  },
+].filter((group) => group.items.length > 0));
+
+watch(branchGroups, () => {
+  if (branchMenuOpen.value) updateBranchMenuPosition();
+}, { flush: "post" });
 
 const selectBranch = async (branch: GitBranch) => {
   closeBranchMenu();
@@ -326,41 +357,9 @@ watch(() => workspace.cwd, () => {
             <span class="git-pane__branch-label">{{ status?.branch ?? "—" }}</span>
             <ArrowDownSIcon class="git-pane__branch-chevron" />
           </button>
-          <MenuPanel :open="branchMenuOpen" :style="branchMenuStyle" :width="280" :height="320" role="menu">
-            <div class="git-pane__menu-header">Local branches</div>
-            <div v-if="branches && localBranches.length === 0" class="git-pane__menu-empty">
-              No local branches
-            </div>
-            <button
-              v-for="branch in localBranches"
-              :key="branch.name"
-              type="button"
-              class="menu-item"
-              role="menuitem"
-              :class="{ 'is-active': branch.current }"
-              :disabled="branch.current || syncBusy === 'checkout'"
-              @click="selectBranch(branch)"
-            >
-              <span class="git-pane__menu-branch-name">{{ branch.name }}</span>
-              <span v-if="branch.upstream" class="git-pane__menu-branch-meta">
-                {{ branch.track || "↑↓" }}
-              </span>
-            </button>
-            <template v-if="remoteBranches.length > 0">
-              <div class="git-pane__menu-header">Remote tracking</div>
-              <button
-                v-for="branch in remoteBranches"
-                :key="branch.name"
-                type="button"
-                class="menu-item"
-                role="menuitem"
-                :disabled="syncBusy === 'checkout'"
-                @click="selectBranch(branch)"
-              >
-                <span class="git-pane__menu-branch-name">{{ branch.name }}</span>
-              </button>
-            </template>
-          </MenuPanel>
+          <FloatingPanel :open="branchMenuOpen" :style="branchMenuStyle" :width="280" :max-height="320" :panel-id="branchMenuPanelId" role="menu">
+            <MenuPanel :groups="branchGroups" empty-text="No branches" @select="selectBranch($event.value)" />
+          </FloatingPanel>
         </div>
 
         <div class="git-pane__sync">
@@ -622,36 +621,6 @@ watch(() => workspace.cwd, () => {
   flex: 0 0 auto;
   align-items: center;
   gap: 2px;
-}
-
-/* Branch switcher menu */
-.git-pane__menu-header {
-  padding: 6px 10px 4px;
-  color: var(--ui-text-muted);
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.git-pane__menu-empty {
-  padding: 8px 10px;
-  color: var(--ui-text-muted);
-  font-size: 13px;
-}
-
-.git-pane__menu-branch-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.git-pane__menu-branch-meta {
-  color: var(--ui-text-muted);
-  font-family: var(--ui-font-mono);
-  font-size: 11px;
 }
 
 /* ── Section frames ───────────────────────────────────────────────── */

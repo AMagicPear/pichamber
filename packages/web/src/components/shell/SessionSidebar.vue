@@ -20,6 +20,7 @@ import SearchBox from "@/components/ui/SearchBox.vue";
 import { splitHighlight } from "@/composables/highlight";
 import AboutModal from "@/components/modals/AboutModal.vue";
 import ProjectPickerModal from "@/components/modals/ProjectPickerModal.vue";
+import FloatingPanel from "@/components/ui/FloatingPanel.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 import { pathBasename } from "@amagicpear/pichamber-shared";
@@ -180,12 +181,12 @@ const {
   open: sessionMenuOpen,
   style: sessionMenuStyle,
   close: closeSessionMenu,
+  panelId: sessionMenuPanelId,
 } = usePopover({
   root: sessionListRoot,
   trigger: ".session-list__menu-trigger.is-menu-target",
-  panel: ".menu-panel",
+  panel: ".floating-panel",
   width: 180,
-  height: 66,
 });
 
 const openSessionMenu = (sessionId: string) => {
@@ -231,6 +232,22 @@ const beginRename = (session: SessionInfo | undefined) => {
     renamingRef.value?.focus();
     renamingRef.value?.select();
   });
+};
+
+const sessionMenuGroups = [{
+  id: "actions",
+  items: [
+    { id: "rename", label: "Rename", value: "rename", icon: FileEditIcon },
+    { id: "delete", label: "Delete session", value: "delete", icon: DeleteBinIcon },
+  ],
+}];
+
+const selectSessionMenuItem = (item: { value: string }) => {
+  if (item.value === "rename") {
+    beginRename(sessions.value.find((session: SessionInfo) => session.id === selectedSessionId.value));
+  } else {
+    void removeSelectedSession();
+  }
 };
 
 const applyRename = async () => {
@@ -379,17 +396,9 @@ onMounted(async () => {
       </template>
     </section>
 
-    <MenuPanel :open="sessionMenuOpen" :style="sessionMenuStyle" :width="180" :height="66" aria-label="Session options">
-      <button type="button" class="menu-item" role="menuitem"
-        @click="beginRename(sessions.find(s => s.id === selectedSessionId))">
-        <FileEditIcon />
-        Rename
-      </button>
-      <button type="button" class="menu-item" role="menuitem" @click="removeSelectedSession">
-        <DeleteBinIcon />
-        Delete session
-      </button>
-    </MenuPanel>
+    <FloatingPanel :open="sessionMenuOpen" :style="sessionMenuStyle" :width="180" :panel-id="sessionMenuPanelId" aria-label="Session options">
+      <MenuPanel :groups="sessionMenuGroups" @select="selectSessionMenuItem" />
+    </FloatingPanel>
 
     <footer class="sidebar__footer">
       <IconButton size="standard" label="Settings" @click="ui.settingsOpen = true">

@@ -6,7 +6,7 @@ import ContextIcon from "lucide-static/icons/square-text.svg";
 import FolderIcon from "lucide-static/icons/folder.svg";
 import GitBranchIcon from "lucide-static/icons/git-branch.svg";
 import IconButton from "@/components/ui/IconButton.vue";
-import MenuPanel from "@/components/ui/MenuPanel.vue";
+import FloatingPanel from "@/components/ui/FloatingPanel.vue";
 import ProviderQuotaPanel from "@/components/ui/ProviderQuotaPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 import { availableModels, windowTitle, workspace } from "@/stores/workspace";
@@ -31,12 +31,11 @@ onMounted(() => {
 });
 
 const root = ref<HTMLElement | null>(null);
-const { open, style, toggle } = usePopover({
+const { open, style, toggle, panelId } = usePopover({
   root,
   trigger: ".providers-button",
-  panel: ".menu-panel",
+  panel: ".floating-panel",
   width: 280,
-  height: 0,
 });
 const onProvidersClick = () => {
   if (!hasQuotedProvider.value) return;
@@ -69,9 +68,9 @@ const onProvidersClick = () => {
           :disabled="!hasQuotedProvider" @click="onProvidersClick">
           <StackIcon />
         </IconButton>
-        <MenuPanel :open="open" :style="style" :width="280" aria-label="Usage & balance">
+        <FloatingPanel :open="open" :style="style" :width="280" :panel-id="panelId" aria-label="Usage & balance">
           <ProviderQuotaPanel :open="open" />
-        </MenuPanel>
+        </FloatingPanel>
       </div>
       <IconButton label="Toggle terminal panel" :pressed="ui.panels.bottom.open" @click="ui.toggle('bottom')">
         <TerminalBoxIcon />

@@ -6,7 +6,6 @@ import CommandIcon from "lucide-static/icons/command.svg";
 import { listDirectory, searchFiles, toMessage } from "@/api/client";
 import { getEntryIcon } from "@/components/ui/fileIcon";
 import { workspace } from "@/stores/workspace";
-import FloatingPanel from "../../ui/FloatingPanel.vue";
 
 const props = defineProps<{
   mode: "files" | "commands" | null;
@@ -89,18 +88,22 @@ defineExpose({ move, choose });
 </script>
 
 <template>
-  <FloatingPanel
+  <section
     v-if="mode"
-    :title="mode === 'files' ? 'Files' : 'Pi commands'"
-    :hint="mode === 'files' ? `@${query}` : `/${query}`"
+    class="composer-shelf"
     :aria-label="mode === 'files' ? 'Files' : 'Commands'"
     role="listbox"
   >
-    <template #title-icon>
-      <AttachmentIcon v-if="mode === 'files'" />
-      <CommandIcon v-else />
-    </template>
-    <template v-if="mode === 'commands'">
+    <header class="composer-shelf__header">
+      <span class="composer-shelf__title">
+        <AttachmentIcon v-if="mode === 'files'" />
+        <CommandIcon v-else />
+        <span>{{ mode === "files" ? "Files" : "Pi commands" }}</span>
+      </span>
+      <span class="composer-shelf__hint">{{ mode === "files" ? `@${query}` : `/${query}` }}</span>
+    </header>
+    <div class="composer-shelf__body">
+      <template v-if="mode === 'commands'">
       <button
         v-for="(command, index) in commandResults"
         :key="`${command.source}:${command.name}`"
@@ -119,8 +122,8 @@ defineExpose({ move, choose });
         <span class="composer-shelf__source" :class="`is-${command.source}`">{{ command.source }}</span>
       </button>
       <p v-if="commandResults.length === 0" class="composer-shelf__state">No matching Pi commands</p>
-    </template>
-    <template v-else>
+      </template>
+      <template v-else>
       <button
         v-for="(entry, index) in fileResults"
         :key="entry.path"
@@ -139,14 +142,82 @@ defineExpose({ move, choose });
       <p v-if="loading" class="composer-shelf__state">Searching files...</p>
       <p v-else-if="error" class="composer-shelf__state is-error">{{ error }}</p>
       <p v-else-if="fileResults.length === 0" class="composer-shelf__state">No matching files</p>
-    </template>
-    <template #footer>
+      </template>
+    </div>
+    <footer class="composer-shelf__footer">
       Up/Down to navigate <span>Enter to insert</span> <span>Esc to close</span>
-    </template>
-  </FloatingPanel>
+    </footer>
+  </section>
 </template>
 
 <style scoped>
+.composer-shelf {
+  position: absolute;
+  z-index: 40;
+  bottom: calc(100% - 1px);
+  left: -1px;
+  display: flex;
+  width: calc(100% + 2px);
+  max-height: min(34vh, 280px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--ui-border-focus);
+  border-bottom-color: var(--ui-border);
+  border-radius: 10px 10px 0 0;
+  background: var(--ui-surface);
+  box-shadow: 0 -12px 30px rgb(33 31 26 / 10%);
+}
+.composer-shelf__header,
+.composer-shelf__footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+}
+.composer-shelf__header {
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+  background: var(--ui-surface-subtle);
+}
+.composer-shelf__title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: var(--ui-text-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+.composer-shelf__title :deep(svg) {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+}
+.composer-shelf__hint {
+  font-family: var(--ui-font-mono);
+  font-size: 10px;
+}
+.composer-shelf__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 5px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.composer-shelf__footer {
+  gap: 12px;
+  min-height: 27px;
+  padding: 0 12px;
+  border-top: 1px solid var(--ui-border-subtle);
+  background: var(--ui-surface-subtle);
+}
+.composer-shelf__footer span { color: var(--ui-text-muted); }
 .composer-shelf__row {
   width: 100%;
   border: 0;
@@ -228,6 +299,7 @@ defineExpose({ move, choose });
 }
 .composer-shelf__state.is-error { color: #9b4242; }
 @media (max-width: 640px) {
+  .composer-shelf { max-height: 40vh; }
   .composer-shelf__row--file .composer-shelf__description { display: none; }
   .composer-shelf__row--file { grid-template-columns: auto minmax(0, 1fr); }
 }

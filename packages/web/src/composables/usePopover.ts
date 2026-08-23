@@ -1,7 +1,7 @@
 /**
  * Shared popover logic for teleported panels (model selector, thinking
  * selector, composer attach menu, …). The panels themselves share the
- * container/item styling via `MenuPanel`.
+ * container styling via `FloatingPanel`.
  *
  * Owns the open state, the fixed-position math (flip above the trigger,
  * clamp to the viewport), and the global listeners that close the panel:
@@ -10,6 +10,7 @@
 import { nextTick, onBeforeUnmount, ref, watch, type Ref } from "vue";
 
 type Size = number | (() => number);
+let nextPopoverId = 0;
 
 type PopoverOptions = {
   /** Element containing the trigger button; used for outside-click containment. */
@@ -18,10 +19,8 @@ type PopoverOptions = {
   trigger: string;
   /** Class on the teleported panel; used for outside-click containment. */
   panel: string;
-  /** Panel size for flip/clamp math. The panel's own CSS controls its
-   *  rendered size — these values are never written to the style. */
+  /** Panel width for horizontal clamping. */
   width?: Size;
-  height?: Size;
   /** Gap between trigger and panel. */
   gap?: number;
   /** Called after the panel is positioned on open. */
@@ -36,11 +35,11 @@ export const usePopover = ({
   trigger,
   panel,
   width,
-  height,
   gap = 6,
   onOpen,
 }: PopoverOptions) => {
   const open = ref(false);
+  const panelId = `popover-${++nextPopoverId}`;
   /** Fixed-position style for the teleported panel. */
   const style = ref<Record<string, string>>({});
 
@@ -49,7 +48,7 @@ export const usePopover = ({
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
     const panelWidth = resolveSize(width);
-    const panelHeight = resolveSize(height);
+    const panelHeight = document.querySelector<HTMLElement>(`[data-popover-id="${panelId}"]`)?.offsetHeight ?? 0;
     // Prefer opening upward; flip below the trigger when there isn't enough
     // headroom. Clamp to the viewport with an 8px margin.
     const top = rect.top - panelHeight - gap >= 8 ? rect.top - panelHeight - gap : rect.bottom + gap;
@@ -102,5 +101,5 @@ export const usePopover = ({
     window.removeEventListener("scroll", updatePosition, true);
   });
 
-  return { open, style, close, toggle };
+  return { open, style, close, toggle, updatePosition, panelId };
 };

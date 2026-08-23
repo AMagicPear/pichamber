@@ -1,66 +1,142 @@
-<script setup lang="ts">
-/**
- * Shared teleported menu panel for all composer popovers (model selector,
- * thinking selector, attach menu, …).
- *
- * Owns only what the popovers share: the Teleport + global `.popover`
- * transition, the uniform panel container, and the `.menu-item` classes
- * applied to slot content. Open state and fixed-position math live in
- * `usePopover`; the item's accent color can be overridden per menu via the
- * `--menu-item-active-bg` / `--menu-item-active-color` CSS custom
- * properties (defaults to the warm theme accent).
- */
-defineProps<{
-  open: boolean;
-  /** Fixed-position style computed by usePopover. */
-  style: Record<string, string>;
-  /** Optional fixed panel size; defaults to content-driven sizing. */
-  width?: number;
-  height?: number;
-  role?: string;
-  ariaLabel?: string;
+<script setup lang="ts" generic="T">
+import { computed, nextTick, ref, watch, type Component } from "vue";
+import SearchBox from "@/components/ui/SearchBox.vue";
+
+type MenuItem<T> = {
+  id: string;
+  label: string;
+  value: T;
+  icon?: Component | string;
+  active?: boolean;
+  disabled?: boolean;
+  meta?: string;
+  searchText?: string;
+};
+
+type MenuGroup<T> = {
+  id: string;
+  label?: string;
+  items: MenuItem<T>[];
+};
+
+const props = withDefaults(defineProps<{
+  groups: MenuGroup<T>[];
+  open?: boolean;
+  filterable?: boolean;
+  filterPlaceholder?: string;
+  emptyText?: string;
+  itemRole?: string;
+}>(), {
+  open: false,
+  filterable: false,
+  filterPlaceholder: "Filter…",
+  emptyText: "No matches.",
+  itemRole: "menuitem",
+});
+
+const emit = defineEmits<{
+  select: [item: MenuItem<T>];
 }>();
+
+const filter = ref("");
+const filterInput = ref<InstanceType<typeof SearchBox> | null>(null);
+
+const normalizedFilter = computed(() => filter.value.trim().toLocaleLowerCase());
+
+const matchesFilter = (item: MenuItem<T>) => {
+  if (!normalizedFilter.value) return true;
+  return `${item.label} ${item.searchText ?? ""}`.toLocaleLowerCase().includes(normalizedFilter.value);
+};
+
+const visibleGroups = computed(() => props.groups
+  .map((group) => ({ ...group, items: group.items.filter(matchesFilter) }))
+  .filter((group) => group.items.length > 0));
+
+watch(() => props.open, async (open) => {
+  if (!open) {
+    filter.value = "";
+    return;
+  }
+  if (props.filterable) {
+    await nextTick();
+    filterInput.value?.focus();
+  }
+});
+
+const select = (item: MenuItem<T>) => {
+  if (!item.disabled) emit("select", item);
+};
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="popover">
-      <div
-        v-if="open"
-        class="menu-panel"
-        :role="role ?? 'menu'"
-        :aria-label="ariaLabel"
-        :style="[
-          style,
-          width != null && { width: `${width}px` },
-          height != null && { height: `${height}px` },
-        ]"
-        v-bind="$attrs"
-      >
-        <slot />
-      </div>
-    </Transition>
-  </Teleport>
+  <div class="menu-panel">
+    <div v-if="filterable" class="menu-panel__filter">
+      <SearchBox
+        ref="filterInput"
+        v-model="filter"
+        type="text"
+        :placeholder="filterPlaceholder"
+        label="Filter menu items"
+      />
+    </div>
+    <div class="menu-panel__list">
+      <template v-for="group in visibleGroups" :key="group.id">
+        <div v-if="group.label" class="menu-panel__group-title">{{ group.label }}</div>
+        <button
+          v-for="item in group.items"
+          :key="item.id"
+          type="button"
+          class="menu-panel__item"
+          :class="{ 'is-active': item.active }"
+          :role="itemRole"
+          :disabled="item.disabled"
+          :aria-selected="itemRole === 'option' ? item.active : undefined"
+          @click="select(item)"
+        >
+          <slot name="item-icon" :item="item">
+            <component v-if="item.icon" :is="item.icon" class="menu-panel__item-icon" />
+          </slot>
+          <span class="menu-panel__item-label">{{ item.label }}</span>
+          <span v-if="item.meta" class="menu-panel__item-meta">{{ item.meta }}</span>
+        </button>
+      </template>
+      <div v-if="visibleGroups.length === 0" class="menu-panel__empty">{{ emptyText }}</div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-/* Teleported to <body>; scoped attributes keep the container rules matching
- * after teleport. Slot content is rendered by the parent component, so the
- * item rules use :deep() to reach it. */
 .menu-panel {
-  z-index: 1000;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  min-width: 160px;
-  max-height: calc(100vh - 80px);
-  overflow: hidden;
-  padding: 4px;
-  border: 1px solid var(--ui-border);
-  border-radius: 12px;
-  background: var(--ui-surface);
-  box-shadow: var(--ui-shadow-raised);
+  min-height: 0;
 }
-.menu-panel :deep(.menu-item) {
+.menu-panel__filter {
+  flex: 0 0 auto;
+  padding: 8px;
+  border-bottom: 1px solid var(--ui-border-subtle);
+}
+.menu-panel__filter > .search-box {
+  background: var(--ui-surface);
+}
+.menu-panel__list {
+  /* `auto` preserves the list's intrinsic height in content-driven panels,
+   * while still allowing it to shrink and scroll inside a fixed-height one. */
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 2px;
+  overflow-y: auto;
+}
+.menu-panel__group-title {
+  padding: 6px 8px 2px;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.menu-panel__item {
   display: flex;
   width: 100%;
   align-items: center;
@@ -76,31 +152,44 @@ defineProps<{
   text-align: left;
   cursor: pointer;
 }
-.menu-panel :deep(.menu-item:hover) {
+.menu-panel__item:hover:not(:disabled) {
   background: var(--ui-surface-hover);
 }
-.menu-panel :deep(.menu-item.is-active) {
+.menu-panel__item.is-active {
   background: var(--menu-item-active-bg, var(--ui-accent-soft));
   color: var(--menu-item-active-color, var(--ui-accent-text));
 }
-.menu-panel :deep(.menu-item:focus-visible) {
+.menu-panel__item:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.menu-panel__item:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: -2px;
 }
-.menu-panel :deep(.menu-item svg) {
+.menu-panel__item-icon,
+.menu-panel__item :deep(svg) {
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
 }
-/* Items with a right-aligned hint (e.g. thinking levels). */
-.menu-panel :deep(.menu-item--split) {
-  justify-content: space-between;
-  gap: 12px;
+.menu-panel__item-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.menu-panel :deep(.menu-item__hint) {
+.menu-panel__item-meta {
+  flex: 0 0 auto;
   color: var(--ui-text-muted);
+  font-family: var(--ui-font-mono);
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+.menu-panel__empty {
+  padding: 14px;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  text-align: center;
 }
 </style>

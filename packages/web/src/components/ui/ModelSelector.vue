@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import ArrowDownSIcon from "lucide-static/icons/chevron-down.svg";
+import { computed } from "vue";
 import type { ModelDescriptor } from "@amagicpear/pichamber-shared";
-import MenuPanel from "@/components/ui/MenuPanel.vue";
+import SelectorPopover from "@/components/ui/SelectorPopover.vue";
 import ProviderLogo from "./ProviderLogo";
-import SearchBox from "@/components/ui/SearchBox.vue";
-import { usePopover } from "@/composables/usePopover";
+import MenuPanel from "@/components/ui/MenuPanel.vue";
 
 const props = defineProps<{
   model: ModelDescriptor | undefined;
@@ -17,50 +15,32 @@ const emit = defineEmits<{
   select: [model: ModelDescriptor];
 }>();
 
-const root = ref<HTMLElement | null>(null);
-const search = ref("");
-const searchInput = ref<InstanceType<typeof SearchBox> | null>(null);
-
-const { open, style, close: closePopover, toggle } = usePopover({
-  root,
-  trigger: ".model-selector__trigger",
-  panel: ".menu-panel",
-  width: 360,
-  height: 360,
-  onOpen: () => searchInput.value?.focus(),
-});
-
-/** Closing also resets the filter so the next open starts fresh. */
-const close = () => {
-  search.value = "";
-  closePopover();
-};
-
 /** Group available models by provider, keeping the current selection
- *  pinned at the top of its bucket so it stays visible after a search.
+ *  pinned at the top of its bucket so it stays visible.
  *  Each entry carries the provider's Pi display name for the group title. */
-const grouped = computed(() => {
-  const term = search.value.trim().toLowerCase();
+const groups = computed(() => {
   const buckets = new Map<string, { name: string; models: ModelDescriptor[] }>();
   for (const candidate of props.availableModels) {
-    if (
-      term &&
-      !candidate.name.toLowerCase().includes(term) &&
-      !candidate.id.toLowerCase().includes(term) &&
-      !candidate.provider.toLowerCase().includes(term)
-    ) {
-      continue;
-    }
     const bucket = buckets.get(candidate.provider) ?? { name: candidate.providerName, models: [] };
     bucket.models.push(candidate);
     buckets.set(candidate.provider, bucket);
   }
-  return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b));
+  return [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([provider, group]) => ({
+    id: provider,
+    label: group.name,
+    items: group.models.map((candidate) => ({
+      id: `${candidate.provider}/${candidate.id}`,
+      label: candidate.name,
+      value: candidate,
+      active: props.model?.provider === candidate.provider && props.model?.id === candidate.id,
+      searchText: `${candidate.id} ${candidate.provider} ${candidate.providerName}`,
+    })),
+  }));
 });
 
-const onSelect = (next: ModelDescriptor) => {
-  emit("select", next);
-  close();
+const onSelect = (item: { value: ModelDescriptor }, closePopover: () => void) => {
+  emit("select", item.value);
+  closePopover();
 };
 
 const placeholder = computed(() => {
@@ -70,150 +50,33 @@ const placeholder = computed(() => {
 </script>
 
 <template>
-  <div ref="root" class="model-selector">
-    <button
-      type="button"
-      class="model-selector__trigger"
-      :disabled="disabled || availableModels.length === 0"
-      :aria-expanded="open"
-      aria-haspopup="listbox"
-      @click="toggle"
-    >
-      <ProviderLogo class="model-selector__icon" :provider-id="model?.provider" :model-id="model?.id" :size="16" />
-      <span class="model-selector__name">{{ placeholder }}</span>
-      <ArrowDownSIcon class="model-selector__chevron" />
-    </button>
-
-    <MenuPanel
-      :open="open"
-      :style="style"
-      :width="360"
-      :height="360"
-      role="listbox"
-    >
-      <div class="model-selector__search">
-        <SearchBox
-          ref="searchInput"
-          v-model="search"
-          type="text"
-          placeholder="Filter models…"
-          label="Filter models"
-          @keydown.esc="close"
-        />
-      </div>
-      <div class="model-selector__list">
-        <div v-for="[provider, group] in grouped" :key="provider" class="model-selector__group">
-          <div class="model-selector__group-title">{{ group.name }}</div>
-          <button
-            v-for="candidate in group.models"
-            :key="`${candidate.provider}/${candidate.id}`"
-            type="button"
-            class="menu-item"
-            role="option"
-            :aria-selected="model?.provider === candidate.provider && model?.id === candidate.id"
-            :class="{ 'is-active': model?.provider === candidate.provider && model?.id === candidate.id }"
-            @click="onSelect(candidate)"
-          >
-            <ProviderLogo class="model-selector__item-icon" :provider-id="candidate.provider" :model-id="candidate.id" :size="16" />
-            <span class="model-selector__item-name">{{ candidate.name }}</span>
-          </button>
-        </div>
-        <div v-if="grouped.length === 0" class="model-selector__empty">No matches.</div>
-      </div>
-    </MenuPanel>
-  </div>
+  <SelectorPopover
+    class="model-selector"
+    :width="360"
+    :panel-width="360"
+    :panel-max-height="360"
+    :disabled="disabled || availableModels.length === 0"
+  >
+    <template #trigger-icon>
+      <ProviderLogo :provider-id="model?.provider" :model-id="model?.id" :size="16" />
+    </template>
+    <template #trigger-label>{{ placeholder }}</template>
+    <template #default="{ close: closePopover, open }">
+      <MenuPanel
+        :groups="groups"
+        :open="open"
+        filterable
+        filter-placeholder="Filter models…"
+        item-role="option"
+        @select="onSelect($event, closePopover)"
+      >
+        <template #item-icon="{ item }">
+          <ProviderLogo :provider-id="item.value.provider" :model-id="item.value.id" :size="16" />
+        </template>
+      </MenuPanel>
+    </template>
+  </SelectorPopover>
 </template>
 
 <style scoped>
-.model-selector {
-  position: relative;
-  display: inline-flex;
-  min-width: 0;
-}
-.model-selector__trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  max-width: 220px;
-  height: 26px;
-  padding: 0 5px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 120ms ease;
-}
-.model-selector__trigger:hover:not(:disabled) {
-  background: var(--ui-surface-hover);
-}
-.model-selector__trigger:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-.model-selector__icon {
-  flex: 0 0 15px;
-  opacity: 0.78;
-}
-.model-selector__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.model-selector__chevron {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
-  opacity: 0.55;
-}
-
-/* The shared MenuPanel sizes the 360×360 box via the width/height props.
-   Search box styling matches the composer shelf. */
-.model-selector__search {
-  flex: 0 0 auto;
-  padding: 8px;
-  border-bottom: 1px solid var(--ui-border-subtle);
-}
-.model-selector__search > .search-box {
-  background: var(--ui-surface);
-}
-.model-selector__list {
-  flex: 1 1 0;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 4px;
-}
-.model-selector__group {
-  margin-bottom: 4px;
-}
-.model-selector__group-title {
-  padding: 6px 8px 2px;
-  color: var(--ui-text-muted);
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.model-selector__item-name {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.model-selector__item-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-}
-.model-selector__empty {
-  padding: 14px;
-  color: var(--ui-text-muted);
-  font-size: 13px;
-  text-align: center;
-}
 </style>

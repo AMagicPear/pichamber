@@ -1,10 +1,7 @@
 // Lucide icons sourced from `lucide-static` (https://lucide.dev) — the
 // official SVG distribution that backs every framework adapter
-// (`lucide-vue-next`, `lucide-react`, ...). We `?raw`-import each SVG
-// individually and parse it into morphicons' native `IconNode` format
-// ([tag, attrs][]). Adding an icon = one more `import` line, exactly
-// the same shape as `import { Menu, X } from "lucide"`. Vite tree-shakes
-// every unreferenced SVG out of the bundle.
+// We `?raw`-import each SVG individually and parse it into morphicons' native `IconNode` format
+// ([tag, attrs][]). Vite tree-shakes every unreferenced SVG out of the bundle.
 
 import { fitIcon } from "morphicons";
 import type { IconNode } from "morphicons";
@@ -16,7 +13,6 @@ import filePenRaw from "lucide-static/icons/file-pen.svg?raw";
 import filePlusRaw from "lucide-static/icons/file-plus.svg?raw";
 import fileTextRaw from "lucide-static/icons/file-text.svg?raw";
 import foldersRaw from "lucide-static/icons/folders.svg?raw";
-import mcpRaw from "@/assets/icons/MCP.svg?raw";
 import searchRaw from "lucide-static/icons/search.svg?raw";
 import searchCheckRaw from "lucide-static/icons/search-check.svg?raw";
 import squareTerminalRaw from "lucide-static/icons/square-terminal.svg?raw";
@@ -30,6 +26,9 @@ import panelLeftCloseRaw from "lucide-static/icons/panel-left-close.svg?raw";
 import panelLeft from "lucide-static/icons/panel-left.svg?raw";
 import refreshCwRaw from "lucide-static/icons/refresh-cw.svg?raw";
 import refreshCcWRaw from "lucide-static/icons/refresh-ccw.svg?raw";
+
+// 下方摆放本项目对lucide补充的图标
+import mcpRaw from "@/assets/icons/MCP.svg?raw";
 
 /** Raw SVG strings keyed by Lucide name. Each entry comes from an
  *  explicit `?raw` import above — Vite drops unused icons from the bundle.

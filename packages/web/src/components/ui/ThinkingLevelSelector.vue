@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import AiGenerate2Icon from "lucide-static/icons/sparkles.svg";
-import ArrowDownSIcon from "lucide-static/icons/chevron-down.svg";
+import SelectorPopover from "@/components/ui/SelectorPopover.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
-import { usePopover } from "@/composables/usePopover";
 
 const props = defineProps<{
   level: ThinkingLevel;
@@ -15,20 +14,8 @@ const emit = defineEmits<{
   select: [level: ThinkingLevel];
 }>();
 
-const root = ref<HTMLElement | null>(null);
-
-const { open, style, close, toggle } = usePopover({
-  root,
-  trigger: ".thinking-selector__trigger",
-  panel: ".menu-panel",
-  width: 156,
-  // 8px panel padding + one 28px row per level (used only for flip math;
-  // the panel sizes itself).
-  height: () => 8 + visibleLevels.value.length * 28,
-});
-
 const labels: Record<ThinkingLevel, string> = {
-  off: "Build",
+  off: "Off",
   minimal: "Minimal",
   low: "Low",
   medium: "Medium",
@@ -47,98 +34,40 @@ const visibleLevels = computed<ThinkingLevel[]>(() =>
 
 const currentLabel = computed(() => labels[props.level] ?? props.level);
 
-const onSelect = (next: ThinkingLevel) => {
-  emit("select", next);
+const groups = computed(() => [{
+  id: "levels",
+  items: visibleLevels.value.map((level) => ({
+    id: level,
+    label: labels[level],
+    value: level,
+    active: level === props.level,
+  })),
+}]);
+
+const onSelect = (item: { value: ThinkingLevel }, close: () => void) => {
+  emit("select", item.value);
   close();
 };
 </script>
 
 <template>
-  <div ref="root" class="thinking-selector">
-    <button
-      type="button"
-      class="thinking-selector__trigger"
-      :aria-expanded="open"
-      aria-haspopup="listbox"
-      @click="toggle"
-    >
-      <AiGenerate2Icon class="thinking-selector__icon" />
-      <span class="thinking-selector__label">{{ currentLabel }}</span>
-      <ArrowDownSIcon class="thinking-selector__chevron" />
-    </button>
-    <MenuPanel
-      :open="open"
-      :style="{
-        ...style,
-        '--menu-item-active-bg': 'var(--ui-accent-soft)',
-        '--menu-item-active-color': 'var(--ui-accent-text)',
-      }"
-      role="listbox"
-    >
-      <button
-        v-for="level in visibleLevels"
-        :key="level"
-        type="button"
-        class="menu-item menu-item--split"
-        role="option"
-        :aria-selected="level === props.level"
-        :class="{ 'is-active': level === props.level }"
-        @click="onSelect(level)"
-      >
-        <span>{{ labels[level] }}</span>
-        <span class="menu-item__hint">{{ level }}</span>
-      </button>
-    </MenuPanel>
-  </div>
+  <SelectorPopover
+    class="thinking-selector"
+    :width="104"
+    :panel-width="104"
+    :panel-min-width="104"
+    :trigger-style="{
+      '--selector-popover-trigger-color': 'var(--ui-thinking-text)',
+    }"
+    :panel-style="{
+      '--menu-item-active-bg': 'var(--ui-accent-soft)',
+      '--menu-item-active-color': 'var(--ui-accent-text)',
+    }"
+  >
+    <template #trigger-icon><AiGenerate2Icon /></template>
+    <template #trigger-label>{{ currentLabel }}</template>
+    <template #default="{ close }">
+      <MenuPanel :groups="groups" item-role="option" @select="onSelect($event, close)" />
+    </template>
+  </SelectorPopover>
 </template>
-
-<style scoped>
-.thinking-selector {
-  position: relative;
-  display: inline-flex;
-  min-width: 0;
-}
-.thinking-selector__trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  max-width: 170px;
-  height: 26px;
-  padding: 0 5px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ui-thinking-text);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color var(--ui-duration-fast) var(--ui-ease-standard), color var(--ui-duration-fast) var(--ui-ease-standard);
-}
-.thinking-selector__trigger:hover {
-  background: var(--ui-surface-hover);
-  color: var(--ui-text-strong);
-}
-.thinking-selector__trigger[aria-expanded="true"] {
-  background: var(--ui-accent-soft);
-  color: var(--ui-accent-text);
-}
-.thinking-selector__icon {
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
-  opacity: 0.72;
-}
-.thinking-selector__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.thinking-selector__chevron {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
-  opacity: 0.55;
-}
-</style>
