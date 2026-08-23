@@ -15,6 +15,7 @@
  */
 import { readdir, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import type { FileEditor } from "../settings/app-config";
 import { basename, relative, resolve } from "node:path";
 import type { DirEntry, ListResult, OpenFileResult } from "@amagicpear/pichamber-shared";
 
@@ -159,7 +160,11 @@ export const searchFiles = async (
 };
 
 /** The OS command that opens a path in the default app / file manager. */
-const openCommand = (): string[] => {
+const openCommand = (editor: FileEditor, target: string): string[] => {
+  if (editor === "vscode") return ["code", "--goto", target];
+  if (editor === "cursor") return ["cursor", "--goto", target];
+  if (editor === "zed") return ["zed", target];
+  if (editor === "webstorm") return ["webstorm", "--line", target];
   if (process.platform === "darwin") return ["open"];
   if (process.platform === "win32") return ["cmd", "/c", "start", ""]; // empty title arg
   return ["xdg-open"];
@@ -178,15 +183,19 @@ const openCommand = (): string[] => {
 export const openFile = async (
   input: string,
   workspacePath?: string | null,
+  editor: FileEditor = "vscode",
 ): Promise<OpenFileResult> => {
   const workspace = await canonicalWorkspace(workspacePath);
+  const line = /^(.*[^:\d]):(\d+)$/.exec(input);
+  const fileInput = line && editor !== "system" ? line[1] : input;
   const target =
-    input === "~" || input.startsWith("~/")
-      ? resolve(getWorkspace(), input.slice(2))
-      : resolveInWorkspace(input, workspace);
+    fileInput === "~" || fileInput.startsWith("~/")
+      ? resolve(getWorkspace(), fileInput.slice(2))
+      : resolveInWorkspace(fileInput, workspace);
   await new Promise<void>((resolve, reject) => {
-    const [cmd, ...args] = openCommand();
-    const child = spawn(cmd, [...args, target], { stdio: "ignore", detached: true });
+    const editorTarget = line && editor !== "system" ? `${target}:${line[2]}` : target;
+    const [cmd, ...args] = openCommand(editor, editorTarget);
+    const child = spawn(cmd, editor === "system" ? [...args, editorTarget] : args, { stdio: "ignore", detached: true });
     child.once("error", reject);
     child.once("spawn", () => {
       child.unref();

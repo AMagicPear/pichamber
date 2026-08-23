@@ -129,6 +129,12 @@ export const openFile = async (sessionId: string | null | undefined, path: strin
   return await jsonOrThrow<OpenFileResult>(r);
 };
 
+export type FileEditor = "vscode" | "cursor" | "zed" | "webstorm" | "system";
+export const fetchFileEditor = () => fetch(`${BASE}/settings/editor`).then((r) => jsonOrThrow<{ fileEditor: FileEditor }>(r));
+export const updateFileEditor = (fileEditor: FileEditor) =>
+  fetch(`${BASE}/settings/editor`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileEditor }) })
+    .then((r) => jsonOrThrow<{ fileEditor: FileEditor }>(r));
+
 // ─── Git (Git pane) ───────────────────────────────────────────────────
 
 export const getGitStatus = (sessionId?: string | null) =>

@@ -23,7 +23,6 @@ const props = defineProps<{ node: LinkNode }>();
  * remains visible on hover and copyable.
  */
 const isLocal = computed(() => !/^[a-z][a-z0-9+.-]*:/i.test(props.node.href));
-
 const onClick = async (event: MouseEvent) => {
   if (!isLocal.value) return;
   event.preventDefault();

@@ -45,7 +45,7 @@ import { browseProjectDirectories } from "./services/projects";
 import { getProviderQuota, listQuotaProviders } from "./providers/quota";
 import { SdkSessionDriver } from "./core/driver";
 import { RuntimeModeError, toMessage } from "./error";
-import { getRuntimeMode, loadAppConfig } from "./settings/app-config";
+import { getFileEditor, getRuntimeMode, loadAppConfig, setFileEditor } from "./settings/app-config";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./services/workspace";
 import type { ExtensionsOverview, LoadedExtensionInfo } from "@amagicpear/pichamber-shared";
 import {
@@ -263,6 +263,20 @@ const server = Bun.serve({
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 500 });
         }
+      },
+    },
+    "/api/settings/editor": {
+      GET: async () => {
+        await loadAppConfig();
+        return Response.json({ fileEditor: getFileEditor() });
+      },
+      PUT: async (req) => {
+        const fileEditor = (await req.json().catch(() => ({})) as { fileEditor?: unknown }).fileEditor;
+        if (!["vscode", "cursor", "zed", "webstorm", "system"].includes(fileEditor as string)) {
+          return Response.json({ error: "unsupported file editor" }, { status: 400 });
+        }
+        await setFileEditor(fileEditor as Parameters<typeof setFileEditor>[0]);
+        return Response.json({ fileEditor });
       },
     },
     "/api/pi/behavior": {
@@ -758,7 +772,7 @@ const server = Bun.serve({
         const sessionId = url.searchParams.get("sessionId");
         if (!path) return Response.json({ error: "path is required" }, { status: 400 });
         try {
-          return Response.json(await openFile(path, await requestCwd(sessionId)));
+          return Response.json(await openFile(path, await requestCwd(sessionId), getFileEditor()));
         } catch (err) {
           return fsErrorResponse(err);
         }

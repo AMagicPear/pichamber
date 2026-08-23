@@ -19,6 +19,7 @@ import FoldersIcon from "lucide-static/icons/folders.svg";
 import GitBranchIcon from "lucide-static/icons/git-branch.svg";
 import Notification3Icon from "lucide-static/icons/bell-ring.svg";
 import PaletteIcon from "lucide-static/icons/palette.svg";
+import FileCodeIcon from "lucide-static/icons/file-code.svg";
 import ServerIcon from "lucide-static/icons/server.svg";
 import SlashCommands2Icon from "lucide-static/icons/square-asterisk.svg";
 import McpIcon from "@/assets/icons/MCP.svg";
@@ -32,6 +33,7 @@ import SettingsGroup from "@/components/modals/settings/SettingsGroup.vue";
 import SettingsOption from "@/components/modals/settings/SettingsOption.vue";
 import SettingsPageHeader from "@/components/modals/settings/SettingsPageHeader.vue";
 import ExtensionsManager from "@/components/modals/settings/ExtensionsManager.vue";
+import { fetchFileEditor, updateFileEditor, type FileEditor } from "@/api/client";
 
 defineOptions({ name: "SettingsView" });
 
@@ -46,6 +48,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { key: "appearance", label: "Appearance", icon: PaletteIcon, enabled: true },
+  { key: "editor", label: "Editor", icon: FileCodeIcon, enabled: true },
   { key: "chat", label: "Chat", icon: ChatAi3Icon, enabled: true },
   { key: "notifications", label: "Notifications", icon: Notification3Icon, enabled: true },
   { key: "sessions", label: "Sessions", icon: ChatHistoryIcon, enabled: true },
@@ -79,6 +82,21 @@ const settingsView = persistedState<SettingsViewState>("pichamber.settings-view.
 const activeKey = toRef(settingsView, "activeKey");
 const searchQuery = ref("");
 const settingsSize = toRef(settingsView, "size");
+const fileEditor = ref<FileEditor>("vscode");
+onMounted(async () => {
+  try {
+    fileEditor.value = (await fetchFileEditor()).fileEditor;
+  } catch {
+    // Keep the default while the server is unavailable.
+  }
+});
+const saveFileEditor = async (value: FileEditor) => {
+  try {
+    fileEditor.value = (await updateFileEditor(value)).fileEditor;
+  } catch {
+    // The select remains on the last confirmed server value.
+  }
+};
 
 // Desktop-notification permission is a tristate of "we don't know yet",
 // "the user said yes/no", or "this browser can't show notifications".
@@ -217,6 +235,22 @@ const selectItem = (key: string) => {
             <SettingsOption title="Hide temporary sessions" description="Hide sessions under /tmp and macOS temporary folders.">
               <input v-model="settings.hideTemporarySessions" type="checkbox" />
             </SettingsOption>
+          </template>
+
+          <template v-else-if="activeKey === 'editor'">
+            <SettingsPageHeader title="Editor" description="Choose which application opens local file links." />
+
+            <SettingsGroup title="Local file links">
+              <SettingsOption inline title="Open files with" description="Supported editors use the link's line number when one is available.">
+                <select :value="fileEditor" @change="saveFileEditor(($event.target as HTMLSelectElement).value as FileEditor)">
+                  <option value="vscode">VS Code (default)</option>
+                  <option value="cursor">Cursor</option>
+                  <option value="zed">Zed</option>
+                  <option value="webstorm">WebStorm</option>
+                  <option value="system">System default</option>
+                </select>
+              </SettingsOption>
+            </SettingsGroup>
           </template>
 
           <template v-else-if="activeKey === 'chat'">
