@@ -1,5 +1,12 @@
-<script lang="tsx">
-import { defineComponent, inject, ref, watch, type InjectionKey, type PropType, type Ref } from "vue";
+import {
+  defineComponent,
+  inject,
+  ref,
+  watch,
+  type InjectionKey,
+  type PropType,
+  type Ref,
+} from "vue";
 import type { DirEntry } from "@amagicpear/pichamber-shared";
 import { listDirectory, toMessage } from "@/api/client";
 import { workspace } from "@/stores/workspace";
@@ -65,7 +72,6 @@ const FileTreeNode = defineComponent({
     }
 
     return () => {
-      const EntryIcon = getEntryIcon(props.entry.name, props.entry.isDirectory, expanded.value);
       return (
         <li class="file-tree__item">
           <button
@@ -75,7 +81,11 @@ const FileTreeNode = defineComponent({
             onClick={toggle}
           >
             <span class={["file-tree__icon", { "is-folder": props.entry.isDirectory }]}>
-              <svg aria-hidden="true"><use href={EntryIcon} /></svg>
+              <svg aria-hidden="true">
+                <use
+                  href={getEntryIcon(props.entry.name, props.entry.isDirectory, expanded.value)}
+                />
+              </svg>
             </span>
             <span class="file-tree__name">{props.entry.name}</span>
           </button>
@@ -97,4 +107,3 @@ const FileTreeNode = defineComponent({
 });
 
 export default FileTreeNode;
-</script>
