@@ -1,4 +1,4 @@
-import { computed, defineComponent, type PropType } from "vue";
+import { computed, defineComponent, h, type PropType } from "vue";
 import type { FunctionalComponent, SVGAttributes } from "vue";
 import fallbackLogoSrc from "lucide-static/icons/bot-message-square.svg";
 
@@ -122,23 +122,20 @@ export default defineComponent({
     class: { type: String, default: "" },
   },
   setup(props) {
-    const Logo = computed(() => resolveLogo(props.providerId, props.modelId));
-    return () => {
-      const ResolvedLogo = Logo.value;
-      return (
-        <ResolvedLogo
-          class={["provider-logo", props.class]}
-          role="img"
-          aria-label={props.alt || `${props.providerId || "model"} logo`}
-          style={{
-            color: "var(--ui-text)",
-            display: "block",
-            width: toPixels(props.size),
-            height: toPixels(props.size),
-            flex: "0 0 auto",
-          }}
-        />
-      );
-    };
+    const logo = computed(() => resolveLogo(props.providerId, props.modelId));
+    return () => (
+      <logo.value
+        class={["provider-logo", props.class]}
+        role="img"
+        aria-label={props.alt || `${props.providerId || "model"} logo`}
+        style={{
+          color: "var(--ui-text)",
+          display: "block",
+          width: toPixels(props.size),
+          height: toPixels(props.size),
+          flex: "0 0 auto",
+        }}
+      />
+    );
   },
 });
