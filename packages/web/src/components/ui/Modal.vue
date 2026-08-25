@@ -7,14 +7,18 @@ const props = withDefaults(
     /** sm = compact card, picker = top-mounted picker, lg = full workspace. */
     size?: "sm" | "lg";
     placement?: "center" | "top";
+    /** Whether clicking the backdrop requests the owning surface to close. */
+    closeOnBackdrop?: boolean;
+    /** Whether Escape requests the owning surface to close. */
+    closeOnEscape?: boolean;
   }>(),
-  { size: "lg", placement: "center" },
+  { size: "lg", placement: "center", closeOnBackdrop: true, closeOnEscape: true },
 );
 const emit = defineEmits<{ close: [] }>();
 
 // Esc must work no matter where focus is, so listen on document while open.
 const onKeyDown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") emit("close");
+  if (event.key === "Escape" && props.closeOnEscape) emit("close");
 };
 watch(
   () => props.show,
@@ -35,7 +39,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
       :class="`modal-mask--${placement}`"
       role="dialog"
       aria-modal="true"
-      @click.self="emit('close')"
+      @click.self="closeOnBackdrop && emit('close')"
     >
       <div class="modal-container" :class="[`modal-container--${size}`, `modal-container--${placement}`]">
         <header class="modal__header">

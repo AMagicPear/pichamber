@@ -412,6 +412,9 @@ export default {
   extensionUi: {
     request: "Extension request",
     continue: "Continue",
+    answerLater: "Handle later",
+    waitingForInteraction: "An extension is waiting for your input",
+    openInteraction: "Open request",
     dismiss: "Dismiss notification",
   },
 

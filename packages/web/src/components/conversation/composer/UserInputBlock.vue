@@ -10,6 +10,7 @@ import SendIcon from "lucide-static/icons/send.svg";
 import ListCollapseIcon from "lucide-static/icons/list-collapse.svg";
 import StopIcon from "lucide-static/icons/square.svg";
 import TargetIcon from "lucide-static/icons/target.svg";
+import QuestionIcon from "lucide-static/icons/message-circle-question.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import ConfirmModal from "@/components/modals/ConfirmModal.vue";
 import ComposerShelf from "@/components/conversation/composer/ComposerShelf.vue";
@@ -33,6 +34,7 @@ const emit = defineEmits<{
   abort: [];
   compact: [];
   restorePending: [];
+  reopenExtensionInteraction: [];
   selectModel: [model: ModelDescriptor];
   selectThinkingLevel: [level: ThinkingLevel];
 }>();
@@ -42,6 +44,7 @@ const props = defineProps<{
   activity: AgentActivity;
   pending: PendingMessages;
   canRestorePending: boolean;
+  hasDeferredExtensionInteraction: boolean;
   commands: RuntimeSlashCommand[];
   extensionStatuses: Record<string, string>;
   extensionWidgets: Record<string, { widget: ExtensionWidget; placement: "aboveEditor" | "belowEditor" }>;
@@ -441,6 +444,11 @@ const placeholder = computed(() => {
             </div>
             <button v-if="canRestorePending" type="button" @click="emit('restorePending')">{{ t('composer.restoreAll') }}</button>
           </div>
+          <div v-if="hasDeferredExtensionInteraction" class="composer__pending-interaction" role="status">
+            <QuestionIcon aria-hidden="true" />
+            <span>{{ t('extensionUi.waitingForInteraction') }}</span>
+            <button type="button" class="composer__pending-interaction-action" @click="emit('reopenExtensionInteraction')">{{ t('extensionUi.openInteraction') }}</button>
+          </div>
           <div class="composer__footer">
             <div class="composer__footer-leading">
               <div class="composer__attach">
@@ -689,6 +697,60 @@ const placeholder = computed(() => {
 /* Pending messages are separated from the editor by a quiet divider. */
 .composer__queue {
   border-top: 1px solid var(--ui-border-subtle);
+}
+
+.composer__pending-interaction {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--ui-border-subtle);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-strong);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.composer__pending-interaction svg {
+  width: 16px;
+  height: 16px;
+  color: var(--ui-status-text);
+}
+
+.composer__pending-interaction span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.composer__pending-interaction-action {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  background: var(--ui-surface);
+  color: var(--ui-text-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgb(16 15 15 / 4%);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.composer__pending-interaction-action:hover {
+  border-color: #b65323;
+  background: var(--ui-surface-hover);
+}
+
+.composer__pending-interaction-action:focus-visible {
+  outline: 2px solid #b65323;
+  outline-offset: 2px;
 }
 
 /* Status footnote lives OUTSIDE the composer box — no border, no

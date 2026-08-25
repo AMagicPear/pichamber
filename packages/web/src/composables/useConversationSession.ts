@@ -4,7 +4,7 @@ import { onBeforeUnmount } from "vue";
 import { toMessage } from "@/api/client";
 import { connectSessionWs, type WsHandle, type WsStatus } from "@/api/ws";
 import { matchBuiltinCommand } from "./builtin-commands";
-import { extensionUi, pushErrorToast, showNextExtensionDialog } from "@/stores/extensionUi";
+import { extensionUi, pushErrorToast, settleExtensionInteraction } from "@/stores/extensionUi";
 import {
   applyServerMessage,
   connected,
@@ -87,7 +87,7 @@ const reload = () => ws?.send({ type: "reload" });
 
 const respondToExtension = (response: RpcExtensionUIResponse) => {
   ws?.send(response);
-  showNextExtensionDialog();
+  settleExtensionInteraction(response.id);
 };
 
 /** Pi owns the model and thinking state. Wait for its state broadcast

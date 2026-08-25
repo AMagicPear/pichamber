@@ -13,7 +13,14 @@ import ConversationMessages from "@/components/conversation/messages/Conversatio
 import UserInputBlock from "@/components/conversation/composer/UserInputBlock.vue";
 import ExtensionUiHost from "@/components/conversation/ExtensionUiHost.vue";
 import { useConversationSession } from "@/composables/useConversationSession";
-import { dismissNotification, extensionUi, pushInfoToast, pushErrorToast } from "@/stores/extensionUi";
+import {
+  deferExtensionInteraction,
+  dismissNotification,
+  extensionUi,
+  pushInfoToast,
+  pushErrorToast,
+  reopenExtensionInteraction,
+} from "@/stores/extensionUi";
 import { workspace } from "@/stores/workspace";
 import {
   activity,
@@ -110,6 +117,7 @@ watch(
       :activity="activity"
       :pending="pending"
       :can-restore-pending="canRestorePending"
+      :has-deferred-extension-interaction="extensionUi.deferredInteraction !== null"
       :commands="shelfCommands"
       :extension-statuses="extensionUi.statuses"
       :extension-widgets="extensionUi.widgets"
@@ -122,14 +130,17 @@ watch(
       @abort="abort"
       @compact="compact"
       @restore-pending="restorePending"
+      @reopen-extension-interaction="reopenExtensionInteraction"
       @select-model="setModel"
       @select-thinking-level="setThinkingLevel"
     />
 
     <ExtensionUiHost
-      :dialog="extensionUi.dialog"
+      :interaction="extensionUi.interaction"
+      :deferred-interaction="extensionUi.deferredInteraction"
       :notifications="extensionUi.notifications"
       @respond="respondToExtension"
+      @defer="deferExtensionInteraction"
       @dismiss-notification="dismissNotification"
     />
 

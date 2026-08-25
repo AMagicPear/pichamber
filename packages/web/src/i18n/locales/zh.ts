@@ -411,6 +411,9 @@ export default {
   extensionUi: {
     request: "扩展请求",
     continue: "继续",
+    answerLater: "稍后处理",
+    waitingForInteraction: "扩展正在等待你的操作",
+    openInteraction: "打开请求",
     dismiss: "关闭通知",
   },
 

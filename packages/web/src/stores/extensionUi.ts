@@ -10,7 +10,7 @@ import { createId } from "@/utils/id";
  *  注：`setTitle` / `set_editor_text` 改的是 workspace 自己的 state，
  *  不在本模块，由 applyServerMessage 显式调度。 */
 
-type ExtensionDialog = Extract<
+type ExtensionInteraction = Extract<
   RpcExtensionUIRequest,
   { method: "select" | "confirm" | "input" | "editor" }
 >;
@@ -20,17 +20,42 @@ type WidgetEntry = { widget: ExtensionWidget; placement: WidgetPlacement };
 const TOAST_TTL_MS = 5_000;
 
 export const extensionUi = reactive({
-  dialog: null as ExtensionDialog | null,
+  interaction: null as ExtensionInteraction | null,
+  deferredInteraction: null as ExtensionInteraction | null,
   notifications: [] as ExtensionNotification[],
   statuses: {} as Record<string, string>,
   widgets: {} as Record<string, WidgetEntry>,
 });
 
-const extensionDialogQueue: ExtensionDialog[] = [];
+const extensionInteractionQueue: ExtensionInteraction[] = [];
 
-/** 弹出队列里的下一个扩展对话框（当前对话框应答后调用）。 */
-export const showNextExtensionDialog = () => {
-  extensionUi.dialog = extensionDialogQueue.shift() ?? null;
+/** 显示队列里的下一个扩展交互（当前交互结算后调用）。 */
+export const showNextExtensionInteraction = () => {
+  if (extensionUi.deferredInteraction) return;
+  extensionUi.interaction = extensionInteractionQueue.shift() ?? null;
+};
+
+/** 收起当前请求但不向扩展发送 response，因此扩展会继续等待。 */
+export const deferExtensionInteraction = () => {
+  if (!extensionUi.interaction || extensionUi.deferredInteraction) return;
+  extensionUi.deferredInteraction = extensionUi.interaction;
+  extensionUi.interaction = null;
+};
+
+/** 将已收起的扩展交互恢复到前台。 */
+export const reopenExtensionInteraction = () => {
+  if (!extensionUi.deferredInteraction || extensionUi.interaction) return;
+  extensionUi.interaction = extensionUi.deferredInteraction;
+  extensionUi.deferredInteraction = null;
+};
+
+/** 只有明确提交或取消才会结算并移除交互。 */
+export const settleExtensionInteraction = (id: string) => {
+  if (extensionUi.interaction?.id === id) extensionUi.interaction = null;
+  if (extensionUi.deferredInteraction?.id === id) extensionUi.deferredInteraction = null;
+  const queueIndex = extensionInteractionQueue.findIndex((interaction) => interaction.id === id);
+  if (queueIndex !== -1) extensionInteractionQueue.splice(queueIndex, 1);
+  showNextExtensionInteraction();
 };
 
 /** Push a transport / model / thinking / catastrophic-prompt error onto the
@@ -64,8 +89,14 @@ export const applyExtensionUiRequest = (request: RpcExtensionUIRequest) => {
     case "confirm":
     case "input":
     case "editor":
-      if (extensionUi.dialog) extensionDialogQueue.push(request);
-      else extensionUi.dialog = request;
+      if (
+        request.id === extensionUi.interaction?.id ||
+        request.id === extensionUi.deferredInteraction?.id ||
+        extensionInteractionQueue.some((interaction) => interaction.id === request.id)
+      ) break;
+      if (extensionUi.interaction) extensionInteractionQueue.push(request);
+      else if (extensionUi.deferredInteraction) extensionInteractionQueue.push(request);
+      else extensionUi.interaction = request;
       break;
     case "notify":
       extensionUi.notifications.push({
@@ -99,8 +130,9 @@ export const applyExtensionUiRequest = (request: RpcExtensionUIRequest) => {
 
 /** 断连 / 换会话时由 `resetSessionState` 调用。 */
 export const resetExtensionUi = () => {
-  extensionUi.dialog = null;
-  extensionDialogQueue.splice(0);
+  extensionUi.interaction = null;
+  extensionUi.deferredInteraction = null;
+  extensionInteractionQueue.splice(0);
   extensionUi.notifications.splice(0);
   for (const key of Object.keys(extensionUi.statuses)) delete extensionUi.statuses[key];
   for (const key of Object.keys(extensionUi.widgets)) delete extensionUi.widgets[key];

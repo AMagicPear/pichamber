@@ -3,95 +3,101 @@ import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@earendil-wo
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import CloseIcon from "lucide-static/icons/x.svg";
+import IconButton from "@/components/ui/IconButton.vue";
 import Modal from "@/components/ui/Modal.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
 
 const { t } = useI18n();
 
-type DialogRequest = Extract<
+type InteractionRequest = Extract<
   RpcExtensionUIRequest,
   { method: "select" | "confirm" | "input" | "editor" }
 >;
 
 const props = defineProps<{
-  dialog: DialogRequest | null;
+  interaction: InteractionRequest | null;
+  deferredInteraction: InteractionRequest | null;
   notifications: Array<{ id: string; message: string; type: "info" | "warning" | "error" }>;
 }>();
 
 const emit = defineEmits<{
   respond: [response: RpcExtensionUIResponse];
+  defer: [];
   dismissNotification: [id: string];
 }>();
 
-// A select/input/editor title is expected to be a short question, but some
+// A select/input/editor title is expected to be a short request, but some
 // models stuff a whole paragraph into it. Treat anything beyond a compact
 // heading as long-form body text: render it smaller, wrap it, and cap its
 // height so it scrolls in place instead of filling the whole modal.
-const longTitle = computed(() => (props.dialog?.title.length ?? 0) > 160);
+const longTitle = computed(() => (props.interaction?.title.length ?? 0) > 160);
 
 const value = ref("");
 let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
 watch(
-  () => props.dialog,
-  (dialog) => {
+  () => props.interaction ?? props.deferredInteraction,
+  (interaction) => {
     clearTimeout(timeoutId);
-    value.value = dialog?.method === "editor" ? dialog.prefill ?? "" : "";
-    if (dialog && "timeout" in dialog && dialog.timeout) {
-      timeoutId = setTimeout(() => cancel(), dialog.timeout);
+    value.value = interaction?.method === "editor" ? interaction.prefill ?? "" : "";
+    if (interaction && "timeout" in interaction && interaction.timeout) {
+      timeoutId = setTimeout(() => cancel(), interaction.timeout);
     }
   },
 );
 onBeforeUnmount(() => clearTimeout(timeoutId));
 
 const cancel = () => {
-  if (props.dialog) emit("respond", { type: "extension_ui_response", id: props.dialog.id, cancelled: true });
+  if (props.interaction) emit("respond", { type: "extension_ui_response", id: props.interaction.id, cancelled: true });
 };
 
 const submitValue = () => {
-  if (!props.dialog) return;
-  emit("respond", { type: "extension_ui_response", id: props.dialog.id, value: value.value });
+  if (!props.interaction) return;
+  emit("respond", { type: "extension_ui_response", id: props.interaction.id, value: value.value });
 };
 
 const confirm = (confirmed: boolean) => {
-  if (!props.dialog) return;
-  emit("respond", { type: "extension_ui_response", id: props.dialog.id, confirmed });
+  if (!props.interaction) return;
+  emit("respond", { type: "extension_ui_response", id: props.interaction.id, confirmed });
 };
 </script>
 
 <template>
-  <Modal size="sm" :show="dialog !== null" @close="cancel">
+  <Modal size="sm" :show="interaction !== null" @close="emit('defer')">
     <template #body>
-      <div v-if="dialog" class="extension-dialog">
+      <div v-if="interaction" class="extension-dialog">
         <header>
           <span class="extension-dialog__label">{{ t('extensionUi.request') }}</span>
-          <h3 v-if="!longTitle">{{ dialog.title }}</h3>
-          <p v-else class="extension-dialog__title-long">{{ dialog.title }}</p>
-          <p v-if="dialog.method === 'confirm'">{{ dialog.message }}</p>
+          <IconButton class="extension-dialog__defer" size="compact" :label="t('extensionUi.answerLater')" @click="emit('defer')">
+            <CloseIcon />
+          </IconButton>
+          <h3 v-if="!longTitle">{{ interaction.title }}</h3>
+          <p v-else class="extension-dialog__title-long">{{ interaction.title }}</p>
+          <p v-if="interaction.method === 'confirm'">{{ interaction.message }}</p>
         </header>
 
-        <div v-if="dialog.method === 'select'" class="extension-dialog__options">
+        <div v-if="interaction.method === 'select'" class="extension-dialog__options">
           <button
-            v-for="option in dialog.options"
+            v-for="option in interaction.options"
             :key="option"
             type="button"
-            @click="emit('respond', { type: 'extension_ui_response', id: dialog.id, value: option })"
+            @click="emit('respond', { type: 'extension_ui_response', id: interaction.id, value: option })"
           >
             {{ option }}
           </button>
         </div>
 
         <SearchBox
-          v-else-if="dialog.method === 'input'"
+          v-else-if="interaction.method === 'input'"
           v-model="value"
           type="text"
           autoFocus
-          :placeholder="dialog.placeholder"
-          :label="dialog.title"
+          :placeholder="interaction.placeholder"
+          :label="interaction.title"
           @enter="submitValue"
         />
         <textarea
-          v-else-if="dialog.method === 'editor'"
+          v-else-if="interaction.method === 'editor'"
           v-model="value"
           autofocus
           rows="8"
@@ -99,12 +105,12 @@ const confirm = (confirmed: boolean) => {
           @keydown.ctrl.enter="submitValue"
         />
 
-        <footer v-if="dialog.method !== 'select'">
-          <button type="button" class="extension-dialog__secondary" @click="dialog.method === 'confirm' ? confirm(false) : cancel()">
-            {{ dialog.method === "confirm" ? t('common.no') : t('common.cancel') }}
+        <footer v-if="interaction.method !== 'select'">
+          <button type="button" class="extension-dialog__secondary" @click="interaction.method === 'confirm' ? confirm(false) : cancel()">
+            {{ interaction.method === "confirm" ? t('common.no') : t('common.cancel') }}
           </button>
-          <button type="button" class="extension-dialog__primary" @click="dialog.method === 'confirm' ? confirm(true) : submitValue()">
-            {{ dialog.method === "confirm" ? t('common.yes') : t('extensionUi.continue') }}
+          <button type="button" class="extension-dialog__primary" @click="interaction.method === 'confirm' ? confirm(true) : submitValue()">
+            {{ interaction.method === "confirm" ? t('common.yes') : t('extensionUi.continue') }}
           </button>
         </footer>
       </div>
@@ -131,7 +137,8 @@ const confirm = (confirmed: boolean) => {
   max-height: min(65vh, 460px);
   overflow-y: auto;
 }
-.extension-dialog header { display: grid; gap: 4px; }
+.extension-dialog header { position: relative; display: grid; gap: 4px; padding-right: 28px; }
+.extension-dialog__defer { position: absolute; top: 0; right: 0; }
 .extension-dialog__label {
   color: var(--ui-text-muted);
   font-size: 10px;
