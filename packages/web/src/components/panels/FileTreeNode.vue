@@ -10,7 +10,7 @@ import { getEntryIcon } from "../ui/fileIcon";
  *  share the same ref via `provide`/`inject` in the parent. */
 export const FILE_TREE_REFRESH_KEY: InjectionKey<Ref<number>> = Symbol("fileTree:refresh");
 
-export default defineComponent({
+const FileTreeNode = defineComponent({
   name: "FileTreeNode",
   props: {
     entry: { type: Object as PropType<DirEntry>, required: true },
@@ -95,4 +95,6 @@ export default defineComponent({
     };
   },
 });
+
+export default FileTreeNode;
 </script>
