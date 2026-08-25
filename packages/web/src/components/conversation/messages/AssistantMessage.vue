@@ -2,11 +2,12 @@
 import { computed, ref } from "vue";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
-import ChatMarkdown from "./ChatMarkdown.vue";
+import MarkdownRender from "markstream-vue";
 import ConversationDetail from "./ConversationDetail.vue";
 import MessageActions from "./MessageActions.vue";
 import ProviderLogo from "../../ui/ProviderLogo";
 import { inline, messageText, thinkingStreaming as thinkingStreamingOf, thinkingText } from "./messageContent";
+import { useMarkdownRender } from "./useMarkdownRender";
 
 const emit = defineEmits<{ fork: []; copy: [text: string] }>();
 
@@ -49,6 +50,7 @@ const thinking = computed(() => thinkingText(props.message));
 /** Auto expand/collapse the Thinking detail: expanded while the model is
  *  still streaming into a thinking part, collapsed when it ends. */
 const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, props.final));
+const markdownRenderProps = useMarkdownRender(() => props.final);
 </script>
 
 <template>
@@ -73,7 +75,7 @@ const thinkingStreaming = computed(() => thinkingStreamingOf(props.message, prop
       <ConversationDetail v-if="thinking" class="conversation-message__details" icon="brain" label="Thinking"
         :preview="inline(thinking)" :body="{ kind: 'markdown', content: thinking }" :auto-expand="thinkingStreaming"
         hide-preview-on-expand />
-      <ChatMarkdown v-if="text" class="conversation-message__content" :content="text" :final="final" />
+      <MarkdownRender v-if="text" v-bind="markdownRenderProps" class="markdown-chat conversation-message__content" :content="text" />
     </template>
   </article>
 </template>

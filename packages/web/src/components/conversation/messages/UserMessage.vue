@@ -2,9 +2,10 @@
 import { computed, ref } from "vue";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
 import MessageActions from "./MessageActions.vue";
-import ChatMarkdown from "./ChatMarkdown.vue";
+import MarkdownRender from "markstream-vue";
 import { messageImages, messageText } from "./messageContent";
 import SkillBlockChip from "./SkillBlockChip.vue";
+import { useMarkdownRender } from "./useMarkdownRender";
 
 const emit = defineEmits<{ fork: []; copy: [text: string] }>();
 
@@ -61,6 +62,7 @@ const parts = computed<{ skill: SkillChip | null; text: string }>(() => {
     text: userMessage ? userMessage : "",
   };
 });
+const markdownRenderProps = useMarkdownRender();
 </script>
 
 <template>
@@ -88,7 +90,7 @@ const parts = computed<{ skill: SkillChip | null; text: string }>(() => {
       <SkillBlockChip :name="parts.skill.name" :location="parts.skill.location" />
     </div>
     <div v-if="parts.text" class="conversation-message__user">
-      <ChatMarkdown :content="parts.text" />
+      <MarkdownRender class="markdown-chat" v-bind="markdownRenderProps" :content="parts.text" />
     </div>
     <div v-if="timestampText" class="conversation-message__footer">
       <MessageActions

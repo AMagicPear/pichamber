@@ -5,12 +5,13 @@ import type { VNode } from "vue";
 // the JSX/<FolderIcon/> usage type-checks.
 import FolderIconSrc from "lucide-static/icons/folder.svg";
 import FileTextIconSrc from "lucide-static/icons/file-text.svg";
+import MarkdownRender from "markstream-vue";
 import { getEntryIcon } from "../../ui/fileIcon";
 import CodeView from "../../ui/CodeView.vue";
 import DiffView from "../../panels/DiffView.vue";
-import ChatMarkdown from "./ChatMarkdown.vue";
 import { displayPath } from "./toolDiff";
 import { type ToolBody } from "./toolBody";
+import { useMarkdownRender } from "./useMarkdownRender";
 import "./ToolBodyView.css";
 
 const FolderIcon = FolderIconSrc as unknown as FunctionalComponent<SVGAttributes>;
@@ -137,11 +138,13 @@ export const ToolBodyView = defineComponent({
   name: "ToolBodyView",
   props: { body: { type: Object as PropType<ToolBody>, required: true } },
   setup(props) {
+    const markdownRenderProps = useMarkdownRender();
+
     return () => {
       const body = props.body;
       switch (body.kind) {
         case "markdown":
-          return <ChatMarkdown class="tool-body-view__markdown" content={body.content} />;
+          return <MarkdownRender class="markdown-chat tool-body-view__markdown" {...markdownRenderProps.value} content={body.content} />;
         case "diff":
           return <DiffView class="tool-body-view__diff" patch={body.patch} />;
         case "images":

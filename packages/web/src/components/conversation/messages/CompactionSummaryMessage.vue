@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
-import ChatMarkdown from "./ChatMarkdown.vue";
+import MarkdownRender from "markstream-vue";
 import SummaryCard from "./SummaryCard.vue";
+import { useMarkdownRender } from "./useMarkdownRender";
 
 type CompactionSummary = AgentMessage & {
   role: "compactionSummary";
@@ -10,6 +11,7 @@ type CompactionSummary = AgentMessage & {
 };
 
 defineProps<{ message: CompactionSummary }>();
+const markdownRenderProps = useMarkdownRender();
 </script>
 
 <template>
@@ -19,7 +21,7 @@ defineProps<{ message: CompactionSummary }>();
         <span class="compaction-summary__label">[compaction]</span>
         <span class="compaction-summary__meta">Compacted from {{ message.tokensBefore.toLocaleString() }} tokens</span>
       </template>
-      <ChatMarkdown :content="message.summary" />
+      <MarkdownRender class="markdown-chat" v-bind="markdownRenderProps" :content="message.summary" />
     </SummaryCard>
   </article>
 </template>
