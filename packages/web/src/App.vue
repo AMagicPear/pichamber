@@ -32,7 +32,7 @@ const rightPanel = computed(() => ({
 
 <template>
   <div class="app-shell">
-    <IconButton class="app-shell__sidebar-toggle" label="Toggle left sidebar" @click="ui.toggle('left')">
+    <IconButton class="app-shell__sidebar-toggle" :label="$t('app.toggleSidebar')" @click="ui.toggle('left')">
       <MorphIcon :icon="lucideIcon(ui.panels.left.open ? 'panel-left-close' : 'panel-left')" spring="snappy"/>
     </IconButton>
 

@@ -1,7 +1,9 @@
 <script setup lang="ts" generic="T">
 import { computed, nextTick, ref, watch, type Component } from "vue";
+import { useI18n } from "vue-i18n";
 import SearchBox from "@/components/ui/SearchBox.vue";
 
+const { t } = useI18n();
 type MenuItem<T> = {
   id: string;
   label: string;
@@ -29,8 +31,6 @@ const props = withDefaults(defineProps<{
 }>(), {
   open: false,
   filterable: false,
-  filterPlaceholder: "Filter…",
-  emptyText: "No matches.",
   itemRole: "menuitem",
 });
 
@@ -75,8 +75,8 @@ const select = (item: MenuItem<T>) => {
         ref="filterInput"
         v-model="filter"
         type="text"
-        :placeholder="filterPlaceholder"
-        label="Filter menu items"
+        :placeholder="filterPlaceholder ?? t('menu.filter')"
+        :label="t('menu.filterLabel')"
       />
     </div>
     <div class="menu-panel__list">
@@ -100,7 +100,7 @@ const select = (item: MenuItem<T>) => {
           <span v-if="item.meta" class="menu-panel__item-meta">{{ item.meta }}</span>
         </button>
       </template>
-      <div v-if="visibleGroups.length === 0" class="menu-panel__empty">{{ emptyText }}</div>
+      <div v-if="visibleGroups.length === 0" class="menu-panel__empty">{{ emptyText ?? t('menu.noMatches') }}</div>
     </div>
   </div>
 </template>

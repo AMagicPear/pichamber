@@ -26,6 +26,7 @@ import { usePopover } from "@/composables/usePopover";
 import { pathBasename } from "@amagicpear/pichamber-shared";
 import type { SessionInfo } from "@amagicpear/pichamber-shared";
 import { computed, nextTick, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { RouterLink, useRouter } from "vue-router";
 import { ui } from "@/stores/ui";
 import {
@@ -41,6 +42,8 @@ import {
 import { settings } from "@/stores/settings";
 import { deleteSession, toMessage } from "@/api/client";
 import { lucideIcon } from "@/components/ui/morphIcons";
+
+const { t } = useI18n();
 
 const searchOpen = ref(false);
 const sessionSearch = ref("");
@@ -158,7 +161,7 @@ const startProjectSession = async (cwd: string) => {
   closeSessionMenu();
   workspace.cwd = cwd;
   workspace.folderName = projectName(cwd);
-  workspace.sessionName = "New Session";
+  workspace.sessionName = t('sidebar.newSessionLabel');
 
   if (router.currentRoute.value.name === "new-session") {
     try {
@@ -203,7 +206,7 @@ const openSessionMenu = (sessionId: string) => {
 
 const removeSelectedSession = async () => {
   const sessionId = selectedSessionId.value;
-  if (!sessionId || !window.confirm("Delete this session?")) return;
+  if (!sessionId || !confirm(t('sidebar.deleteConfirm'))) return;
 
   closeSessionMenu();
   try {
@@ -234,13 +237,13 @@ const beginRename = (session: SessionInfo | undefined) => {
   });
 };
 
-const sessionMenuGroups = [{
+const sessionMenuGroups = computed(() => [{
   id: "actions",
   items: [
-    { id: "rename", label: "Rename", value: "rename", icon: FileEditIcon },
-    { id: "delete", label: "Delete session", value: "delete", icon: DeleteBinIcon },
+    { id: "rename", label: t('sidebar.rename'), value: "rename", icon: FileEditIcon },
+    { id: "delete", label: t('sidebar.deleteSession'), value: "delete", icon: DeleteBinIcon },
   ],
-}];
+}]);
 
 const selectSessionMenuItem = (item: { value: string }) => {
   if (item.value === "rename") {
@@ -294,44 +297,43 @@ onMounted(async () => {
 <template>
   <aside class="sidebar">
     <div class="sidebar__topbar">
-      <svg class="sidebar__logo" :viewBox="LOGO_MARK_VIEW_BOX" width="22" height="22" aria-label="Pichamber" role="img">
+      <svg class="sidebar__logo" :viewBox="LOGO_MARK_VIEW_BOX" width="22" height="22" aria-label="Pi Chamber" role="img">
         <LogoMark />
       </svg>
     </div>
 
-    <div class="sidebar__actions" aria-label="Workspace actions">
+    <div class="sidebar__actions" :aria-label="t('sidebar.workspaceActions')">
       <div>
-        <IconButton label="Add project" @click="projectPickerOpen = true">
+        <IconButton :label="t('sidebar.addProject')" @click="projectPickerOpen = true">
           <FolderAddIcon />
         </IconButton>
-        <IconButton label="New session" @click="startProjectSession(workspace.cwd ?? '~')">
+        <IconButton :label="t('sidebar.newSession')" @click="startProjectSession(workspace.cwd ?? '~')">
           <ChatNewIcon />
         </IconButton>
       </div>
       <div>
-        <IconButton label="Search sessions" :pressed="searchOpen" @click="toggleSessionSearch">
+        <IconButton :label="t('sidebar.searchSessions')" :pressed="searchOpen" @click="toggleSessionSearch">
           <SearchIcon />
         </IconButton>
-        <IconButton label="Select sessions" disabled>
+        <IconButton :label="t('sidebar.selectSessions')" disabled>
           <CheckboxMultipleIcon />
         </IconButton>
-        <IconButton label="Sort projects" disabled>
+        <IconButton :label="t('sidebar.sortProjects')" disabled>
           <SortDescIcon />
         </IconButton>
       </div>
     </div>
 
     <div class="sidebar__searchbar" :class="{ 'is-open': searchOpen }">
-      <SearchBox v-if="searchOpen" v-model="sessionSearch" placeholder="Search sessions..." label="Search sessions"
+      <SearchBox v-if="searchOpen" v-model="sessionSearch" :placeholder="t('sidebar.searchPlaceholder')" :label="t('sidebar.searchSessions')"
         autoFocus />
     </div>
 
     <section ref="sessionListRoot" class="session-list scroll-fade-bottom">
-      <p v-if="sessionsLoading" class="session-list__state">Loading sessions...</p>
+      <p v-if="sessionsLoading" class="session-list__state">{{ t('sidebar.loadingSessions') }}</p>
       <p v-else-if="sessionsError" class="session-list__state session-list__state--error">{{ sessionsError }}</p>
-      <p v-else-if="sessions.length === 0" class="session-list__state">No sessions yet.</p>
-      <p v-else-if="visibleSessions.length === 0" class="session-list__state">No sessions match &quot;{{ sessionSearch
-      }}&quot;.</p>
+      <p v-else-if="sessions.length === 0" class="session-list__state">{{ t('sidebar.noSessionsYet') }}</p>
+      <p v-else-if="visibleSessions.length === 0" class="session-list__state">{{ t('sidebar.noSessionsMatch', { query: sessionSearch }) }}</p>
 
       <template v-else>
         <section v-for="project in projectGroups" :key="project.cwd" class="session-list__section">
@@ -344,7 +346,7 @@ onMounted(async () => {
               </span>
               <span class="session-list__project-title">{{ projectName(project.cwd) }}</span>
             </button>
-            <IconButton class="session-list__project-new" label="New session in project" size="compact"
+            <IconButton class="session-list__project-new" :label="t('sidebar.newSessionInProject')" size="compact"
               @click.stop="startProjectSession(project.cwd)">
               <AddIcon />
             </IconButton>
@@ -361,12 +363,12 @@ onMounted(async () => {
               ]" @click="closeSessionMenu(); navigate()">
                 <template v-if="renamingSessionId === session.id">
                   <input ref="renamingRef" v-model="renameInput" class="session-list__rename-input"
-                    aria-label="Rename session" @click.stop @keydown="onRenameEnter" />
+                    :aria-label="t('sidebar.renameSession')" @click.stop @keydown="onRenameEnter" />
                   <span class="session-list__rename-controls">
-                    <IconButton size="mini" label="Apply rename" @click.stop="applyRename">
+                    <IconButton size="mini" :label="t('sidebar.applyRename')" @click.stop="applyRename">
                       <CheckIcon />
                     </IconButton>
-                    <IconButton size="mini" label="Cancel rename" @click.stop="cancelRename">
+                    <IconButton size="mini" :label="t('sidebar.cancelRename')" @click.stop="cancelRename">
                       <CloseIcon />
                     </IconButton>
                   </span>
@@ -381,7 +383,7 @@ onMounted(async () => {
                   <span class="session-list__age">{{ sessionAge(session) }}</span>
                   <IconButton class="session-list__menu-trigger"
                     :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === session.id }"
-                    label="Session options" size="compact" @click.stop="openSessionMenu(session.id)">
+                    :label="t('sidebar.sessionOptions')" size="compact" @click.stop="openSessionMenu(session.id)">
                     <More2Icon />
                   </IconButton>
                 </template>
@@ -389,25 +391,25 @@ onMounted(async () => {
             </RouterLink>
             <button v-if="project.sessions.length > visibleProjectSessions(project.cwd, project.sessions).length"
               type="button" class="session-list__more" @click="showMoreSessions(project.cwd)">
-              Show more sessions
+              {{ t('sidebar.showMoreSessions') }}
             </button>
           </template>
         </section>
       </template>
     </section>
 
-    <FloatingPanel :open="sessionMenuOpen" :style="sessionMenuStyle" :width="180" :panel-id="sessionMenuPanelId" aria-label="Session options">
+    <FloatingPanel :open="sessionMenuOpen" :style="sessionMenuStyle" :width="180" :panel-id="sessionMenuPanelId" :aria-label="t('sidebar.sessionOptions')">
       <MenuPanel :groups="sessionMenuGroups" @select="selectSessionMenuItem" />
     </FloatingPanel>
 
     <footer class="sidebar__footer">
-      <IconButton size="standard" label="Settings" @click="ui.settingsOpen = true">
+      <IconButton size="standard" :label="t('sidebar.settings')" @click="ui.settingsOpen = true">
         <SettingsIcon />
       </IconButton>
-      <IconButton size="standard" label="Keyboard shortcuts" disabled>
+      <IconButton size="standard" :label="t('sidebar.keyboardShortcuts')" disabled>
         <QuestionIcon />
       </IconButton>
-      <IconButton size="standard" label="About" @click="aboutOpen = true">
+      <IconButton size="standard" :label="t('sidebar.about')" @click="aboutOpen = true">
         <InformationIcon />
       </IconButton>
     </footer>

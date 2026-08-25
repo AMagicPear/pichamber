@@ -4,6 +4,9 @@ import IconButton from "@/components/ui/IconButton.vue";
 import { lucideIcon } from "@/components/ui/morphIcons";
 import { MorphIcon } from "morphicons/vue";
 import { reactive } from "vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   /** Whether the whole group is displayed (drives the `<Transition>` v-show). */
@@ -27,10 +30,10 @@ const dynamicClick = (event: MouseEvent, action: 'copy') => {
 <template>
   <Transition name="message-actions">
     <span v-show="open" class="message-actions">
-      <IconButton v-if="show?.fork" size="mini" label="Fork here" @click="emit('fork')">
+      <IconButton v-if="show?.fork" size="mini" :label="t('messages.forkHere')" @click="emit('fork')">
         <GitForkIcon />
       </IconButton>
-      <IconButton v-if="show?.copy" size="mini" label="Copy text" @click="dynamicClick($event, 'copy')">
+      <IconButton v-if="show?.copy" size="mini" :label="t('messages.copyText')" @click="dynamicClick($event, 'copy')">
         <MorphIcon :icon="lucideIcon(checked.copy ? 'check' : 'copy')" spring="snappy" />
       </IconButton>
     </span>

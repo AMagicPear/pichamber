@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { DirEntry, RuntimeSlashCommand } from "@amagicpear/pichamber-shared";
 import { computed, nextTick, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import AttachmentIcon from "lucide-static/icons/paperclip.svg";
 import CommandIcon from "lucide-static/icons/command.svg";
 import { listDirectory, searchFiles, toMessage } from "@/api/client";
 import { getEntryIcon } from "@/components/ui/fileIcon";
 import { workspace } from "@/stores/workspace";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   mode: "files" | "commands" | null;
@@ -91,14 +94,14 @@ defineExpose({ move, choose });
   <section
     v-if="mode"
     class="composer-shelf"
-    :aria-label="mode === 'files' ? 'Files' : 'Commands'"
+    :aria-label="mode === 'files' ? t('composer.shelfFiles') : t('composer.shelfCommands')"
     role="listbox"
   >
     <header class="composer-shelf__header">
       <span class="composer-shelf__title">
         <AttachmentIcon v-if="mode === 'files'" />
         <CommandIcon v-else />
-        <span>{{ mode === "files" ? "Files" : "Pi commands" }}</span>
+        <span>{{ mode === "files" ? t('composer.shelfFiles') : t('composer.shelfCommands') }}</span>
       </span>
       <span class="composer-shelf__hint">{{ mode === "files" ? `@${query}` : `/${query}` }}</span>
     </header>
@@ -117,11 +120,11 @@ defineExpose({ move, choose });
       >
         <span class="composer-shelf__command-copy">
           <span class="composer-shelf__primary">/{{ command.name }}</span>
-          <span class="composer-shelf__description">{{ command.description || "No description" }}</span>
+          <span class="composer-shelf__description">{{ command.description || t('composer.noDescription') }}</span>
         </span>
         <span class="composer-shelf__source" :class="`is-${command.source}`">{{ command.source }}</span>
       </button>
-      <p v-if="commandResults.length === 0" class="composer-shelf__state">No matching Pi commands</p>
+      <p v-if="commandResults.length === 0" class="composer-shelf__state">{{ t('composer.noMatchingCommands') }}</p>
       </template>
       <template v-else>
       <button
@@ -139,13 +142,13 @@ defineExpose({ move, choose });
         <span class="composer-shelf__primary">{{ entry.name }}</span>
         <span class="composer-shelf__description">{{ entry.relativePath }}</span>
       </button>
-      <p v-if="loading" class="composer-shelf__state">Searching files...</p>
+      <p v-if="loading" class="composer-shelf__state">{{ t('composer.searchingFiles') }}</p>
       <p v-else-if="error" class="composer-shelf__state is-error">{{ error }}</p>
-      <p v-else-if="fileResults.length === 0" class="composer-shelf__state">No matching files</p>
+      <p v-else-if="fileResults.length === 0" class="composer-shelf__state">{{ t('composer.noMatchingFiles') }}</p>
       </template>
     </div>
     <footer class="composer-shelf__footer">
-      Up/Down to navigate <span>Enter to insert</span> <span>Esc to close</span>
+      {{ t('composer.upDown') }} <span>{{ t('composer.enterInsert') }}</span> <span>{{ t('composer.escClose') }}</span>
     </footer>
   </section>
 </template>

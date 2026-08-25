@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { fetchRuntimeMode, toMessage, updateRuntimeMode } from "@/api/client";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsOption from "./SettingsOption.vue";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
+
+const { t } = useI18n();
 
 const runtimeMode = ref<"sdk" | "rpc">("sdk");
 const loading = ref(true);
@@ -37,11 +40,11 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsPageHeader title="Runtime" description="Choose the Pi process mode used by this Pichamber server." />
+  <SettingsPageHeader :title="t('settings.runtime.title')" :description="t('settings.runtime.description')" />
   <p v-if="error" class="settings-page__error" role="alert">{{ error }}</p>
-  <p v-else-if="loading" class="runtime-settings__state">Loading runtime settings...</p>
-  <SettingsGroup v-else title="Pi runtime">
-    <SettingsOption inline title="Execution mode" description="Changing this stops active agent runs and reloads the application.">
+  <p v-else-if="loading" class="runtime-settings__state">{{ t('settings.runtime.loadingRuntime') }}</p>
+  <SettingsGroup v-else :title="t('settings.runtime.piRuntime')">
+    <SettingsOption inline :title="t('settings.runtime.executionMode')" :description="t('settings.runtime.executionModeDesc')">
       <select :value="runtimeMode" :disabled="saving" @change="save(($event.target as HTMLSelectElement).value as 'sdk' | 'rpc')">
         <option value="sdk">SDK runtime</option>
         <option value="rpc">Local Pi RPC</option>

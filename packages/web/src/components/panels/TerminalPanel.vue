@@ -23,6 +23,7 @@
  */
 
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import AddIcon from "lucide-static/icons/plus.svg";
 import CloseIcon from "lucide-static/icons/x.svg";
 import FullscreenIcon from "lucide-static/icons/fullscreen.svg";
@@ -34,6 +35,8 @@ import { startPty, stopPty, toMessage } from "@/api/client";
 import { ui } from "@/stores/ui";
 import { workspace } from "@/stores/workspace";
 import { createId } from "@/utils/id";
+
+const { t } = useI18n();
 
 type TabStatus = "creating" | "ready" | "closed" | "error";
 
@@ -187,7 +190,7 @@ watch(
             <IconButton
               class="terminal__tab-icon-close"
               size="mini"
-              label="Close terminal tab"
+              :label="t('terminal.closeTab')"
               @click.stop="closeTab(tab.id)"
             >
               <CloseIcon />
@@ -195,14 +198,14 @@ watch(
           </span>
           <span class="terminal__tab-title">{{ tab.title }}</span>
         </div>
-        <IconButton size="compact" label="New terminal" @click="createTab">
+        <IconButton size="compact" :label="t('terminal.newTab')" @click="createTab">
           <AddIcon />
         </IconButton>
       </div>
       <div class="terminal__actions">
         <IconButton
           size="compact"
-          :label="maximized ? 'Restore terminal' : 'Maximize terminal'"
+          :label="maximized ? t('terminal.restore') : t('terminal.maximize')"
           :pressed="maximized"
           @click="toggleMaximize"
         >
@@ -211,7 +214,7 @@ watch(
         </IconButton>
         <IconButton
           size="compact"
-          label="Close terminal panel"
+          :label="t('terminal.closePanel')"
           @click="ui.toggle('bottom')"
         >
           <CloseIcon />
@@ -222,10 +225,10 @@ watch(
     <div class="terminal__body">
       <template v-if="tabs.length === 0">
         <div class="terminal__empty">
-          <p>No terminals yet.</p>
+          <p>{{ t('terminal.noTerminals') }}</p>
           <button type="button" class="ui-empty-action" @click="createTab">
             <AddIcon />
-            <span>New terminal</span>
+            <span>{{ t('terminal.newTab') }}</span>
           </button>
         </div>
       </template>
@@ -239,24 +242,24 @@ watch(
             @exited="(p) => onTabExited(tab.id, p)"
           />
           <div v-else-if="tab.status === 'creating'" class="terminal__state">
-            <p>Starting shell…</p>
+            <p>{{ t('terminal.startingShell') }}</p>
           </div>
           <div v-else-if="tab.status === 'error'" class="terminal__state terminal__state--error">
             <p>
-              <strong>Terminal failed to start.</strong>
+              <strong>{{ t('terminal.failedToStart') }}</strong>
               <span>{{ tab.errorMessage }}</span>
             </p>
             <button type="button" class="terminal__action" @click="reopenTab(tab.id)">
-              Try again
+              {{ t('terminal.tryAgain') }}
             </button>
           </div>
           <div v-else class="terminal__state">
             <p>
-              <strong>Terminal closed.</strong>
-              <span>{{ tab.errorMessage || "Shell exited." }}</span>
+              <strong>{{ t('terminal.closed') }}</strong>
+              <span>{{ tab.errorMessage || t('terminal.shellExited') }}</span>
             </p>
             <button type="button" class="terminal__action" @click="reopenTab(tab.id)">
-              Restart
+              {{ t('terminal.restart') }}
             </button>
           </div>
         </div>

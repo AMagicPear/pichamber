@@ -6,6 +6,9 @@ import { toMessage } from "@/api/client";
 import { useGhosttyInit } from "@/composables/useGhostty";
 import { releaseTerminalCleanup, replaceTerminalCleanup } from "@/composables/terminalRegistry";
 import { activeTheme } from "@/stores/theme";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{ ptyId: string }>();
 const emit = defineEmits<{ exited: [{ reason: string }] }>();
@@ -157,12 +160,12 @@ watch(activeTheme, () => {
   <div class="terminal-view">
     <div ref="hostRef" class="terminal-view__host" />
     <div v-if="status !== 'ready'" class="terminal-view__overlay">
-      <p v-if="status === 'loading' || status === 'connecting'">Starting terminal…</p>
+      <p v-if="status === 'loading' || status === 'connecting'">{{ t('terminal.startingShell') }}</p>
       <p v-else-if="status === 'error'">
-        <strong>Terminal failed to start.</strong>
+        <strong>{{ t('terminal.failedToStart') }}</strong>
         <span>{{ errorMessage }}</span>
       </p>
-      <p v-else>Terminal closed.</p>
+      <p v-else>{{ t('terminal.closed') }}</p>
     </div>
   </div>
 </template>

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import ArrowDownIcon from "lucide-static/icons/chevron-down.svg";
 import FolderIcon from "lucide-static/icons/folder.svg";
 import Modal from "@/components/ui/Modal.vue";
 import { browseProjectDirectories, toMessage } from "@/api/client";
+
+const { t } = useI18n();
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{ close: []; select: [path: string] }>();
@@ -54,23 +57,23 @@ const choose = () => {
     <template #body>
       <div class="project-picker">
         <div class="project-picker__path">
-          <button type="button" aria-label="Parent directory" :disabled="!parent" @click="parent && browse(parent)"><ArrowDownIcon /></button>
-          <input ref="pathInput" v-model="path" aria-label="Project path" @keydown.enter="browse(path)" />
-          <button type="button" class="project-picker__go" aria-label="Browse path" @click="browse(path)">Go</button>
+          <button type="button" :aria-label="t('projectPicker.parentDirectory')" :disabled="!parent" @click="parent && browse(parent)"><ArrowDownIcon /></button>
+          <input ref="pathInput" v-model="path" :aria-label="t('projectPicker.projectPath')" @keydown.enter="browse(path)" />
+          <button type="button" class="project-picker__go" :aria-label="t('projectPicker.browsePath')" @click="browse(path)">{{ t('projectPicker.go') }}</button>
         </div>
         <div class="project-picker__list">
           <button v-for="entry in entries" :key="`${entry.name}:${entry.path}`" type="button" :class="{ 'is-selected': selected === entry.path }" @dblclick="browse(entry.path)" @click="selected = entry.path; path = entry.path">
             <FolderIcon />
             <span>{{ entry.name }}</span>
           </button>
-          <p v-if="loading">Loading directories...</p>
+          <p v-if="loading">{{ t('projectPicker.loadingDirectories') }}</p>
           <p v-else-if="error" class="is-error">{{ error }}</p>
-          <p v-else-if="entries.length === 0">No subdirectories</p>
+          <p v-else-if="entries.length === 0">{{ t('projectPicker.noSubdirectories') }}</p>
         </div>
         <footer>
-          <span class="project-picker__hint">Double-click a folder to open it</span>
-          <button type="button" class="project-picker__open" :disabled="loading || !path.trim()" @click="choose">Use this folder</button>
-          <button type="button" class="project-picker__cancel" @click="emit('close')">Esc</button>
+          <span class="project-picker__hint">{{ t('projectPicker.hint') }}</span>
+          <button type="button" class="project-picker__open" :disabled="loading || !path.trim()" @click="choose">{{ t('projectPicker.useThisFolder') }}</button>
+          <button type="button" class="project-picker__cancel" @click="emit('close')">{{ t('projectPicker.esc') }}</button>
         </footer>
       </div>
     </template>

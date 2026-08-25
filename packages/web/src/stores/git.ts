@@ -20,6 +20,10 @@ let loadPromise: Promise<void> | null = null;
 /** Refresh the branch chip. Concurrent callers share one request. */
 export const loadGitBranch = (): Promise<void> => {
   if (loadPromise) return loadPromise;
+  if (!workspace.sessionId) {
+    activeGitBranch.value = null;
+    return Promise.resolve();
+  }
   loadPromise = getGitStatus(workspace.sessionId)
     .then((status) => {
       activeGitBranch.value = status.branch;

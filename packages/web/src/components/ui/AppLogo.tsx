@@ -94,7 +94,7 @@ export const AppLogo = defineComponent({
     width: { type: Number, default: 70 },
     height: { type: Number, default: 70 },
     isAnimated: { type: Boolean, default: false },
-    ariaLabel: { type: String, default: "Pichamber logo" },
+    ariaLabel: { type: String, default: "Pi Chamber logo" },
     strokeColor: { type: String, default: "currentColor" },
     fillColor: { type: String, default: "color-mix(in srgb, currentColor 15%, transparent)" },
     cellHighlightColor: {

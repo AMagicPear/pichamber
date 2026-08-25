@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import FileIcon from "lucide-static/icons/file-text.svg";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 defineProps<{
   name: string;
@@ -11,7 +14,7 @@ defineProps<{
   <div class="skill-chip" :title="location">
     <span class="skill-chip__badge">
       <FileIcon class="skill-chip__icon" aria-hidden="true" />
-      <span class="skill-chip__label">Skill</span>
+      <span class="skill-chip__label">{{ t('conversation.skill') }}</span>
     </span>
     <span class="skill-chip__name">{{ name }}</span>
   </div>

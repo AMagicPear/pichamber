@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { MorphIcon } from "morphicons/vue";
 import type { IconNode } from "morphicons";
 import FilePathLabel from "@/components/ui/FilePathLabel.vue";
@@ -11,7 +12,12 @@ const props = defineProps<{
   /** Lucide icon name (e.g. `"square-terminal"`); resolved via
    *  `useLucideIcon` and morphed to a chevron on hover/expand. */
   icon?: LucideIconName;
-  label: string;
+  /** i18n key for the label, resolved reactively via `t(labelKey, labelParams)`. */
+  labelKey: string;
+  /** Interpolation params for `labelKey` (e.g. `tools.custom`'s `{name}`). */
+  labelParams?: Record<string, unknown>;
+  /** Render the label with a "failed" suffix (tool results). */
+  isError?: boolean;
   preview?: string;
   /** Full file path — rendered filename-first via FilePathLabel. */
   path?: string;
@@ -40,6 +46,14 @@ const props = defineProps<{
    *  previews (bash command / ls path) stay visible. */
   hidePreviewOnExpand?: boolean;
 }>();
+
+const { t } = useI18n();
+
+/** Tool label resolved from its i18n key; failed calls append "failed". */
+const labelText = computed(() => {
+  const name = props.labelParams ? t(props.labelKey, props.labelParams) : t(props.labelKey);
+  return props.isError ? t("tools.failed", { name }) : name;
+});
 
 // Initial state honours the per-item preference (tool results want a
 // quiet default; Thinking wants to start collapsed). The autoExpand
@@ -114,7 +128,7 @@ const elapsed = computed(() => {
         <MorphIcon :icon="currentIcon" :size="16" spring="snappy" reduced-motion="user"
           class="conversation-detail__icon" />
       </span>
-      <span class="conversation-detail__label">{{ label }}</span>
+      <span class="conversation-detail__label">{{ labelText }}</span>
       <FilePathLabel v-if="path" class="conversation-detail__preview" :path="path" :show-prefix="!expanded" />
       <span v-else-if="preview" class="conversation-detail__preview conversation-detail__preview--plain"
         v-show="!expanded || !hidePreviewOnExpand">{{ preview }}</span>

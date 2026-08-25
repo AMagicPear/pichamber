@@ -3,10 +3,11 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AgentActivity, ModelDescriptor, PendingMessages, RuntimeSlashCommand } from "@amagicpear/pichamber-shared";
 import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import { computed, nextTick, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import AddCircleIcon from "lucide-static/icons/circle-plus.svg";
 import MicIcon from "lucide-static/icons/mic.svg";
 import SendIcon from "lucide-static/icons/send.svg";
-import StackIcon from "@/assets/icons/Stack.svg";
+import ListCollapseIcon from "lucide-static/icons/list-collapse.svg";
 import StopIcon from "lucide-static/icons/square.svg";
 import TargetIcon from "lucide-static/icons/target.svg";
 import IconButton from "@/components/ui/IconButton.vue";
@@ -20,6 +21,8 @@ import { conversation, working, type DraftImage } from "@/stores/workspace";
 import { createId } from "@/utils/id";
 import AttachmentIcon from "lucide-static/icons/paperclip.svg";
 import CloseIcon from "lucide-static/icons/x.svg";
+
+const { t } = useI18n();
 
 const draft = defineModel<string | undefined>({ required: true });
 const images = defineModel<DraftImage[]>("images", { required: true });
@@ -67,8 +70,8 @@ const goalAvailable = computed(() =>
 );
 const goalLabel = computed(() =>
   goalAvailable.value
-    ? (goalMode.value ? "Cancel /goal prefix" : "Send next message as /goal")
-    : "Goal mode (requires an extension that provides /goal)",
+    ? (goalMode.value ? t('composer.goalCancel') : t('composer.goalSend'))
+    : t('composer.goalRequires'),
 );
 /** If the extension providing `/goal` goes away mid-session, drop the lit
  *  state so we never silently prepend a prefix the runtime no longer
@@ -346,14 +349,14 @@ const activityText = computed(() => {
   switch (props.activity.phase) {
     case "working": {
       const detail = workingDetail.value;
-      if (detail === "thinking") return "Thinking";
-      if (detail === "responding") return "Responding";
-      if (detail) return `Running ${detail.tool}`;
-      return "Working";
+      if (detail === "thinking") return t('composer.thinking');
+      if (detail === "responding") return t('composer.responding');
+      if (detail) return t('composer.runningTool', { tool: detail.tool });
+      return t('composer.working');
     }
-    case "compacting": return "Compacting context";
-    case "retrying": return `Retrying ${props.activity.attempt}/${props.activity.maxAttempts}`;
-    default: return "Ready";
+    case "compacting": return t('composer.compactingContext');
+    case "retrying": return t('composer.retrying', { attempt: props.activity.attempt, max: props.activity.maxAttempts });
+    default: return t('composer.ready');
   }
 });
 
@@ -383,10 +386,10 @@ const workingDetail = computed<"thinking" | "responding" | { tool: string } | un
  *  scheme don't have to dig through Settings. Kept short — the chevron isn't
  *  a full shortcut hint. */
 const placeholder = computed(() => {
-  const base = "Ask Pi anything. Type @ for files or / for commands. Drag images to attach.";
+  const base = t('composer.placeholder');
   return props.sendKey === "enter"
     ? base
-    : `${base} Submit with ⌘/Ctrl + Enter.`;
+    : t('composer.placeholderMod', { base: `${base} ` });
 });
 </script>
 
@@ -404,12 +407,12 @@ const placeholder = computed(() => {
           </div>
           <textarea ref="inputEl" v-model="draft" class="composer__input" :placeholder="placeholder" rows="1"
             @input="detectTrigger" @keydown="onKeydown" @click="detectTrigger" @paste="onPaste" />
-          <div v-if="images.length" class="composer__images" aria-label="Attached images">
+          <div v-if="images.length" class="composer__images" :aria-label="t('composer.attachedImages')">
             <div v-for="image in images" :key="image.id" class="composer__image"
               :style="{ '--image-aspect': image.aspectRatio }">
               <div class="composer__image-content">
-                <img :src="`data:${image.mimeType};base64,${image.data}`" alt="Attached image" />
-                <button type="button" aria-label="Remove image" title="Remove image" @click="removeImage(image.id)">
+                <img :src="`data:${image.mimeType};base64,${image.data}`" :alt="t('composer.attachedImageAlt')" />
+                <button type="button" :aria-label="t('composer.removeImage')" :title="t('composer.removeImage')" @click="removeImage(image.id)">
                   <CloseIcon />
                 </button>
               </div>
@@ -417,27 +420,27 @@ const placeholder = computed(() => {
           </div>
           <div v-if="pendingCount" class="composer__queue">
             <div v-for="(message, index) in pending.steering" :key="`steer:${index}:${message}`">
-              <span>Steer</span>
+              <span>{{ t('composer.steerQueue') }}</span>
               <p>{{ message }}</p>
             </div>
             <div v-for="(message, index) in pending.followUp" :key="`follow:${index}:${message}`">
-              <span>Follow up</span>
+              <span>{{ t('composer.followUpQueue') }}</span>
               <p>{{ message }}</p>
             </div>
-            <button v-if="canRestorePending" type="button" @click="emit('restorePending')">Restore all</button>
+            <button v-if="canRestorePending" type="button" @click="emit('restorePending')">{{ t('composer.restoreAll') }}</button>
           </div>
           <div class="composer__footer">
             <div class="composer__footer-leading">
               <div class="composer__attach">
-                <IconButton size="compact" label="Attach files" :aria-expanded="shelfMode === 'files'"
+                <IconButton size="compact" :label="t('composer.attachFiles')" :aria-expanded="shelfMode === 'files'"
                   @click="openFiles">
                   <AddCircleIcon />
                 </IconButton>
               </div>
               <!-- Compact works at any time: the SDK's compact() aborts the
                current turn first (same as Pi's /compact), then summarizes. -->
-              <IconButton size="compact" label="Compact context" @click="emit('compact')">
-                <StackIcon />
+              <IconButton size="compact" :label="t('composer.compactContext')" @click="emit('compact')">
+                <ListCollapseIcon />
               </IconButton>
               <IconButton size="compact" :label="goalLabel" :title="goalLabel" :pressed="goalMode"
                 :disabled="!goalAvailable" @click="goalMode = !goalMode">
@@ -453,21 +456,20 @@ const placeholder = computed(() => {
               </div>
               <!-- Mode toggle lives next to the action buttons now that it's
                only meaningful while the agent is busy. -->
-              <div v-if="working" class="composer__mode" role="tablist" aria-label="Send mode">
+              <div v-if="working" class="composer__mode" role="tablist" :aria-label="t('composer.sendMode')">
                 <button type="button" role="tab" :aria-selected="submitMode === 'steer'"
-                  :class="{ 'is-active': submitMode === 'steer' }" @click="submitMode = 'steer'">Steer</button>
+                  :class="{ 'is-active': submitMode === 'steer' }" @click="submitMode = 'steer'">{{ t('composer.steer') }}</button>
                 <button type="button" role="tab" :aria-selected="submitMode === 'followUp'"
-                  :class="{ 'is-active': submitMode === 'followUp' }" @click="submitMode = 'followUp'">Follow
-                  up</button>
+                  :class="{ 'is-active': submitMode === 'followUp' }" @click="submitMode = 'followUp'">{{ t('composer.followUp') }}</button>
               </div>
-              <IconButton size="compact" label="Dictation" disabled>
+              <IconButton size="compact" :label="t('composer.dictation')" disabled>
                 <MicIcon />
               </IconButton>
-              <IconButton v-if="working" size="compact" label="Stop agent" tone="danger" @click="emit('abort')">
+              <IconButton v-if="working" size="compact" :label="t('composer.stopAgent')" tone="danger" @click="emit('abort')">
                 <StopIcon />
               </IconButton>
               <IconButton size="compact"
-                :label="working ? (submitMode === 'steer' ? 'Steer agent' : 'Queue follow-up') : 'Send'"
+                :label="working ? (submitMode === 'steer' ? t('composer.steerAgent') : t('composer.queueFollowUp')) : t('composer.send')"
                 :disabled="!canSend" @click="emitSend(submitMode)">
                 <SendIcon />
               </IconButton>

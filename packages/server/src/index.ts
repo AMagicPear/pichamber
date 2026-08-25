@@ -845,7 +845,7 @@ const server = Bun.serve({
   },
 });
 
-console.log(`Pichamber ${version} listening on http://${hostname}:${configuredPort}`);
+console.log(`Pi Chamber ${version} listening on http://${hostname}:${configuredPort}`);
 
 // Best-effort cleanup on shutdown. Useful when Bun restarts in --hot mode.
 const shutdown = () => {

@@ -72,7 +72,7 @@ const markdownRenderProps = useMarkdownRender(() => props.final);
         <MessageActions :show="{ fork: true, copy: !!text }" :open="actionsVisible" @fork="emit('fork')"
           @copy="emit('copy', text)" />
       </header>
-      <ConversationDetail v-if="thinking" class="conversation-message__details" icon="brain" label="Thinking"
+      <ConversationDetail v-if="thinking" class="conversation-message__details" icon="brain" label-key="conversation.thinkingLabel"
         :preview="inline(thinking)" :body="{ kind: 'markdown', content: thinking }" :final="props.final" :auto-expand="thinkingStreaming"
         hide-preview-on-expand />
       <MarkdownRender

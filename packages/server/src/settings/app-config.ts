@@ -26,7 +26,7 @@ export const loadAppConfig = () => {
             : "vscode",
       };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn("Failed to read Pichamber settings", error);
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") console.warn("Failed to read Pi Chamber settings", error);
     }
   })();
   return loaded;

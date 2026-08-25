@@ -4,6 +4,9 @@
 import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import CloseIcon from "lucide-static/icons/x.svg";
 import ActivityTree from "./ActivityTree.vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 defineProps<{
   widgets: Record<string, {
@@ -15,10 +18,10 @@ defineEmits<{ close: [] }>();
 </script>
 
 <template>
-  <section id="activity-panel-surface" class="activity-panel" role="dialog" aria-label="Activity">
+  <section id="activity-panel-surface" class="activity-panel" role="dialog" :aria-label="t('activity.title')">
     <header class="activity-panel__header">
-      <span class="activity-panel__label">Activity</span>
-      <button type="button" class="activity-panel__close" aria-label="Close activity panel" @click="$emit('close')">
+      <span class="activity-panel__label">{{ t('activity.title') }}</span>
+      <button type="button" class="activity-panel__close" :aria-label="t('activity.close')" @click="$emit('close')">
         <CloseIcon aria-hidden="true" />
       </button>
     </header>

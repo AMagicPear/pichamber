@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, toRef } from "vue";
+import { useI18n } from "vue-i18n";
 import SplitPane from "@/components/shell/SplitPane.vue";
 import IconButton from "@/components/ui/IconButton.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
@@ -25,6 +26,7 @@ import SlashCommands2Icon from "lucide-static/icons/square-asterisk.svg";
 import McpIcon from "@/assets/icons/MCP.svg";
 import { settings } from "@/stores/settings";
 import { preference as themePreference, setTheme, themeOptions } from "@/stores/theme";
+import { localeOptions, localePreference, setLocale } from "@/i18n";
 import { persistedState } from "@/stores/persisted";
 import PiBehaviorSettings from "@/components/modals/settings/PiBehaviorSettings.vue";
 import RuntimeSettings from "@/components/modals/settings/RuntimeSettings.vue";
@@ -39,34 +41,36 @@ defineOptions({ name: "SettingsView" });
 
 const emit = defineEmits<{ close: [] }>();
 
+const { t } = useI18n();
+
 interface NavItem {
   key: string;
-  label: string;
+  label: () => string;
   icon: unknown;
   enabled?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { key: "appearance", label: "Appearance", icon: PaletteIcon, enabled: true },
-  { key: "editor", label: "Editor", icon: FileCodeIcon, enabled: true },
-  { key: "chat", label: "Chat", icon: ChatAi3Icon, enabled: true },
-  { key: "notifications", label: "Notifications", icon: Notification3Icon, enabled: true },
-  { key: "sessions", label: "Sessions", icon: ChatHistoryIcon, enabled: true },
-  { key: "shortcuts", label: "Shortcuts", icon: CommandIcon },
-  { key: "git", label: "Git", icon: GitBranchIcon, enabled: true },
-  { key: "magic-prompts", label: "Magic Prompts", icon: AiGenerate2Icon },
-  { key: "snippets", label: "Snippets", icon: ChatThreadIcon },
-  { key: "projects", label: "Projects", icon: FoldersIcon },
-  { key: "remote-instances", label: "Remote Instances", icon: ServerIcon },
-  { key: "agents", label: "Agents", icon: AiAgentIcon },
-  { key: "behavior", label: "Behavior", icon: BrainIcon, enabled: true },
-  { key: "runtime", label: "Runtime", icon: ServerIcon, enabled: true },
-  { key: "commands", label: "Commands", icon: SlashCommands2Icon },
-  { key: "mcp", label: "MCP", icon: McpIcon },
-  { key: "extensions", label: "Extensions", icon: CodeBoxIcon, enabled: true },
-  { key: "providers", label: "Providers", icon: CloudIcon, enabled: true },
-  { key: "skills-installed", label: "Skills", icon: BookOpenIcon },
-  { key: "skills-catalog", label: "Skills Catalog", icon: BookIcon },
+  { key: "appearance", label: () => t("settings.nav.appearance"), icon: PaletteIcon, enabled: true },
+  { key: "editor", label: () => t("settings.nav.editor"), icon: FileCodeIcon, enabled: true },
+  { key: "chat", label: () => t("settings.nav.chat"), icon: ChatAi3Icon, enabled: true },
+  { key: "notifications", label: () => t("settings.nav.notifications"), icon: Notification3Icon, enabled: true },
+  { key: "sessions", label: () => t("settings.nav.sessions"), icon: ChatHistoryIcon, enabled: true },
+  { key: "shortcuts", label: () => t("settings.nav.shortcuts"), icon: CommandIcon },
+  { key: "git", label: () => "Git", icon: GitBranchIcon, enabled: true },
+  { key: "magic-prompts", label: () => t("settings.nav.magicPrompts"), icon: AiGenerate2Icon },
+  { key: "snippets", label: () => t("settings.nav.snippets"), icon: ChatThreadIcon },
+  { key: "projects", label: () => t("settings.nav.projects"), icon: FoldersIcon },
+  { key: "remote-instances", label: () => t("settings.nav.remoteInstances"), icon: ServerIcon },
+  { key: "agents", label: () => t("settings.nav.agents"), icon: AiAgentIcon },
+  { key: "behavior", label: () => t("settings.nav.behavior"), icon: BrainIcon, enabled: true },
+  { key: "runtime", label: () => t("settings.nav.runtime"), icon: ServerIcon, enabled: true },
+  { key: "commands", label: () => t("settings.nav.commands"), icon: SlashCommands2Icon },
+  { key: "mcp", label: () => "MCP", icon: McpIcon },
+  { key: "extensions", label: () => t("settings.nav.extensions"), icon: CodeBoxIcon, enabled: true },
+  { key: "providers", label: () => t("settings.nav.providers"), icon: CloudIcon, enabled: true },
+  { key: "skills-installed", label: () => t("settings.nav.skills"), icon: BookOpenIcon },
+  { key: "skills-catalog", label: () => t("settings.nav.skillsCatalog"), icon: BookIcon },
 ];
 
 type SettingsViewState = { activeKey: string; size: number };
@@ -128,41 +132,41 @@ const permissionLabel = computed(() => {
   const status = notificationStatus.value;
   if (status === "unsupported") {
     return {
-      title: "Browser unsupported",
-      description: "This browser does not expose the system Notification API.",
-      action: "Unavailable",
+      title: t("settings.notifications.unsupportedTitle"),
+      description: t("settings.notifications.unsupportedDesc"),
+      action: t("settings.notifications.unsupportedAction"),
       disabled: true,
     };
   }
   if (status === "granted") {
     return {
-      title: "Notifications allowed",
-      description: "Desktop notifications are enabled in this browser.",
-      action: "Granted",
+      title: t("settings.notifications.allowedTitle"),
+      description: t("settings.notifications.allowedDesc"),
+      action: t("settings.notifications.allowedAction"),
       disabled: true,
     };
   }
   if (status === "denied") {
     return {
-      title: "Notifications blocked",
-      description: "Reset the permission from your browser's site settings, then re-open this page.",
-      action: "Denied",
+      title: t("settings.notifications.blockedTitle"),
+      description: t("settings.notifications.blockedDesc"),
+      action: t("settings.notifications.blockedAction"),
       disabled: true,
     };
   }
   return {
-    title: "Allow desktop notifications",
-    description: "Asks the browser to show a system notification when an agent turn completes.",
-    action: "Request permission",
+    title: t("settings.notifications.requestTitle"),
+    description: t("settings.notifications.requestDesc"),
+    action: t("settings.notifications.requestAction"),
     disabled: false,
   };
 });
 
-const visibleNavItems = computed(() =>
-  navItems.filter((item) =>
-    item.label.toLowerCase().includes(searchQuery.value.trim().toLowerCase()),
-  ),
-);
+const visibleNavItems = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return navItems;
+  return navItems.filter((item) => item.label().toLowerCase().includes(query));
+});
 
 const selectItem = (key: string) => {
   activeKey.value = key;
@@ -179,7 +183,7 @@ const selectItem = (key: string) => {
   >
     <template #sidebar>
       <aside class="settings-nav">
-        <SearchBox v-model="searchQuery" placeholder="Search settings…" label="Search settings" />
+        <SearchBox v-model="searchQuery" :placeholder="t('settings.searchPlaceholder')" :label="t('settings.search')" />
 
         <ul class="settings-nav__list">
           <li
@@ -189,11 +193,11 @@ const selectItem = (key: string) => {
           >
             <button type="button" :disabled="!item.enabled" @click="selectItem(item.key)">
               <component :is="item.icon" />
-              <span>{{ item.label }}</span>
+              <span>{{ item.label() }}</span>
             </button>
           </li>
           <li v-if="visibleNavItems.length === 0" class="settings-nav__empty">
-            <span>No matches</span>
+            <span>{{ t('settings.noMatches') }}</span>
           </li>
         </ul>
       </aside>
@@ -202,17 +206,17 @@ const selectItem = (key: string) => {
     <template #default>
       <section class="settings-page">
         <div class="settings-page__close">
-          <IconButton size="compact" label="Close settings" @click="emit('close')">
+          <IconButton size="compact" :label="t('settings.closeSettings')" @click="emit('close')">
             <CloseIcon />
           </IconButton>
         </div>
 
         <div class="settings-page__body">
           <template v-if="activeKey === 'appearance'">
-            <SettingsPageHeader title="Appearance" description="Choose how Pichamber looks on this device." />
+            <SettingsPageHeader :title="t('settings.appearance.title')" :description="t('settings.appearance.description')" />
 
-            <SettingsGroup title="Theme">
-              <div class="theme-options" role="radiogroup" aria-label="Theme">
+            <SettingsGroup :title="t('settings.appearance.themeTitle')">
+              <div class="theme-options" role="radiogroup" :aria-label="t('settings.appearance.themeTitle')">
                 <button
                   v-for="option in themeOptions"
                   :key="option.id"
@@ -223,71 +227,87 @@ const selectItem = (key: string) => {
                   @click="setTheme(option.id)"
                 >
                   <span class="theme-options__preview" :class="`is-${option.id}`"><i /><i /></span>
-                  <span><strong>{{ option.label }}</strong><small>{{ option.description }}</small></span>
+                  <span><strong>{{ t(option.labelKey) }}</strong><small>{{ t(option.descriptionKey) }}</small></span>
+                </button>
+              </div>
+            </SettingsGroup>
+
+            <SettingsGroup :title="t('settings.appearance.languageTitle')" class="language-group">
+              <div class="language-options" role="radiogroup" :aria-label="t('settings.appearance.languageTitle')">
+                <button
+                  v-for="option in localeOptions"
+                  :key="option.id"
+                  type="button"
+                  role="radio"
+                  :aria-checked="localePreference() === option.id"
+                  :class="{ 'is-active': localePreference() === option.id }"
+                  @click="setLocale(option.id)"
+                >
+                  <span><strong>{{ "label" in option ? option.label : t(option.labelKey) }}</strong></span>
                 </button>
               </div>
             </SettingsGroup>
           </template>
 
           <template v-else-if="activeKey === 'sessions'">
-            <SettingsPageHeader title="Sessions" description="Control which sessions appear in the sidebar." />
+            <SettingsPageHeader :title="t('settings.sessions.title')" :description="t('settings.sessions.description')" />
 
-            <SettingsOption title="Hide temporary sessions" description="Hide sessions under /tmp and macOS temporary folders.">
+            <SettingsOption :title="t('settings.sessions.hideTemporary')" :description="t('settings.sessions.hideTemporaryDesc')">
               <input v-model="settings.hideTemporarySessions" type="checkbox" />
             </SettingsOption>
           </template>
 
           <template v-else-if="activeKey === 'editor'">
-            <SettingsPageHeader title="Editor" description="Choose which application opens local file links." />
+            <SettingsPageHeader :title="t('settings.editor.title')" :description="t('settings.editor.description')" />
 
-            <SettingsGroup title="Local file links">
-              <SettingsOption inline title="Open files with" description="Supported editors use the link's line number when one is available.">
+            <SettingsGroup :title="t('settings.editor.localFileLinks')">
+              <SettingsOption inline :title="t('settings.editor.openFilesWith')" :description="t('settings.editor.openFilesWithDesc')">
                 <select :value="fileEditor" @change="saveFileEditor(($event.target as HTMLSelectElement).value as FileEditor)">
                   <option value="vscode">VS Code (default)</option>
                   <option value="cursor">Cursor</option>
                   <option value="zed">Zed</option>
                   <option value="webstorm">WebStorm</option>
-                  <option value="system">System default</option>
+                  <option value="system">{{ t('settings.editor.systemDefault') }}</option>
                 </select>
               </SettingsOption>
             </SettingsGroup>
           </template>
 
           <template v-else-if="activeKey === 'chat'">
-            <SettingsPageHeader title="Chat" description="Local preferences for the conversation view. These never sync across devices." />
+            <SettingsPageHeader :title="t('settings.chat.title')" :description="t('settings.chat.description')" />
 
-            <SettingsGroup title="Composer">
-              <SettingsOption inline title="Send key" description="Pick the key combo that submits a message. Plain Enter is faster; Cmd/Ctrl+Enter leaves the newline key free.">
+            <SettingsGroup :title="t('settings.chat.composer')">
+              <SettingsOption inline :title="t('settings.chat.sendKey')" :description="t('settings.chat.sendKeyDesc')">
                 <select v-model="settings.sendKey">
-                  <option value="enter">Enter (default)</option>
-                  <option value="modEnter">⌘/Ctrl + Enter</option>
+                  <option value="enter">{{ t('settings.chat.sendKeyEnter') }}</option>
+                  <option value="modEnter">{{ t('settings.chat.sendKeyModEnter') }}</option>
                 </select>
               </SettingsOption>
             </SettingsGroup>
 
-            <SettingsGroup title="Display">
-              <SettingsOption title="Show timestamps" description="Render a local timestamp under every committed message in the conversation.">
+            <SettingsGroup :title="t('settings.chat.display')">
+              <SettingsOption :title="t('settings.chat.showTimestamps')" :description="t('settings.chat.showTimestampsDesc')">
                 <input v-model="settings.showTimestamps" type="checkbox" />
               </SettingsOption>
-              <SettingsOption title="Expand tool results by default" description="Open committed tool result details when the page first renders. You'll still be able to fold them.">
+              <SettingsOption :title="t('settings.chat.expandToolResults')" :description="t('settings.chat.expandToolResultsDesc')">
                 <input v-model="settings.expandedToolResults" type="checkbox" />
               </SettingsOption>
             </SettingsGroup>
           </template>
 
           <template v-else-if="activeKey === 'notifications'">
-            <SettingsPageHeader title="Notifications" description="Decide how Pichamber lets you know the agent has finished a turn." />
+            <SettingsPageHeader :title="t('settings.notifications.title')" :description="t('settings.notifications.description')" />
 
-            <SettingsGroup title="On agent turn complete">
-              <SettingsOption title="Sound" description="Play a short chime when the agent becomes idle. Respects your device's mute switch.">
+            <SettingsGroup :title="t('settings.notifications.onTurnComplete')">
+              <SettingsOption :title="t('settings.notifications.sound')" :description="t('settings.notifications.soundDesc')">
                 <input v-model="settings.notifySound" type="checkbox" />
               </SettingsOption>
-              <SettingsOption title="Desktop notification" description="Show a system notification when the turn ends. Requires browser permission below.">
+              <SettingsOption :title="t('settings.notifications.desktopNotification')" :description="t('settings.notifications.desktopNotificationDesc')">
                 <input v-model="settings.notifyDesktop" type="checkbox" :disabled="!canDesktopNotify" />
               </SettingsOption>
             </SettingsGroup>
 
-            <SettingsGroup title="Browser permission">
+            <SettingsGroup :title="t('settings.notifications.browserPermission')">
               <SettingsOption
                 inline
                 :title="permissionLabel.title"
@@ -304,17 +324,17 @@ const selectItem = (key: string) => {
           </template>
 
           <template v-else-if="activeKey === 'git'">
-            <SettingsPageHeader title="Git" description="Control how Pichamber refreshes remote branch information." />
+            <SettingsPageHeader title="Git" :description="t('settings.git.description')" />
 
-            <SettingsGroup title="Remote updates">
-              <SettingsOption title="Automatically fetch remotes" description="Run git fetch periodically while the Git panel is open. This refreshes remote refs without changing your working tree.">
+            <SettingsGroup :title="t('settings.git.remoteUpdates')">
+              <SettingsOption :title="t('settings.git.autoFetch')" :description="t('settings.git.autoFetchDesc')">
                 <input v-model="settings.gitAutoFetch" type="checkbox" />
               </SettingsOption>
             </SettingsGroup>
           </template>
 
           <template v-else-if="activeKey === 'extensions'">
-            <SettingsPageHeader title="Extensions" description="Manage Pi extensions and inspect the active session." />
+            <SettingsPageHeader :title="t('settings.extensions.title')" :description="t('settings.extensions.description')" />
             <ExtensionsManager />
           </template>
 
@@ -434,6 +454,15 @@ const selectItem = (key: string) => {
 .theme-options__preview.is-system::before { background: linear-gradient(135deg, #efede7 0 49.5%, #2a2a27 50%); }
 .theme-options__preview.is-system i { background: linear-gradient(135deg, #d5d1c8 0 49.5%, #565550 50%); }
 @media (max-width: 700px) { .theme-options { grid-template-columns: 1fr; } }
+
+/* Language picker: simple text pills, no preview tiles needed. */
+.language-group { margin-top: 22px; }
+.language-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.language-options > button { display: inline-flex; align-items: center; padding: 6px 14px; border: 1px solid var(--ui-border-subtle); border-radius: 999px; background: var(--ui-surface); color: var(--ui-text-muted); font-size: 13px; transition: border-color var(--ui-duration-fast) var(--ui-ease-standard), background-color var(--ui-duration-fast) var(--ui-ease-standard); }
+.language-options > button:hover { background: var(--ui-surface-hover); }
+.language-options > button.is-active { border-color: var(--ui-border-focus); background: var(--ui-surface-selected); color: var(--ui-text-strong); }
+.language-options > button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
+.language-options strong { font-weight: 500; }
 
 /* Permission button: matches the input/select control surface so the
  * inline option row stays visually balanced. Disabled reads muted so

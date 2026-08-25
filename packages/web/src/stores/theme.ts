@@ -4,9 +4,9 @@ import { persistedState } from "@/stores/persisted";
 /** 主题偏好/系统主题等跨组件共享状态。按模块级 store 模式集中，
  *  组件直接 import，不再经 useTheme composable 中转。 */
 export const themeOptions = [
-  { id: "system", label: "System", description: "Match your device appearance." },
-  { id: "light", label: "Light", description: "Use the light interface." },
-  { id: "dark", label: "Dark", description: "Use the dark interface." },
+  { id: "system", labelKey: "settings.appearance.themeSystem", descriptionKey: "settings.appearance.themeSystemDesc" },
+  { id: "light", labelKey: "settings.appearance.themeLight", descriptionKey: "settings.appearance.themeLightDesc" },
+  { id: "dark", labelKey: "settings.appearance.themeDark", descriptionKey: "settings.appearance.themeDarkDesc" },
 ] as const;
 
 export type ThemePreference = (typeof themeOptions)[number]["id"];

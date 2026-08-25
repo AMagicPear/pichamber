@@ -7,6 +7,7 @@ import {
   type PropType,
   type Ref,
 } from "vue";
+import { useI18n } from "vue-i18n";
 import type { DirEntry } from "@amagicpear/pichamber-shared";
 import { listDirectory, toMessage } from "@/api/client";
 import { workspace } from "@/stores/workspace";
@@ -23,6 +24,7 @@ const FileTreeNode = defineComponent({
     entry: { type: Object as PropType<DirEntry>, required: true },
   },
   setup(props) {
+    const { t } = useI18n();
     const expanded = ref(false);
     const children = ref<DirEntry[] | null>(null);
     const error = ref<string | null>(null);
@@ -94,7 +96,7 @@ const FileTreeNode = defineComponent({
               {error.value ? (
                 <li class="file-tree__state file-tree__state--error">{error.value}</li>
               ) : isLoading.value ? (
-                <li class="file-tree__state">Loading…</li>
+                <li class="file-tree__state">{t('files.loading')}</li>
               ) : (
                 children.value?.map((child) => <FileTreeNode key={child.path} entry={child} />)
               )}

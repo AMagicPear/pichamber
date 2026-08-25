@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AiAgentIcon from "lucide-static/icons/bot.svg";
-import StackIcon from "@/assets/icons/Stack.svg";
+import WalletIcon from "lucide-static/icons/wallet.svg";
 import TerminalBoxIcon from "lucide-static/icons/square-terminal.svg";
 import ContextIcon from "lucide-static/icons/square-text.svg";
 import FolderIcon from "lucide-static/icons/folder.svg";
@@ -12,8 +12,11 @@ import { usePopover } from "@/composables/usePopover";
 import { availableModels, windowTitle, workspace } from "@/stores/workspace";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { activeGitBranch, loadGitBranch } from "@/stores/git";
 import { ui } from "@/stores/ui";
+
+const { t } = useI18n();
 
 const gitBranch = activeGitBranch;
 
@@ -53,7 +56,7 @@ const onProvidersClick = () => {
         </div>
         <div class="session-header__path-row">
           <p :title="workspace.cwd ?? undefined">{{ workspace.cwd }}</p>
-          <span v-if="gitBranch" class="session-header__branch" :title="`Git branch: ${gitBranch}`">
+          <span v-if="gitBranch" class="session-header__branch" :title="t('header.gitBranchTitle', { branch: gitBranch })">
             <GitBranchIcon />
             {{ gitBranch }}
           </span>
@@ -61,29 +64,29 @@ const onProvidersClick = () => {
       </div>
     </div>
 
-    <nav class="session-header__tools" aria-label="Session tools">
+    <nav class="session-header__tools" :aria-label="t('header.sessionTools')">
       <div ref="root" class="providers-trigger">
-        <IconButton class="providers-button" label="Usage & balance"
-          :title="hasQuotedProvider ? 'View usage & balance' : 'No supported providers configured'" :pressed="open"
+        <IconButton class="providers-button" :label="t('header.usageBalance')"
+          :title="hasQuotedProvider ? t('header.viewUsageBalance') : t('header.noProvidersConfigured')" :pressed="open"
           :disabled="!hasQuotedProvider" @click="onProvidersClick">
-          <StackIcon />
+          <WalletIcon />
         </IconButton>
-        <FloatingPanel :open="open" :style="style" :width="280" :panel-id="panelId" aria-label="Usage & balance">
+        <FloatingPanel :open="open" :style="style" :width="280" :panel-id="panelId" :aria-label="t('header.usageBalance')">
           <ProviderQuotaPanel :open="open" />
         </FloatingPanel>
       </div>
-      <IconButton label="Toggle terminal panel" :pressed="ui.panels.bottom.open" @click="ui.toggle('bottom')">
+      <IconButton :label="t('header.toggleTerminal')" :pressed="ui.panels.bottom.open" @click="ui.toggle('bottom')">
         <TerminalBoxIcon />
       </IconButton>
-      <IconButton label="Git panel" :pressed="ui.panels.right.open && ui.activeRightPanel === 'git'"
+      <IconButton :label="t('header.gitPanel')" :pressed="ui.panels.right.open && ui.activeRightPanel === 'git'"
         @click="ui.selectRightPanel('git')">
         <GitBranchIcon />
       </IconButton>
-      <IconButton label="Files panel" :pressed="ui.panels.right.open && ui.activeRightPanel === 'files'"
+      <IconButton :label="t('header.filesPanel')" :pressed="ui.panels.right.open && ui.activeRightPanel === 'files'"
         @click="ui.selectRightPanel('files')">
         <FolderIcon />
       </IconButton>
-      <IconButton label="Context panel" :pressed="ui.panels.right.open && ui.activeRightPanel === 'context'"
+      <IconButton :label="t('header.contextPanel')" :pressed="ui.panels.right.open && ui.activeRightPanel === 'context'"
         @click="ui.selectRightPanel('context')">
         <ContextIcon />
       </IconButton>

@@ -3,7 +3,7 @@
  * state inside ActivityPanel, so the toggle just renders a button and
  * emits `toggle` when clicked — no refs, no logic. */
 import ArrowUpIcon from "lucide-static/icons/chevron-up.svg";
-import StackIcon from "@/assets/icons/Stack.svg";
+import ActivityIcon from "lucide-static/icons/activity.svg";
 
 defineProps<{
   count: number;
@@ -27,7 +27,7 @@ defineEmits<{
     :aria-controls="expanded ? 'activity-panel-surface' : undefined"
     @click="$emit('toggle')"
   >
-    <StackIcon aria-hidden="true" />
+    <ActivityIcon aria-hidden="true" />
     <span class="activity-toggle__label">Activity</span>
     <span class="activity-toggle__count">{{ count }}</span>
     <ArrowUpIcon aria-hidden="true" class="activity-toggle__chevron" />

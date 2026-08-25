@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import type { SessionStatsView } from "@amagicpear/pichamber-shared";
 import { stats } from "@/stores/workspace";
+
+const { t } = useI18n();
 
 const view = computed<SessionStatsView | undefined>(() => stats.value);
 
@@ -26,11 +29,11 @@ const usageRows = computed(() => {
   // and cacheRead so the eye scans the production tokens first, then the
   // billing-relevant cache buckets.
   return [
-    { label: "Input", value: text.input },
-    { label: "Output", value: text.output },
-    { label: "Reasoning", value: text.reasoning },
-    { label: "Cache Read", value: text.cacheRead },
-    { label: "Cache Write", value: text.cacheWrite },
+    { label: t('context.input'), value: text.input },
+    { label: t('context.output'), value: text.output },
+    { label: t('context.reasoning'), value: text.reasoning },
+    { label: t('context.cacheRead'), value: text.cacheRead },
+    { label: t('context.cacheWrite'), value: text.cacheWrite },
   ];
 });
 
@@ -46,8 +49,8 @@ const modelTitle = computed(() => {
 <template>
   <div class="right-panel__pane context-pane" role="tabpanel" aria-label="context">
     <div v-if="!hasData" class="ui-empty-state">
-      <p>Context</p>
-      <span>Send a message to see live token usage and session stats.</span>
+      <p>{{ t('context.title') }}</p>
+      <span>{{ t('context.emptyHint') }}</span>
     </div>
 
     <div v-else class="context-pane__body">
@@ -61,10 +64,10 @@ const modelTitle = computed(() => {
       </header>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading ui-section-title">Context</h3>
+        <h3 class="context-pane__heading ui-section-title">{{ t('context.contextHeading') }}</h3>
         <div class="context-pane__stat">
-          <span class="context-pane__value">{{ view?.context.tokensText ?? "—" }}</span>
-          <span class="context-pane__sub">{{ view?.context.percent ?? "—" }} used</span>
+          <span class="context-pane__value">{{ view?.context.tokensText ?? "-" }}</span>
+          <span class="context-pane__sub">{{ t('context.used', { value: view?.context.percent ?? "-" }) }}</span>
         </div>
         <div
           v-if="view?.context.contextWindow && view.context.tokens != null"
@@ -82,29 +85,29 @@ const modelTitle = computed(() => {
       </section>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading ui-section-title">Messages</h3>
+        <h3 class="context-pane__heading ui-section-title">{{ t('context.messages') }}</h3>
         <div class="context-pane__stat">
           <span class="context-pane__value">{{ view?.messages.totalText ?? "0" }}</span>
         </div>
         <div class="context-pane__row">
-          <span class="context-pane__row-label">User</span>
+          <span class="context-pane__row-label">{{ t('context.user') }}</span>
           <span class="context-pane__row-value">{{ view?.messages.userText ?? "0" }}</span>
         </div>
         <div class="context-pane__row">
-          <span class="context-pane__row-label">Assistant</span>
+          <span class="context-pane__row-label">{{ t('context.assistant') }}</span>
           <span class="context-pane__row-value">{{ view?.messages.assistantText ?? "0" }}</span>
         </div>
       </section>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading ui-section-title">Cost</h3>
+        <h3 class="context-pane__heading ui-section-title">{{ t('context.cost') }}</h3>
         <div class="context-pane__stat">
           <span class="context-pane__value">{{ view?.cost.value ?? "$0.00" }}</span>
         </div>
       </section>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading ui-section-title">Last Assistant Message</h3>
+        <h3 class="context-pane__heading ui-section-title">{{ t('context.lastAssistant') }}</h3>
         <div v-for="row in usageRows" :key="row.label" class="context-pane__row">
           <span class="context-pane__row-label">{{ row.label }}</span>
           <span class="context-pane__row-value">{{ row.value }}</span>
@@ -112,7 +115,7 @@ const modelTitle = computed(() => {
       </section>
 
       <section class="context-pane__section">
-        <h3 class="context-pane__heading ui-section-title">Cache Hit</h3>
+        <h3 class="context-pane__heading ui-section-title">{{ t('context.cacheHit') }}</h3>
         <div class="context-pane__stat">
           <span class="context-pane__value">{{ view?.cacheHit ?? "0.0%" }}</span>
         </div>

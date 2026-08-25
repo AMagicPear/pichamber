@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ModelDescriptor } from "@amagicpear/pichamber-shared";
 import SelectorPopover from "@/components/ui/SelectorPopover.vue";
 import ProviderLogo from "./ProviderLogo";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   model: ModelDescriptor | undefined;
@@ -44,8 +47,8 @@ const onSelect = (item: { value: ModelDescriptor }, closePopover: () => void) =>
 };
 
 const placeholder = computed(() => {
-  if (props.availableModels.length === 0) return "No models available";
-  return props.model?.name ?? "Choose model";
+  if (props.availableModels.length === 0) return t('modelSelector.noModels');
+  return props.model?.name ?? t('modelSelector.chooseModel');
 });
 </script>
 
@@ -66,7 +69,7 @@ const placeholder = computed(() => {
         :groups="groups"
         :open="open"
         filterable
-        filter-placeholder="Filter models…"
+        :filter-placeholder="t('modelSelector.filterModels')"
         item-role="option"
         @select="onSelect($event, closePopover)"
       >

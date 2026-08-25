@@ -2,6 +2,9 @@
 import FolderIcon from "lucide-static/icons/folder.svg";
 import FileTree from "@/components/panels/FileTree.vue";
 import { workspace } from "@/stores/workspace";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -9,8 +12,8 @@ import { workspace } from "@/stores/workspace";
     <FileTree v-if="workspace.cwd !== null" />
     <div v-else class="ui-empty-state">
       <FolderIcon />
-      <p>No workspace selected</p>
-      <span>Open a workspace to browse its files.</span>
+      <p>{{ t('files.noWorkspace') }}</p>
+      <span>{{ t('files.openWorkspace') }}</span>
     </div>
   </div>
 </template>

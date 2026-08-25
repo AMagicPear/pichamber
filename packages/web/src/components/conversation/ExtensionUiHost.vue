@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import type { RpcExtensionUIRequest, RpcExtensionUIResponse } from "@earendil-works/pi-coding-agent";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import CloseIcon from "lucide-static/icons/x.svg";
 import Modal from "@/components/ui/Modal.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
+
+const { t } = useI18n();
 
 type DialogRequest = Extract<
   RpcExtensionUIRequest,
@@ -61,7 +64,7 @@ const confirm = (confirmed: boolean) => {
     <template #body>
       <div v-if="dialog" class="extension-dialog">
         <header>
-          <span class="extension-dialog__label">Extension request</span>
+          <span class="extension-dialog__label">{{ t('extensionUi.request') }}</span>
           <h3 v-if="!longTitle">{{ dialog.title }}</h3>
           <p v-else class="extension-dialog__title-long">{{ dialog.title }}</p>
           <p v-if="dialog.method === 'confirm'">{{ dialog.message }}</p>
@@ -98,10 +101,10 @@ const confirm = (confirmed: boolean) => {
 
         <footer v-if="dialog.method !== 'select'">
           <button type="button" class="extension-dialog__secondary" @click="dialog.method === 'confirm' ? confirm(false) : cancel()">
-            {{ dialog.method === "confirm" ? "No" : "Cancel" }}
+            {{ dialog.method === "confirm" ? t('common.no') : t('common.cancel') }}
           </button>
           <button type="button" class="extension-dialog__primary" @click="dialog.method === 'confirm' ? confirm(true) : submitValue()">
-            {{ dialog.method === "confirm" ? "Yes" : "Continue" }}
+            {{ dialog.method === "confirm" ? t('common.yes') : t('extensionUi.continue') }}
           </button>
         </footer>
       </div>
@@ -112,7 +115,7 @@ const confirm = (confirmed: boolean) => {
     <div v-for="notification in notifications" :key="notification.id" class="extension-toast" :class="`is-${notification.type}`">
       <i aria-hidden="true" />
       <span>{{ notification.message }}</span>
-      <button type="button" aria-label="Dismiss notification" @click="emit('dismissNotification', notification.id)"><CloseIcon /></button>
+      <button type="button" :aria-label="t('extensionUi.dismiss')" @click="emit('dismissNotification', notification.id)"><CloseIcon /></button>
     </div>
   </TransitionGroup>
 </template>

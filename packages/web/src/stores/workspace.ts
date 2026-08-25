@@ -19,6 +19,7 @@ import type {
 import { BUILTIN_COMMANDS } from "@/composables/builtin-commands";
 import { settings } from "@/stores/settings";
 import { applyExtensionUiRequest, pushErrorToast, resetExtensionUi } from "@/stores/extensionUi";
+import { i18n } from "@/i18n";
 
 /** 当前工作区/会话的一切状态，按官方推荐的模块级 reactive 模式统一放这里。
  *  - `workspace`：项目/会话元数据（cwd、sessionId、sessionName…）
@@ -29,7 +30,7 @@ export const workspace = reactive({
   cwd: "~" as string | null,
   folderName: null as string | null,
   sessionId: null as string | null,
-  sessionName: "New Session" as string | null,
+  sessionName: i18n.global.t('sidebar.newSessionLabel') as string | null,
 });
 
 export const sessions = ref<SessionInfo[]>([]);
@@ -50,7 +51,7 @@ export const sessionTitle = (session: SessionInfo | string): string => {
   return (
     sessionInfo?.name?.trim() ||
     sessionInfo?.firstMessage?.trim() ||
-    (sessionInfo?.messageCount === 0 ? "New Session" : `Session ${sessionId}`)
+    (sessionInfo?.messageCount === 0 ? i18n.global.t('sidebar.newSessionLabel') : i18n.global.t('sidebar.sessionFallback', { id: sessionId }))
   );
 };
 
@@ -120,7 +121,7 @@ export const createSessionForCwd = async (cwd: string) => {
   workspace.sessionId = sessionId;
   workspace.cwd = resolvedCwd;
   workspace.folderName = pathBasename(resolvedCwd);
-  workspace.sessionName = "New Session";
+  workspace.sessionName = i18n.global.t('sidebar.newSessionLabel');
   return sessionId;
 };
 
@@ -128,10 +129,10 @@ export const updateWorkspace = async (sessionId: string) => {
   // A freshly created empty session is active in memory before Pi persists it,
   // so it may not appear in listAll() yet. Its local metadata is authoritative.
   if (workspace.sessionId === sessionId && workspace.cwd !== null) return true;
-  workspace.sessionId = sessionId;
   await loadSessions();
-  if (workspace.sessionId !== sessionId) return false;
-  if (sessionsError.value) return true;
+  if (sessionsError.value) return false;
+  if (!sessions.value.some((session) => session.id === sessionId)) return false;
+  workspace.sessionId = sessionId;
   if (syncWorkspaceMetadata(sessionId)) return true;
   await refreshSessions();
   return sessionsError.value ? true : syncWorkspaceMetadata(sessionId);
@@ -439,7 +440,7 @@ export const canSend = computed(
 watch(
   [() => workspace.sessionName, windowTitle],
   ([sessionName, title]) => {
-    document.title = `${[sessionName, title].filter(Boolean).join(" · ")} - PiChamber`;
+    document.title = `${[sessionName, title].filter(Boolean).join(" · ")} - Pi Chamber`;
   },
   { immediate: true },
 );
@@ -493,7 +494,7 @@ const fireDesktopNotification = (modelLabel: string) => {
   if (Notification.permission !== "granted") return;
   try {
     const body = modelLabel ? `${modelLabel} finished responding.` : "Agent finished responding.";
-    const notification = new Notification("Pichamber", {
+    const notification = new Notification("Pi Chamber", {
       body,
       silent: true,
       tag: "pichamber-completion",

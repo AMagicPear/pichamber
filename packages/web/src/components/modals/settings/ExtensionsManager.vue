@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import type { ExtensionsOverview, PiBuiltinExtension, PiExtensionSource, PiExtensionUpdate } from "@amagicpear/pichamber-shared";
 import {
   checkPiExtensionUpdates,
@@ -14,6 +15,8 @@ import { workspace } from "@/stores/workspace";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsOption from "./SettingsOption.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
+
+const { t } = useI18n();
 
 const overview = ref<ExtensionsOverview | null>(null);
 const loading = ref(false);
@@ -92,7 +95,7 @@ const install = async (ext: PiBuiltinExtension) => {
 const remove = async (ext: PiBuiltinExtension) => {
   const sessionId = workspace.sessionId;
   if (!sessionId) return;
-  if (!confirm(`Remove built-in extension "${ext.name}" from your Pi extensions folder?`)) return;
+  if (!confirm(t('settings.extensions.removeBuiltinConfirm', { name: ext.name }))) return;
   saving.value = true;
   error.value = null;
   try {
@@ -125,7 +128,7 @@ const addSource = async () => {
 const removeSource = async (entry: PiExtensionSource) => {
   const sessionId = workspace.sessionId;
   if (!sessionId) return;
-  if (!confirm(`Remove source "${entry.source}"?`)) return;
+  if (!confirm(t('settings.extensions.removeSourceConfirm', { source: entry.source }))) return;
   saving.value = true;
   error.value = null;
   try {
@@ -160,12 +163,14 @@ onMounted(async () => {
   <div class="extension-manager">
     <p v-if="error" class="settings-page__error" role="alert">{{ error }}</p>
 
-    <SettingsGroup title="Built-in extensions" class="extension-manager__builtins">
+    <SettingsGroup :title="t('settings.extensions.builtinExtensions')" class="extension-manager__builtins">
       <p class="extension-manager__hint">
-        Installed into your Pi agent directory and available to pichamber and <code>pi</code>. Updates are explicit.
+        <i18n-t keypath="settings.extensions.builtinHint" tag="span">
+          <template #code><code>pi</code></template>
+        </i18n-t>
       </p>
       <p v-if="!loading && builtins.length === 0" class="extension-manager__state">
-        No built-in extensions available.
+        {{ t('settings.extensions.noBuiltins') }}
       </p>
       <ul v-else class="extension-manager__list">
         <li v-for="ext in builtins" :key="ext.id" class="extension-manager__manage-row">
@@ -175,58 +180,58 @@ onMounted(async () => {
           </div>
           <div class="extension-manager__actions">
             <template v-if="ext.installed">
-              <button type="button" :disabled="saving" @click="install(ext)">Update</button>
-              <button type="button" class="is-danger" :disabled="saving" @click="remove(ext)">Remove</button>
+              <button type="button" :disabled="saving" @click="install(ext)">{{ t('common.update') }}</button>
+              <button type="button" class="is-danger" :disabled="saving" @click="remove(ext)">{{ t('common.remove') }}</button>
             </template>
-            <button v-else type="button" :disabled="saving" @click="install(ext)">Configure</button>
+            <button v-else type="button" :disabled="saving" @click="install(ext)">{{ t('settings.extensions.configure') }}</button>
           </div>
         </li>
       </ul>
     </SettingsGroup>
 
-    <SettingsGroup title="Package sources" class="extension-manager__sources">
+    <SettingsGroup :title="t('settings.extensions.packageSources')" class="extension-manager__sources">
       <div class="extension-manager__update-bar">
         <span>
-          <strong v-if="updates.length">{{ updates.length }} update{{ updates.length === 1 ? "" : "s" }} available</strong>
-          <span v-else-if="checkingUpdates">Checking for updates…</span>
-          <span v-else-if="updatesChecked">No package updates available.</span>
-          <span v-else>Updates have not been checked.</span>
+          <strong v-if="updates.length">{{ t('settings.extensions.updatesAvailable', { count: updates.length }) }}</strong>
+          <span v-else-if="checkingUpdates">{{ t('settings.extensions.checkingUpdates') }}</span>
+          <span v-else-if="updatesChecked">{{ t('settings.extensions.noUpdatesAvailable') }}</span>
+          <span v-else>{{ t('settings.extensions.updatesNotChecked') }}</span>
         </span>
         <div class="extension-manager__actions">
-          <button type="button" :disabled="saving || checkingUpdates" @click="checkUpdates">Check again</button>
+          <button type="button" :disabled="saving || checkingUpdates" @click="checkUpdates">{{ t('settings.extensions.checkAgain') }}</button>
           <button v-if="updates.length" type="button" :disabled="saving || checkingUpdates" @click="updatePackages()">
-            Update all
+            {{ t('settings.extensions.updateAll') }}
           </button>
         </div>
       </div>
-      <SettingsOption inline title="Add source" description="Use npm:, git:, a URL, or a local package path.">
+      <SettingsOption inline :title="t('settings.extensions.addSource')" :description="t('settings.extensions.addSourceDesc')">
         <span class="extension-manager__add">
           <SearchBox
             v-model="newSource"
             type="text"
             size="compact"
             :disabled="saving"
-            placeholder="npm:package or ./extension"
-            label="Extension source"
+            :placeholder="t('settings.extensions.sourcePlaceholder')"
+            :label="t('settings.extensions.sourceLabel')"
             @enter="addSource"
           />
           <select v-model="newScope" :disabled="saving">
             <option value="user">Global</option>
             <option value="project">Project</option>
           </select>
-          <button type="button" :disabled="saving || !newSource.trim()" @click="addSource">Add</button>
+          <button type="button" :disabled="saving || !newSource.trim()" @click="addSource">{{ t('common.add') }}</button>
         </span>
       </SettingsOption>
-      <p class="extension-manager__hint">New sources load when the next session starts.</p>
-      <p v-if="!loading && sources.length === 0" class="extension-manager__state">No package sources configured.</p>
+      <p class="extension-manager__hint">{{ t('settings.extensions.newSourcesHint') }}</p>
+      <p v-if="!loading && sources.length === 0" class="extension-manager__state">{{ t('settings.extensions.noSources') }}</p>
       <ul v-else class="extension-manager__list">
         <li v-for="entry in sources" :key="`${entry.scope}:${entry.source}`" class="extension-manager__manage-row">
           <div class="extension-manager__item-copy">
             <strong>{{ entry.source }} <small v-if="entry.version">v{{ entry.version }}</small></strong>
             <small>
               {{ scopeLabel(entry.scope) }}
-              <template v-if="updates.some((update) => update.source === entry.source && update.scope === entry.scope)"> · update available</template>
-              <template v-if="entry.filtered"> · filtered</template>
+              <template v-if="updates.some((update) => update.source === entry.source && update.scope === entry.scope)"> · {{ t('settings.extensions.updateAvailable') }}</template>
+              <template v-if="entry.filtered"> · {{ t('settings.extensions.filtered') }}</template>
               <template v-if="entry.installedPath"> · {{ entry.installedPath }}</template>
             </small>
           </div>
@@ -236,32 +241,32 @@ onMounted(async () => {
               type="button"
               :disabled="saving || checkingUpdates"
               @click="updatePackages(entry.source)"
-            >Update</button>
-            <button type="button" class="is-danger" :disabled="saving" @click="removeSource(entry)">Remove</button>
+            >{{ t('common.update') }}</button>
+            <button type="button" class="is-danger" :disabled="saving" @click="removeSource(entry)">{{ t('common.remove') }}</button>
           </div>
         </li>
       </ul>
     </SettingsGroup>
 
-    <SettingsGroup title="Current session" class="extension-manager__session">
+    <SettingsGroup :title="t('settings.extensions.currentSession')" class="extension-manager__session">
       <p v-if="diagnostics.length" class="extension-manager__diagnostics">
-        <strong>Load errors</strong>
+        <strong>{{ t('settings.extensions.loadErrors') }}</strong>
         <span v-for="diagnostic in diagnostics" :key="`${diagnostic.path}:${diagnostic.error}`">
-          <code>{{ diagnostic.path }}</code> — {{ diagnostic.error }}
+          <code>{{ diagnostic.path }}</code> - {{ diagnostic.error }}
         </span>
       </p>
-      <p v-else-if="loading" class="extension-manager__state">Loading extensions…</p>
+      <p v-else-if="loading" class="extension-manager__state">{{ t('settings.extensions.loadingExtensions') }}</p>
       <p v-else-if="!inventoryAvailable" class="extension-manager__state">
-        The active runtime does not expose its extension inventory.
+        {{ t('settings.extensions.noInventory') }}
       </p>
       <p v-else-if="loaded.length === 0" class="extension-manager__state">
-        No extensions are active in this session.
+        {{ t('settings.extensions.noActiveExtensions') }}
       </p>
       <ul v-else class="extension-manager__list">
         <li v-for="ext in loaded" :key="ext.path" class="extension-manager__active-row">
           <header>
             <strong>{{ ext.label }}</strong>
-            <small>{{ scopeLabel(ext.scope) }} · {{ ext.origin === "package" ? "package" : "extension" }}</small>
+            <small>{{ scopeLabel(ext.scope) }} · {{ ext.origin === "package" ? t('settings.extensions.package') : t('settings.extensions.extension') }}</small>
           </header>
           <small class="extension-manager__path" :title="ext.path">{{ ext.path }}</small>
           <div v-if="ext.commands.length || ext.tools.length" class="extension-manager__resources">

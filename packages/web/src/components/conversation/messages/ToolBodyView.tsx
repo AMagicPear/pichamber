@@ -12,7 +12,12 @@ import DiffView from "../../panels/DiffView.vue";
 import { displayPath } from "./toolDiff";
 import { type ToolBody } from "./toolBody";
 import { useMarkdownRender } from "./useMarkdownRender";
+import { i18n } from "@/i18n";
 import "./ToolBodyView.css";
+
+// 模块级工具结果解析文本也走 i18n（不依赖组件上下文）。
+const gt = (key: string, params?: Record<string, unknown>) =>
+  params ? i18n.global.t(key, params) : i18n.global.t(key);
 
 const FolderIcon = FolderIconSrc as unknown as FunctionalComponent<SVGAttributes>;
 const FileTextIcon = FileTextIconSrc as unknown as FunctionalComponent<SVGAttributes>;
@@ -74,8 +79,8 @@ const renderListRows = (output: string): ListRows => {
   const { lines, notes } = splitNotes(output);
   const items = lines.filter((l) => l.length > 0).map(displayPath);
   return {
-    heading: items.length === 0 ? "no files" : `${items.length} files`,
-    empty: "No files",
+    heading: items.length === 0 ? gt('toolBody.noFiles') : gt('toolBody.nFiles', { count: items.length }),
+    empty: gt('toolBody.noFiles'),
     itemsClass: " tool-body-view__list-items--flow",
     notes,
     rows: items.map((name) => (
@@ -103,8 +108,8 @@ const renderGrepRows = (output: string): ListRows => {
     matches.push({ file, line: num, text: line.slice(second + 1) });
   }
   return {
-    heading: matches.length === 0 ? "no matches" : `${matches.length} matches`,
-    empty: "No matches",
+    heading: matches.length === 0 ? gt('toolBody.noMatches') : gt('toolBody.nMatches', { count: matches.length }),
+    empty: gt('toolBody.noMatches'),
     itemsClass: " tool-body-view__list-items--matches",
     notes,
     rows: matches.map((m) => (
@@ -157,7 +162,7 @@ export const ToolBodyView = defineComponent({
                 <img
                   key={i}
                   src={`data:${img.mimeType};base64,${img.data}`}
-                  alt="Read image"
+                  alt={gt('toolBody.readImage')}
                   loading="lazy"
                   decoding="async"
                 />

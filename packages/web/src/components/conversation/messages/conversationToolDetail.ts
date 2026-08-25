@@ -1,10 +1,16 @@
 import { inline } from "./messageContent";
 import { displayPath, isFileTool, numberArg, patchOpsSummary, stringArg } from "./toolDiff";
 import { type ToolBody, type ToolImage, toolBody } from "./toolBody";
+import { i18n } from "@/i18n";
 import type { LucideIconName } from "@/components/ui/morphIcons";
 
 export type ConversationToolDetail = {
-  label: string;
+  /** i18n key for the tool label; `<ConversationDetail>` resolves it via
+   *  `t(labelKey, labelParams)` at render time, so the memoized detail
+   *  stays language-reactive. */
+  labelKey: string;
+  /** Interpolation params for `labelKey` (`tools.custom` uses `{name}`). */
+  labelParams?: Record<string, unknown>;
   /** Collapsed single-line preview (plain text for bash/ls/thinking). */
   preview?: string;
   /** Body shape; consumed by `<ConversationDetail>` for the expanded area. */
@@ -35,27 +41,33 @@ type ToolDetailInput = {
 const fileToolIcon = (toolName: string) =>
   toolName === "edit" ? "file-pen" : toolName === "write" ? "file-plus" : "file-text";
 
-const fileLabel = (toolName: string) =>
-  `${toolName.charAt(0).toUpperCase()}${toolName.slice(1)} File`;
-
-const errorLabel = (toolName: string) => {
-  const base = toolName || "Tool";
-  return `${base.charAt(0).toUpperCase()}${base.slice(1)} failed`;
+/** 已知工具名 → 翻译键；未知工具/MCP 插件工具走 `tools.custom` 原样透传名称，
+ *  让 label 始终统一走 `t(labelKey, labelParams)`。 */
+const labelKeyFor = (toolName: string): { labelKey: string; labelParams?: Record<string, unknown> } => {
+  switch (toolName) {
+    case "bash":
+      return { labelKey: "tools.shellCommand" };
+    case "read":
+      return { labelKey: "tools.readFile" };
+    case "write":
+      return { labelKey: "tools.writeFile" };
+    case "edit":
+      return { labelKey: "tools.editFile" };
+    case "apply_patch":
+      return { labelKey: "tools.applyPatch" };
+    case "find":
+      return { labelKey: "tools.findFiles" };
+    case "grep":
+      return { labelKey: "tools.grep" };
+    case "mcp":
+      return { labelKey: "tools.mcp" };
+    case "mcpScript":
+      return { labelKey: "tools.mcpScript" };
+    default:
+      // pi-mcp-adapter 的 `<prefix>_<server>_<tool>` 与未知工具保持原名展示。
+      return { labelKey: "tools.custom", labelParams: { name: toolName || i18n.global.t("tools.tool") } };
+  }
 };
-
-/** MCP 插件注册的工具显示名；命中即配 mcp 图标：
- *  - `pi-mcp-adapter` 代理入口：`mcp` → "MCP"、`mcpScript` → "MCP Script"
- *  - `pi-mcp-extension` 直接工具：`<prefix>_<server>_<tool>`（默认前缀
- *    `mcp`），保持原名展示。
- *  未命中返回 undefined，走通用 fallback。 */
-const mcpToolLabel = (toolName: string): string | undefined =>
-  toolName === "mcp"
-    ? "MCP"
-    : toolName === "mcpScript"
-      ? "MCP Script"
-      : toolName.startsWith("mcp_")
-        ? toolName
-        : undefined;
 
 export const conversationToolDetail = ({
   toolName,
@@ -66,9 +78,13 @@ export const conversationToolDetail = ({
 }: ToolDetailInput): ConversationToolDetail => {
   const failed = isError === true;
   const command = stringArg(args, "command");
+  const path = stringArg(args, "path");
+  const { labelKey, labelParams } = labelKeyFor(toolName);
+
   if (toolName === "bash") {
     return {
-      label: failed ? errorLabel("Shell Command") : "Shell Command",
+      labelKey,
+      labelParams,
       preview: command ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: "square-terminal",
@@ -77,13 +93,12 @@ export const conversationToolDetail = ({
     };
   }
 
-  const path = stringArg(args, "path");
   if (isFileTool(toolName) && path) {
-    const relative = displayPath(path);
     return {
-      label: failed ? errorLabel(toolName) : fileLabel(toolName),
+      labelKey,
+      labelParams,
       // 失败也保留路径：让用户知道是哪个文件操作失败。
-      path: relative,
+      path: displayPath(path),
       body: toolBody({ toolName, args, output, isError, images }),
       icon: fileToolIcon(toolName),
       isError: failed,
@@ -96,7 +111,8 @@ export const conversationToolDetail = ({
         ? patchOpsSummary((args as { input?: unknown }).input as string)
         : undefined;
     return {
-      label: failed ? errorLabel(toolName) : "Apply Patch",
+      labelKey: "tools.applyPatch",
+      labelParams,
       preview: summary ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: "file-pen",
@@ -107,7 +123,7 @@ export const conversationToolDetail = ({
   if (toolName === "ls") {
     const relative = path ? displayPath(path) : undefined;
     return {
-      label: failed ? errorLabel("ls") : path ? "List Directory" : "List Files",
+      labelKey: path ? "tools.listDirectory" : "tools.listFiles",
       preview: relative ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: "folders",
@@ -118,7 +134,8 @@ export const conversationToolDetail = ({
   if (toolName === "find") {
     const relative = path ? displayPath(path) : undefined;
     return {
-      label: failed ? errorLabel("find") : "Find Files",
+      labelKey,
+      labelParams,
       preview: relative ?? inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: "search",
@@ -128,7 +145,8 @@ export const conversationToolDetail = ({
 
   if (toolName === "grep") {
     return {
-      label: failed ? errorLabel("grep") : "Grep",
+      labelKey,
+      labelParams,
       preview: inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: "search-check",
@@ -137,10 +155,10 @@ export const conversationToolDetail = ({
   }
 
   // MCP 插件工具（pi-mcp-adapter / pi-mcp-extension）：统一 mcp 图标与显示名。
-  const mcpLabel = mcpToolLabel(toolName);
-  if (mcpLabel !== undefined) {
+  if (toolName === "mcp" || toolName === "mcpScript" || toolName.startsWith("mcp_")) {
     return {
-      label: failed ? `${mcpLabel} failed` : mcpLabel,
+      labelKey,
+      labelParams,
       preview: inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: "mcp",
@@ -149,7 +167,8 @@ export const conversationToolDetail = ({
   }
 
   return {
-    label: failed ? errorLabel(toolName) : toolName || "Tool",
+    labelKey,
+    labelParams,
     preview: inline(output),
     body: toolBody({ toolName, args, output, isError }),
     isError: failed,

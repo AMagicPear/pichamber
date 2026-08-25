@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import type { PiProviderSettings } from "@amagicpear/pichamber-shared";
 import { fetchPiProviders, removePiProviderCredential, setPiProviderApiKey, toMessage } from "@/api/client";
 import { workspace } from "@/stores/workspace";
 import ProviderLogo from "@/components/ui/ProviderLogo";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
+
+const { t } = useI18n();
 
 const providers = ref<PiProviderSettings[]>([]);
 const loading = ref(false);
@@ -58,7 +61,7 @@ const saveApiKey = async (providerId: string) => {
 
 const removeCredential = async (provider: PiProviderSettings) => {
   const sessionId = workspace.sessionId;
-  if (!sessionId || !confirm(`Remove the stored credential for ${provider.name}?`)) return;
+  if (!sessionId || !confirm(t('settings.providers.removeCredentialConfirm', { name: provider.name }))) return;
   saving.value = true;
   error.value = null;
   try {
@@ -74,11 +77,11 @@ watch(() => workspace.sessionId, load, { immediate: true });
 </script>
 
 <template>
-  <SettingsPageHeader title="Providers" description="Manage API-key credentials for providers available to this session." />
+  <SettingsPageHeader :title="t('settings.providers.title')" :description="t('settings.providers.description')" />
 
   <p v-if="error" class="settings-page__error" role="alert">{{ error }}</p>
-  <p v-else-if="loading" class="provider-settings__state">Loading providers…</p>
-  <p v-else-if="orderedProviders.length === 0" class="provider-settings__state">No providers available.</p>
+  <p v-else-if="loading" class="provider-settings__state">{{ t('settings.providers.loading') }}</p>
+  <p v-else-if="orderedProviders.length === 0" class="provider-settings__state">{{ t('settings.providers.none') }}</p>
 
   <div v-else class="provider-settings__list">
     <article v-for="provider in orderedProviders" :key="provider.id" class="provider-settings__row">
@@ -91,9 +94,9 @@ watch(() => workspace.sessionId, load, { immediate: true });
       </div>
       <div class="provider-settings__meta">
         <span :class="{ 'is-ready': provider.auth.configured }">
-          {{ provider.auth.configured ? (provider.auth.label ?? "Configured") : "Not configured" }}
+          {{ provider.auth.configured ? (provider.auth.label ?? t('common.configured')) : t('common.notConfigured') }}
         </span>
-        <small>{{ provider.modelCount }} models</small>
+        <small>{{ t('settings.providers.models', { count: provider.modelCount }) }}</small>
       </div>
       <div v-if="provider.auth.supportsApiKey" class="provider-settings__actions">
         <template v-if="editingProviderId === provider.id">
@@ -108,12 +111,12 @@ watch(() => workspace.sessionId, load, { immediate: true });
             @enter="saveApiKey(provider.id)"
             @keydown.esc="editingProviderId = null"
           />
-          <button type="button" :disabled="saving || !apiKey.trim()" @click="saveApiKey(provider.id)">Save</button>
-          <button type="button" :disabled="saving" @click="editingProviderId = null">Cancel</button>
+          <button type="button" :disabled="saving || !apiKey.trim()" @click="saveApiKey(provider.id)">{{ t('settings.providers.save') }}</button>
+          <button type="button" :disabled="saving" @click="editingProviderId = null">{{ t('common.cancel') }}</button>
         </template>
         <template v-else>
           <button type="button" :disabled="saving" @click="startEditing(provider.id)">
-            {{ provider.auth.configured ? "Update key" : "Set key" }}
+            {{ provider.auth.configured ? t('settings.providers.updateKey') : t('settings.providers.setKey') }}
           </button>
           <button
             v-if="provider.auth.canRemove"
@@ -121,7 +124,7 @@ watch(() => workspace.sessionId, load, { immediate: true });
             class="is-danger"
             :disabled="saving"
             @click="removeCredential(provider)"
-          >Remove</button>
+          >{{ t('settings.providers.removeCredential') }}</button>
         </template>
       </div>
     </article>

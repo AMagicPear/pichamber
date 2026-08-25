@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import type {
   GitBranch,
   GitBranchList,
@@ -30,7 +31,7 @@ import GitBranchIcon from "lucide-static/icons/git-branch.svg";
 import ArrowDownSIcon from "lucide-static/icons/chevron-down.svg";
 import DeleteBinIcon from "lucide-static/icons/trash-2.svg";
 import RefreshIcon from "lucide-static/icons/refresh-cw.svg";
-import StackIcon from "@/assets/icons/Stack.svg";
+import ArchiveIcon from "lucide-static/icons/archive.svg";
 import PlusIcon from "lucide-static/icons/circle-plus.svg";
 import DiffView from "@/components/panels/DiffView.vue";
 import IconButton from "@/components/ui/IconButton.vue";
@@ -45,6 +46,8 @@ import { settings } from "@/stores/settings";
 import { ui } from "@/stores/ui";
 import { lucideIcon, type LucideIconName } from "../ui/morphIcons";
 import { MorphIcon } from "morphicons/vue";
+
+const { t } = useI18n();
 
 type SyncKind = "pull" | "push" | "stash" | "stash-pop" | "stash-drop" | "init" | "checkout";
 
@@ -103,7 +106,7 @@ const remoteBranches = computed(() => branches.value?.branches.filter((b) => b.r
 const branchGroups = computed(() => [
   {
     id: "local",
-    label: "Local branches",
+    label: t('git.localBranches'),
     items: localBranches.value.map((branch) => ({
       id: branch.name,
       label: branch.name,
@@ -115,7 +118,7 @@ const branchGroups = computed(() => [
   },
   {
     id: "remote",
-    label: "Remote tracking",
+    label: t('git.remoteTracking'),
     items: remoteBranches.value.map((branch) => ({
       id: branch.name,
       label: branch.name,
@@ -412,7 +415,7 @@ watch(() => workspace.cwd, () => {
     <!-- ── Not a git repository: offer one-click init ──────────── -->
     <div v-if="!isRepo" class="ui-empty-state">
       <GitBranchIcon />
-      <p>This directory is not a Git repository</p>
+      <p>{{ t('git.notARepo') }}</p>
       <span>{{ statusError }}</span>
       <button
         type="button"
@@ -421,7 +424,7 @@ watch(() => workspace.cwd, () => {
         @click="doInit"
       >
         <GitBranchIcon />
-        <span>{{ syncBusy === "init" ? "Initializing…" : "Initialize repository" }}</span>
+        <span>{{ syncBusy === "init" ? t('git.initializing') : t('git.initializeRepository') }}</span>
       </button>
     </div>
 
@@ -441,7 +444,7 @@ watch(() => workspace.cwd, () => {
             <ArrowDownSIcon class="git-pane__branch-chevron" />
           </button>
           <FloatingPanel :open="branchMenuOpen" :style="branchMenuStyle" :width="280" :max-height="320" :panel-id="branchMenuPanelId" role="menu">
-            <MenuPanel :groups="branchGroups" empty-text="No branches" @select="selectBranch($event.value)" />
+            <MenuPanel :groups="branchGroups" :empty-text="t('git.noBranches')" @select="selectBranch($event.value)" />
           </FloatingPanel>
         </div>
 
@@ -472,7 +475,7 @@ watch(() => workspace.cwd, () => {
       <section class="git-pane__section">
         <header class="git-pane__section-header">
           <h3 class="git-pane__section-title ui-section-title">
-            Changes
+            {{ t('git.changes') }}
             <span v-if="hasChanges" class="git-pane__count">{{ status?.changes.length }}</span>
           </h3>
         </header>
@@ -506,15 +509,15 @@ watch(() => workspace.cwd, () => {
             <button
               type="button"
               class="git-pane__discard"
-              :aria-label="`Discard changes to ${change.path}`"
-              :title="`Discard changes to ${change.path}`"
+              :aria-label="t('git.discardChanges', { path: change.path })"
+              :title="t('git.discardChanges', { path: change.path })"
               @click="discard(change)"
             >
               <DeleteBinIcon />
             </button>
           </li>
         </ul>
-        <p v-else class="git-pane__state">Clean working tree</p>
+        <p v-else class="git-pane__state">{{ t('git.cleanWorkingTree') }}</p>
         <p v-if="statusError" class="git-pane__state git-pane__state--error">{{ statusError }}</p>
       </section>
 
@@ -527,11 +530,11 @@ watch(() => workspace.cwd, () => {
         <p v-else-if="diffError" class="git-pane__diff-empty git-pane__diff-empty--error">
           {{ diffError }}
         </p>
-        <p v-else-if="diffLoading" class="git-pane__diff-empty">Loading diff…</p>
+        <p v-else-if="diffLoading" class="git-pane__diff-empty">{{ t('git.loadingDiff') }}</p>
         <p v-else-if="selected" class="git-pane__diff-empty">
-          {{ selected.status === "untracked" ? "Untracked file — no diff yet" : "No changes" }}
+          {{ selected.status === "untracked" ? t('git.untrackedNoDiff') : t('git.noChanges') }}
         </p>
-        <p v-else class="git-pane__diff-empty">Select a file to view its diff</p>
+        <p v-else class="git-pane__diff-empty">{{ t('git.selectFile') }}</p>
       </section>
 
       <!-- ── Commit ───────────────────────────────────────────── -->
@@ -539,7 +542,7 @@ watch(() => workspace.cwd, () => {
         <header class="git-pane__section-header">
           <h3 class="git-pane__section-title ui-section-title">
             Commit
-            <span v-if="!hasStaged" class="git-pane__hint">Stage files to enable commit.</span>
+            <span v-if="!hasStaged" class="git-pane__hint">{{ t('git.commitHint') }}</span>
           </h3>
         </header>
         <textarea
@@ -565,7 +568,7 @@ watch(() => workspace.cwd, () => {
       <section class="git-pane__section git-pane__section--stash">
         <header class="git-pane__section-header">
           <h3 class="git-pane__section-title ui-section-title">
-            <StackIcon class="git-pane__stash-icon" />
+            <ArchiveIcon class="git-pane__stash-icon" />
             Stash
           </h3>
         </header>
@@ -612,7 +615,7 @@ watch(() => workspace.cwd, () => {
             </div>
           </li>
         </ul>
-        <p v-else class="git-pane__state">No stashed entries</p>
+        <p v-else class="git-pane__state">{{ t('git.noStashed') }}</p>
         <p v-if="syncError" class="git-pane__sync-error" :title="syncError">{{ syncError }}</p>
       </section>
     </div>

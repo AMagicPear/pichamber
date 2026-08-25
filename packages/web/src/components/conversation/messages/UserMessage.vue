@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
 import MessageActions from "./MessageActions.vue";
 import MarkdownRender from "markstream-vue";
 import { messageImages, messageText } from "./messageContent";
 import SkillBlockChip from "./SkillBlockChip.vue";
 import { useMarkdownRender } from "./useMarkdownRender";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{ fork: []; copy: [text: string] }>();
 
@@ -81,7 +84,7 @@ const markdownRenderProps = useMarkdownRender();
     >
       <img
         :src="`data:${img.mimeType};base64,${img.data}`"
-        alt="Attached image"
+        :alt="t('composer.attachedImageAlt')"
         loading="lazy"
         decoding="async"
       />

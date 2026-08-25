@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { fetchProviderQuota } from "@/api/client";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
 import { availableModels, workspace } from "@/stores/workspace";
 import type { ModelDescriptor, ProviderDescriptor, ProviderQuota, QuotaWindow } from "@amagicpear/pichamber-shared";
 import ProviderLogo from "./ProviderLogo";
+
+const { t } = useI18n();
 
 const props = defineProps<{ open: boolean }>();
 
@@ -74,9 +77,9 @@ watch(
 const quotaFor = (provider: string) => quotaByProvider.value[provider];
 
 const formatReset = (ms: number) => {
-  if (!ms) return "—";
+  if (!ms) return "-";
   const diff = ms - Date.now();
-  if (diff <= 0) return "now";
+  if (diff <= 0) return t('common.now');
   const hours = Math.floor(diff / 3_600_000);
   if (hours < 24) {
     const minutes = Math.floor((diff % 3_600_000) / 60_000);
@@ -101,14 +104,14 @@ const formatNumber = (n: number) =>
   <div class="quota-panel">
     <header class="quota-panel__head">
       <div class="quota-panel__title">
-        <span>Usage & balance</span>
+        <span>{{ t('quota.title') }}</span>
       </div>
       <button type="button" class="quota-panel__refresh" :disabled="loading" @click="refresh">
-        {{ loading ? "…" : "Refresh" }}
+        {{ loading ? "…" : t('quota.refresh') }}
       </button>
     </header>
 
-    <div v-if="providers.length === 0" class="quota-panel__empty">No quoted providers configured.</div>
+    <div v-if="providers.length === 0" class="quota-panel__empty">{{ t('quota.empty') }}</div>
 
     <div v-else class="quota-panel__list">
       <section v-for="provider in providers" :key="provider.id" class="provider">
@@ -150,7 +153,7 @@ const formatNumber = (n: number) =>
             <div v-if="hasBar(window)" class="quota__track" role="progressbar" :aria-valuenow="Math.round(window.utilization * 100)" aria-valuemin="0" aria-valuemax="100">
               <div class="quota__fill" :style="{ width: `${Math.round(window.utilization * 100)}%` }" />
             </div>
-            <span v-if="hasBar(window)" class="quota__reset">resets in {{ formatReset(window.resetsAt) }}</span>
+            <span v-if="hasBar(window)" class="quota__reset">{{ t('quota.resetsIn', { value: formatReset(window.resetsAt) }) }}</span>
           </div>
         </div>
       </section>

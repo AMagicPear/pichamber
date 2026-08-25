@@ -1,5 +1,6 @@
 <script lang="tsx">
 import { computed, defineComponent, onMounted, provide, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import FileAddIcon from "lucide-static/icons/file-plus.svg";
 import FolderAddIcon from "lucide-static/icons/folder-plus.svg";
 import SearchBox from "@/components/ui/SearchBox.vue";
@@ -17,6 +18,7 @@ const SEARCH_DEBOUNCE_MS = 120;
 export default defineComponent({
   name: "FileTree",
   setup() {
+    const { t } = useI18n();
     const entries = ref<DirEntry[]>([]);
     const error = ref<string | null>(null);
     const search = ref("");
@@ -117,17 +119,17 @@ export default defineComponent({
             onUpdate:modelValue={(value: string) => {
               search.value = value;
             }}
-            placeholder="Search files..."
-            label="Search files"
+            placeholder={t('files.searchPlaceholder')}
+            label={t('files.searchLabel')}
           />
           <div class="file-tree__actions">
-            <IconButton size="standard" label="New file" disabled>
+            <IconButton size="standard" label={t('files.newFile')} disabled>
               <FileAddIcon />
             </IconButton>
-            <IconButton size="standard" label="New folder" disabled>
+            <IconButton size="standard" label={t('files.newFolder')} disabled>
               <FolderAddIcon />
             </IconButton>
-            <IconButton size="standard" label="Reload" onClick={() => load()}>
+            <IconButton size="standard" label={t('common.refresh')} onClick={() => load()}>
               <MorphIcon icon={lucideIcon(refreshIcon.value)} spring="snappy" />
             </IconButton>
           </div>
@@ -139,7 +141,7 @@ export default defineComponent({
           searchError.value ? (
             <p class="file-tree__state file-tree__state--error">{searchError.value}</p>
           ) : searchLoading.value ? (
-            <p class="file-tree__state">Searching…</p>
+            <p class="file-tree__state">{t('files.searching')}</p>
           ) : searchResults.value.length > 0 ? (
             <ul class="file-tree__list">
               {searchResults.value.map((entry) => (
@@ -147,7 +149,7 @@ export default defineComponent({
               ))}
             </ul>
           ) : (
-            <p class="file-tree__state">No files match "{search.value}"</p>
+            <p class="file-tree__state">{t('files.noFilesMatch', { query: search.value })}</p>
           )
         ) : entries.value.length > 0 ? (
           <ul class="file-tree__list">
@@ -156,7 +158,7 @@ export default defineComponent({
             ))}
           </ul>
         ) : (
-          <p class="file-tree__state">No files</p>
+          <p class="file-tree__state">{t('files.noFiles')}</p>
         )}
       </div>
     );

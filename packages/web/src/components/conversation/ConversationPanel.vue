@@ -7,6 +7,7 @@ import ScalesIcon from "lucide-static/icons/scale.svg";
 import SearchEyeIcon from "lucide-static/icons/search.svg";
 import SurveyIcon from "@/assets/icons/Survey.svg";
 import TargetIcon from "lucide-static/icons/target.svg";
+import { useI18n } from "vue-i18n";
 import IconButton from "@/components/ui/IconButton.vue";
 import ConversationMessages from "@/components/conversation/messages/ConversationMessages.vue";
 import UserInputBlock from "@/components/conversation/composer/UserInputBlock.vue";
@@ -31,15 +32,17 @@ import {
 import { settings } from "@/stores/settings";
 import { computed, watch } from "vue";
 
-const presets = [
-  { label: "Explore the codebase", icon: CompassIcon },
-  { label: "Catch me up", icon: HistoryIcon },
-  { label: "Weigh my options", icon: ScalesIcon },
-  { label: "Start feature planning", icon: SurveyIcon },
-  { label: "Craft a Goal", icon: TargetIcon },
-  { label: "Debug an issue", icon: BugIcon },
-  { label: "Review my changes", icon: SearchEyeIcon },
-];
+const { t } = useI18n();
+
+const presets = computed(() => [
+  { label: t('conversation.presets.exploreCodebase'), icon: CompassIcon },
+  { label: t('conversation.presets.catchMeUp'), icon: HistoryIcon },
+  { label: t('conversation.presets.weighOptions'), icon: ScalesIcon },
+  { label: t('conversation.presets.featurePlanning'), icon: SurveyIcon },
+  { label: t('conversation.presets.craftGoal'), icon: TargetIcon },
+  { label: t('conversation.presets.debugIssue'), icon: BugIcon },
+  { label: t('conversation.presets.reviewChanges'), icon: SearchEyeIcon },
+]);
 
 const {
   abort,
@@ -72,9 +75,9 @@ const onMessageFork = () => {
 const onMessageCopy = async (text: string) => {
   try {
     await navigator.clipboard.writeText(text);
-    pushInfoToast("Copied message to clipboard");
+    pushInfoToast(t('conversation.copiedMessage'));
   } catch {
-    pushErrorToast("Failed to copy message");
+    pushErrorToast(t('conversation.copyFailed'));
   }
 };
 
@@ -98,7 +101,7 @@ watch(
       @fork="onMessageFork"
       @copy="onMessageCopy"
     />
-    <h2 v-else>What are we working on in {{ workspace.folderName }}?</h2>
+    <h2 v-else>{{ t('conversation.emptyTitle', { folder: workspace.folderName }) }}</h2>
 
     <UserInputBlock
       v-model="draft"
@@ -130,7 +133,7 @@ watch(
       @dismiss-notification="dismissNotification"
     />
 
-    <div v-if="conversation.length === 0" class="presets" aria-label="Prompt starters">
+    <div v-if="conversation.length === 0" class="presets" :aria-label="t('conversation.promptStarters')">
       <button
         v-for="preset in presets"
         :key="preset.label"
@@ -140,7 +143,7 @@ watch(
         <component :is="preset.icon" />
         <span>{{ preset.label }}</span>
       </button>
-      <IconButton class="presets__add" label="Add prompt starter" disabled><AddIcon /></IconButton>
+      <IconButton class="presets__add" :label="t('conversation.addPromptStarter')" disabled><AddIcon /></IconButton>
     </div>
   </section>
 </template>

@@ -21,6 +21,7 @@
     "morphicons": "^1.7.0",
     "stream-diffs": "^0.0.2",
     "vue": "^3.6.0-rc.5",
+    "vue-i18n": "^11",
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
