@@ -74,9 +74,6 @@ const updatePackages = async (source?: string) => {
   }
 };
 
-const scopeLabel = (scope: "user" | "project" | "temporary") =>
-  scope === "user" ? "Global" : scope === "project" ? "Project" : "Session";
-
 const install = async (ext: PiBuiltinExtension) => {
   const sessionId = workspace.sessionId;
   if (!sessionId) return;
@@ -229,7 +226,7 @@ onMounted(async () => {
           <div class="extension-manager__item-copy">
             <strong>{{ entry.source }} <small v-if="entry.version">v{{ entry.version }}</small></strong>
             <small>
-              {{ scopeLabel(entry.scope) }}
+              {{ t(`settings.extensions.scope.${entry.scope}`) }}
               <template v-if="updates.some((update) => update.source === entry.source && update.scope === entry.scope)"> · {{ t('settings.extensions.updateAvailable') }}</template>
               <template v-if="entry.filtered"> · {{ t('settings.extensions.filtered') }}</template>
               <template v-if="entry.installedPath"> · {{ entry.installedPath }}</template>
@@ -266,7 +263,7 @@ onMounted(async () => {
         <li v-for="ext in loaded" :key="ext.path" class="extension-manager__active-row">
           <header>
             <strong>{{ ext.label }}</strong>
-            <small>{{ scopeLabel(ext.scope) }} · {{ ext.origin === "package" ? t('settings.extensions.package') : t('settings.extensions.extension') }}</small>
+            <small>{{ t(`settings.extensions.scope.${ext.scope}`) }} · {{ t(`settings.extensions.origin.${ext.origin}`) }}</small>
           </header>
           <small class="extension-manager__path" :title="ext.path">{{ ext.path }}</small>
           <div v-if="ext.commands.length || ext.tools.length" class="extension-manager__resources">

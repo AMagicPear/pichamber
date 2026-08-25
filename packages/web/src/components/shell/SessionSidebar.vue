@@ -19,6 +19,7 @@ import CheckIcon from "lucide-static/icons/check.svg";
 import SearchBox from "@/components/ui/SearchBox.vue";
 import { splitHighlight } from "@/composables/highlight";
 import AboutModal from "@/components/modals/AboutModal.vue";
+import ConfirmModal from "@/components/modals/ConfirmModal.vue";
 import ProjectPickerModal from "@/components/modals/ProjectPickerModal.vue";
 import FloatingPanel from "@/components/ui/FloatingPanel.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
@@ -180,6 +181,8 @@ const startProjectSession = async (cwd: string) => {
 const router = useRouter();
 const sessionListRoot = ref<HTMLElement | null>(null);
 const selectedSessionId = ref<string | null>(null);
+const deleteConfirmOpen = ref(false);
+const pendingDeleteSessionId = ref<string | null>(null);
 const {
   open: sessionMenuOpen,
   style: sessionMenuStyle,
@@ -205,10 +208,11 @@ const openSessionMenu = (sessionId: string) => {
 };
 
 const removeSelectedSession = async () => {
-  const sessionId = selectedSessionId.value;
-  if (!sessionId || !confirm(t('sidebar.deleteConfirm'))) return;
+  const sessionId = pendingDeleteSessionId.value;
+  if (!sessionId) return;
 
-  closeSessionMenu();
+  deleteConfirmOpen.value = false;
+  pendingDeleteSessionId.value = null;
   try {
     await deleteSession(sessionId);
     sessions.value = sessions.value.filter((session) => session.id !== sessionId);
@@ -216,6 +220,18 @@ const removeSelectedSession = async () => {
   } catch (error) {
     sessionsError.value = toMessage(error);
   }
+};
+
+const requestDeleteSelectedSession = () => {
+  if (!selectedSessionId.value) return;
+  pendingDeleteSessionId.value = selectedSessionId.value;
+  closeSessionMenu();
+  deleteConfirmOpen.value = true;
+};
+
+const cancelDeleteSession = () => {
+  deleteConfirmOpen.value = false;
+  pendingDeleteSessionId.value = null;
 };
 
 // ─── Inline rename ────────────────────────────────────────────────────
@@ -249,7 +265,7 @@ const selectSessionMenuItem = (item: { value: string }) => {
   if (item.value === "rename") {
     beginRename(sessions.value.find((session: SessionInfo) => session.id === selectedSessionId.value));
   } else {
-    void removeSelectedSession();
+    requestDeleteSelectedSession();
   }
 };
 
@@ -416,6 +432,14 @@ onMounted(async () => {
 
     <AboutModal :show="aboutOpen" @close="aboutOpen = false" />
     <ProjectPickerModal :show="projectPickerOpen" @close="projectPickerOpen = false" @select="openProject" />
+    <ConfirmModal
+      :show="deleteConfirmOpen"
+      :title="t('sidebar.deleteConfirmTitle')"
+      :message="t('sidebar.deleteConfirmMessage')"
+      :confirm-label="t('sidebar.deleteSession')"
+      @close="cancelDeleteSession"
+      @confirm="removeSelectedSession"
+    />
   </aside>
 </template>
 

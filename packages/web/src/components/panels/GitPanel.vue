@@ -475,7 +475,7 @@ watch(() => workspace.cwd, () => {
       <section class="git-pane__section">
         <header class="git-pane__section-header">
           <h3 class="git-pane__section-title ui-section-title">
-            {{ t('git.changes') }}
+            Changes
             <span v-if="hasChanges" class="git-pane__count">{{ status?.changes.length }}</span>
           </h3>
         </header>

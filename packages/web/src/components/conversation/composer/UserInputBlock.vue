@@ -11,6 +11,7 @@ import ListCollapseIcon from "lucide-static/icons/list-collapse.svg";
 import StopIcon from "lucide-static/icons/square.svg";
 import TargetIcon from "lucide-static/icons/target.svg";
 import IconButton from "@/components/ui/IconButton.vue";
+import ConfirmModal from "@/components/modals/ConfirmModal.vue";
 import ComposerShelf from "@/components/conversation/composer/ComposerShelf.vue";
 import ModelSelector from "@/components/ui/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/ui/ThinkingLevelSelector.vue";
@@ -96,6 +97,17 @@ const applyGoalPrefix = () => {
 const emitSend = (behavior?: "steer" | "followUp") => {
   applyGoalPrefix();
   emit("send", behavior);
+};
+
+const compactConfirmOpen = ref(false);
+
+const requestCompact = () => {
+  compactConfirmOpen.value = true;
+};
+
+const confirmCompact = () => {
+  compactConfirmOpen.value = false;
+  emit("compact");
 };
 
 const MAX_IMAGES = 8;
@@ -439,7 +451,7 @@ const placeholder = computed(() => {
               </div>
               <!-- Compact works at any time: the SDK's compact() aborts the
                current turn first (same as Pi's /compact), then summarizes. -->
-              <IconButton size="compact" :label="t('composer.compactContext')" @click="emit('compact')">
+              <IconButton size="compact" :label="t('composer.compactContext')" @click="requestCompact">
                 <ListCollapseIcon />
               </IconButton>
               <IconButton size="compact" :label="goalLabel" :title="goalLabel" :pressed="goalMode"
@@ -486,6 +498,14 @@ const placeholder = computed(() => {
         </template>
       </template>
     </ComposerActivityStack>
+
+    <ConfirmModal
+      :show="compactConfirmOpen"
+      :title="t('composer.compactConfirmTitle')"
+      :message="t('composer.compactConfirmMessage')"
+      @close="compactConfirmOpen = false"
+      @confirm="confirmCompact"
+    />
   </div>
 </template>
 
