@@ -300,6 +300,12 @@ export default {
     dropImageIndicator: "Drop image to attach",
     shelfFiles: "Files",
     shelfCommands: "Pi commands",
+    commandSource: {
+      extension: "Extension",
+      skill: "Skill",
+      builtin: "Built-in",
+      prompt: "Prompt",
+    },
     noMatchingCommands: "No matching Pi commands",
     searchingFiles: "Searching files...",
     noMatchingFiles: "No matching files",

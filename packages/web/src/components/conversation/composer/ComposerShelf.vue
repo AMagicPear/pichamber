@@ -10,6 +10,9 @@ import { workspace } from "@/stores/workspace";
 
 const { t } = useI18n();
 
+const commandSourceLabel = (source: RuntimeSlashCommand["source"]) =>
+  t(`composer.commandSource.${source}`);
+
 const props = defineProps<{
   mode: "files" | "commands" | null;
   query: string;
@@ -122,7 +125,7 @@ defineExpose({ move, choose });
           <span class="composer-shelf__primary">/{{ command.name }}</span>
           <span class="composer-shelf__description">{{ command.description || t('composer.noDescription') }}</span>
         </span>
-        <span class="composer-shelf__source" :class="`is-${command.source}`">{{ command.source }}</span>
+        <span class="composer-shelf__source" :class="`is-${command.source}`">{{ commandSourceLabel(command.source) }}</span>
       </button>
       <p v-if="commandResults.length === 0" class="composer-shelf__state">{{ t('composer.noMatchingCommands') }}</p>
       </template>

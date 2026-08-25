@@ -46,8 +46,8 @@ onMounted(load);
   <SettingsGroup v-else :title="t('settings.runtime.piRuntime')">
     <SettingsOption inline :title="t('settings.runtime.executionMode')" :description="t('settings.runtime.executionModeDesc')">
       <select :value="runtimeMode" :disabled="saving" @change="save(($event.target as HTMLSelectElement).value as 'sdk' | 'rpc')">
-        <option value="sdk">SDK runtime</option>
-        <option value="rpc">Local Pi RPC</option>
+        <option value="sdk">{{ t('settings.runtime.sdkRuntime') }}</option>
+        <option value="rpc">{{ t('settings.runtime.localPiRpc') }}</option>
       </select>
     </SettingsOption>
   </SettingsGroup>

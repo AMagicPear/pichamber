@@ -126,7 +126,7 @@ export default {
       description: "会话视图的本地偏好设置，不会跨设备同步",
       composer: "输入框",
       sendKey: "发送键",
-      sendKeyDesc: "选择提交消息的按键组合。直接 Enter 更快；⌘/Ctrl+Enter 把换行键留出来",
+      sendKeyDesc: "选择提交消息的按键组合",
       sendKeyEnter: "Enter（默认）",
       display: "显示",
       showTimestamps: "显示时间戳",
@@ -268,7 +268,7 @@ export default {
   },
 
   composer: {
-    placeholder: "向 Pi 提问。输入 {'@'} 选文件，输入 / 选命令。拖入图片以附加",
+    placeholder: "向 Pi 提问 - 输入 {'@'} 选文件，输入 / 选命令，拖入图片以附加",
     placeholderMod: "{base} 用 ⌘/Ctrl + Enter 提交",
     attachFiles: "附加文件",
     compactContext: "压缩上下文",
@@ -299,6 +299,12 @@ export default {
     dropImageIndicator: "拖放图片以附加",
     shelfFiles: "文件",
     shelfCommands: "Pi 命令",
+    commandSource: {
+      extension: "扩展",
+      skill: "技能",
+      builtin: "内置",
+      prompt: "提示词",
+    },
     noMatchingCommands: "没有匹配的 Pi 命令",
     searchingFiles: "正在搜索文件...",
     noMatchingFiles: "没有匹配的文件",
@@ -450,7 +456,7 @@ export default {
     mcpScript: "MCP Script",
     tool: "工具",
     custom: "{name}",
-    failed: "{name} 失败",
+    failed: "{name}失败",
   },
 
   language: {
