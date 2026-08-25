@@ -23,6 +23,9 @@ const props = defineProps<{
   startedAt?: number;
   /** Body shape — the dispatcher picks a renderer from `body.kind`. */
   body: ToolBody;
+  /** Whether Markdown content is complete; thinking bodies inherit the
+   * assistant stream state while tool results use the completed default. */
+  final?: boolean;
   /** Auto-expand while true (caller flips it when streaming starts) and
    *  auto-collapse when it flips false (streaming segment ended). Manual
    *  toggles between the flips are respected. */
@@ -124,7 +127,7 @@ const elapsed = computed(() => {
       <div class="conversation-detail__body-inner">
         <!-- Every body kind (markdown/diff/images/code/text/ls/grep/paths)
              is rendered by the ToolBodyView TSX component. -->
-        <ToolBodyView :body="body" />
+        <ToolBodyView :body="body" :final="final" />
       </div>
     </div>
   </section>

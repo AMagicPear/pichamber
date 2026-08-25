@@ -46,10 +46,8 @@
   --ui-input-height: 32px;
 }
 
-/* Force markstream-vue to use the same typeface as the rest of the app.
- * The library defines these on `.markstream-vue`, so the override must live
- * on the same selector to win the specificity race. */
-.markstream-vue {
+/* Chat typography belongs to the renderer's explicit custom-id boundary. */
+.markstream-vue[data-custom-id="chat"] {
   --ms-font-sans: var(--ui-font-sans);
   --markstream-code-font-family: var(--ui-font-mono);
 }

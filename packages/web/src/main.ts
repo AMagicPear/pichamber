@@ -16,7 +16,7 @@ initializeTheme();
 
 const app = createApp(App);
 
-setCustomComponents({
+setCustomComponents("chat", {
   link: LocalFileLink,
 });
 app.use(router);

@@ -21,19 +21,6 @@ const props = defineProps<{
  *  No logic here — the panel decides what to do. */
 const emit = defineEmits<{ fork: []; copy: [text: string] }>();
 
-/* ── Scroll anchoring (event-driven, following the StackBlitz
- * `use-stick-to-bottom` pattern used by chat apps) ─────────────
- *
- * - `scrollElement` + `contentElement`: a ResizeObserver watches the
- *   inner content wrapper; whenever content grows (streaming, async
- *   markdown) we scroll — but only while the user is still pinned.
- * - Escape lock: any upward user scroll (wheel or drag) immediately
- *   un-pins (`escapedFromLock`). It re-pins only after the user scrolls
- *   back down to within 70px of the bottom. This is what prevents the
- *   "magnet" pull when the user reads history.
- * - `ignoreScrollTop` distinguishes programmatic scrolls (set by us)
- *   from user scrolls so our own scrollTop writes don't un-pin.
- */
 const scroller = ref<HTMLElement | null>(null);
 const content = ref<HTMLElement | null>(null);
 const stickToBottom = ref(true);
@@ -70,7 +57,6 @@ const onViewportResize = () => {
 const onScroll = () => {
   const el = scroller.value;
   if (!el) return;
-  // Our own programmatic scroll — do not treat it as a user gesture.
   if (ignoreScrollTop !== undefined) {
     ignoreScrollTop = undefined;
     return;
@@ -88,7 +74,6 @@ const onScroll = () => {
 };
 
 const onWheel = (e: WheelEvent) => {
-  // Wheel up always escapes, even when the browser cancels the scroll.
   if (e.deltaY < 0) {
     escapedFromLock.value = true;
     stickToBottom.value = false;
@@ -100,19 +85,14 @@ onMounted(() => {
   if (!target) return;
   window.addEventListener("resize", onViewportResize);
   contentObserver = new ResizeObserver(() => {
-    // Browser resizing changes every message's wrapping. Defer the one
-    // anchor correction until resize settles instead of forcing layout on
-    // every intermediate width.
     if (viewportResizeTimer !== undefined) return;
     const el = scroller.value;
     if (!el) return;
-    // The browser can overscroll past the target; snap it back.
     if (el.scrollTop > el.scrollHeight - el.clientHeight) {
       el.scrollTop = el.scrollHeight - el.clientHeight;
     }
     if (stickToBottom.value) scheduleScrollToBottom();
   });
-  // Fires once immediately with the initial size, covering the first paint.
   contentObserver.observe(target);
 });
 
@@ -204,35 +184,35 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
   <div ref="scroller" class="conversation__messages scroll-fade-bottom" @scroll="onScroll" @wheel="onWheel">
     <div ref="content" class="conversation__content">
       <template v-for="item in items" :key="item.id">
-        <UserMessage
-          v-if="item.kind === 'message' && item.message.role === 'user'"
-          :message="item.message"
-          :timestamp-text="props.showTimestamps ? messageTimestampText(item.message) : undefined"
-          @fork="emit('fork')"
-          @copy="(text) => emit('copy', text)"
-        />
-        <AssistantMessage
-          v-else-if="item.kind === 'message' && item.message.role === 'assistant'"
-          :message="item.message"
-          :final="!item.streaming"
-          :model-name="modelNameFor(item.message)"
-          :show-timestamp="!!props.showTimestamps"
-          :timestamp-text="messageTimestampText(item.message)"
-          @fork="emit('fork')"
-          @copy="(text) => emit('copy', text)"
-        />
-        <CompactionSummaryMessage
-          v-else-if="item.kind === 'message' && item.message.role === 'compactionSummary'"
-          :message="item.message"
-        />
-        <CustomSummaryMessage
-          v-else-if="item.kind === 'message' && (item.message.role === 'custom' || item.message.role === 'branchSummary')"
-          :message="item.message"
-        />
-        <ToolResultMessage
-          v-else-if="item.kind === 'tool'"
-          :detail="toolDetail(item)"
-        />
+      <UserMessage
+        v-if="item.kind === 'message' && item.message.role === 'user'"
+        :message="item.message"
+        :timestamp-text="props.showTimestamps ? messageTimestampText(item.message) : undefined"
+        @fork="emit('fork')"
+        @copy="(text) => emit('copy', text)"
+      />
+      <AssistantMessage
+        v-else-if="item.kind === 'message' && item.message.role === 'assistant'"
+        :message="item.message"
+        :final="!item.streaming"
+        :model-name="modelNameFor(item.message)"
+        :show-timestamp="!!props.showTimestamps"
+        :timestamp-text="messageTimestampText(item.message)"
+        @fork="emit('fork')"
+        @copy="(text) => emit('copy', text)"
+      />
+      <CompactionSummaryMessage
+        v-else-if="item.kind === 'message' && item.message.role === 'compactionSummary'"
+        :message="item.message"
+      />
+      <CustomSummaryMessage
+        v-else-if="item.kind === 'message' && (item.message.role === 'custom' || item.message.role === 'branchSummary')"
+        :message="item.message"
+      />
+      <ToolResultMessage
+        v-else-if="item.kind === 'tool'"
+        :detail="toolDetail(item)"
+      />
       </template>
     </div>
   </div>

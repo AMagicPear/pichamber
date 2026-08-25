@@ -14,13 +14,17 @@ export const useMarkdownRender = (final?: MaybeRefOrGetter<boolean | undefined>)
 
   return computed(() => ({
     mode: "chat" as const,
+    customId: "chat",
     final: isFinal.value,
-    fade: false,
-    smoothStreaming: "auto" as const,
+    htmlPolicy: "escape" as const,
+    fade: !streaming.value,
+    smoothStreaming: streaming.value ? ("auto" as const) : false,
     isDark: activeTheme.value === "dark",
     codeBlockOptions,
+    batchRendering: streaming.value,
     maxLiveNodes: streaming.value ? 0 : undefined,
     renderBatchSize: streaming.value ? 16 : undefined,
     renderBatchDelay: streaming.value ? 8 : undefined,
+    renderBatchBudgetMs: streaming.value ? 4 : undefined,
   }));
 };

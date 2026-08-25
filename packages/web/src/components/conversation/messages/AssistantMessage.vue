@@ -73,9 +73,14 @@ const markdownRenderProps = useMarkdownRender(() => props.final);
           @copy="emit('copy', text)" />
       </header>
       <ConversationDetail v-if="thinking" class="conversation-message__details" icon="brain" label="Thinking"
-        :preview="inline(thinking)" :body="{ kind: 'markdown', content: thinking }" :auto-expand="thinkingStreaming"
+        :preview="inline(thinking)" :body="{ kind: 'markdown', content: thinking }" :final="props.final" :auto-expand="thinkingStreaming"
         hide-preview-on-expand />
-      <MarkdownRender v-if="text" v-bind="markdownRenderProps" class="markdown-chat conversation-message__content" :content="text" />
+      <MarkdownRender
+        v-if="text"
+        v-bind="markdownRenderProps"
+        class="markdown-chat conversation-message__content"
+        :content="text"
+      />
     </template>
   </article>
 </template>

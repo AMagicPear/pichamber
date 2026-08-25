@@ -1,7 +1,7 @@
 /* Shared tuning for MarkdownRender (markstream-vue) instances inside
  * chat surfaces: assistant body, user bubbles, thinking details.
  * Sizes stay compact so the conversation reads like a chat, not a doc. */
-.markdown-chat {
+.markstream-vue[data-custom-id="chat"] {
   --ms-text-body: 14px;
   --ms-leading-body: 1.6;
   --ms-text-h1: 20px;
@@ -45,60 +45,55 @@
   font-feature-settings: "kern", "liga", "calt";
 }
 
-/* Theme bridge for every markstream renderer boundary. The library declares
- * semantic variables on each `.markstream-vue`, including nested renderers
- * used by list items, so project overrides must target the boundary rather
- * than individual Markdown nodes. */
-.markdown-chat.markstream-vue,
-.markdown-chat .markstream-vue {
-  --ms-text-body: 14px;
-  --ms-leading-body: 1.6;
+/* `custom-id="chat"` is the renderer's supported styling boundary. Keep
+ * color tokens here rather than reaching into generated node internals. */
+.markstream-vue[data-custom-id="chat"] {
   --inline-code-bg: var(--ui-code-inline-bg);
   --inline-code-fg: var(--ui-code-inline-fg);
   --table-border: var(--ui-border);
   --table-header-bg: var(--ui-table-header-bg);
 }
 
-.markdown-chat .table-node tbody tr:nth-child(2n) {
+.markstream-vue[data-custom-id="chat"] .table-node tbody tr:nth-child(2n) {
   background-color: var(--ui-table-stripe-bg);
 }
 
-.markdown-chat .table-node tbody tr:hover {
+.markstream-vue[data-custom-id="chat"] .table-node tbody tr:hover {
   background-color: var(--ui-surface-hover);
 }
 
 /* Lists: markstream-vue ships no list styles, so we must supply them here.
  * Keep them compact to match the chat density. */
-.markdown-chat ul,
-.markdown-chat ol {
+.markstream-vue[data-custom-id="chat"] ul,
+.markstream-vue[data-custom-id="chat"] ol {
   margin: 0;
   padding-left: 1.5em;
 }
-.markdown-chat li {
+.markstream-vue[data-custom-id="chat"] li {
   margin-block: var(--ms-flow-list-item-y, 2px);
   line-height: var(--ms-leading-body, 1.6);
 }
 /* Nested lists: tighter spacing for sub-lists. */
-.markdown-chat li > ul,
-.markdown-chat li > ol {
+.markstream-vue[data-custom-id="chat"] li > ul,
+.markstream-vue[data-custom-id="chat"] li > ol {
   margin-block: 2px;
 }
-.markdown-chat li > ul {
+.markstream-vue[data-custom-id="chat"] li > ul {
   list-style-type: disc;
 }
-.markdown-chat li > ol {
+.markstream-vue[data-custom-id="chat"] li > ol {
   list-style-type: decimal;
 }
 
 /* Links keep markstream's muted tone (the default LinkNode style) instead
  * of the browser's deep blue. `--link-color` is defined on the
  * .markstream-vue theme root and inherits down here. */
-.markdown-chat a {
+.markstream-vue[data-custom-id="chat"] a {
   color: var(--link-color, hsl(215 55% 62%));
   text-decoration: none;
   word-break: break-all;
 }
-.markdown-chat a:hover {
+.markstream-vue[data-custom-id="chat"] a:hover {
   text-decoration: underline;
   text-underline-offset: 0.2rem;
 }

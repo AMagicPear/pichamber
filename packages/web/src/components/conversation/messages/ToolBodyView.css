@@ -5,6 +5,11 @@
 
 .tool-body-view__markdown {
   margin: 0;
+}
+
+/* Chat renderer tokens are intentionally more specific than a plain class.
+ * Thinking and tool Markdown remain secondary content in the detail panel. */
+.tool-body-view__markdown.markstream-vue[data-custom-id="chat"] {
   color: var(--ui-text-muted);
 }
 

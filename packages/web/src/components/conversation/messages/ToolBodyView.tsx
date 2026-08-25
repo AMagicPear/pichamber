@@ -136,9 +136,12 @@ const listBody = (body: Extract<ToolBody, { kind: "grep" | "paths" }>) => {
 
 export const ToolBodyView = defineComponent({
   name: "ToolBodyView",
-  props: { body: { type: Object as PropType<ToolBody>, required: true } },
+  props: {
+    body: { type: Object as PropType<ToolBody>, required: true },
+    final: { type: Boolean, default: true },
+  },
   setup(props) {
-    const markdownRenderProps = useMarkdownRender();
+    const markdownRenderProps = useMarkdownRender(() => props.final);
 
     return () => {
       const body = props.body;
