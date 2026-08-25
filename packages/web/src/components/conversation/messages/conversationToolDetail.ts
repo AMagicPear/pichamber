@@ -3,12 +3,6 @@ import { displayPath, isFileTool, numberArg, patchOpsSummary, stringArg } from "
 import { type ToolBody, type ToolImage, toolBody } from "./toolBody";
 import type { LucideIconName } from "@/components/ui/morphIcons";
 
-/** Tool names registered by `pi-mcp-adapter` — rendered as "MCP" with the
- *  MCP icon. Covers the proxy (`mcp`) and batch-script (`mcpScript`)
- *  entry points. Direct-mode tools (`<server>_<tool>`) intentionally not
- *  matched here — they're indistinguishable from user extensions by name. */
-const MCP_TOOL_NAMES = new Set(["mcp", "mcpScript"]);
-
 export type ConversationToolDetail = {
   label: string;
   /** Collapsed single-line preview (plain text for bash/ls/thinking). */
@@ -48,6 +42,20 @@ const errorLabel = (toolName: string) => {
   const base = toolName || "Tool";
   return `${base.charAt(0).toUpperCase()}${base.slice(1)} failed`;
 };
+
+/** MCP 插件注册的工具显示名；命中即配 mcp 图标：
+ *  - `pi-mcp-adapter` 代理入口：`mcp` → "MCP"、`mcpScript` → "MCP Script"
+ *  - `pi-mcp-extension` 直接工具：`<prefix>_<server>_<tool>`（默认前缀
+ *    `mcp`），保持原名展示。
+ *  未命中返回 undefined，走通用 fallback。 */
+const mcpToolLabel = (toolName: string): string | undefined =>
+  toolName === "mcp"
+    ? "MCP"
+    : toolName === "mcpScript"
+      ? "MCP Script"
+      : toolName.startsWith("mcp_")
+        ? toolName
+        : undefined;
 
 export const conversationToolDetail = ({
   toolName,
@@ -128,12 +136,12 @@ export const conversationToolDetail = ({
     };
   }
 
-  // MCP adapter tools (registered by `pi-mcp-adapter`): unified display
-  // name and icon, regardless of which MCP server is behind them.
-  if (MCP_TOOL_NAMES.has(toolName)) {
+  // MCP 插件工具（pi-mcp-adapter / pi-mcp-extension）：统一 mcp 图标与显示名。
+  const mcpLabel = mcpToolLabel(toolName);
+  if (mcpLabel !== undefined) {
     return {
-      label: failed ? "MCP" : "MCP",
-      preview: command ?? inline(output),
+      label: failed ? `${mcpLabel} failed` : mcpLabel,
+      preview: inline(output),
       body: toolBody({ toolName, args, output, isError }),
       icon: "mcp",
       isError: failed,
