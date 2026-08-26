@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { createSdkDriver } from "./session";
+import { createSdkDriver, hasUsableSessionCwd } from "./session";
 
 const temporaryDirectories: string[] = [];
 
@@ -12,6 +12,16 @@ afterEach(async () => {
 });
 
 describe("session driver creation", () => {
+  test("recognizes only existing directories as usable session working directories", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pichamber-session-"));
+    temporaryDirectories.push(root);
+    const project = join(root, "project");
+    await mkdir(project);
+
+    expect(hasUsableSessionCwd(project)).toBe(true);
+    expect(hasUsableSessionCwd(join(root, "deleted-project"))).toBe(false);
+  });
+
   test("preserves a new session's manager, id, and cwd before the file exists", async () => {
     const sessionDirectory = await mkdtemp(join(tmpdir(), "pichamber-session-"));
     temporaryDirectories.push(sessionDirectory);

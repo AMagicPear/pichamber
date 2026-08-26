@@ -20,7 +20,6 @@ export type {
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
   SessionEntry,
-  SessionInfo,
   SlashCommandInfo,
   SourceInfo,
   WidgetPlacement,

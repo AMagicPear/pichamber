@@ -24,6 +24,7 @@ import {
   deleteSession,
   getSessionCwd,
   getSessionDriver,
+  hasUsableSessionCwd,
   listAllSessions,
   renameSession,
   switchRuntimeMode,
@@ -191,6 +192,7 @@ const server = Bun.serve({
             sessions.map(async (session) => ({
               ...session,
               cwd: await canonicalWorkspace(session.cwd).catch(() => session.cwd),
+              cwdAvailable: hasUsableSessionCwd(session.cwd),
             })),
           ),
         );

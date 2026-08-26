@@ -14,11 +14,17 @@ import type {
   JsonAgentSessionEvent,
   RpcExtensionUIRequest,
   RpcExtensionUIResponse,
+  SessionInfo as PiSessionInfo,
   SlashCommandInfo,
   SlashCommandSource,
   SourceInfo,
 } from "@earendil-works/pi-coding-agent";
 import type { ImageContent } from "@earendil-works/pi-ai";
+
+/** A persisted Pi session enriched with the current availability of its cwd. */
+export type SessionInfo = PiSessionInfo & {
+  cwdAvailable: boolean;
+};
 
 /** Composer 状态行的"当前在干嘛"，与 TUI 的 `StatusIndicatorKind`
  *  （working/retry/compaction/branchSummary）+ `IdleStatus` 一一对应。

@@ -4,11 +4,11 @@
  * 注意：pi的行为是，创建新的 session 时，默认不创建本地文件，要等有了对话更新之后才会创建。
  */
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import {
   type CreateAgentSessionRuntimeFactory,
-  type SessionInfo,
+  type SessionInfo as PiSessionInfo,
   SessionManager,
   createAgentSessionFromServices,
   createAgentSessionRuntime,
@@ -28,6 +28,17 @@ const sessionFileLookup = new Map<string, string>();
 const activeSessions = new Map<string, SessionDriver>();
 const openingSessions = new Map<string, Promise<SessionDriver | null>>();
 let runtimeTransition: Promise<void> | null = null;
+
+export const hasUsableSessionCwd = (cwd: string) => {
+  try {
+    return statSync(cwd).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+const isMissingSessionCwdError = (error: unknown) =>
+  error instanceof Error && error.name === "MissingSessionCwdError";
 
 const sessionIdentity = (sessionManager: SessionManager) => {
   const sessionFile = sessionManager.getSessionFile();
@@ -100,7 +111,7 @@ const getSessionFileWithId = async (id: string): Promise<string | null> => {
   return sessionFile ?? null;
 };
 
-export const listAllSessions = async (): Promise<SessionInfo[]> => {
+export const listAllSessions = async (): Promise<PiSessionInfo[]> => {
   const sessions = await SessionManager.listAll();
   sessionFileLookup.clear();
   for (const session of sessions) sessionFileLookup.set(session.id, session.path);
@@ -119,9 +130,16 @@ export const getSessionDriver = async (id: string): Promise<SessionDriver | null
   const open = (async () => {
     const sessionFile = await getSessionFileWithId(id);
     if (!sessionFile) return null;
-    const driver = createDriver(SessionManager.open(sessionFile), getRuntimeMode());
-    await driver.start();
-    return registerDriver(driver);
+    const sessionManager = SessionManager.open(sessionFile);
+    if (!hasUsableSessionCwd(sessionManager.getCwd())) return null;
+    try {
+      const driver = createDriver(sessionManager, getRuntimeMode());
+      await driver.start();
+      return registerDriver(driver);
+    } catch (error) {
+      if (isMissingSessionCwdError(error)) return null;
+      throw error;
+    }
   })();
   openingSessions.set(id, open);
   try {
