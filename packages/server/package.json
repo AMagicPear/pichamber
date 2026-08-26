@@ -10,14 +10,14 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "catalog:",
-    "@earendil-works/pi-ai": "catalog:",
-    "@earendil-works/pi-coding-agent": "catalog:",
+    "@earendil-works/pi-agent-core": "^0.84.3",
+    "@earendil-works/pi-ai": "^0.84.3",
+    "@earendil-works/pi-coding-agent": "^0.84.3",
     "@amagicpear/pichamber-shared": "workspace:*",
-    "bun-pty": "catalog:"
+    "bun-pty": "^0.4.10"
   },
   "devDependencies": {
-    "@tsconfig/node24": "catalog:",
-    "typescript": "catalog:"
+    "@tsconfig/node24": "^24.0.5",
+    "typescript": "^7.0.2"
   }
 }
