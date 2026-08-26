@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@amagicpear/pichamber-shared": "workspace:*",
+    "@lobehub/icons-static-svg": "^1.94.0",
     "ghostty-web": "^0.4.0",
     "katex": "^0.18.4",
     "lucide-static": "^1.34.0",
