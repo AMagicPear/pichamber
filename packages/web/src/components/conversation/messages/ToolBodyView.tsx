@@ -9,6 +9,7 @@ import MarkdownRender from "markstream-vue";
 import { getEntryIcon } from "../../ui/fileIcon";
 import CodeView from "../../ui/CodeView.vue";
 import DiffView from "../../panels/DiffView.vue";
+import ImageThumbnail from "../../ui/ImageThumbnail.vue";
 import { displayPath } from "./toolDiff";
 import { type ToolBody } from "./toolBody";
 import { useMarkdownRender } from "./useMarkdownRender";
@@ -159,12 +160,11 @@ export const ToolBodyView = defineComponent({
           return (
             <div class="tool-body-view__images">
               {body.images.map((img, i) => (
-                <img
+                <ImageThumbnail
                   key={i}
                   src={`data:${img.mimeType};base64,${img.data}`}
                   alt={gt('toolBody.readImage')}
-                  loading="lazy"
-                  decoding="async"
+                  variant="tool"
                 />
               ))}
             </div>

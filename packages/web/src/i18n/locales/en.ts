@@ -327,6 +327,13 @@ export default {
     escClose: "Esc to close",
   },
 
+  imagePreview: {
+    open: "Open {image}",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    reset: "Reset view",
+  },
+
   conversation: {
     emptyTitle: "What are we working on in {folder}?",
     promptStarters: "Prompt starters",

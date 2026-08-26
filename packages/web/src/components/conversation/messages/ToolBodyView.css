@@ -25,15 +25,6 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-.tool-body-view__images img {
-  display: block;
-  max-width: 100%;
-  max-height: 320px;
-  border: 1px solid var(--ui-border-subtle);
-  border-radius: 8px;
-  background: var(--ui-surface-subtle);
-  object-fit: contain;
-}
 
 /* Plain text (bash / unknown tools / JSON fallback): bare monospace output —
  * no box, the expanded body's left border anchors it. Auto-wrap at the

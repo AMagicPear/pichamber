@@ -4,7 +4,7 @@ import { onBeforeUnmount, watch } from "vue";
 const props = withDefaults(
   defineProps<{
     show: boolean;
-    /** sm = compact card, picker = top-mounted picker, lg = full workspace. */
+    /** sm = compact card, lg = full workspace. */
     size?: "sm" | "lg";
     placement?: "center" | "top";
     /** Whether clicking the backdrop requests the owning surface to close. */
@@ -32,34 +32,36 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onKeyDown));
 </script>
 
 <template>
-  <Transition name="modal">
-    <div
-      v-if="show"
-      class="modal-mask"
-      :class="`modal-mask--${placement}`"
-      role="dialog"
-      aria-modal="true"
-      @click.self="closeOnBackdrop && emit('close')"
-    >
-      <div class="modal-container" :class="[`modal-container--${size}`, `modal-container--${placement}`]">
-        <header class="modal__header">
-          <slot name="header">Settings</slot>
-        </header>
-        <div class="modal__body">
-          <slot name="body" />
-        </div>
-        <div class="modal__footer">
-          <slot name="footer" />
+  <Teleport to="body">
+    <Transition name="modal">
+      <div
+        v-if="show"
+        class="modal-mask"
+        :class="`modal-mask--${placement}`"
+        role="dialog"
+        aria-modal="true"
+        @click.self="closeOnBackdrop && emit('close')"
+      >
+        <div class="modal-container" :class="[`modal-container--${size}`, `modal-container--${placement}`]">
+          <header class="modal__header">
+            <slot name="header">Settings</slot>
+          </header>
+          <div class="modal__body">
+            <slot name="body" />
+          </div>
+          <div class="modal__footer">
+            <slot name="footer" />
+          </div>
         </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
 .modal-mask {
   position: fixed;
-  z-index: 100;
+  z-index: 1100;
   inset: 0;
   display: flex;
   align-items: center;

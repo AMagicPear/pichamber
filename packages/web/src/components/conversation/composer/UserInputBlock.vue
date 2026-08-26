@@ -22,7 +22,7 @@ import type { SendKey } from "@/stores/settings";
 import { conversation, working, type DraftImage } from "@/stores/workspace";
 import { createId } from "@/utils/id";
 import AttachmentIcon from "lucide-static/icons/paperclip.svg";
-import CloseIcon from "lucide-static/icons/x.svg";
+import ImageThumbnail from "@/components/ui/ImageThumbnail.vue";
 
 const { t } = useI18n();
 
@@ -426,10 +426,13 @@ const placeholder = computed(() => {
             <div v-for="image in images" :key="image.id" class="composer__image"
               :style="{ '--image-aspect': image.aspectRatio }">
               <div class="composer__image-content">
-                <img :src="`data:${image.mimeType};base64,${image.data}`" :alt="t('composer.attachedImageAlt')" />
-                <button type="button" :aria-label="t('composer.removeImage')" :title="t('composer.removeImage')" @click="removeImage(image.id)">
-                  <CloseIcon />
-                </button>
+                <ImageThumbnail
+                  :src="`data:${image.mimeType};base64,${image.data}`"
+                  :alt="t('composer.attachedImageAlt')"
+                  variant="composer"
+                  removable
+                  @remove="removeImage(image.id)"
+                />
               </div>
             </div>
           </div>
@@ -629,47 +632,6 @@ const placeholder = computed(() => {
   transition: transform 140ms var(--ui-ease-emphasized);
 }
 
-.composer__image img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 1px solid var(--ui-border);
-  border-radius: 5px;
-  object-fit: cover;
-}
-
-.composer__image button {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  display: inline-flex;
-  width: 15px;
-  height: 15px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid var(--ui-border);
-  border-radius: 50%;
-  background: var(--ui-surface);
-  color: var(--ui-text-muted);
-  cursor: pointer;
-}
-
-.composer__image button:hover {
-  color: var(--ui-text-strong);
-  background: var(--ui-surface-hover);
-}
-
-.composer__image button:focus-visible {
-  outline: 2px solid var(--ui-focus);
-  outline-offset: 1px;
-}
-
-.composer__image button :deep(svg) {
-  width: 10px;
-  height: 10px;
-}
-
 @keyframes composer-image-enter {
   from {
     opacity: 0;
@@ -683,7 +645,7 @@ const placeholder = computed(() => {
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .composer__image:has(img:hover) .composer__image-content {
+  .composer__image:hover .composer__image-content {
     transform: rotate(-1deg) scale(1.04);
   }
 }

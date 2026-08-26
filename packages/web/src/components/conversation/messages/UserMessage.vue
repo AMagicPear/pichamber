@@ -7,6 +7,7 @@ import MarkdownRender from "markstream-vue";
 import { messageImages, messageText } from "./messageContent";
 import SkillBlockChip from "./SkillBlockChip.vue";
 import { useMarkdownRender } from "./useMarkdownRender";
+import ImageThumbnail from "@/components/ui/ImageThumbnail.vue";
 
 const { t } = useI18n();
 
@@ -82,11 +83,10 @@ const markdownRenderProps = useMarkdownRender();
       :key="`image:${i}`"
       class="conversation-message__image"
     >
-      <img
+      <ImageThumbnail
         :src="`data:${img.mimeType};base64,${img.data}`"
         :alt="t('composer.attachedImageAlt')"
-        loading="lazy"
-        decoding="async"
+        variant="message"
       />
     </div>
     <div v-if="parts.skill" class="conversation-message__skill">
@@ -157,13 +157,9 @@ const markdownRenderProps = useMarkdownRender();
   max-width: 420px;
   margin: 0 0 8px auto;
 }
-.conversation-message__image img {
-  display: block;
+.conversation-message__image :deep(.image-preview) {
   width: auto;
   max-width: 100%;
-  max-height: 320px;
-  border-radius: 8px;
-  object-fit: contain;
   animation: user-image-enter 180ms var(--ui-ease-emphasized) both;
 }
 

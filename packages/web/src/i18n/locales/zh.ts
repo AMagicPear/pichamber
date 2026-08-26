@@ -326,6 +326,13 @@ export default {
     escClose: "Esc 关闭",
   },
 
+  imagePreview: {
+    open: "打开{image}",
+    zoomIn: "放大",
+    zoomOut: "缩小",
+    reset: "重置视图",
+  },
+
   conversation: {
     emptyTitle: "我们在 {folder} 中要做点什么？",
     promptStarters: "提示词起始",
