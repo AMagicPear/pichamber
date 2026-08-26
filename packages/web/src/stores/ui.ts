@@ -70,31 +70,39 @@ const hydrate = (raw: Partial<StoredUi>): StoredUi => {
   return { panels, maximized, activeRightPanel };
 };
 
+// `stored` is the persisted reactive root. We attach the imperative methods
+// directly so writes always land on the same proxy that the persistence
+// watcher is observing — wrapping it in another `reactive({...})` would
+// copy primitives (e.g. `activeRightPanel`) by value and silently break them.
 const stored = persistedState<StoredUi>(STORAGE_KEY, defaultUi(), hydrate);
 
-export const ui = reactive({
-  panels: stored.panels,
-  maximized: stored.maximized,
-  activeRightPanel: stored.activeRightPanel,
-  settingsOpen: false,
-  toggle(mode: SplitMode) {
-    ui.panels[mode].open = !ui.panels[mode].open;
-  },
-  selectRightPanel(panel: RightPanel) {
-    if (ui.panels.right.open && ui.activeRightPanel === panel) {
-      ui.panels.right.open = false;
-      return;
-    }
-    ui.activeRightPanel = panel;
-    ui.panels.right.open = true;
-  },
-  setSize(mode: SplitMode, size: number) {
-    ui.panels[mode].size = clampSize(mode, size);
-  },
-  toggleMaximized(mode: SplitMode) {
-    ui.maximized[mode] = !ui.maximized[mode];
-  },
-  setMaximized(mode: SplitMode, value: boolean) {
-    ui.maximized[mode] = value;
-  },
-});
+export const ui = reactive(stored) as StoredUi & {
+  settingsOpen: boolean;
+  toggle(mode: SplitMode): void;
+  selectRightPanel(panel: RightPanel): void;
+  setSize(mode: SplitMode, size: number): void;
+  toggleMaximized(mode: SplitMode): void;
+  setMaximized(mode: SplitMode, value: boolean): void;
+};
+
+ui.settingsOpen = false;
+ui.toggle = (mode) => {
+  ui.panels[mode].open = !ui.panels[mode].open;
+};
+ui.selectRightPanel = (panel) => {
+  if (ui.panels.right.open && ui.activeRightPanel === panel) {
+    ui.panels.right.open = false;
+    return;
+  }
+  ui.activeRightPanel = panel;
+  ui.panels.right.open = true;
+};
+ui.setSize = (mode, size) => {
+  ui.panels[mode].size = clampSize(mode, size);
+};
+ui.toggleMaximized = (mode) => {
+  ui.maximized[mode] = !ui.maximized[mode];
+};
+ui.setMaximized = (mode, value) => {
+  ui.maximized[mode] = value;
+};

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import ContextIcon from "lucide-static/icons/square-text.svg";
 import type { SessionStatsView } from "@amagicpear/pichamber-shared";
 import { stats } from "@/stores/workspace";
 
@@ -49,6 +50,7 @@ const modelTitle = computed(() => {
 <template>
   <div class="right-panel__pane context-pane" role="tabpanel" aria-label="context">
     <div v-if="!hasData" class="ui-empty-state">
+      <ContextIcon />
       <p>{{ t('context.title') }}</p>
       <span>{{ t('context.emptyHint') }}</span>
     </div>
