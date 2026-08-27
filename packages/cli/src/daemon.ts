@@ -111,7 +111,7 @@ const ensureDaemon = async (port, quiet = false) => {
     const instanceId = crypto.randomUUID();
     const logFd = openSync(paths.log, "a", 0o600);
     const child = Bun.spawn([process.execPath, serverEntry], {
-      detached: true, stdin: "ignore", stdout: logFd, stderr: logFd,
+      detached: true, stdin: "ignore", stdout: logFd, stderr: logFd, windowsHide: true,
       env: { ...process.env, PICHAMBER_HOST: "127.0.0.1", PICHAMBER_PORT: String(port), PICHAMBER_VERSION: VERSION, PICHAMBER_INSTANCE_ID: instanceId, PICHAMBER_DAEMON_TOKEN: token },
     });
     closeSync(logFd); child.unref();
@@ -128,7 +128,7 @@ const ensureDaemon = async (port, quiet = false) => {
 
 const openBrowser = (url) => {
   const [cmd, args] = process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd.exe", ["/d", "/s", "/c", `start "" "${url.replaceAll('"', '\\"')}"`]] : ["xdg-open", [url]];
-  const child = Bun.spawn([cmd, ...args], { detached: true, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+  const child = Bun.spawn([cmd, ...args], { detached: true, stdin: "ignore", stdout: "ignore", stderr: "ignore", windowsHide: true });
   child.unref();
 };
 

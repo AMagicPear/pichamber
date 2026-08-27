@@ -102,7 +102,7 @@ const runFd = (
     if (regexQuery && regexQuery.includes("/")) args.push("--full-path");
     if (regexQuery) args.push(regexQuery);
 
-    const child = spawn(fdPath, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(fdPath, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     let stdout = "";
     let finished = false;
     const finish = (entries: FdEntry[]) => {

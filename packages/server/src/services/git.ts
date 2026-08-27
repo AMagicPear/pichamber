@@ -31,6 +31,7 @@ const runGit = async (cwd: string | undefined, args: string[]): Promise<GitResul
   const proc = Bun.spawn(["git", "-C", resolveCwd(cwd), ...args], {
     stdout: "pipe",
     stderr: "pipe",
+    windowsHide: true,
   });
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -209,6 +210,7 @@ export const discardPaths = async (cwd: string | undefined, paths: string[]): Pr
       cwd: resolveCwd(cwd),
       stdout: "pipe",
       stderr: "pipe",
+      windowsHide: true,
     });
     const [stderr, code] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
     if (code !== 0) {

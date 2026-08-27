@@ -195,7 +195,7 @@ export const openFile = async (
   await new Promise<void>((resolve, reject) => {
     const editorTarget = line && editor !== "system" ? `${target}:${line[2]}` : target;
     const [cmd, ...args] = openCommand(editor, editorTarget);
-    const child = spawn(cmd, editor === "system" ? [...args, editorTarget] : args, { stdio: "ignore", detached: true });
+    const child = spawn(cmd, editor === "system" ? [...args, editorTarget] : args, { stdio: "ignore", detached: true, windowsHide: true });
     child.once("error", reject);
     child.once("spawn", () => {
       child.unref();

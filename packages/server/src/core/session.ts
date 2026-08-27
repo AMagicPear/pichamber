@@ -175,7 +175,7 @@ export const deleteSession = async (
     return { ok: true, method: "inmemory" };
   }
   const trashArgs = sessionPath.startsWith("-") ? ["--", sessionPath] : [sessionPath];
-  const trashResult = spawnSync("trash", trashArgs, { encoding: "utf-8" });
+  const trashResult = spawnSync("trash", trashArgs, { encoding: "utf-8", windowsHide: true });
   if (trashResult.status === 0 || !existsSync(sessionPath)) {
     sessionFileLookup.delete(id);
     return { ok: true, method: "trash" };
