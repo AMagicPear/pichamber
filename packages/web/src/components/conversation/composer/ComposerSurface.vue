@@ -17,7 +17,7 @@ defineEmits<{ close: [] }>();
       <div class="composer-surface__title"><slot name="title" /></div>
       <div class="composer-surface__actions">
         <slot name="meta" />
-        <IconButton v-if="dismissible" size="compact" :label="closeLabel ?? ariaLabel" @click="$emit('close')">
+        <IconButton v-if="dismissible" size="mini" :label="closeLabel ?? ariaLabel" @click="$emit('close')">
           <CloseIcon aria-hidden="true" />
         </IconButton>
       </div>
