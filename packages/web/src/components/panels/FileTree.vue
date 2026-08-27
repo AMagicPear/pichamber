@@ -64,7 +64,7 @@ export default defineComponent({
       }
     };
 
-    /** Same debounce + requestVersion pattern as `ComposerShelf`: a slow
+    /** Same debounce + requestVersion pattern as composer file suggestions: a slow
      *  earlier fetch must not overwrite a newer query's results. */
     const runSearch = async (query: string) => {
       const current = ++searchRequestVersion;

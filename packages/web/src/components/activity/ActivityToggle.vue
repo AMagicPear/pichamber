@@ -1,14 +1,13 @@
 <script setup lang="ts">
-/* Pure presentation button. The activity feature owns its own open
- * state inside ActivityPanel, so the toggle just renders a button and
- * emits `toggle` when clicked — no refs, no logic. */
+/* Pure presentation button. UserInputBlock owns the currently active
+ * composer surface, so the toggle only reflects that state and emits a
+ * request to switch the activity surface. */
 import ArrowUpIcon from "lucide-static/icons/chevron-up.svg";
 import ActivityIcon from "lucide-static/icons/activity.svg";
 
 defineProps<{
   count: number;
-  /** Reflected onto `aria-expanded` for assistive tech. ActivityPanel
-   *  passes the current `open` value through the trigger slot scope. */
+  /** Reflected onto `aria-expanded` for assistive tech. */
   expanded: boolean;
 }>();
 

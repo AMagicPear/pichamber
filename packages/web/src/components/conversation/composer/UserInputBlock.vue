@@ -5,7 +5,6 @@ import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AddCircleIcon from "lucide-static/icons/circle-plus.svg";
-import MicIcon from "lucide-static/icons/mic.svg";
 import SendIcon from "lucide-static/icons/send.svg";
 import ListCollapseIcon from "lucide-static/icons/list-collapse.svg";
 import StopIcon from "lucide-static/icons/square.svg";
@@ -13,16 +12,22 @@ import TargetIcon from "lucide-static/icons/target.svg";
 import QuestionIcon from "lucide-static/icons/message-circle-question.svg";
 import IconButton from "@/components/ui/IconButton.vue";
 import ConfirmModal from "@/components/modals/ConfirmModal.vue";
-import ComposerShelf from "@/components/conversation/composer/ComposerShelf.vue";
+import ComposerSuggestions from "@/components/conversation/composer/ComposerSuggestions.vue";
 import ModelSelector from "@/components/ui/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/ui/ThinkingLevelSelector.vue";
-import ComposerActivityStack from "@/components/conversation/composer/ComposerActivityStack.vue";
+import ComposerSurfaceStack from "@/components/conversation/composer/ComposerSurfaceStack.vue";
+import ActivityPanel from "@/components/activity/ActivityPanel.vue";
+import ActivityToggle from "@/components/activity/ActivityToggle.vue";
 import { messageText } from "@/components/conversation/messages/messageContent";
 import type { SendKey } from "@/stores/settings";
 import { conversation, working, type DraftImage } from "@/stores/workspace";
 import { createId } from "@/utils/id";
 import AttachmentIcon from "lucide-static/icons/paperclip.svg";
 import ImageThumbnail from "@/components/ui/ImageThumbnail.vue";
+import { useDictation } from "@/composables/useDictation";
+import { pushErrorToast } from "@/stores/extensionUi";
+import { MorphIcon } from "morphicons/vue";
+import { lucideIcon } from "@/components/ui/morphIcons";
 
 const { t } = useI18n();
 
@@ -57,11 +62,15 @@ const props = defineProps<{
 }>();
 
 const submitMode = ref<"steer" | "followUp">("steer");
-const shelf = ref<InstanceType<typeof ComposerShelf> | null>(null);
-const shelfMode = ref<"files" | "commands" | null>(null);
+const suggestions = ref<InstanceType<typeof ComposerSuggestions> | null>(null);
+const activeSurface = ref<"activity" | "files" | "commands" | null>(null);
 const shelfQuery = ref("");
 const dragDepth = ref(0);
 const isDraggingImage = computed(() => dragDepth.value > 0);
+const suggestionMode = computed<"files" | "commands" | null>(() =>
+  activeSurface.value === "files" || activeSurface.value === "commands" ? activeSurface.value : null,
+);
+const closeSurface = () => { activeSurface.value = null; };
 
 const GOAL_COMMAND = "goal";
 const GOAL_PREFIX = `/${GOAL_COMMAND} `;
@@ -97,9 +106,19 @@ const applyGoalPrefix = () => {
   goalMode.value = false;
 };
 
-const emitSend = (behavior?: "steer" | "followUp") => {
+const pendingDictationSend = ref<{ behavior?: "steer" | "followUp" } | null>(null);
+const emitSendNow = (behavior?: "steer" | "followUp") => {
   applyGoalPrefix();
   emit("send", behavior);
+};
+
+const emitSend = (behavior?: "steer" | "followUp") => {
+  if (dictation.listening.value) {
+    pendingDictationSend.value = { behavior };
+    dictation.stop();
+    return;
+  }
+  emitSendNow(behavior);
 };
 
 const compactConfirmOpen = ref(false);
@@ -203,14 +222,14 @@ const removeImage = (id: string) => {
 };
 
 const onKeydown = (event: KeyboardEvent) => {
-  if (shelfMode.value && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+  if (suggestionMode.value && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
     event.preventDefault();
-    shelf.value?.move(event.key === "ArrowUp" ? -1 : 1);
+    suggestions.value?.move(event.key === "ArrowUp" ? -1 : 1);
     return;
   }
   if (event.key === "Escape") {
     event.preventDefault();
-    if (shelfMode.value) shelfMode.value = null;
+    if (activeSurface.value) closeSurface();
     else if (working) emit("abort");
     return;
   }
@@ -227,7 +246,7 @@ const onKeydown = (event: KeyboardEvent) => {
       : wantsModSend;
     if (!shouldSubmit) return;
     event.preventDefault();
-    if (shelfMode.value) shelf.value?.choose();
+    if (suggestionMode.value) suggestions.value?.choose();
     else emitSend(event.altKey ? "followUp" : submitMode.value);
   }
 };
@@ -252,6 +271,37 @@ const insertAtCursor = (text: string) => {
   }
 };
 
+const insertDictation = (text: string) => {
+  const current = draft.value ?? "";
+  const cursor = inputEl.value?.selectionStart ?? current.length;
+  const needsSpace = cursor > 0 && !/\s/.test(current[cursor - 1] ?? "");
+  insertAtCursor(`${needsSpace ? " " : ""}${text}`);
+};
+
+const dictationError = (code: string) => {
+  pushErrorToast(
+    code === "not-allowed" || code === "service-not-allowed"
+      ? t('composer.dictationPermissionDenied')
+      : t('composer.dictationFailed'),
+  );
+};
+
+const dictation = useDictation(insertDictation, dictationError);
+const isDictating = computed(() => dictation.listening.value);
+const dictationLabel = computed(() => {
+  if (!dictation.supported) return t('composer.dictationUnavailable');
+  return isDictating.value ? t('composer.stopDictation') : t('composer.dictation');
+});
+
+watch(isDictating, (listening) => {
+  if (listening || !pendingDictationSend.value) return;
+  const pendingSend = pendingDictationSend.value;
+  pendingDictationSend.value = null;
+  nextTick(() => {
+    if (props.canSend) emitSendNow(pendingSend.behavior);
+  });
+});
+
 /** One regex for an open `@`/`/` trigger at a token boundary: group 1 is the
  *  leading whitespace (empty at line start), group 2 the trigger char, group 3
  *  the query — bare, or the quoted `@"path with spaces"` form that mirrors
@@ -274,14 +324,14 @@ const parseTrigger = (before: string) => {
 const detectTrigger = () => {
   const el = inputEl.value;
   if (!el) {
-    shelfMode.value = null;
+    if (suggestionMode.value) closeSurface();
     return;
   }
   const trigger = parseTrigger(el.value.slice(0, el.selectionStart));
   if (trigger) {
-    shelfMode.value = trigger.kind;
+    activeSurface.value = trigger.kind;
     shelfQuery.value = trigger.query;
-  } else shelfMode.value = null;
+  } else if (suggestionMode.value) closeSurface();
 };
 
 // Wrap with `"…"` when the path contains whitespace, matching the official
@@ -299,7 +349,7 @@ const onPickCommand = (command: RuntimeSlashCommand) => {
 };
 
 const replaceTrigger = (replacement: string) => {
-  shelfMode.value = null;
+  closeSurface();
   const el = inputEl.value;
   const current = draft.value ?? "";
   if (!el) {
@@ -322,7 +372,7 @@ const openFiles = () => {
   const cursor = el?.selectionStart ?? current.length;
   const needsSpace = cursor > 0 && !/\s/.test(current[cursor - 1] ?? "");
   insertAtCursor(`${needsSpace ? " " : ""}@`);
-  shelfMode.value = "files";
+  activeSurface.value = "files";
   shelfQuery.value = "";
 };
 
@@ -342,6 +392,10 @@ const activityWidgets = computed<Record<string, CardEntry>>(() => Object.fromEnt
   Object.entries(props.extensionWidgets).filter(([, entry]) => entry.widget.kind !== "lines"),
 ) as Record<string, CardEntry>);
 const activityWidgetCount = computed(() => Object.keys(activityWidgets.value).length);
+const toggleActivity = () => {
+  if (!activityWidgetCount.value) return;
+  activeSurface.value = activeSurface.value === "activity" ? null : "activity";
+};
 const auxiliaryItems = computed<AuxiliaryItem[]>(() => [
   ...Object.entries(props.extensionStatuses).map(([key, text]) => ({
     id: `status:${key}`,
@@ -410,18 +464,27 @@ const placeholder = computed(() => {
 
 <template>
   <div class="composer-shell">
-    <ComposerActivityStack :widgets="activityWidgets" :show-status="working || auxiliaryItems.length > 0">
+    <ComposerSurfaceStack :open="activeSurface !== null"
+      :show-status="activityWidgetCount > 0 || working || auxiliaryItems.length > 0" @close="closeSurface">
+      <template #surface>
+        <ActivityPanel v-if="activeSurface === 'activity'" :widgets="activityWidgets" @close="closeSurface" />
+        <ComposerSuggestions v-else-if="suggestionMode" ref="suggestions" :mode="suggestionMode ?? 'files'"
+          :query="shelfQuery" :commands="commands" @close="closeSurface" @select-file="onPickFile" @select-command="onPickCommand" />
+      </template>
       <template #composer>
         <div class="composer"
-          :class="{ 'working': working, 'has-shelf': !!shelfMode, 'is-dragging-image': isDraggingImage }"
+          :class="{ 'working': working, 'is-dictating': isDictating, 'is-dragging-image': isDraggingImage }"
           @dragenter="onDragEnter" @dragover.prevent @dragleave="onDragLeave" @drop.prevent="onDrop">
-          <ComposerShelf ref="shelf" :mode="shelfMode" :query="shelfQuery" :commands="commands"
-            @select-file="onPickFile" @select-command="onPickCommand" />
           <div v-if="isDraggingImage" class="composer__drop-indicator" aria-hidden="true">
             <AttachmentIcon />
           </div>
           <textarea ref="inputEl" v-model="draft" class="composer__input" :placeholder="placeholder" rows="1"
             @input="detectTrigger" @keydown="onKeydown" @click="detectTrigger" @paste="onPaste" />
+          <div v-if="isDictating" class="composer__dictation">
+            <span class="composer__dictation-wave" aria-hidden="true"><i /><i /><i /></span>
+            <span class="composer__dictation-preview" aria-hidden="true">{{ dictation.interimText || t('composer.dictationListening') }}</span>
+            <span class="composer__visually-hidden" role="status">{{ t('composer.dictationListening') }}</span>
+          </div>
           <div v-if="images.length" class="composer__images" :aria-label="t('composer.attachedImages')">
             <div v-for="image in images" :key="image.id" class="composer__image"
               :style="{ '--image-aspect': image.aspectRatio }">
@@ -455,7 +518,7 @@ const placeholder = computed(() => {
           <div class="composer__footer">
             <div class="composer__footer-leading">
               <div class="composer__attach">
-                <IconButton size="compact" :label="t('composer.attachFiles')" :aria-expanded="shelfMode === 'files'"
+                <IconButton size="compact" :label="t('composer.attachFiles')" :aria-expanded="activeSurface === 'files'"
                   @click="openFiles">
                   <AddCircleIcon />
                 </IconButton>
@@ -485,15 +548,16 @@ const placeholder = computed(() => {
                 <button type="button" role="tab" :aria-selected="submitMode === 'followUp'"
                   :class="{ 'is-active': submitMode === 'followUp' }" @click="submitMode = 'followUp'">{{ t('composer.followUp') }}</button>
               </div>
-              <IconButton size="compact" :label="t('composer.dictation')" disabled>
-                <MicIcon />
+              <IconButton size="compact" :label="dictationLabel" :pressed="isDictating"
+                :tone="isDictating ? 'danger' : undefined" :disabled="!dictation.supported" @click="dictation.toggle">
+                <MorphIcon :icon="lucideIcon(isDictating ? 'square' : 'mic')" spring="snappy" reduced-motion="user" />
               </IconButton>
               <IconButton v-if="working" size="compact" :label="t('composer.stopAgent')" tone="danger" @click="emit('abort')">
                 <StopIcon />
               </IconButton>
               <IconButton size="compact"
                 :label="working ? (submitMode === 'steer' ? t('composer.steerAgent') : t('composer.queueFollowUp')) : t('composer.send')"
-                :disabled="!canSend" @click="emitSend(submitMode)">
+                :disabled="!canSend && !isDictating" @click="emitSend(submitMode)">
                 <SendIcon />
               </IconButton>
             </div>
@@ -501,6 +565,7 @@ const placeholder = computed(() => {
         </div>
       </template>
       <template #status>
+        <ActivityToggle v-if="activityWidgetCount" :count="activityWidgetCount" :expanded="activeSurface === 'activity'" @toggle="toggleActivity" />
         <span v-if="working" class="composer__activity"><i />{{ activityText }}</span>
         <template v-for="(item, index) in auxiliaryItems" :key="item.id">
           <span v-if="working || activityWidgetCount > 0 || index > 0" class="composer__status-sep"
@@ -508,7 +573,7 @@ const placeholder = computed(() => {
           <span class="composer__status-text" :data-source="item.source">{{ item.text }}</span>
         </template>
       </template>
-    </ComposerActivityStack>
+    </ComposerSurfaceStack>
 
     <ConfirmModal
       :show="compactConfirmOpen"
@@ -561,6 +626,16 @@ const placeholder = computed(() => {
   box-shadow: 0 0 0 2px var(--ui-focus);
 }
 
+.composer.is-dictating:not(.is-dragging-image) {
+  border-color: #b65323;
+  box-shadow: 0 0 0 2px rgb(182 83 35 / 12%);
+  animation: composer-dictation-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes composer-dictation-pulse {
+  50% { box-shadow: 0 0 0 4px rgb(182 83 35 / 5%); }
+}
+
 .composer__drop-indicator {
   position: absolute;
   z-index: 3;
@@ -577,10 +652,6 @@ const placeholder = computed(() => {
 .composer__drop-indicator :deep(svg) {
   width: 24px;
   height: 24px;
-}
-
-.composer.has-shelf {
-  border-radius: 0 0 13px 13px;
 }
 
 .composer__input {
@@ -607,6 +678,59 @@ const placeholder = computed(() => {
 
 .composer__input::placeholder {
   color: var(--ui-text-muted);
+}
+
+.composer__dictation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 12px 7px;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.composer__dictation-wave {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  width: 14px;
+  height: 14px;
+}
+
+.composer__dictation-wave i {
+  width: 2px;
+  height: 5px;
+  border-radius: 2px;
+  background: #b65323;
+  animation: composer-dictation-wave 700ms ease-in-out infinite alternate;
+}
+
+.composer__dictation-wave i:nth-child(2) { height: 11px; animation-delay: 120ms; }
+.composer__dictation-wave i:nth-child(3) { height: 7px; animation-delay: 240ms; }
+
+@keyframes composer-dictation-wave {
+  to { transform: scaleY(0.45); opacity: 0.55; }
+}
+
+.composer__dictation-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .composer__images {
@@ -651,7 +775,9 @@ const placeholder = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .composer__image {
+  .composer__image,
+  .composer.is-dictating:not(.is-dragging-image),
+  .composer__dictation-wave i {
     animation: none;
   }
 }

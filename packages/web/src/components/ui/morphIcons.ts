@@ -21,11 +21,13 @@ import folderRaw from "lucide-static/icons/folder.svg?raw";
 import folderOpenRaw from "lucide-static/icons/folder-open.svg?raw";
 import copyRaw from "lucide-static/icons/copy.svg?raw";
 import loaderCircleRaw from "lucide-static/icons/loader-circle.svg?raw";
+import micRaw from "lucide-static/icons/mic.svg?raw";
 import CheckRaw from "lucide-static/icons/check.svg?raw";
 import panelLeftCloseRaw from "lucide-static/icons/panel-left-close.svg?raw";
 import panelLeft from "lucide-static/icons/panel-left.svg?raw";
 import refreshCwRaw from "lucide-static/icons/refresh-cw.svg?raw";
 import refreshCcWRaw from "lucide-static/icons/refresh-ccw.svg?raw";
+import squareRaw from "lucide-static/icons/square.svg?raw";
 
 // 下方摆放本项目对lucide补充的图标
 import mcpRaw from "@/assets/icons/MCP.svg?raw";
@@ -51,11 +53,13 @@ const RAWS = {
   copy: copyRaw,
   "chevron-up": chevronUpRaw,
   "loader-circle": loaderCircleRaw,
+  mic: micRaw,
   check: CheckRaw,
   "panel-left-close": panelLeftCloseRaw,
   "panel-left": panelLeft,
   "refresh-cw": refreshCwRaw,
   "refresh-ccw": refreshCcWRaw,
+  square: squareRaw,
 } as const;
 
 /** Lucide icon name union. Restricts `icon?: string` props so typos
