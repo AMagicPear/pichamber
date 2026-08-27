@@ -6,7 +6,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AddCircleIcon from "lucide-static/icons/circle-plus.svg";
 import SendIcon from "lucide-static/icons/send.svg";
-import ListCollapseIcon from "lucide-static/icons/list-collapse.svg";
+import LayersArrowDownIcon from "lucide-static/icons/layers-arrow-down.svg";
 import StopIcon from "lucide-static/icons/square.svg";
 import TargetIcon from "lucide-static/icons/target.svg";
 import QuestionIcon from "lucide-static/icons/message-circle-question.svg";
@@ -526,7 +526,7 @@ const placeholder = computed(() => {
               <!-- Compact works at any time: the SDK's compact() aborts the
                current turn first (same as Pi's /compact), then summarizes. -->
               <IconButton size="compact" :label="t('composer.compactContext')" @click="requestCompact">
-                <ListCollapseIcon />
+                <LayersArrowDownIcon />
               </IconButton>
               <IconButton size="compact" :label="goalLabel" :title="goalLabel" :pressed="goalMode"
                 :disabled="!goalAvailable" @click="goalMode = !goalMode">
