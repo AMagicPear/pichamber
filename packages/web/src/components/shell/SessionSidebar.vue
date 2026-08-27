@@ -27,7 +27,7 @@ import MenuPanel from "@/components/ui/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
 import { pathBasename } from "@amagicpear/pichamber-shared";
 import type { SessionInfo } from "@amagicpear/pichamber-shared";
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { RouterLink, useRouter } from "vue-router";
 import { ui } from "@/stores/ui";
@@ -129,33 +129,92 @@ const sortMenuIcon = computed<LucideIconName>(() => {
   return "arrow-down-wide-narrow";
 });
 
-const projectGroups = computed(() => {
-  const groups = new Map<string, SessionInfo[]>();
-  for (const session of visibleSessions.value) {
-    const cwd = projectPath(session.cwd);
-    const projectSessions = groups.get(cwd) ?? [];
-    projectSessions.push(session);
-    groups.set(cwd, projectSessions);
+type SessionGroup = {
+  root: SessionInfo;
+  /** All descendants flattened — direct children and grandchildren alike.
+   *  Grandchildren never appear nested under their own parent in the UI;
+   *  they live in the grandparent's list so the sidebar stays two-tier
+   *  (parent + descendants) regardless of how deep the spawn chain is. */
+  descendants: SessionInfo[];
+};
+
+/** Walk `parentSessionPath` upward until we hit a session that has no
+ *  parent (or whose parent isn't in the snapshot). Used to attribute
+ *  grandchild sessions to their topmost ancestor instead of their direct
+ *  parent — so C (child of B, B child of A) shows up in A's list, not B's. */
+const findRoot = (session: SessionInfo, byPath: Map<string, SessionInfo>): SessionInfo => {
+  let current = session;
+  const visited = new Set<string>();
+  while (current.parentSessionPath && !visited.has(current.path)) {
+    visited.add(current.path);
+    const parent = byPath.get(current.parentSessionPath);
+    if (!parent) return current;
+    current = parent;
   }
-  return [...groups.entries()]
-    .map(([cwd, projectSessions]) => ({
-      cwd,
-      sessions: projectSessions.sort((a, b) => toTime(b.modified) - toTime(a.modified)),
-    }))
-    .sort((a, b) => {
-      if (projectSort.value === "name") return projectName(a.cwd).localeCompare(projectName(b.cwd));
-      if (projectSort.value === "name-reverse") return projectName(b.cwd).localeCompare(projectName(a.cwd));
-      const aT = toTime(a.sessions[0]?.modified);
-      const bT = toTime(b.sessions[0]?.modified);
-      if (bT !== aT) return bT - aT;
-      return projectName(a.cwd).localeCompare(projectName(b.cwd));
-    });
+  return current;
+};
+
+const projectGroups = computed(() => {
+  // Re-attribute every session to its parent's project cwd so a subagent
+  // spawn lands under the parent's project header, then bucket by cwd.
+  const byPath = new Map<string, SessionInfo>();
+  for (const session of visibleSessions.value) byPath.set(session.path, session);
+
+  const byRootPath = new Map<string, SessionGroup>();
+  for (const session of visibleSessions.value) {
+    const root = findRoot(session, byPath);
+    if (!byRootPath.has(root.path)) byRootPath.set(root.path, { root, descendants: [] });
+    if (session.path !== root.path) byRootPath.get(root.path)!.descendants.push(session);
+  }
+
+  const byCwd = new Map<string, { cwd: string; groups: SessionGroup[] }>();
+  for (const group of byRootPath.values()) {
+    const cwd = projectPath(group.root.cwd);
+    const bucket = byCwd.get(cwd) ?? { cwd, groups: [] };
+    bucket.groups.push(group);
+    byCwd.set(cwd, bucket);
+  }
+
+  for (const bucket of byCwd.values()) {
+    bucket.groups.sort((a, b) => toTime(b.root.modified) - toTime(a.root.modified));
+    for (const group of bucket.groups) {
+      group.descendants.sort((a, b) => toTime(b.modified) - toTime(a.modified));
+    }
+  }
+
+  return [...byCwd.values()].sort((a, b) => {
+    if (projectSort.value === "name") return projectName(a.cwd).localeCompare(projectName(b.cwd));
+    if (projectSort.value === "name-reverse") return projectName(b.cwd).localeCompare(projectName(a.cwd));
+    const aT = toTime(a.groups[0]?.root.modified);
+    const bT = toTime(b.groups[0]?.root.modified);
+    if (bT !== aT) return bT - aT;
+    return projectName(a.cwd).localeCompare(projectName(b.cwd));
+  });
 });
 
 const INITIAL_VISIBLE_SESSIONS = 5;
 const SESSION_PAGE_SIZE = 5;
 const collapsedProjects = ref(new Set<string>());
 const visibleSessionCounts = ref(new Map<string, number>());
+/** `session.path` of every parent that currently has at least one child
+ *  session nested beneath it. The chevron button and child-count badge read
+ *  from this set; the row itself renders identically to a flat session. */
+const collapsedSessions = ref(new Set<string>());
+let collapsedSessionsInitialized = false;
+
+watch(
+  sessions,
+  (snapshot) => {
+    if (collapsedSessionsInitialized) return;
+    const parents = new Set<string>();
+    for (const session of snapshot) {
+      if (session.parentSessionPath) parents.add(session.parentSessionPath);
+    }
+    collapsedSessions.value = parents;
+    collapsedSessionsInitialized = true;
+  },
+  { immediate: true },
+);
 
 const toggleProject = (cwd: string) => {
   const next = new Set(collapsedProjects.value);
@@ -164,8 +223,49 @@ const toggleProject = (cwd: string) => {
   collapsedProjects.value = next;
 };
 
-const visibleProjectSessions = (cwd: string, projectSessions: SessionInfo[]) =>
-  projectSessions.slice(0, visibleSessionCounts.value.get(cwd) ?? INITIAL_VISIBLE_SESSIONS);
+const toggleSessionCollapse = (path: string, event: Event) => {
+  event.stopPropagation();
+  event.preventDefault();
+  const next = new Set(collapsedSessions.value);
+  if (next.has(path)) next.delete(path);
+  else next.add(path);
+  collapsedSessions.value = next;
+};
+
+type DisplayItem = {
+  session: SessionInfo;
+  isParent: boolean;
+  isDescendant: boolean;
+  descendantCount: number;
+};
+
+/** Flatten a project's groups into renderable rows: each root first, then
+ *  its descendants inline. Roots beyond `INITIAL_VISIBLE_SESSIONS` are
+ *  hidden until the user clicks "show more"; descendants always follow
+ *  their root in full, so expanding never truncates the child list. */
+const visibleProjectItems = (cwd: string, groups: SessionGroup[]): DisplayItem[] => {
+  const budget = visibleSessionCounts.value.get(cwd) ?? INITIAL_VISIBLE_SESSIONS;
+  const collapsed = collapsedSessions.value;
+  const items: DisplayItem[] = [];
+  const visibleGroups = groups.slice(0, budget);
+  for (const group of visibleGroups) {
+    items.push({
+      session: group.root,
+      isParent: group.descendants.length > 0,
+      isDescendant: false,
+      descendantCount: group.descendants.length,
+    });
+    if (group.descendants.length > 0 && !collapsed.has(group.root.path)) {
+      for (const descendant of group.descendants) {
+        items.push({ session: descendant, isParent: false, isDescendant: true, descendantCount: 0 });
+      }
+    }
+  }
+  return items;
+};
+
+const hasMoreRoots = (cwd: string, groups: SessionGroup[]) =>
+  groups.length > (visibleSessionCounts.value.get(cwd) ?? INITIAL_VISIBLE_SESSIONS);
 
 const showMoreSessions = (cwd: string) => {
   const next = new Map(visibleSessionCounts.value);
@@ -506,18 +606,20 @@ onMounted(async () => {
             </IconButton>
           </div>
           <template v-if="!collapsedProjects.has(project.cwd)">
-            <RouterLink v-for="session in visibleProjectSessions(project.cwd, project.sessions)" :key="session.id"
-              custom :to="{ name: 'session', params: { sessionId: session.id } }" v-slot="{ navigate, isActive }">
+            <RouterLink v-for="item in visibleProjectItems(project.cwd, project.groups)" :key="item.session.id"
+              custom :to="{ name: 'session', params: { sessionId: item.session.id } }" v-slot="{ navigate, isActive }">
               <div class="session-list__item" :class="[
                 {
                   'is-active': isActive,
-                  'is-menu-open': sessionMenuOpen && selectedSessionId === session.id,
-                  'is-renaming': renamingSessionId === session.id,
-                  'is-selected': selectionMode && selectedSessionIds.has(session.id),
+                  'is-menu-open': sessionMenuOpen && selectedSessionId === item.session.id,
+                  'is-renaming': renamingSessionId === item.session.id,
+                  'is-selected': selectionMode && selectedSessionIds.has(item.session.id),
                   'is-selecting': selectionMode,
+                  'is-descendant': item.isDescendant,
                 },
-              ]" @click="selectionMode ? toggleSessionSelection(session.id) : (closeSessionMenu(), navigate())">
-                <template v-if="renamingSessionId === session.id">
+              ]" @click="selectionMode ? toggleSessionSelection(item.session.id) : (closeSessionMenu(), navigate())">
+                <template v-if="renamingSessionId === item.session.id">
+                  <span class="session-list__control-slot" aria-hidden="true" />
                   <input ref="renamingRef" v-model="renameInput" class="session-list__rename-input"
                     :aria-label="t('sidebar.renameSession')" @click.stop @keydown="onRenameEnter" />
                   <span class="session-list__rename-controls">
@@ -530,24 +632,32 @@ onMounted(async () => {
                   </span>
                 </template>
                 <template v-else>
-                  <input v-if="selectionMode" class="session-list__checkbox" type="checkbox" :checked="selectedSessionIds.has(session.id)"
-                    :aria-label="t('sidebar.selectSession', { title: sessionTitle(session) })" @click.stop @change="toggleSessionSelection(session.id)" />
+                  <span class="session-list__control-slot">
+                    <IconButton v-if="item.isParent && !selectionMode" size="mini" :label="t('sidebar.toggleSubSessions')"
+                      :aria-expanded="!collapsedSessions.has(item.session.path)" @click="toggleSessionCollapse(item.session.path, $event)">
+                      <MorphIcon :icon="collapsedSessions.has(item.session.path) ? lucideIcon('chevron-right') : lucideIcon('chevron-down')"
+                        :size="12" spring="snappy" reduced-motion="user" />
+                    </IconButton>
+                    <input v-else-if="selectionMode" class="session-list__checkbox" type="checkbox" :checked="selectedSessionIds.has(item.session.id)"
+                      :aria-label="t('sidebar.selectSession', { title: sessionTitle(item.session) })" @click.stop @change="toggleSessionSelection(item.session.id)" />
+                  </span>
                   <span class="session-list__title">
-                    <template v-for="(segment, i) in highlightTitle(sessionTitle(session))" :key="i">
+                    <template v-for="(segment, i) in highlightTitle(sessionTitle(item.session))" :key="i">
                       <mark v-if="segment.hit" class="session-list__hit">{{ segment.text }}</mark>
                       <template v-else>{{ segment.text }}</template>
                     </template>
                   </span>
-                  <span v-if="!selectionMode" class="session-list__age">{{ sessionAge(session) }}</span>
+                  <span v-if="item.isParent && !selectionMode" class="session-list__child-count" aria-hidden="true">{{ item.descendantCount }}</span>
+                  <span v-if="!selectionMode" class="session-list__age">{{ sessionAge(item.session) }}</span>
                   <IconButton v-if="!selectionMode" class="session-list__menu-trigger"
-                    :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === session.id }"
-                    :label="t('sidebar.sessionOptions')" size="compact" @click.stop="openSessionMenu(session.id)">
+                    :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === item.session.id }"
+                    :label="t('sidebar.sessionOptions')" size="compact" @click.stop="openSessionMenu(item.session.id)">
                     <More2Icon />
                   </IconButton>
                 </template>
               </div>
             </RouterLink>
-            <button v-if="project.sessions.length > visibleProjectSessions(project.cwd, project.sessions).length"
+            <button v-if="hasMoreRoots(project.cwd, project.groups)"
               type="button" class="session-list__more" @click="showMoreSessions(project.cwd)">
               {{ t('sidebar.showMoreSessions') }}
             </button>
@@ -724,8 +834,7 @@ onMounted(async () => {
     color 120ms ease;
 }
 
-.session-list__project-new,
-.session-list__menu-trigger {
+.session-list__project-new {
   position: absolute;
   top: 50%;
   inset-inline-end: 4px;
@@ -747,11 +856,34 @@ onMounted(async () => {
   height: 13px;
 }
 
-.session-list__project-header:is(:hover, :focus-within) .session-list__project-new,
-.session-list__item:is(:hover, .is-menu-open) .session-list__menu-trigger {
+.session-list__item .session-list__menu-trigger {
+  position: static;
+  grid-column: 4;
+  grid-row: 1;
+  justify-self: center;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(3px);
+  color: var(--ui-text-muted);
+  transition:
+    transform 150ms ease-out,
+    opacity 150ms ease-out;
+}
+
+.session-list__project-header:is(:hover, :focus-within) .session-list__project-new {
   opacity: 1;
   pointer-events: auto;
   transform: translate(0, -50%);
+  color: var(--ui-text-strong);
+}
+
+.session-list__item:is(:hover, .is-menu-open) .session-list__menu-trigger {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
   color: var(--ui-text-strong);
 }
 
@@ -785,13 +917,13 @@ onMounted(async () => {
 }
 
 .session-list__item {
-  display: flex;
-  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto 24px;
+  column-gap: 4px;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
-  min-height: 30px;
-  padding: 5px 36px 5px 28px;
+  min-height: 28px;
+  padding: 3px 4px;
   border-radius: 6px;
   color: inherit;
   text-decoration: none;
@@ -811,20 +943,14 @@ onMounted(async () => {
   background: var(--ui-surface-hover);
 }
 
-.session-list__item.is-selecting {
-  padding-right: 8px;
-}
-
-.session-list__item.is-renaming {
-  padding-right: 8px;
-}
+.session-list__item.is-descendant { grid-template-columns: 28px minmax(0, 1fr) auto 24px; }
 
 .session-list__item.is-renaming:hover .session-list__title {
   transform: none;
 }
 
 .session-list__title {
-  flex: 1 1 auto;
+  grid-column: 2;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -834,9 +960,30 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.session-list__control-slot {
+  display: flex;
+  grid-column: 1;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-list__child-count {
+  grid-column: 3;
+  min-width: 16px;
+  padding: 0 5px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .session-list__checkbox {
-  position: absolute;
-  inset-inline-start: 8px;
   width: 14px;
   height: 14px;
   margin: 0;
@@ -855,21 +1002,20 @@ onMounted(async () => {
   color: var(--ui-accent-text);
 }
 
-.session-list__item:hover .session-list__title {
+.session-list__item:hover .session-list__title,
+.session-list__item:hover .session-list__control-slot {
   color: var(--ui-text-strong);
   transform: translateX(1px);
 }
 
 .session-list__age {
-  position: absolute;
-  top: 50%;
-  inset-inline-end: 4px;
+  grid-column: 4;
+  grid-row: 1;
   width: 24px;
   color: var(--ui-text-muted);
   font-size: 12px;
   line-height: 20px;
   text-align: center;
-  transform: translateY(-50%);
   white-space: nowrap;
   transition: opacity 120ms ease-out;
 }
@@ -880,7 +1026,7 @@ onMounted(async () => {
 
 .session-list__rename-input {
   box-sizing: border-box;
-  flex: 1 1 auto;
+  grid-column: 2;
   min-width: 0;
   height: 20px;
   margin: 0;
@@ -895,10 +1041,9 @@ onMounted(async () => {
 
 .session-list__rename-controls {
   display: flex;
+  grid-column: 3;
   align-items: center;
   gap: 4px;
-  flex: 0 0 auto;
-  margin-inline-start: 6px;
 }
 
 .session-list__more {

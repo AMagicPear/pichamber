@@ -63,6 +63,7 @@ export default {
     noSessionsYet: "暂无会话",
     noSessionsMatch: '没有匹配 "{query}" 的会话',
     showMoreSessions: "显示更多会话",
+    toggleSubSessions: "展开/收起子会话",
     deleteConfirmTitle: "确认删除会话？",
     deleteConfirmMessage: "此会话及其对话历史将被删除，是否继续？",
     rename: "重命名",

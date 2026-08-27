@@ -64,6 +64,7 @@ export default {
     noSessionsYet: "No sessions yet.",
     noSessionsMatch: 'No sessions match "{query}".',
     showMoreSessions: "Show more sessions",
+    toggleSubSessions: "Toggle sub-sessions",
     deleteConfirmTitle: "Delete session?",
     deleteConfirmMessage: "This session and its conversation history will be deleted. Continue?",
     rename: "Rename",
