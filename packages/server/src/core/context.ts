@@ -13,7 +13,6 @@ const dateFormat = new Intl.DateTimeFormat("en-US", {
 });
 
 const formatPercent = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
-const formatCost = (raw: number) => `$${raw.toFixed(2)}`;
 
 const modelDescriptor = (runtime: AgentSessionRuntime): ModelDescriptor | undefined => {
   const model = runtime.session.model;
@@ -94,7 +93,7 @@ export const computeSessionStatsView = async (
       userText: numberFormat.format(stats.userMessages),
       assistantText: numberFormat.format(stats.assistantMessages),
     },
-    cost: { value: formatCost(stats.cost), raw: stats.cost },
+    cost: stats.cost,
     lastAssistant,
     lastAssistantText: {
       input: numberFormat.format(lastAssistant.input),

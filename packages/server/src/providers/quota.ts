@@ -174,6 +174,28 @@ const parseDeepSeek = (payload: unknown): QuotaWindow[] => parseBalance(payload,
 const parseMoonshot = (payload: unknown, currency = "USD"): QuotaWindow[] =>
   parseBalance(payload, { label: "Balance", currency });
 
+const parseOpenRouter = (payload: unknown): QuotaWindow[] => {
+  const data = (payload as { data?: { total_credits?: unknown; total_usage?: unknown } }).data;
+  const credits = Number(data?.total_credits);
+  const usage = Number(data?.total_usage);
+  if (!Number.isFinite(credits) || !Number.isFinite(usage)) {
+    throw new Error("OpenRouter credits response missing total credits or usage");
+  }
+
+  const balance = credits - usage;
+  return [
+    {
+      label: "Balance (USD)",
+      utilization: credits > 0 ? clamp01(usage / credits) : 0,
+      resetsAt: 0,
+      display: balance.toFixed(2),
+      used: usage,
+      limit: balance,
+      unit: "USD",
+    },
+  ];
+};
+
 // ─── Volcengine Ark Agent Plan (HMAC-SHA256 signed) ──────────────────
 //
 // 火山方舟管控面 API 使用火山引擎签名算法（AWS SigV4 的火山变体）。
@@ -450,6 +472,13 @@ const adapters: QuotaAdapter[] = [
     baseUrl: "https://api.openai.com/v1",
     path: "/usage",
     parse: parseOpenAiUsage,
+  },
+  {
+    name: "OpenRouter",
+    providerIds: ["openrouter"],
+    baseUrl: "https://openrouter.ai/api/v1",
+    path: "/credits",
+    parse: parseOpenRouter,
   },
   {
     name: "OpenAI-compatible",

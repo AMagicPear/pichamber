@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { getProviderQuotaWithApiKey, listQuotaProvidersForModels, parseArkAfpUsage } from "./quota";
+import {
+  clearQuotaCache,
+  getProviderQuotaWithApiKey,
+  listQuotaProvidersForModels,
+  parseArkAfpUsage,
+} from "./quota";
 
 describe("RPC quota providers", () => {
   test("lists only adapters with provider-id-only endpoint resolution", () => {
@@ -9,6 +14,7 @@ describe("RPC quota providers", () => {
         { provider: "deepseek" },
         { provider: "moonshotai-cn" },
         { provider: "openai" },
+        { provider: "openrouter" },
         { provider: "ark-agent-plan" },
         { provider: "custom-openai-proxy" },
         { provider: "minimax-cn" },
@@ -18,6 +24,7 @@ describe("RPC quota providers", () => {
       { id: "deepseek", name: "DeepSeek" },
       { id: "moonshotai-cn", name: "Moonshot" },
       { id: "openai", name: "OpenAI" },
+      { id: "openrouter", name: "OpenRouter" },
       { id: "ark-agent-plan", name: "Ark Agent Plan" },
     ]);
   });
@@ -64,6 +71,43 @@ describe("parseArkAfpUsage", () => {
 });
 
 describe("getProviderQuotaWithApiKey", () => {
+  test("uses OpenRouter's credits endpoint and returns its remaining balance", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchCalls: Array<{ url: string; authorization: string | null }> = [];
+    globalThis.fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const request = typeof input === "string"
+          ? new Request(input, init)
+          : new Request(input as Request, init);
+        fetchCalls.push({ url: request.url, authorization: request.headers.get("Authorization") });
+        return Response.json({ data: { total_credits: 12.5, total_usage: 3.25 } });
+      },
+      originalFetch,
+    );
+    clearQuotaCache();
+
+    try {
+      const result = await getProviderQuotaWithApiKey("openrouter", "test-key");
+      expect(fetchCalls).toHaveLength(1);
+      expect(fetchCalls[0].url).toBe("https://openrouter.ai/api/v1/credits");
+      expect(fetchCalls[0].authorization).toBe("Bearer test-key");
+      expect(result.windows).toEqual([
+        {
+          label: "Balance (USD)",
+          utilization: 3.25 / 12.5,
+          resetsAt: 0,
+          display: "9.25",
+          used: 3.25,
+          limit: 9.25,
+          unit: "USD",
+        },
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      clearQuotaCache();
+    }
+  });
+
   test("self-managed adapters do not block on a missing Bearer apiKey", async () => {
     // ark-agent-plan uses Volcengine HMAC rather than a provider Bearer key.
     // Without VOLC_ACCESS_KEY_ID set, the custom fetcher surfaces its own

@@ -268,7 +268,7 @@ const initialModelState = (): Pick<
       userText: "0",
       assistantText: "0",
     },
-    cost: { value: "$0.00", raw: 0 },
+    cost: 0,
     lastAssistant: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
     lastAssistantText: { input: "0", output: "0", reasoning: "0", cacheRead: "0", cacheWrite: "0" },
     cacheHit: "0.0%",
@@ -293,7 +293,7 @@ const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean =
   if (prev.messages.total !== next.messages.total) return true;
   if (prev.messages.user !== next.messages.user) return true;
   if (prev.messages.assistant !== next.messages.assistant) return true;
-  if (prev.cost.raw !== next.cost.raw) return true;
+  if (prev.cost !== next.cost) return true;
   if (prev.cacheHit !== next.cacheHit) return true;
   if (prev.lastAssistant.input !== next.lastAssistant.input) return true;
   if (prev.lastAssistant.output !== next.lastAssistant.output) return true;

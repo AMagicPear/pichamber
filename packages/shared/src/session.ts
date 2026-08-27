@@ -142,7 +142,7 @@ export type SessionStatsView = {
     userText: string;
     assistantText: string;
   };
-  cost: { value: string; raw: number };
+  cost: number;
   lastAssistant: LastAssistantUsage;
   /** Comma-grouped render of `lastAssistant`, one string per bucket,
    *  for the same reason `messages.*Text` exists. */

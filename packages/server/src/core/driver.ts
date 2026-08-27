@@ -65,7 +65,6 @@ export interface SessionDriver {
 const emptyUsage = () => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
 const numberFormat = new Intl.NumberFormat("en-US");
 const formatPercent = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
-const formatCost = (raw: number) => `$${raw.toFixed(2)}`;
 
 const descriptor = (model: { provider: string; id: string; name?: string; reasoning?: boolean }, name = model.provider): ModelDescriptor => ({
   provider: model.provider,
@@ -106,7 +105,7 @@ const rpcStatsView = (stats: SessionStats, model: ModelDescriptor | undefined): 
       userText: numberFormat.format(stats.userMessages),
       assistantText: numberFormat.format(stats.assistantMessages),
     },
-    cost: { value: formatCost(stats.cost), raw: stats.cost },
+    cost: stats.cost,
     lastAssistant,
     lastAssistantText: { input: "0", output: "0", reasoning: "0", cacheRead: "0", cacheWrite: "0" },
     cacheHit: totalRead > 0 ? formatPercent(stats.tokens.cacheRead / totalRead) : "0.0%",

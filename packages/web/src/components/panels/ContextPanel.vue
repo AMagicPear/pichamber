@@ -104,7 +104,7 @@ const modelTitle = computed(() => {
       <section class="context-pane__section">
         <h3 class="context-pane__heading ui-section-title">{{ t('context.cost') }}</h3>
         <div class="context-pane__stat">
-          <span class="context-pane__value">{{ view?.cost.value ?? "$0.00" }}</span>
+          <span class="context-pane__value">{{ view?.cost != null ? "$" + view.cost.toFixed(4) : "$0.0000" }}</span>
         </div>
       </section>
 
