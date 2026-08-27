@@ -20,6 +20,7 @@ import SearchBox from "@/components/ui/SearchBox.vue";
 import { splitHighlight } from "@/composables/highlight";
 import AboutModal from "@/components/modals/AboutModal.vue";
 import ConfirmModal from "@/components/modals/ConfirmModal.vue";
+import KeyboardShortcutsModal from "@/components/modals/KeyboardShortcutsModal.vue";
 import ProjectPickerModal from "@/components/modals/ProjectPickerModal.vue";
 import FloatingPanel from "@/components/ui/FloatingPanel.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
@@ -116,6 +117,9 @@ const projectName = (cwd: string) => {
   return name || trimmed || "/";
 };
 
+type ProjectSort = "recent" | "name";
+const projectSort = ref<ProjectSort>("recent");
+
 const projectGroups = computed(() => {
   const groups = new Map<string, SessionInfo[]>();
   for (const session of visibleSessions.value) {
@@ -130,6 +134,7 @@ const projectGroups = computed(() => {
       sessions: projectSessions.sort((a, b) => toTime(b.modified) - toTime(a.modified)),
     }))
     .sort((a, b) => {
+      if (projectSort.value === "name") return projectName(a.cwd).localeCompare(projectName(b.cwd));
       const aT = toTime(a.sessions[0]?.modified);
       const bT = toTime(b.sessions[0]?.modified);
       if (bT !== aT) return bT - aT;
@@ -179,10 +184,18 @@ const startProjectSession = async (cwd: string) => {
 };
 
 const router = useRouter();
+const sidebarRoot = ref<HTMLElement | null>(null);
 const sessionListRoot = ref<HTMLElement | null>(null);
 const selectedSessionId = ref<string | null>(null);
 const deleteConfirmOpen = ref(false);
 const pendingDeleteSessionId = ref<string | null>(null);
+const selectionMode = ref(false);
+const selectedSessionIds = ref(new Set<string>());
+const bulkDeleteConfirmOpen = ref(false);
+const selectedSessionCount = computed(() => selectedSessionIds.value.size);
+const allVisibleSessionsSelected = computed(() =>
+  visibleSessions.value.length > 0 && visibleSessions.value.every((session) => selectedSessionIds.value.has(session.id)),
+);
 const {
   open: sessionMenuOpen,
   style: sessionMenuStyle,
@@ -196,6 +209,7 @@ const {
 });
 
 const openSessionMenu = (sessionId: string) => {
+  if (selectionMode.value) return;
   if (sessionMenuOpen.value && selectedSessionId.value === sessionId) {
     closeSessionMenu();
     return;
@@ -205,6 +219,27 @@ const openSessionMenu = (sessionId: string) => {
   nextTick(() => {
     sessionMenuOpen.value = true;
   });
+};
+
+const toggleSelectionMode = () => {
+  selectionMode.value = !selectionMode.value;
+  selectedSessionIds.value = new Set();
+  closeSessionMenu();
+  closeSortMenu();
+  cancelRename();
+};
+
+const toggleSessionSelection = (sessionId: string) => {
+  const next = new Set(selectedSessionIds.value);
+  if (next.has(sessionId)) next.delete(sessionId);
+  else next.add(sessionId);
+  selectedSessionIds.value = next;
+};
+
+const toggleSelectAllVisibleSessions = () => {
+  selectedSessionIds.value = allVisibleSessionsSelected.value
+    ? new Set()
+    : new Set(visibleSessions.value.map((session) => session.id));
 };
 
 const removeSelectedSession = async () => {
@@ -232,6 +267,61 @@ const requestDeleteSelectedSession = () => {
 const cancelDeleteSession = () => {
   deleteConfirmOpen.value = false;
   pendingDeleteSessionId.value = null;
+};
+
+const requestBulkDelete = () => {
+  if (selectedSessionCount.value === 0) return;
+  bulkDeleteConfirmOpen.value = true;
+};
+
+const removeSelectedSessions = async () => {
+  const ids = [...selectedSessionIds.value];
+  if (ids.length === 0) return;
+
+  bulkDeleteConfirmOpen.value = false;
+  const results = await Promise.allSettled(ids.map((id) => deleteSession(id)));
+  const deletedIds = new Set(ids.filter((_, index) => results[index]?.status === "fulfilled"));
+  const failedResult = results.find((result) => result.status === "rejected");
+  sessions.value = sessions.value.filter((session) => !deletedIds.has(session.id));
+  selectedSessionIds.value = new Set(ids.filter((id) => !deletedIds.has(id)));
+  if (workspace.sessionId && deletedIds.has(workspace.sessionId)) await router.push({ name: "new-session" });
+  if (failedResult?.status === "rejected") sessionsError.value = toMessage(failedResult.reason);
+  else selectionMode.value = false;
+};
+
+const cancelBulkDelete = () => {
+  bulkDeleteConfirmOpen.value = false;
+};
+
+const {
+  open: sortMenuOpen,
+  style: sortMenuStyle,
+  close: closeSortMenu,
+  panelId: sortMenuPanelId,
+} = usePopover({
+  root: sidebarRoot,
+  trigger: ".sidebar__sort-trigger",
+  panel: ".floating-panel",
+  width: 190,
+});
+
+const sortMenuGroups = computed(() => [{
+  id: "sort",
+  items: [
+    { id: "recent", label: t("sidebar.sortByRecent"), value: "recent", active: projectSort.value === "recent" },
+    { id: "name", label: t("sidebar.sortByName"), value: "name", active: projectSort.value === "name" },
+  ],
+}]);
+
+const toggleSortMenu = () => {
+  closeSessionMenu();
+  sortMenuOpen.value = !sortMenuOpen.value;
+};
+
+const selectProjectSort = (item: { value: string }) => {
+  if (item.value !== "recent" && item.value !== "name") return;
+  projectSort.value = item.value;
+  closeSortMenu();
 };
 
 // ─── Inline rename ────────────────────────────────────────────────────
@@ -298,6 +388,7 @@ const onRenameEnter = (event: KeyboardEvent) => {
 };
 
 const aboutOpen = ref(false);
+const keyboardShortcutsOpen = ref(false);
 const projectPickerOpen = ref(false);
 
 const openProject = async (cwd: string) => {
@@ -311,7 +402,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside ref="sidebarRoot" class="sidebar">
     <div class="sidebar__topbar">
       <svg class="sidebar__logo" :viewBox="LOGO_MARK_VIEW_BOX" width="22" height="22" aria-label="Pi Chamber" role="img">
         <LogoMark />
@@ -331,10 +422,10 @@ onMounted(async () => {
         <IconButton :label="t('sidebar.searchSessions')" :pressed="searchOpen" @click="toggleSessionSearch">
           <SearchIcon />
         </IconButton>
-        <IconButton :label="t('sidebar.selectSessions')" disabled>
+        <IconButton :label="t('sidebar.selectSessions')" :pressed="selectionMode" @click="toggleSelectionMode">
           <CheckboxMultipleIcon />
         </IconButton>
-        <IconButton :label="t('sidebar.sortProjects')" disabled>
+        <IconButton class="sidebar__sort-trigger" :label="t('sidebar.sortProjects')" :pressed="sortMenuOpen" @click="toggleSortMenu">
           <SortDescIcon />
         </IconButton>
       </div>
@@ -343,6 +434,15 @@ onMounted(async () => {
     <div class="sidebar__searchbar" :class="{ 'is-open': searchOpen }">
       <SearchBox v-if="searchOpen" v-model="sessionSearch" :placeholder="t('sidebar.searchPlaceholder')" :label="t('sidebar.searchSessions')"
         autoFocus />
+    </div>
+    <div class="sidebar__selectionbar" :class="{ 'is-open': selectionMode }">
+      <span class="sidebar__selectionbar-count">{{ t('sidebar.selectedSessions', { count: selectedSessionCount }) }}</span>
+      <button type="button" @click="toggleSelectAllVisibleSessions">
+        {{ allVisibleSessionsSelected ? t('sidebar.clearSelection') : t('sidebar.selectAllSessions') }}
+      </button>
+      <IconButton size="compact" :label="t('sidebar.deleteSelectedSessions', { count: selectedSessionCount })" :disabled="selectedSessionCount === 0" tone="danger" @click="requestBulkDelete">
+        <DeleteBinIcon />
+      </IconButton>
     </div>
 
     <section ref="sessionListRoot" class="session-list scroll-fade-bottom">
@@ -375,8 +475,10 @@ onMounted(async () => {
                   'is-active': isActive,
                   'is-menu-open': sessionMenuOpen && selectedSessionId === session.id,
                   'is-renaming': renamingSessionId === session.id,
+                  'is-selected': selectionMode && selectedSessionIds.has(session.id),
+                  'is-selecting': selectionMode,
                 },
-              ]" @click="closeSessionMenu(); navigate()">
+              ]" @click="selectionMode ? toggleSessionSelection(session.id) : (closeSessionMenu(), navigate())">
                 <template v-if="renamingSessionId === session.id">
                   <input ref="renamingRef" v-model="renameInput" class="session-list__rename-input"
                     :aria-label="t('sidebar.renameSession')" @click.stop @keydown="onRenameEnter" />
@@ -390,14 +492,16 @@ onMounted(async () => {
                   </span>
                 </template>
                 <template v-else>
+                  <input v-if="selectionMode" class="session-list__checkbox" type="checkbox" :checked="selectedSessionIds.has(session.id)"
+                    :aria-label="t('sidebar.selectSession', { title: sessionTitle(session) })" @click.stop @change="toggleSessionSelection(session.id)" />
                   <span class="session-list__title">
                     <template v-for="(segment, i) in highlightTitle(sessionTitle(session))" :key="i">
                       <mark v-if="segment.hit" class="session-list__hit">{{ segment.text }}</mark>
                       <template v-else>{{ segment.text }}</template>
                     </template>
                   </span>
-                  <span class="session-list__age">{{ sessionAge(session) }}</span>
-                  <IconButton class="session-list__menu-trigger"
+                  <span v-if="!selectionMode" class="session-list__age">{{ sessionAge(session) }}</span>
+                  <IconButton v-if="!selectionMode" class="session-list__menu-trigger"
                     :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === session.id }"
                     :label="t('sidebar.sessionOptions')" size="compact" @click.stop="openSessionMenu(session.id)">
                     <More2Icon />
@@ -417,12 +521,15 @@ onMounted(async () => {
     <FloatingPanel :open="sessionMenuOpen" :style="sessionMenuStyle" :width="180" :panel-id="sessionMenuPanelId" :aria-label="t('sidebar.sessionOptions')">
       <MenuPanel :groups="sessionMenuGroups" @select="selectSessionMenuItem" />
     </FloatingPanel>
+    <FloatingPanel :open="sortMenuOpen" :style="sortMenuStyle" :width="190" :panel-id="sortMenuPanelId" :aria-label="t('sidebar.sortProjects')">
+      <MenuPanel :groups="sortMenuGroups" @select="selectProjectSort" />
+    </FloatingPanel>
 
     <footer class="sidebar__footer">
       <IconButton size="standard" :label="t('sidebar.settings')" @click="ui.settingsOpen = true">
         <SettingsIcon />
       </IconButton>
-      <IconButton size="standard" :label="t('sidebar.keyboardShortcuts')" disabled>
+      <IconButton size="standard" :label="t('sidebar.keyboardShortcuts')" @click="keyboardShortcutsOpen = true">
         <QuestionIcon />
       </IconButton>
       <IconButton size="standard" :label="t('sidebar.about')" @click="aboutOpen = true">
@@ -431,6 +538,7 @@ onMounted(async () => {
     </footer>
 
     <AboutModal :show="aboutOpen" @close="aboutOpen = false" />
+    <KeyboardShortcutsModal :show="keyboardShortcutsOpen" @close="keyboardShortcutsOpen = false" />
     <ProjectPickerModal :show="projectPickerOpen" @close="projectPickerOpen = false" @select="openProject" />
     <ConfirmModal
       :show="deleteConfirmOpen"
@@ -439,6 +547,14 @@ onMounted(async () => {
       :confirm-label="t('sidebar.deleteSession')"
       @close="cancelDeleteSession"
       @confirm="removeSelectedSession"
+    />
+    <ConfirmModal
+      :show="bulkDeleteConfirmOpen"
+      :title="t('sidebar.deleteSelectedConfirmTitle')"
+      :message="t('sidebar.deleteSelectedConfirmMessage', { count: selectedSessionCount })"
+      :confirm-label="t('sidebar.deleteSelectedSessions', { count: selectedSessionCount })"
+      @close="cancelBulkDelete"
+      @confirm="removeSelectedSessions"
     />
   </aside>
 </template>
@@ -450,7 +566,7 @@ onMounted(async () => {
   display: grid;
   width: 100%;
   height: 100%;
-  grid-template-rows: 48px 40px auto minmax(0, 1fr) 42px;
+  grid-template-rows: 48px 40px auto auto minmax(0, 1fr) 42px;
   overflow: hidden;
   color: var(--ui-text);
   font-size: 14px;
@@ -478,6 +594,45 @@ onMounted(async () => {
 .sidebar__searchbar.is-open {
   height: calc(var(--ui-input-height) + 8px);
   padding: 6px var(--sidebar-gutter) 2px;
+}
+
+.sidebar__selectionbar {
+  display: flex;
+  height: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--sidebar-gutter);
+  overflow: hidden;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+  transition: height var(--ui-duration-medium) var(--ui-ease-emphasized), padding var(--ui-duration-medium) var(--ui-ease-emphasized);
+}
+
+.sidebar__selectionbar.is-open {
+  height: 32px;
+  padding: 4px var(--sidebar-gutter) 2px;
+}
+
+.sidebar__selectionbar-count {
+  min-width: 0;
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__selectionbar button:not(.icon-button) {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-text-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sidebar__selectionbar button:not(.icon-button):hover {
+  background: var(--ui-surface-hover);
 }
 
 .sidebar__actions {
@@ -614,6 +769,14 @@ onMounted(async () => {
   background: var(--ui-surface-selected);
 }
 
+.session-list__item.is-selected {
+  background: var(--ui-surface-hover);
+}
+
+.session-list__item.is-selecting {
+  padding-right: 8px;
+}
+
 .session-list__item.is-renaming {
   padding-right: 8px;
 }
@@ -631,6 +794,20 @@ onMounted(async () => {
     color 150ms ease-out,
     transform 150ms ease-out;
   white-space: nowrap;
+}
+
+.session-list__checkbox {
+  position: absolute;
+  inset-inline-start: 8px;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--ui-primary);
+  transition: transform 150ms ease-out;
+}
+
+.session-list__item.is-selecting:hover .session-list__checkbox {
+  transform: translateX(1px);
 }
 
 .session-list__hit {
