@@ -36,7 +36,7 @@
     "@vue/tsconfig": "^0.9.1",
     "catppuccin-vsc-icons": "github:catppuccin/vscode-icons#b6915da9f6889b683a110aa747de96c2820a537d",
     "jiti": "^2.7.0",
-    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript": "^6.0.3",
     "vue-tsc": "^3.3.11",
     "vite": "^8.2.2",
     "vite-plugin-vue-devtools": "^8.2.1",
