@@ -329,6 +329,7 @@ export default {
     placeholder: "向 Pi 提问 - 输入 {'@'} 选文件，输入 / 选命令，拖入图片以附加",
     placeholderMod: "{base} 用 ⌘/Ctrl + Enter 提交",
     attachFiles: "附加文件",
+    uploadImages: "上传图片",
     compactContext: "压缩上下文",
     compactConfirmTitle: "确认压缩上下文？",
     compactConfirmMessage: "当前对话上下文将被总结压缩，是否继续？",

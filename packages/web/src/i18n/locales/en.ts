@@ -330,6 +330,7 @@ export default {
     placeholder: "Ask Pi anything. Type {'@'} for files or / for commands. Drag images to attach.",
     placeholderMod: "{base} Submit with ⌘/Ctrl + Enter.",
     attachFiles: "Attach files",
+    uploadImages: "Upload images",
     compactContext: "Compact context",
     compactConfirmTitle: "Compact context?",
     compactConfirmMessage: "The current conversation context will be summarized. Continue?",

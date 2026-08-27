@@ -5,6 +5,7 @@ import type { ExtensionWidget } from "@/composables/extensionWidgets";
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AddCircleIcon from "lucide-static/icons/circle-plus.svg";
+import ImageUpIcon from "lucide-static/icons/image-up.svg";
 import SendIcon from "lucide-static/icons/send.svg";
 import LensConcaveIcon from "lucide-static/icons/lens-concave.svg";
 import StopIcon from "lucide-static/icons/square.svg";
@@ -65,6 +66,7 @@ const submitMode = ref<"steer" | "followUp">("steer");
 const suggestions = ref<InstanceType<typeof ComposerSuggestions> | null>(null);
 const activeSurface = ref<"activity" | "files" | "commands" | null>(null);
 const shelfQuery = ref("");
+const fileInput = ref<HTMLInputElement | null>(null);
 const dragDepth = ref(0);
 const isDraggingImage = computed(() => dragDepth.value > 0);
 const suggestionMode = computed<"files" | "commands" | null>(() =>
@@ -207,6 +209,16 @@ const addImages = async (candidates: File[]) => {
 const onDrop = (event: DragEvent) => {
   dragDepth.value = 0;
   void addImages(Array.from(event.dataTransfer?.files ?? []));
+};
+
+const openImagePicker = () => fileInput.value?.click();
+
+const onImagePickerChange = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  if (files.length) void addImages(files);
+  // Reset so picking the same file again still fires `change`.
+  input.value = "";
 };
 
 const onPaste = (event: ClipboardEvent) => {
@@ -523,6 +535,11 @@ const placeholder = computed(() => {
                   <AddCircleIcon />
                 </IconButton>
               </div>
+              <input ref="fileInput" type="file" multiple :accept="[...supportedImageTypes].join(',')" hidden
+                @change="onImagePickerChange">
+              <IconButton size="compact" :label="t('composer.uploadImages')" @click="openImagePicker">
+                <ImageUpIcon />
+              </IconButton>
               <!-- Compact works at any time: the SDK's compact() aborts the
                current turn first (same as Pi's /compact), then summarizes. -->
               <IconButton size="compact" :label="t('composer.compactContext')" @click="requestCompact">
