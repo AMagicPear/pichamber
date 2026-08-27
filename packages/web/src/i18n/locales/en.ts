@@ -66,6 +66,8 @@ export default {
     deleteConfirmTitle: "Delete session?",
     deleteConfirmMessage: "This session and its conversation history will be deleted. Continue?",
     rename: "Rename",
+    copySessionToProject: "Copy session to project",
+    copySessionSuccess: "Copied session to {project}",
     deleteSession: "Delete session",
     newSessionLabel: "New Session",
     sessionFallback: "Session {id}",
@@ -320,6 +322,7 @@ export default {
     noSubdirectories: "No subdirectories",
     hint: "Double-click a folder to open it",
     useThisFolder: "Use this folder",
+    esc: "Cancel",
   },
 
   composer: {

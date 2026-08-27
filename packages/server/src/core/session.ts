@@ -231,6 +231,22 @@ export const forkSessionAt = async (id: string, entryId: string) => {
   return { sessionId: fork.getSessionId(), cwd: fork.getCwd(), sessionFile: forkFile };
 };
 
+/** Copy the active session path into another project using Pi's native
+ * cross-project fork API. Unlike `forkSessionAt`, this preserves the full
+ * current conversation path and changes the new session's cwd. */
+export const copySessionToCwd = async (id: string, cwd: string) => {
+  await loadAppConfig();
+  if (runtimeTransition) await runtimeTransition;
+  const sessionFile = await getSessionFileWithId(id);
+  if (!sessionFile) throw new Error("Session not found");
+
+  const copy = SessionManager.forkFrom(sessionFile, cwd);
+  const copyFile = copy.getSessionFile();
+  if (!copyFile) throw new Error("Failed to copy session");
+  sessionFileLookup.set(copy.getSessionId(), copyFile);
+  return { sessionId: copy.getSessionId(), cwd: copy.getCwd(), sessionFile: copyFile };
+};
+
 export const switchRuntimeMode = async (
   mode: SessionDriverMode,
   closeChannel: (sessionId: string) => Promise<void>,

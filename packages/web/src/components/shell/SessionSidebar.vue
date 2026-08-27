@@ -2,6 +2,7 @@
 import AddIcon from "lucide-static/icons/plus.svg";
 import ChatNewIcon from "lucide-static/icons/message-square-plus.svg";
 import CheckboxMultipleIcon from "lucide-static/icons/list-checks.svg";
+import CopyIcon from "lucide-static/icons/copy.svg";
 import DeleteBinIcon from "lucide-static/icons/trash-2.svg";
 import FolderAddIcon from "lucide-static/icons/folder-plus.svg";
 import FileEditIcon from "lucide-static/icons/file-pen.svg";
@@ -33,6 +34,7 @@ import { RouterLink, useRouter } from "vue-router";
 import { ui } from "@/stores/ui";
 import {
   createSessionForCwd,
+  copySessionToProject,
   loadSessions,
   renameSessionInStore,
   sessionTitle,
@@ -44,6 +46,7 @@ import {
 import { settings } from "@/stores/settings";
 import { deleteSession, toMessage } from "@/api/client";
 import { lucideIcon } from "@/components/ui/morphIcons";
+import { pushInfoToast } from "@/stores/extensionUi";
 
 const { t } = useI18n();
 
@@ -347,6 +350,7 @@ const sessionMenuGroups = computed(() => [{
   id: "actions",
   items: [
     { id: "rename", label: t('sidebar.rename'), value: "rename", icon: FileEditIcon },
+    { id: "copy", label: t('sidebar.copySessionToProject'), value: "copy", icon: CopyIcon },
     { id: "delete", label: t('sidebar.deleteSession'), value: "delete", icon: DeleteBinIcon },
   ],
 }]);
@@ -354,6 +358,13 @@ const sessionMenuGroups = computed(() => [{
 const selectSessionMenuItem = (item: { value: string }) => {
   if (item.value === "rename") {
     beginRename(sessions.value.find((session: SessionInfo) => session.id === selectedSessionId.value));
+  } else if (item.value === "copy") {
+    const session = sessions.value.find((candidate: SessionInfo) => candidate.id === selectedSessionId.value);
+    if (!session) return;
+    copyTargetSessionId.value = session.id;
+    projectPickerInitialPath.value = session.cwd;
+    closeSessionMenu();
+    projectPickerOpen.value = true;
   } else {
     requestDeleteSelectedSession();
   }
@@ -390,10 +401,29 @@ const onRenameEnter = (event: KeyboardEvent) => {
 const aboutOpen = ref(false);
 const keyboardShortcutsOpen = ref(false);
 const projectPickerOpen = ref(false);
+const copyTargetSessionId = ref<string | null>(null);
+const projectPickerInitialPath = ref<string | undefined>();
 
 const openProject = async (cwd: string) => {
   projectPickerOpen.value = false;
+  const sessionId = copyTargetSessionId.value;
+  copyTargetSessionId.value = null;
+  if (sessionId) {
+    try {
+      const copy = await copySessionToProject(sessionId, cwd);
+      pushInfoToast(t('sidebar.copySessionSuccess', { project: projectName(copy.cwd) }));
+    } catch (error) {
+      sessionsError.value = toMessage(error);
+    }
+    return;
+  }
   await startProjectSession(cwd);
+};
+
+const closeProjectPicker = () => {
+  projectPickerOpen.value = false;
+  copyTargetSessionId.value = null;
+  projectPickerInitialPath.value = undefined;
 };
 
 onMounted(async () => {
@@ -411,7 +441,7 @@ onMounted(async () => {
 
     <div class="sidebar__actions" :aria-label="t('sidebar.workspaceActions')">
       <div>
-        <IconButton :label="t('sidebar.addProject')" @click="projectPickerOpen = true">
+        <IconButton :label="t('sidebar.addProject')" @click="projectPickerInitialPath = undefined; projectPickerOpen = true">
           <FolderAddIcon />
         </IconButton>
         <IconButton :label="t('sidebar.newSession')" @click="startProjectSession(workspace.cwd ?? '~')">
@@ -539,7 +569,7 @@ onMounted(async () => {
 
     <AboutModal :show="aboutOpen" @close="aboutOpen = false" />
     <KeyboardShortcutsModal :show="keyboardShortcutsOpen" @close="keyboardShortcutsOpen = false" />
-    <ProjectPickerModal :show="projectPickerOpen" @close="projectPickerOpen = false" @select="openProject" />
+    <ProjectPickerModal :show="projectPickerOpen" :initial-path="projectPickerInitialPath" @close="closeProjectPicker" @select="openProject" />
     <ConfirmModal
       :show="deleteConfirmOpen"
       :title="t('sidebar.deleteConfirmTitle')"

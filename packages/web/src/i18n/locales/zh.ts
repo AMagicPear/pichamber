@@ -65,6 +65,8 @@ export default {
     deleteConfirmTitle: "确认删除会话？",
     deleteConfirmMessage: "此会话及其对话历史将被删除，是否继续？",
     rename: "重命名",
+    copySessionToProject: "复制会话到项目",
+    copySessionSuccess: "已复制会话到 {project}",
     deleteSession: "删除会话",
     newSessionLabel: "新建会话",
     sessionFallback: "会话 {id}",
@@ -319,6 +321,7 @@ export default {
     noSubdirectories: "无子目录",
     hint: "双击文件夹以打开",
     useThisFolder: "使用此文件夹",
+    esc: "取消",
   },
 
   composer: {

@@ -21,6 +21,7 @@ import {
 } from "./services/git";
 import {
   createSessionWithCwd,
+  copySessionToCwd,
   deleteSession,
   forkSessionAt,
   getSessionCwd,
@@ -600,6 +601,22 @@ const server = Bun.serve({
         } catch (error) {
           const message = toMessage(error);
           return Response.json({ error: message }, { status: message === "Session not found" ? 404 : 400 });
+        }
+      },
+    },
+    "/api/sessions/:id/copy": {
+      POST: async (req) => {
+        const { cwd } = (await req.json().catch(() => ({}))) as { cwd?: unknown };
+        if (typeof cwd !== "string" || !cwd.trim()) {
+          return Response.json({ error: "cwd required" }, { status: 400 });
+        }
+        try {
+          const workspace = await canonicalWorkspace(cwd);
+          return Response.json(await copySessionToCwd(req.params.id, workspace));
+        } catch (error) {
+          const message = toMessage(error);
+          const status = error instanceof WorkspaceError ? error.status : message === "Session not found" ? 404 : 400;
+          return Response.json({ error: message }, { status });
         }
       },
     },

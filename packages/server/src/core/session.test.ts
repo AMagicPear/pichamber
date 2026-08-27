@@ -51,4 +51,23 @@ describe("session driver creation", () => {
     expect(fork.getBranch().map((entry) => entry.id)).toEqual([firstId, secondId]);
     expect(manager.getBranch().map((entry) => entry.id)).toEqual([firstId, secondId, thirdId]);
   });
+
+  test("copies a persisted session into another project directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pichamber-session-"));
+    temporaryDirectories.push(root);
+    const sourceCwd = join(root, "source");
+    const targetCwd = join(root, "target");
+    const sessionDir = join(root, "sessions");
+    await Promise.all([mkdir(sourceCwd), mkdir(targetCwd)]);
+    const source = SessionManager.create(sourceCwd, sessionDir);
+    source.appendMessage({ role: "user", content: "copy this", timestamp: Date.now() });
+    source.appendMessage({ role: "assistant", content: [], timestamp: Date.now(), provider: "test", model: "test", api: "test", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop" });
+    const sourceFile = source.getSessionFile()!;
+
+    const copy = SessionManager.forkFrom(sourceFile, targetCwd, sessionDir);
+
+    expect(copy.getCwd()).toBe(targetCwd);
+    expect(copy.getHeader()?.parentSession).toBe(sourceFile);
+    expect(copy.getBranch().map((entry) => entry.type)).toEqual(["message", "message"]);
+  });
 });

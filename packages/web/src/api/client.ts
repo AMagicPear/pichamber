@@ -78,6 +78,13 @@ export const forkSession = (sessionId: string, entryId: string) =>
     body: JSON.stringify({ entryId }),
   }).then((r) => jsonOrThrow<{ sessionId: string; cwd: string }>(r));
 
+export const copySession = (sessionId: string, cwd: string) =>
+  fetch(`${BASE}/sessions/${encodeURIComponent(sessionId)}/copy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd }),
+  }).then((r) => jsonOrThrow<{ sessionId: string; cwd: string }>(r));
+
 export const deleteSession = (sessionId: string) =>
   fetch(`${BASE}/sessions/${sessionId}`, { method: "DELETE" }).then((r) =>
     jsonOrThrow<{ ok: true }>(r),

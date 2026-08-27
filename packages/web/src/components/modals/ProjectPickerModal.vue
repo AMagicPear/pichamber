@@ -8,7 +8,7 @@ import { browseProjectDirectories, toMessage } from "@/api/client";
 
 const { t } = useI18n();
 
-const props = defineProps<{ show: boolean }>();
+const props = defineProps<{ show: boolean; initialPath?: string }>();
 const emit = defineEmits<{ close: []; select: [path: string] }>();
 
 const path = ref("");
@@ -42,7 +42,7 @@ watch(
   () => props.show,
   (show) => {
     if (!show) return;
-    void browse().then(() => nextTick(() => pathInput.value?.focus()));
+    void browse(props.initialPath).then(() => nextTick(() => pathInput.value?.focus()));
   },
 );
 

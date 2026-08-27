@@ -1,5 +1,5 @@
 import { computed, reactive, ref, shallowRef, watch } from "vue";
-import { createSession, forkSession, listSessions, renameSession, toMessage } from "@/api/client";
+import { copySession, createSession, forkSession, listSessions, renameSession, toMessage } from "@/api/client";
 import { pathBasename } from "@amagicpear/pichamber-shared";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type {
@@ -134,6 +134,14 @@ export const forkSessionFromEntry = async (sessionId: string, entryId: string) =
   workspace.sessionName = i18n.global.t('sidebar.newSessionLabel');
   void refreshSessions();
   return fork.sessionId;
+};
+
+/** Copy a session's current path into another project without changing the
+ * active workspace. The sidebar picks the target cwd and remains on source. */
+export const copySessionToProject = async (sessionId: string, cwd: string) => {
+  const copy = await copySession(sessionId, cwd);
+  await refreshSessions();
+  return copy;
 };
 
 export const updateWorkspace = async (sessionId: string) => {
