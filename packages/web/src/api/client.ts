@@ -23,6 +23,8 @@ import type {
   PiExtensionUpdate,
   PiProviderSettings,
   ExtensionsOverview,
+  SkillsOverview,
+  McpOverview,
   PtyStartOptions,
   PtyStartResult,
   SearchResult,
@@ -354,3 +356,31 @@ export const updatePiExtensions = (sessionId: string, source?: string) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(source ? { source } : {}),
   }).then((r) => jsonOrThrow<{ updates: PiExtensionUpdate[] }>(r));
+
+export const fetchPiSkillsOverview = (sessionId: string) =>
+  fetch(`${BASE}/pi/skills/overview?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
+    jsonOrThrow<SkillsOverview>(r),
+  );
+
+export const setPiSkillEnabled = (sessionId: string, path: string, enabled: boolean) =>
+  fetch(`${BASE}/pi/skills/enabled?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, enabled }),
+  }).then((r) => jsonOrThrow<{ enabled: boolean }>(r));
+
+export const setPiSkillCommands = (sessionId: string, enabled: boolean) =>
+  fetch(`${BASE}/pi/skills/commands?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  }).then((r) => jsonOrThrow<{ enabled: boolean }>(r));
+
+export const fetchPiMcpOverview = (sessionId: string) =>
+  fetch(`${BASE}/pi/mcp/overview?sessionId=${encodeURIComponent(sessionId)}`).then((r) => jsonOrThrow<McpOverview>(r));
+
+export const setPiMcpServerEnabled = (sessionId: string, name: string, enabled: boolean) =>
+  fetch(`${BASE}/pi/mcp/${encodeURIComponent(name)}/enabled?sessionId=${encodeURIComponent(sessionId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }) }).then((r) => jsonOrThrow<McpOverview>(r));
+
+export const reconnectPiMcpServer = (sessionId: string, name: string) =>
+  fetch(`${BASE}/pi/mcp/${encodeURIComponent(name)}/reconnect?sessionId=${encodeURIComponent(sessionId)}`, { method: "POST" }).then((r) => jsonOrThrow<McpOverview>(r));

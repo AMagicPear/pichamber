@@ -131,3 +131,47 @@ export type ExtensionsOverview = {
   /** False when the active runtime cannot enumerate extension inventory (e.g. external RPC). */
   inventoryAvailable: boolean;
 };
+
+/** A Skill discovered by Pi for the active session. */
+export type LoadedSkillInfo = {
+  name: string;
+  description: string;
+  path: string;
+  source: string;
+  scope: "user" | "project" | "temporary";
+  origin: "package" | "top-level";
+  disableModelInvocation: boolean;
+};
+
+/** A Skill suppressed through Pi's global `skills` setting. */
+export type DisabledSkillInfo = {
+  name: string;
+  description?: string;
+  path: string;
+};
+
+/** Pi's discovered Skills and whether their slash commands are registered. */
+export type SkillsOverview = {
+  skills: LoadedSkillInfo[];
+  disabledSkills: DisabledSkillInfo[];
+  diagnostics: Array<{ path: string; error: string }>;
+  enableSkillCommands: boolean;
+  inventoryAvailable: boolean;
+};
+
+export type McpServerInfo = {
+  name: string;
+  source?: string;
+  transport: "stdio" | "http" | "socket";
+  status: "cached" | "not-connected" | "disabled";
+  disabled: boolean;
+  directTools: boolean | string[];
+  toolCount: number;
+  resourceCount: number;
+  promptCount: number;
+  tools: Array<{ name: string; description?: string }>;
+  resources: Array<{ name: string; description?: string }>;
+  prompts: Array<{ name: string; description?: string }>;
+};
+
+export type McpOverview = { available: boolean; servers: McpServerInfo[]; error?: string };

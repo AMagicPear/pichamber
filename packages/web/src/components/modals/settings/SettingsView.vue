@@ -4,26 +4,18 @@ import { useI18n } from "vue-i18n";
 import SplitPane from "@/components/shell/SplitPane.vue";
 import IconButton from "@/components/ui/IconButton.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
-import AiAgentIcon from "lucide-static/icons/bot.svg";
-import AiGenerate2Icon from "lucide-static/icons/sparkles.svg";
 import BookOpenIcon from "lucide-static/icons/book-open.svg";
-import BookIcon from "lucide-static/icons/book.svg";
 import BrainIcon from "lucide-static/icons/brain.svg";
 import ChatAi3Icon from "lucide-static/icons/message-square-text.svg";
 import ChatHistoryIcon from "lucide-static/icons/messages-square.svg";
-import ChatThreadIcon from "lucide-static/icons/messages-square.svg";
 import CloseIcon from "lucide-static/icons/x.svg";
 import CloudIcon from "lucide-static/icons/cloud.svg";
 import CodeBoxIcon from "lucide-static/icons/code.svg";
-import CommandIcon from "lucide-static/icons/command.svg";
-import FoldersIcon from "lucide-static/icons/folders.svg";
 import GitBranchIcon from "lucide-static/icons/git-branch.svg";
 import Notification3Icon from "lucide-static/icons/bell-ring.svg";
 import PaletteIcon from "lucide-static/icons/palette.svg";
 import FileCodeIcon from "lucide-static/icons/file-code.svg";
 import ServerIcon from "lucide-static/icons/server.svg";
-import SlashCommands2Icon from "lucide-static/icons/square-asterisk.svg";
-import McpIcon from "@/assets/icons/MCP.svg";
 import { settings } from "@/stores/settings";
 import { preference as themePreference, setTheme, themeOptions } from "@/stores/theme";
 import { localeOptions, localePreference, setLocale } from "@/i18n";
@@ -35,6 +27,9 @@ import SettingsGroup from "@/components/modals/settings/SettingsGroup.vue";
 import SettingsOption from "@/components/modals/settings/SettingsOption.vue";
 import SettingsPageHeader from "@/components/modals/settings/SettingsPageHeader.vue";
 import ExtensionsManager from "@/components/modals/settings/ExtensionsManager.vue";
+import SkillsManager from "@/components/modals/settings/SkillsManager.vue";
+import McpManager from "@/components/modals/settings/McpManager.vue";
+import McpIcon from "@/assets/icons/MCP.svg";
 import { fetchFileEditor, updateFileEditor, type FileEditor } from "@/api/client";
 
 defineOptions({ name: "SettingsView" });
@@ -47,30 +42,21 @@ interface NavItem {
   key: string;
   label: () => string;
   icon: unknown;
-  enabled?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { key: "appearance", label: () => t("settings.nav.appearance"), icon: PaletteIcon, enabled: true },
-  { key: "editor", label: () => t("settings.nav.editor"), icon: FileCodeIcon, enabled: true },
-  { key: "chat", label: () => t("settings.nav.chat"), icon: ChatAi3Icon, enabled: true },
-  { key: "notifications", label: () => t("settings.nav.notifications"), icon: Notification3Icon, enabled: true },
-  { key: "sessions", label: () => t("settings.nav.sessions"), icon: ChatHistoryIcon, enabled: true },
-  { key: "shortcuts", label: () => t("settings.nav.shortcuts"), icon: CommandIcon },
-  { key: "git", label: () => "Git", icon: GitBranchIcon, enabled: true },
-  { key: "magic-prompts", label: () => t("settings.nav.magicPrompts"), icon: AiGenerate2Icon },
-  { key: "snippets", label: () => t("settings.nav.snippets"), icon: ChatThreadIcon },
-  { key: "projects", label: () => t("settings.nav.projects"), icon: FoldersIcon },
-  { key: "remote-instances", label: () => t("settings.nav.remoteInstances"), icon: ServerIcon },
-  { key: "agents", label: () => t("settings.nav.agents"), icon: AiAgentIcon },
-  { key: "behavior", label: () => t("settings.nav.behavior"), icon: BrainIcon, enabled: true },
-  { key: "runtime", label: () => t("settings.nav.runtime"), icon: ServerIcon, enabled: true },
-  { key: "commands", label: () => t("settings.nav.commands"), icon: SlashCommands2Icon },
+  { key: "appearance", label: () => t("settings.nav.appearance"), icon: PaletteIcon },
+  { key: "editor", label: () => t("settings.nav.editor"), icon: FileCodeIcon },
+  { key: "chat", label: () => t("settings.nav.chat"), icon: ChatAi3Icon },
+  { key: "notifications", label: () => t("settings.nav.notifications"), icon: Notification3Icon },
+  { key: "sessions", label: () => t("settings.nav.sessions"), icon: ChatHistoryIcon },
+  { key: "git", label: () => "Git", icon: GitBranchIcon },
+  { key: "behavior", label: () => t("settings.nav.behavior"), icon: BrainIcon },
+  { key: "runtime", label: () => t("settings.nav.runtime"), icon: ServerIcon },
+  { key: "extensions", label: () => t("settings.nav.extensions"), icon: CodeBoxIcon },
+  { key: "skills", label: () => t("settings.nav.skills"), icon: BookOpenIcon },
   { key: "mcp", label: () => "MCP", icon: McpIcon },
-  { key: "extensions", label: () => t("settings.nav.extensions"), icon: CodeBoxIcon, enabled: true },
-  { key: "providers", label: () => t("settings.nav.providers"), icon: CloudIcon, enabled: true },
-  { key: "skills-installed", label: () => t("settings.nav.skills"), icon: BookOpenIcon },
-  { key: "skills-catalog", label: () => t("settings.nav.skillsCatalog"), icon: BookIcon },
+  { key: "providers", label: () => t("settings.nav.providers"), icon: CloudIcon },
 ];
 
 type SettingsViewState = { activeKey: string; size: number };
@@ -191,7 +177,7 @@ const selectItem = (key: string) => {
             :key="item.key"
             :class="{ 'is-active': activeKey === item.key }"
           >
-            <button type="button" :disabled="!item.enabled" @click="selectItem(item.key)">
+            <button type="button" @click="selectItem(item.key)">
               <component :is="item.icon" />
               <span>{{ item.label() }}</span>
             </button>
@@ -338,6 +324,12 @@ const selectItem = (key: string) => {
             <ExtensionsManager />
           </template>
 
+          <template v-else-if="activeKey === 'skills'">
+            <SettingsPageHeader :title="t('settings.skills.title')" :description="t('settings.skills.description')" />
+            <SkillsManager />
+          </template>
+          <template v-else-if="activeKey === 'mcp'"><SettingsPageHeader :title="t('settings.mcp.title')" :description="t('settings.mcp.description')" /><McpManager /></template>
+
           <PiProvidersSettings v-else-if="activeKey === 'providers'" />
 
           <PiBehaviorSettings v-else-if="activeKey === 'behavior'" />
@@ -394,12 +386,8 @@ const selectItem = (key: string) => {
   flex-shrink: 0;
   color: var(--ui-text-muted);
 }
-.settings-nav__list button:hover:not(:disabled) {
+.settings-nav__list button:hover {
   background: var(--ui-surface-hover);
-}
-.settings-nav__list button:disabled {
-  cursor: default;
-  opacity: 0.45;
 }
 .settings-nav__list .is-active button {
   background: var(--ui-surface-selected);

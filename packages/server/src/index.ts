@@ -1,5 +1,5 @@
-import { basename, dirname, join } from "node:path";
-import { VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
+import { basename, dirname, isAbsolute, join } from "node:path";
+import { getAgentDir, loadSkills, VERSION as PI_VERSION } from "@earendil-works/pi-coding-agent";
 import { listDirectory, openFile, searchFiles } from "./services/fs";
 import {
   checkout,
@@ -47,8 +47,9 @@ import { getProviderQuota, listQuotaProviders } from "./providers/quota";
 import { SdkSessionDriver } from "./core/driver";
 import { RuntimeModeError, toMessage } from "./error";
 import { getFileEditor, getRuntimeMode, loadAppConfig, setFileEditor } from "./settings/app-config";
+import { getMcpOverview, setMcpServerEnabled } from "./settings/mcp-config";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./services/workspace";
-import type { ExtensionsOverview, LoadedExtensionInfo } from "@amagicpear/pichamber-shared";
+import type { DisabledSkillInfo, ExtensionsOverview, LoadedExtensionInfo, LoadedSkillInfo, SkillsOverview } from "@amagicpear/pichamber-shared";
 import {
   getPiBehaviorSettings,
   listPiProviders,
@@ -119,6 +120,19 @@ const getSdkSession = async (sessionId: string) => {
   }
   return { session: driver.session, cwd: driver.cwd } as const;
 };
+
+const getDisabledSkills = (paths: string[], cwd: string): DisabledSkillInfo[] =>
+  paths
+    .filter((path) => path.startsWith("-") && isAbsolute(path.slice(1)))
+    .map((rule) => rule.slice(1))
+    .map((path) => {
+      const skill = loadSkills({ cwd, agentDir: getAgentDir(), skillPaths: [path], includeDefaults: false }).skills[0];
+      return {
+        name: skill?.name ?? basename(dirname(path)),
+        description: skill?.description,
+        path,
+      };
+    });
 
 const ptyWsHandler: WsHandler = {
   open(ws) {
@@ -439,6 +453,118 @@ const server = Bun.serve({
           }
           await result.session.reload();
           return Response.json({ builtins: listBuiltinExtensions() });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/skills/overview": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const resources = result.session.resourceLoader.getSkills();
+          const overview: SkillsOverview = {
+            skills: resources.skills.map((skill) => ({
+              name: skill.name,
+              description: skill.description,
+              path: skill.filePath,
+              source: skill.sourceInfo.source,
+              scope: skill.sourceInfo.scope,
+              origin: skill.sourceInfo.origin,
+              disableModelInvocation: skill.disableModelInvocation,
+            } satisfies LoadedSkillInfo)),
+            disabledSkills: getDisabledSkills(result.session.settingsManager.getSkillPaths(), result.cwd),
+            diagnostics: resources.diagnostics.map((diagnostic) => ({
+              path: diagnostic.path ?? "(unknown)",
+              error: diagnostic.message,
+            })),
+            enableSkillCommands: result.session.settingsManager.getEnableSkillCommands(),
+            inventoryAvailable: true,
+          };
+          return Response.json(overview);
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/skills/enabled": {
+      PUT: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        const body = (await req.json().catch(() => ({}))) as { path?: unknown; enabled?: unknown };
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        if (typeof body.path !== "string" || !isAbsolute(body.path) || typeof body.enabled !== "boolean") {
+          return Response.json({ error: "path (absolute string) and enabled (boolean) required" }, { status: 400 });
+        }
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const rule = `-${body.path}`;
+          const paths = result.session.settingsManager.getSkillPaths();
+          const nextPaths = body.enabled ? paths.filter((path) => path !== rule) : [...new Set([...paths, rule])];
+          result.session.settingsManager.setSkillPaths(nextPaths);
+          await result.session.settingsManager.flush();
+          await result.session.reload();
+          return Response.json({ enabled: body.enabled });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/skills/commands": {
+      PUT: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        const body = (await req.json().catch(() => ({}))) as { enabled?: unknown };
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        if (typeof body.enabled !== "boolean") return Response.json({ error: "enabled (boolean) required" }, { status: 400 });
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          result.session.settingsManager.setEnableSkillCommands(body.enabled);
+          await result.session.settingsManager.flush();
+          await result.session.reload();
+          return Response.json({ enabled: result.session.settingsManager.getEnableSkillCommands() });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/mcp/overview": {
+      GET: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        const result = await getSdkSession(sessionId);
+        if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+        return Response.json(await getMcpOverview(result.cwd));
+      },
+    },
+    "/api/pi/mcp/:name/enabled": {
+      PUT: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        const body = (await req.json().catch(() => ({}))) as { enabled?: unknown };
+        if (!sessionId || typeof body.enabled !== "boolean") return Response.json({ error: "sessionId and enabled (boolean) required" }, { status: 400 });
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          await setMcpServerEnabled(result.cwd, req.params.name, body.enabled);
+          await result.session.reload();
+          return Response.json(await getMcpOverview(result.cwd));
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/mcp/:name/reconnect": {
+      POST: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          await result.session.prompt(`/mcp reconnect ${req.params.name}`);
+          return Response.json(await getMcpOverview(result.cwd));
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 400 });
         }
