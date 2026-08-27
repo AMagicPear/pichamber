@@ -1,6 +1,6 @@
 {
   "name": "@amagicpear/pichamber",
-  "version": "0.10.0",
+  "version": "1.0.0",
   "description": "A browser-based workspace for the Pi Coding Agent",
   "license": "MIT",
   "type": "module",
@@ -39,6 +39,8 @@
   },
   "scripts": {
     "dev": "bun run --filter @amagicpear/pichamber-server --filter @amagicpear/pichamber-web dev",
+    "dev:web": "bun --filter @amagicpear/pichamber-web dev",
+    "dev:server": "bun --filter @amagicpear/pichamber-server dev",
     "build": "bun --filter '*' build",
     "build:web": "bun --filter @amagicpear/pichamber-web build",
     "build:server": "bun --filter @amagicpear/pichamber-server build",
@@ -76,20 +78,5 @@
   },
   "publishConfig": {
     "access": "public"
-  },
-  "overrides": {
-    "vue": "rc",
-    "@vue/compiler-core": "rc",
-    "@vue/compiler-dom": "rc",
-    "@vue/compiler-sfc": "rc",
-    "@vue/compiler-ssr": "rc",
-    "@vue/compiler-vapor": "rc",
-    "@vue/reactivity": "rc",
-    "@vue/runtime-core": "rc",
-    "@vue/runtime-dom": "rc",
-    "@vue/runtime-vapor": "rc",
-    "@vue/server-renderer": "rc",
-    "@vue/shared": "rc",
-    "@vue/compat": "rc"
   }
 }

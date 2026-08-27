@@ -21,7 +21,7 @@
     "mermaid": "^11.17.2",
     "morphicons": "^1.7.0",
     "stream-diffs": "^0.0.2",
-    "vue": "^3.6.0-rc.5",
+    "vue": "^3.5.41",
     "vue-i18n": "^11.4.10",
     "vue-router": "^5.2.0"
   },
