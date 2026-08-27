@@ -20,6 +20,8 @@ import { settings } from "@/stores/settings";
 import { preference as themePreference, setTheme, themeOptions } from "@/stores/theme";
 import { localeOptions, localePreference, setLocale } from "@/i18n";
 import { persistedState } from "@/stores/persisted";
+import en from "@/i18n/locales/en";
+import zh from "@/i18n/locales/zh";
 import PiBehaviorSettings from "@/components/modals/settings/PiBehaviorSettings.vue";
 import RuntimeSettings from "@/components/modals/settings/RuntimeSettings.vue";
 import PiProvidersSettings from "@/components/modals/settings/PiProvidersSettings.vue";
@@ -42,21 +44,33 @@ interface NavItem {
   key: string;
   label: () => string;
   icon: unknown;
+  searchTerms: string[];
 }
 
+const collectText = (value: unknown): string[] => {
+  if (typeof value === "string") return [value];
+  if (!value || typeof value !== "object") return [];
+  return Object.values(value as Record<string, unknown>).flatMap(collectText);
+};
+const searchTerms = (section: string, ...extra: string[]) => [
+  ...extra,
+  ...collectText((en.settings as Record<string, unknown>)[section]),
+  ...collectText((zh.settings as Record<string, unknown>)[section]),
+].map((term) => term.toLowerCase());
+
 const navItems: NavItem[] = [
-  { key: "appearance", label: () => t("settings.nav.appearance"), icon: PaletteIcon },
-  { key: "editor", label: () => t("settings.nav.editor"), icon: FileCodeIcon },
-  { key: "chat", label: () => t("settings.nav.chat"), icon: ChatAi3Icon },
-  { key: "notifications", label: () => t("settings.nav.notifications"), icon: Notification3Icon },
-  { key: "sessions", label: () => t("settings.nav.sessions"), icon: ChatHistoryIcon },
-  { key: "git", label: () => "Git", icon: GitBranchIcon },
-  { key: "behavior", label: () => t("settings.nav.behavior"), icon: BrainIcon },
-  { key: "runtime", label: () => t("settings.nav.runtime"), icon: ServerIcon },
-  { key: "extensions", label: () => t("settings.nav.extensions"), icon: CodeBoxIcon },
-  { key: "skills", label: () => t("settings.nav.skills"), icon: BookOpenIcon },
-  { key: "mcp", label: () => "MCP", icon: McpIcon },
-  { key: "providers", label: () => t("settings.nav.providers"), icon: CloudIcon },
+  { key: "appearance", label: () => t("settings.nav.appearance"), icon: PaletteIcon, searchTerms: searchTerms("appearance") },
+  { key: "editor", label: () => t("settings.nav.editor"), icon: FileCodeIcon, searchTerms: searchTerms("editor", "VS Code", "Cursor", "Zed", "WebStorm") },
+  { key: "chat", label: () => t("settings.nav.chat"), icon: ChatAi3Icon, searchTerms: searchTerms("chat") },
+  { key: "notifications", label: () => t("settings.nav.notifications"), icon: Notification3Icon, searchTerms: searchTerms("notifications") },
+  { key: "sessions", label: () => t("settings.nav.sessions"), icon: ChatHistoryIcon, searchTerms: searchTerms("sessions") },
+  { key: "git", label: () => "Git", icon: GitBranchIcon, searchTerms: searchTerms("git", "Git") },
+  { key: "behavior", label: () => t("settings.nav.behavior"), icon: BrainIcon, searchTerms: searchTerms("behavior") },
+  { key: "runtime", label: () => t("settings.nav.runtime"), icon: ServerIcon, searchTerms: searchTerms("runtime", "SDK", "RPC") },
+  { key: "extensions", label: () => t("settings.nav.extensions"), icon: CodeBoxIcon, searchTerms: searchTerms("extensions") },
+  { key: "skills", label: () => t("settings.nav.skills"), icon: BookOpenIcon, searchTerms: searchTerms("skills", "SKILL.md") },
+  { key: "mcp", label: () => "MCP", icon: McpIcon, searchTerms: searchTerms("mcp", "MCP", "pi-mcp-adapter") },
+  { key: "providers", label: () => t("settings.nav.providers"), icon: CloudIcon, searchTerms: searchTerms("providers", "API key", "OAuth") },
 ];
 
 type SettingsViewState = { activeKey: string; size: number };
@@ -151,7 +165,7 @@ const permissionLabel = computed(() => {
 const visibleNavItems = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   if (!query) return navItems;
-  return navItems.filter((item) => item.label().toLowerCase().includes(query));
+  return navItems.filter((item) => item.searchTerms.some((term) => term.includes(query)));
 });
 
 const selectItem = (key: string) => {
