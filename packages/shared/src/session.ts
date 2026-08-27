@@ -172,6 +172,8 @@ export type ServerMessage =
       /** 官方会话消息模型：user/assistant/toolResult/custom/
        *  compactionSummary（含 compaction 摘要与 custom 消息）。 */
       messages: AgentMessage[];
+      /** Pi 持久化 entry id，与 `messages` 同位置对齐。 */
+      messageEntryIds: Array<string | undefined>;
       model?: ModelDescriptor;
       availableModels?: ModelDescriptor[];
       thinking?: ThinkingState;

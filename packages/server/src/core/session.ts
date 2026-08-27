@@ -211,6 +211,26 @@ export const createSessionWithCwd = async (cwd: string): Promise<SessionDriver> 
   return registerDriver(driver);
 };
 
+/** Extract the current path through one persisted user/assistant entry into
+ * a new session file. The temporary manager keeps the source runtime intact. */
+export const forkSessionAt = async (id: string, entryId: string) => {
+  await loadAppConfig();
+  if (runtimeTransition) await runtimeTransition;
+  const sessionFile = await getSessionFileWithId(id);
+  if (!sessionFile) throw new Error("Session not found");
+
+  const source = SessionManager.open(sessionFile);
+  const entry = source.getEntry(entryId);
+  if (entry?.type !== "message" || (entry.message.role !== "user" && entry.message.role !== "assistant")) {
+    throw new Error("Fork target must be a saved user or assistant message");
+  }
+  const forkFile = source.createBranchedSession(entryId);
+  if (!forkFile) throw new Error("Failed to create forked session");
+  const fork = SessionManager.open(forkFile);
+  sessionFileLookup.set(fork.getSessionId(), forkFile);
+  return { sessionId: fork.getSessionId(), cwd: fork.getCwd(), sessionFile: forkFile };
+};
+
 export const switchRuntimeMode = async (
   mode: SessionDriverMode,
   closeChannel: (sessionId: string) => Promise<void>,

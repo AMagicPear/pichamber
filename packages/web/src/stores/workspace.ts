@@ -1,5 +1,5 @@
 import { computed, reactive, ref, shallowRef, watch } from "vue";
-import { createSession, listSessions, renameSession, toMessage } from "@/api/client";
+import { createSession, forkSession, listSessions, renameSession, toMessage } from "@/api/client";
 import { pathBasename } from "@amagicpear/pichamber-shared";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type {
@@ -125,6 +125,17 @@ export const createSessionForCwd = async (cwd: string) => {
   return sessionId;
 };
 
+/** Activate metadata for a fork created from an existing persisted entry. */
+export const forkSessionFromEntry = async (sessionId: string, entryId: string) => {
+  const fork = await forkSession(sessionId, entryId);
+  workspace.sessionId = fork.sessionId;
+  workspace.cwd = fork.cwd;
+  workspace.folderName = pathBasename(fork.cwd);
+  workspace.sessionName = i18n.global.t('sidebar.newSessionLabel');
+  void refreshSessions();
+  return fork.sessionId;
+};
+
 export const updateWorkspace = async (sessionId: string) => {
   // A freshly created empty session is active in memory before Pi persists it,
   // so it may not appear in listAll() yet. Its local metadata is authoritative.
@@ -211,7 +222,7 @@ export type ConversationTool = {
 };
 
 export type ConversationItem =
-  | { id: string; kind: "message"; message: AgentMessage; streaming: boolean }
+  | { id: string; kind: "message"; message: AgentMessage; entryId?: string; streaming: boolean }
   | { id: string; kind: "tool"; tool: ConversationTool; message?: AgentMessage };
 
 /** 会话显示列表；shallowRef：快照整体替换、事件整条重写，避免 ref 的
@@ -223,12 +234,16 @@ let conversationIdSeq = 0;
 const nextId = (prefix: string) => `${prefix}-${++conversationIdSeq}`;
 
 /** 从官方消息列表派生显示条目（TUI `renderSessionItems` 算法）。 */
-const buildConversationItems = (messages: AgentMessage[]): ConversationItem[] => {
+const buildConversationItems = (
+  messages: AgentMessage[],
+  messageEntryIds: Array<string | undefined> = [],
+): ConversationItem[] => {
   const items: ConversationItem[] = [];
   const pendingTool = new Map<string, number>();
-  for (const message of messages) {
+  for (const [messageIndex, message] of messages.entries()) {
+    const entryId = messageEntryIds[messageIndex];
     if (message.role === "assistant") {
-      items.push({ id: nextId("a"), kind: "message", message, streaming: false });
+      items.push({ id: nextId("a"), kind: "message", message, entryId, streaming: false });
       for (const part of message.content) {
         if (part.type === "toolCall") {
           items.push({
@@ -269,7 +284,7 @@ const buildConversationItems = (messages: AgentMessage[]): ConversationItem[] =>
         });
       }
     } else {
-      items.push({ id: nextId("m"), kind: "message", message, streaming: false });
+      items.push({ id: nextId("m"), kind: "message", message, entryId, streaming: false });
     }
   }
   return items;
@@ -558,7 +573,7 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void) =
       canRestorePending.value = message.canRestorePending;
       lastSeq = message.seq;
       conversationIdSeq = 0;
-      conversation.value = buildConversationItems(message.messages);
+      conversation.value = buildConversationItems(message.messages, message.messageEntryIds);
       if ("model" in message) model.value = message.model;
       if (message.availableModels) availableModels.value = message.availableModels;
       if (message.thinking) thinking.value = message.thinking;

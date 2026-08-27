@@ -9,7 +9,7 @@ import ProviderLogo from "../../ui/ProviderLogo";
 import { inline, messageText, thinkingStreaming as thinkingStreamingOf, thinkingText } from "./messageContent";
 import { useMarkdownRender } from "./useMarkdownRender";
 
-const emit = defineEmits<{ fork: []; copy: [text: string] }>();
+const emit = defineEmits<{ fork: [entryId: string]; copy: [text: string] }>();
 
 /** Toggled by hovering the model-name row; drives the `<Transition>` that
  *  shows/hides the action buttons. */
@@ -29,6 +29,8 @@ const props = defineProps<{
   showTimestamp?: boolean;
   /** Pre-formatted by the parent from message.timestamp. */
   timestampText?: string;
+  /** Pi's persisted entry id; absent while the message is not forkable. */
+  forkEntryId?: string;
 }>();
 
 const error = computed(() => {
@@ -69,7 +71,7 @@ const markdownRenderProps = useMarkdownRender(() => props.final);
         @mouseleave="actionsVisible = false">
         <ProviderLogo :provider-id="provider" :model-id="modelId" :size="16" /> {{ label }}
         <time v-if="showTimestamp && timestampText" class="conversation-message__time">{{ timestampText }}</time>
-        <MessageActions :show="{ fork: true, copy: !!text }" :open="actionsVisible" @fork="emit('fork')"
+        <MessageActions :show="{ fork: !!forkEntryId, copy: !!text }" :open="actionsVisible" @fork="forkEntryId && emit('fork', forkEntryId)"
           @copy="emit('copy', text)" />
       </header>
       <ConversationDetail v-if="thinking" class="conversation-message__details" icon="brain" label-key="conversation.thinkingLabel"

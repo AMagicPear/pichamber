@@ -85,6 +85,7 @@ type ExtensionUiState = {
 type ChannelState = {
   /** Latest official `AgentMessage[]` rebuilt from session entries. */
   messages: AgentMessage[];
+  messageEntryIds: Array<string | undefined>;
   activity: AgentActivity;
   pending: PendingMessages;
   /** Monotonic broadcast sequence; clients detect gaps and resync. */
@@ -305,18 +306,23 @@ const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean =
 
 /** `reconcile` rebuilds the official `AgentMessage[]` from the authoritative
  *  session entries (compaction-aware, via pi's own conversion helpers). */
-const reconcile = async (channel: SessionChannel, messages?: AgentMessage[]): Promise<boolean> => {
+const reconcile = async (
+  channel: SessionChannel,
+  snapshot = channel.driver.getSnapshot(),
+): Promise<boolean> => {
   const state = channel.state;
-  const next = messages ?? (await channel.driver.getSnapshot()).messages;
+  const { messages: next, messageEntryIds } = await snapshot;
   const changed =
     next.length !== state.messages.length ||
-    next.some((message, i) => message !== state.messages[i]);
+    next.some((message, i) => message !== state.messages[i]) ||
+    messageEntryIds.some((entryId, i) => entryId !== state.messageEntryIds[i]);
   state.messages = next;
+  state.messageEntryIds = messageEntryIds;
   return changed;
 };
 
 const snapshotMessage = (channel: SessionChannel): ServerMessage => {
-  const { seq, activity, pending, messages, model, availableModels, thinking, stats, resources } =
+  const { seq, activity, pending, messages, messageEntryIds, model, availableModels, thinking, stats, resources } =
     channel.state;
   return {
     type: "snapshot",
@@ -325,6 +331,7 @@ const snapshotMessage = (channel: SessionChannel): ServerMessage => {
     pending,
     canRestorePending: channel.driver.mode === "sdk",
     messages,
+    messageEntryIds,
     model,
     availableModels,
     thinking,
@@ -427,7 +434,8 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
     sockets: new Set(),
     unsubscribe: () => undefined,
     state: {
-      messages: [],
+    messages: [],
+    messageEntryIds: [],
       activity: { phase: "idle" },
       pending: { steering: [], followUp: [] },
       seq: 0,
@@ -487,7 +495,7 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
     }
 
     const snapshot = await driver.getSnapshot();
-    if (await reconcile(channel, snapshot.messages)) broadcastSnapshot();
+    if (await reconcile(channel, Promise.resolve(snapshot))) broadcastSnapshot();
     state.model = snapshot.model;
     state.availableModels = snapshot.availableModels;
     state.thinking = snapshot.thinking;

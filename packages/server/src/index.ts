@@ -22,6 +22,7 @@ import {
 import {
   createSessionWithCwd,
   deleteSession,
+  forkSessionAt,
   getSessionCwd,
   getSessionDriver,
   hasUsableSessionCwd,
@@ -586,6 +587,20 @@ const server = Bun.serve({
         const ok = await renameSession(req.params.id, trimmed);
         if (!ok) return Response.json({ error: "session not found" }, { status: 404 });
         return Response.json({ ok: true });
+      },
+    },
+    "/api/sessions/:id/fork": {
+      POST: async (req) => {
+        const { entryId } = (await req.json().catch(() => ({}))) as { entryId?: unknown };
+        if (typeof entryId !== "string" || !entryId) {
+          return Response.json({ error: "entryId required" }, { status: 400 });
+        }
+        try {
+          return Response.json(await forkSessionAt(req.params.id, entryId));
+        } catch (error) {
+          const message = toMessage(error);
+          return Response.json({ error: message }, { status: message === "Session not found" ? 404 : 400 });
+        }
       },
     },
     "/api/projects/browse": {

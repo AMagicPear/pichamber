@@ -19,7 +19,7 @@ const props = defineProps<{
 
 /** Forward per-message menu actions (fork/copy) up to the conversation panel.
  *  No logic here — the panel decides what to do. */
-const emit = defineEmits<{ fork: []; copy: [text: string] }>();
+const emit = defineEmits<{ fork: [entryId: string]; copy: [text: string] }>();
 
 const scroller = ref<HTMLElement | null>(null);
 const content = ref<HTMLElement | null>(null);
@@ -188,7 +188,8 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
         v-if="item.kind === 'message' && item.message.role === 'user'"
         :message="item.message"
         :timestamp-text="props.showTimestamps ? messageTimestampText(item.message) : undefined"
-        @fork="emit('fork')"
+        :fork-entry-id="item.entryId"
+        @fork="emit('fork', $event)"
         @copy="(text) => emit('copy', text)"
       />
       <AssistantMessage
@@ -198,7 +199,8 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
         :model-name="modelNameFor(item.message)"
         :show-timestamp="!!props.showTimestamps"
         :timestamp-text="messageTimestampText(item.message)"
-        @fork="emit('fork')"
+        :fork-entry-id="item.entryId"
+        @fork="emit('fork', $event)"
         @copy="(text) => emit('copy', text)"
       />
       <CompactionSummaryMessage

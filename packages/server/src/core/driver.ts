@@ -4,6 +4,7 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 import {
   buildContextEntries,
   RpcClient,
+  SessionManager,
   sessionEntryToContextMessages,
   type AgentSession,
   type AgentSessionEvent,
@@ -36,6 +37,9 @@ export type PromptOptions = {
 
 export type SessionSnapshot = {
   messages: AgentMessage[];
+  /** Pi session entry ids aligned with `messages`; display-only entries use
+   * `undefined`, while persisted user/assistant entries can be fork targets. */
+  messageEntryIds: Array<string | undefined>;
   model: ModelDescriptor | undefined;
   availableModels: ModelDescriptor[];
   thinking: ThinkingState;
@@ -112,8 +116,15 @@ const rpcStatsView = (stats: SessionStats, model: ModelDescriptor | undefined): 
   };
 };
 
-const sdkMessages = (session: AgentSession) =>
-  buildContextEntries(session.sessionManager.buildContextEntries()).flatMap(sessionEntryToContextMessages);
+const sessionMessages = (sessionManager: SessionManager) => {
+  const entries = buildContextEntries(sessionManager.buildContextEntries());
+  return {
+    messages: entries.flatMap(sessionEntryToContextMessages),
+    messageEntryIds: entries.flatMap((entry) =>
+      sessionEntryToContextMessages(entry).map(() => entry.type === "message" ? entry.id : undefined),
+    ),
+  };
+};
 
 export class SdkSessionDriver implements SessionDriver {
   readonly mode = "sdk" as const;
@@ -153,7 +164,7 @@ export class SdkSessionDriver implements SessionDriver {
     const session = this.session;
     const { model, availableModels } = sdkModelState(session);
     return {
-      messages: sdkMessages(session),
+      ...sessionMessages(session.sessionManager),
       model,
       availableModels,
       thinking: { level: session.thinkingLevel, availableLevels: session.getAvailableThinkingLevels() },
@@ -267,7 +278,7 @@ export class RpcSessionDriver implements SessionDriver {
 
   async getSnapshot(): Promise<SessionSnapshot> {
     const client = this.rpcClient;
-    const [state, messages, available, stats, levels] = await Promise.all([
+    const [state, , available, stats, levels] = await Promise.all([
       client.getState(),
       client.getMessages(),
       client.getAvailableModels(),
@@ -277,7 +288,7 @@ export class RpcSessionDriver implements SessionDriver {
     const model = state.model ? descriptor(state.model) : undefined;
     const availableModels = available.map(rpcModelDescriptor);
     return {
-      messages,
+      ...sessionMessages(SessionManager.open(this.sessionFile)),
       model,
       availableModels,
       thinking: { level: state.thinkingLevel, availableLevels: levels },

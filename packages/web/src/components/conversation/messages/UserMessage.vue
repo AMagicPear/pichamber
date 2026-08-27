@@ -11,7 +11,7 @@ import ImageThumbnail from "@/components/ui/ImageThumbnail.vue";
 
 const { t } = useI18n();
 
-const emit = defineEmits<{ fork: []; copy: [text: string] }>();
+const emit = defineEmits<{ fork: [entryId: string]; copy: [text: string] }>();
 
 /** Toggled by hovering the message; drives the `<Transition>` that
  *  shows/hides the action buttons. */
@@ -25,6 +25,8 @@ const props = defineProps<{
    *  reads the same source as AssistantMessage and the user-side footer
    *  matches the assistant-side inline time. */
   timestampText?: string;
+  /** Pi's persisted entry id; absent while the message is not forkable. */
+  forkEntryId?: string;
 }>();
 
 /** Browser-safe reimplementation of pi's skill block parser.
@@ -95,11 +97,11 @@ const markdownRenderProps = useMarkdownRender();
     <div v-if="parts.text" class="conversation-message__user">
       <MarkdownRender class="markdown-chat" v-bind="markdownRenderProps" :content="parts.text" />
     </div>
-    <div v-if="timestampText" class="conversation-message__footer">
+    <div v-if="timestampText || forkEntryId" class="conversation-message__footer">
       <MessageActions
-        :show="{ fork: true, copy: !!parts.text }"
+        :show="{ fork: !!forkEntryId, copy: !!parts.text }"
         :open="actionsVisible"
-        @fork="emit('fork')"
+        @fork="forkEntryId && emit('fork', forkEntryId)"
         @copy="emit('copy', parts.text)"
       />
       <p class="conversation-message__timestamp">{{ timestampText }}</p>

@@ -8,6 +8,7 @@ import SearchEyeIcon from "lucide-static/icons/search.svg";
 import SurveyIcon from "@/assets/icons/Survey.svg";
 import TargetIcon from "lucide-static/icons/target.svg";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 import IconButton from "@/components/ui/IconButton.vue";
 import ConversationMessages from "@/components/conversation/messages/ConversationMessages.vue";
 import UserInputBlock from "@/components/conversation/composer/UserInputBlock.vue";
@@ -21,7 +22,8 @@ import {
   pushErrorToast,
   reopenExtensionInteraction,
 } from "@/stores/extensionUi";
-import { workspace } from "@/stores/workspace";
+import { forkSessionFromEntry, workspace } from "@/stores/workspace";
+import { toMessage } from "@/api/client";
 import {
   activity,
   availableModels,
@@ -40,6 +42,7 @@ import { settings } from "@/stores/settings";
 import { computed, watch } from "vue";
 
 const { t } = useI18n();
+const router = useRouter();
 
 const presets = computed(() => [
   { label: t('conversation.presets.exploreCodebase'), icon: CompassIcon },
@@ -71,10 +74,17 @@ const onSend = (behavior?: "steer" | "followUp") => {
 
 const hasConversation = computed(() => conversation.value.length > 0);
 
-/** Per-message menu placeholders. The actual fork/copy behavior is not wired
- *  yet — these exist so the UI pattern has an explicit handling point. */
-const onMessageFork = () => {
-  // TODO: fork conversation at the targeted message.
+/** Extract the selected persisted message path into a separate session and
+ * navigate there, leaving the source conversation unchanged. */
+const onMessageFork = async (entryId: string) => {
+  const sessionId = workspace.sessionId;
+  if (!sessionId) return;
+  try {
+    const forkId = await forkSessionFromEntry(sessionId, entryId);
+    await router.push({ name: "session", params: { sessionId: forkId } });
+  } catch (error) {
+    pushErrorToast(toMessage(error));
+  }
 };
 
 /** Copy the targeted message's text to the system clipboard, with a small

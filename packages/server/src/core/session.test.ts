@@ -35,4 +35,20 @@ describe("session driver creation", () => {
     expect(driver.cwd).toBe(cwd);
     expect(driver.sessionFile).toBe(sessionFile!);
   });
+
+  test("extracts a selected message path without changing the source session", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pichamber-session-"));
+    temporaryDirectories.push(root);
+    const manager = SessionManager.create(root, root);
+    const firstId = manager.appendMessage({ role: "user", content: "first", timestamp: Date.now() });
+    const secondId = manager.appendMessage({ role: "assistant", content: [], timestamp: Date.now(), provider: "test", model: "test", api: "test", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop" });
+    const thirdId = manager.appendMessage({ role: "user", content: "later", timestamp: Date.now() });
+    const sourceFile = manager.getSessionFile()!;
+
+    const forkFile = SessionManager.open(sourceFile).createBranchedSession(secondId)!;
+    const fork = SessionManager.open(forkFile);
+
+    expect(fork.getBranch().map((entry) => entry.id)).toEqual([firstId, secondId]);
+    expect(manager.getBranch().map((entry) => entry.id)).toEqual([firstId, secondId, thirdId]);
+  });
 });
