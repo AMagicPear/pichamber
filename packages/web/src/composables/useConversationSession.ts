@@ -11,16 +11,17 @@ import {
   draft,
   images,
   resetSessionState,
-  thinking,
-} from "@/stores/workspace";
+} from "@/stores/session";
+import { applySessionEffects } from "@/stores/sessionEffects";
 import type { ClientMessage, ModelDescriptor, ServerMessage } from "@amagicpear/pichamber-shared";
 
 /* ── WS 生命周期与协议动作 ─────────────────────────────────────────
  *  这里不定义任何会话状态 —— 所有会话状态与事件应用都在
- *  `@/stores/workspace`（模块级 store）。本模块只负责：WebSocket 生命周期、
- *  帧传输，以及把用户动作翻译成 WS 帧。动作签名对齐官方 `AgentSession`
- *  （prompt/abort/compact/setModel/setThinkingLevel…）。只取数据的组件请
- *  直接 import workspace store，不需要调用本 composable。
+ *  `@/stores/session`（reducer）与 `@/stores/extensionUi`（扩展 UI）。本模块
+ *  只负责：WebSocket 生命周期、帧传输，以及把用户动作翻译成 WS 帧。动作
+ *  签名对齐官方 `AgentSession`（prompt/abort/compact/setModel/
+ *  setThinkingLevel…）。只取数据的组件请直接 import session store，不需要
+ *  调用本 composable。
  * ─────────────────────────────────────────────────────────────────── */
 
 let ws: WsHandle<ClientMessage> | null = null;
@@ -33,7 +34,7 @@ let activeSessionId: string | null = null;
 let refCount = 0;
 
 const onMessage = (message: ServerMessage) => {
-  applyServerMessage(message, () => ws?.send({ type: "resync" }));
+  applySessionEffects(applyServerMessage(message, () => ws?.send({ type: "resync" })));
 };
 
 const onStatus = (status: WsStatus) => {
@@ -98,7 +99,6 @@ const setModel = (next: ModelDescriptor) => {
 };
 
 const setThinkingLevel = (level: ThinkingLevel) => {
-  thinking.value = { ...thinking.value, level };
   ws?.send({ type: "set_thinking_level", level });
 };
 
@@ -121,8 +121,8 @@ const connect = (sessionId: string) => {
 };
 
 /** Returns the composable's actions (WS lifecycle + protocol verbs). The
- *  conversation state itself lives in `@/stores/workspace` — components
- *  that only read data import it directly instead of calling this. */
+ *  conversation state itself lives in `@/stores/session` — components that
+ *  only read data import it directly instead of calling this. */
 export const useConversationSession = () => {
   refCount += 1;
   onBeforeUnmount(() => {

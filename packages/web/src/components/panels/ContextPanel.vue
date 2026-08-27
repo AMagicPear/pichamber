@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import ContextIcon from "lucide-static/icons/square-text.svg";
 import type { SessionStatsView } from "@amagicpear/pichamber-shared";
-import { stats } from "@/stores/workspace";
+import { lastAssistantModel, stats } from "@/stores/session";
 
 const { t } = useI18n();
 
@@ -43,7 +43,8 @@ const usageRows = computed(() => {
 const modelTitle = computed(() => {
   const m = view.value?.model;
   if (!m) return "";
-  return m.name && m.name !== m.id ? `${m.provider} / ${m.name}` : `${m.provider} / ${m.id}`;
+  const id = lastAssistantModel.value ?? m.id;
+  return m.name && m.name !== id ? `${m.provider} / ${m.name}` : `${m.provider} / ${id}`;
 });
 </script>
 
@@ -60,7 +61,7 @@ const modelTitle = computed(() => {
         <div class="context-pane__model" :title="modelTitle || undefined">
           <span class="context-pane__model-provider">{{ view?.model?.provider ?? "" }}</span>
           <span v-if="view?.model" class="context-pane__model-sep">/</span>
-          <span class="context-pane__model-id">{{ view?.model?.id ?? "" }}</span>
+          <span class="context-pane__model-id">{{ lastAssistantModel ?? view?.model?.id ?? "" }}</span>
         </div>
         <div v-if="view?.modified" class="context-pane__date">{{ view.modified }}</div>
       </header>

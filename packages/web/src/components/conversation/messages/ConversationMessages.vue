@@ -8,7 +8,8 @@ import { conversationToolDetail, type ConversationToolDetail } from "./conversat
 import { messageImages, messageText, messageTimestampText, toolResultText } from "./messageContent";
 import ToolResultMessage from "./ToolResultMessage.vue";
 import UserMessage from "./UserMessage.vue";
-import { workspace, type ConversationItem, type ConversationTool } from "@/stores/workspace";
+import { workspace } from "@/stores/workspace";
+import type { ConversationItem, ConversationTool } from "@/stores/session";
 
 const props = defineProps<{
   items: ConversationItem[];

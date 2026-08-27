@@ -21,7 +21,7 @@ import ActivityPanel from "@/components/activity/ActivityPanel.vue";
 import ActivityToggle from "@/components/activity/ActivityToggle.vue";
 import { messageText } from "@/components/conversation/messages/messageContent";
 import type { SendKey } from "@/stores/settings";
-import { conversation, working, type DraftImage } from "@/stores/workspace";
+import { conversation, working, type DraftImage } from "@/stores/session";
 import { createId } from "@/utils/id";
 import AttachmentIcon from "lucide-static/icons/paperclip.svg";
 import ImageThumbnail from "@/components/ui/ImageThumbnail.vue";

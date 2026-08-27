@@ -38,7 +38,7 @@ import {
   pending,
   shelfCommands,
   thinking,
-} from "@/stores/workspace";
+} from "@/stores/session";
 import { settings } from "@/stores/settings";
 import { computed, ref, watch } from "vue";
 

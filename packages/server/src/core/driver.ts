@@ -331,13 +331,8 @@ export class RpcSessionDriver implements SessionDriver {
 
   subscribe(listener: (event: AgentSessionEvent) => void) {
     return this.rpcClient.onEvent((event: JsonAgentSessionEvent | { type: "extension_ui_request"; [key: string]: unknown }) => {
-      if (event.type === "extension_ui_request") {
-        const method = event.method;
-        if (method === "notify" || method === "setStatus" || method === "setWidget" || method === "setTitle") {
-          listener(event as unknown as AgentSessionEvent);
-        } else listener(event as unknown as AgentSessionEvent);
-        return;
-      }
+      // SessionChannel owns the sole protocol split for extension UI requests.
+      // Keeping the SDK/RPC adapter transparent preserves Pi's original shape.
       listener(event as AgentSessionEvent);
     });
   }

@@ -3,7 +3,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { fetchProviderQuota } from "@/api/client";
 import { getQuotaProviders, loadQuotaProviders } from "@/stores/quota";
-import { availableModels, workspace } from "@/stores/workspace";
+import { workspace } from "@/stores/workspace";
+import { availableModels } from "@/stores/session";
 import type { ModelDescriptor, ProviderDescriptor, ProviderQuota, QuotaWindow } from "@amagicpear/pichamber-shared";
 import ProviderLogo from "./ProviderLogo";
 

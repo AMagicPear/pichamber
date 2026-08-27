@@ -11,9 +11,11 @@ import App from "./App.vue";
 import LocalFileLink from "./components/ui/LocalFileLink.vue";
 import router from "./router";
 import { initializeTheme } from "./stores/theme";
+import { initializeSessionEffects } from "./stores/sessionEffects";
 import { i18n } from "./i18n";
 
 initializeTheme();
+initializeSessionEffects();
 
 const app = createApp(App);
 app.use(i18n);

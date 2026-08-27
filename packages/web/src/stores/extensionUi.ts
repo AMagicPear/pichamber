@@ -7,8 +7,8 @@ import { createId } from "@/utils/id";
  *  与会话运行时状态不同生命周期，单独成模块；WS 官方
  *  `extension_ui_request` 帧
  *  的扩展 UI 部分由 `applyExtensionUiRequest` 入口统一处理。
- *  注：`setTitle` / `set_editor_text` 改的是 workspace 自己的 state，
- *  不在本模块，由 applyServerMessage 显式调度。 */
+ *  注：`setTitle` / `set_editor_text` 改的是 session 自己的 state
+ *  （windowTitle / draft），不在本模块，由 applyServerMessage 显式调度。 */
 
 type ExtensionInteraction = Extract<
   RpcExtensionUIRequest,
@@ -123,7 +123,7 @@ export const applyExtensionUiRequest = (request: RpcExtensionUIRequest) => {
       break;
     case "setTitle":
     case "set_editor_text":
-      // 改的是 workspace.state（windowTitle / draft），不在本模块处理。
+      // 改的是 session state（windowTitle / draft），不在本模块处理。
       break;
   }
 };

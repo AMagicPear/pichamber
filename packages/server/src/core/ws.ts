@@ -2,14 +2,19 @@
  * Session WebSocket handler.
  *
  * One `SessionChannel` per active session, backed by Pi's official runtime.
- * Every channel subscribes to the runtime's
- * official `AgentSessionEvent` stream and forwards events verbatim to
- * clients; the surrounding state (activity / pending / model / thinking /
- * stats / resources) is computed on the server and emitted through
- * partial `state` frames. `activity.phase === "idle"` is the sole
- * not-working signal — there is no separate `busy` flag (the agent loop
- * always emits `agent_start` before any user/assistant `message_start`,
- * so busy would just duplicate activity).
+ * Every channel subscribes to the runtime's official `AgentSessionEvent`
+ * stream and forwards every event verbatim through one monotonically
+ * sequenced stream — the client reducer derives display state (activity /
+ * pending / thinking level) from the official event vocabulary directly.
+ * The server still computes the heavy current facts on Bun (model inventory,
+ * thinking available levels, stats, resources, and the compaction-merged
+ * pending) and emits them through partial `state` frames; the `snapshot`
+ * carries the full server-computed state for reconnect. Extension UI
+ * requests and request-local errors are intentionally out-of-band: they are
+ * not replayable state. `activity.phase === "idle"` is the sole not-working
+ * signal — there is no separate `busy` flag (the agent loop always emits
+ * `agent_start` before any user/assistant `message_start`, so busy would
+ * just duplicate activity).
  *
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -217,11 +222,14 @@ const snapshotResources = (driver: SdkSessionDriver): RuntimeResources => {
   };
 };
 
-/** Broadcast a `state` frame to a channel's sockets, bumping `seq` first.
- *  The client detects gaps in `seq` and requests a resync, so every message
- *  through this function is monotonic. */
+/** Broadcast an ordered state frame for durable, current facts that cannot
+ * be derived from the official event stream (model inventory, thinking
+ * available levels, stats, resources, and the compaction-merged pending).
+ * Activity is NOT a state field: the client derives it from the forwarded
+ * official events (agent_start / agent_settled / compaction_* /
+ * auto_retry_start). The client detects sequence gaps and requests a
+ * snapshot; never use this path for ephemeral UI/errors. */
 type StateFields = {
-  activity?: AgentActivity;
   pending?: PendingMessages;
   model?: ModelDescriptor;
   availableModels?: ModelDescriptor[];
@@ -502,12 +510,10 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
     const settledStats = snapshot.stats;
     state.resources = sdkDriver ? snapshotResources(sdkDriver) : initialModelState().resources;
     const fields: {
-      activity: AgentActivity;
       pending: PendingMessages;
       stats?: SessionStatsView;
       resources: RuntimeResources;
     } = {
-      activity: state.activity,
       pending: pendingWithQueue(channel),
       resources: state.resources,
     };
@@ -551,22 +557,25 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
       return;
     }
     switch (event.type) {
+      // All official `AgentSessionEvent`s are forwarded verbatim — the client
+      // reducer derives display state (activity / pending / thinking level)
+      // directly from the official vocabulary, so the server never invents a
+      // parallel event shape. The server still keeps its own `state.activity` /
+      // `state.pending` shadow only to serve the reconnect snapshot.
       case "agent_start": {
         state.activity = { phase: "working" };
-        broadcastState(channel, { activity: state.activity });
+        broadcastEvent(event);
         break;
       }
       // Conversation content events (official `AgentSessionEvent`) are
       // forwarded verbatim; the client mirrors TUI's handleEvent and builds
-      // the conversation view from them. activity/pending are carried by
-      // `state` frames (server-computed display state); activity only
-      // follows the TUI StatusIndicator: agent_start → working,
-      // compaction_start → compacting, auto_retry_start → retrying,
-      // settlement → idle, and `idle` doubles as the not-busy signal
-      // (the agent loop always emits agent_start before any
-      // user/assistant message_start, so no defensive busy flip is
-      // needed here). message/tool events don't touch it (fine-grained
-      // status is rendered by the message stream).
+      // the conversation view from them. activity only follows the TUI
+      // StatusIndicator: agent_start → working, compaction_start → compacting,
+      // auto_retry_start → retrying, settlement → idle, and `idle` doubles as
+      // the not-busy signal (the agent loop always emits agent_start before any
+      // user/assistant message_start, so no defensive busy flip is needed
+      // here). message/tool events don't touch it (fine-grained status is
+      // rendered by the message stream).
       case "message_start":
       case "message_update":
         broadcastEvent(event);
@@ -582,13 +591,17 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
         break;
       case "queue_update": {
         state.pending = { steering: [...event.steering], followUp: [...event.followUp] };
-        broadcastState(channel, { pending: state.pending });
+        // The compaction buffer is a server-side fact the client cannot derive;
+        // broadcast the merged pending so the composer stays accurate during
+        // compaction.
+        broadcastEvent(event);
+        if (channel.compactionQueue.length > 0) broadcastState(channel, { pending: pendingWithQueue(channel) });
         break;
       }
       case "compaction_start": {
         state.activity = { phase: "compacting" };
         channel.compactionQueue = [];
-        broadcastState(channel, { activity: state.activity });
+        broadcastEvent(event);
         break;
       }
       case "compaction_end": {
@@ -605,7 +618,7 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
           attempt: event.attempt,
           maxAttempts: event.maxAttempts,
         };
-        broadcastState(channel, { activity: state.activity });
+        broadcastEvent(event);
         break;
       }
       case "agent_settled": {
@@ -625,7 +638,10 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
         break;
       }
       case "thinking_level_changed": {
-        queueModelStateBroadcast();
+        // Forward the official event: the client sets `thinking.level` from it.
+        // `availableLevels` depend on the model, not the current level, so they
+        // are refreshed by the `model_change` entry path instead.
+        broadcastEvent(event);
         break;
       }
     }
@@ -904,7 +920,6 @@ export const sessionWsHandler: WsHandler = {
         }
         try {
           await driver.setThinkingLevel(input.level);
-          channelsBySession.get(sessionId)?.queueModelStateBroadcast();
         } catch (err) {
           sendError(bunWS, toMessage(err));
         }

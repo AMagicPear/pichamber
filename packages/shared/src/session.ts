@@ -151,19 +151,21 @@ export type SessionStatsView = {
   cacheHit: string;
 };
 
-/** JSON messages the server sends to session WebSocket clients.
- *  每个消息都携带单调递增的 seq；客户端发现 seq 不连续即请求 resync。
- *
- *  会话内容直接复用官方的 `AgentSessionEvent` 事件流与
- *  `AgentMessage` 消息模型（`snapshot.messages`），不再自造 item 协议；
- *  事件帧只额外添加 WS 顺序号，其他帧承载服务器算好的显示状态。 */
+/** Ordered messages in the session stream. A client applies only this union
+ * through its session reducer and requests a snapshot when sequence numbers
+ * are not contiguous. */
 export type ServerEventMessage = (AgentSessionEvent | JsonAgentSessionEvent) & { seq: number };
 
-export type ServerMessage =
+export type SequencedServerMessage =
   | {
       type: "snapshot";
       seq: number;
+      /** 服务端在快照时刻计算的当前活动状态；运行中的增量变化由官方
+       *  agent_start / agent_settled / compaction_* / auto_retry_start
+       *  事件驱动，客户端自行派生。 */
       activity: AgentActivity;
+      /** 服务端计算的排队消息（SDK 队列 + compaction 缓冲）；运行中的
+       *  SDK 队列由官方 `queue_update` 事件直接派生。 */
       pending: PendingMessages;
       /** Whether pending messages can be removed and restored without
        * interrupting the current agent run. External Pi's public RPC
@@ -180,14 +182,12 @@ export type ServerMessage =
       stats?: SessionStatsView;
       resources: RuntimeResources;
     }
-  /** 官方会话事件原样转发，并添加 WS 顺序号（message_start/update/end、
-   *  tool_execution_*、queue_update、agent_start/settled、compaction_*、
-   *  auto_retry_*、entry_appended…）。 */
-  | ServerEventMessage
   | {
       type: "state";
       seq: number;
-      activity?: AgentActivity;
+      /** 服务端计算、事件流里无法直接派生的当前事实：model 清单、
+       *  thinking 可用级别、stats、resources，以及 compaction 缓冲
+       *  合并后的 pending。运行中的 activity 不在此列——它由官方事件派生。 */
       pending?: PendingMessages;
       model?: ModelDescriptor;
       availableModels?: ModelDescriptor[];
@@ -195,6 +195,12 @@ export type ServerMessage =
       stats?: SessionStatsView;
       resources?: RuntimeResources;
     }
+  | ServerEventMessage;
+
+/** The complete browser protocol. Extension UI requests, draft restores, and
+ * errors are out-of-band effects, intentionally excluded from ordered state. */
+export type ServerMessage =
+  | SequencedServerMessage
   /** 扩展 UI 请求直接使用官方 RPC 形状；setWidget 的 widget 行解析由
    *  前端消费方负责——服务端不懂扩展的私有前缀协议）。 */
   | RpcExtensionUIRequest
