@@ -28,6 +28,9 @@ import panelLeft from "lucide-static/icons/panel-left.svg?raw";
 import refreshCwRaw from "lucide-static/icons/refresh-cw.svg?raw";
 import refreshCcWRaw from "lucide-static/icons/refresh-ccw.svg?raw";
 import squareRaw from "lucide-static/icons/square.svg?raw";
+import arrowDownAZRaw from "lucide-static/icons/arrow-down-a-z.svg?raw";
+import arrowUpAZRaw from "lucide-static/icons/arrow-up-a-z.svg?raw";
+import arrowDownWideNarrowRaw from "lucide-static/icons/arrow-down-wide-narrow.svg?raw";
 
 // 下方摆放本项目对lucide补充的图标
 import mcpRaw from "@/assets/icons/MCP.svg?raw";
@@ -60,6 +63,9 @@ const RAWS = {
   "refresh-cw": refreshCwRaw,
   "refresh-ccw": refreshCcWRaw,
   square: squareRaw,
+  "arrow-down-a-z": arrowDownAZRaw,
+  "arrow-up-a-z": arrowUpAZRaw,
+  "arrow-down-wide-narrow": arrowDownWideNarrowRaw,
 } as const;
 
 /** Lucide icon name union. Restricts `icon?: string` props so typos

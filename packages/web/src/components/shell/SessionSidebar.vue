@@ -12,7 +12,6 @@ import More2Icon from "lucide-static/icons/more-horizontal.svg";
 import QuestionIcon from "lucide-static/icons/circle-question-mark.svg";
 import SearchIcon from "lucide-static/icons/search.svg";
 import SettingsIcon from "lucide-static/icons/settings.svg";
-import SortDescIcon from "lucide-static/icons/arrow-down-wide-narrow.svg";
 import CloseIcon from "lucide-static/icons/x.svg";
 import LogoMark, { LOGO_MARK_VIEW_BOX } from "@/components/ui/LogoMark";
 import IconButton from "@/components/ui/IconButton.vue";
@@ -46,6 +45,7 @@ import {
 import { settings } from "@/stores/settings";
 import { deleteSession, toMessage } from "@/api/client";
 import { lucideIcon } from "@/components/ui/morphIcons";
+import type { LucideIconName } from "@/components/ui/morphIcons";
 import { pushInfoToast } from "@/stores/extensionUi";
 
 const { t } = useI18n();
@@ -120,8 +120,14 @@ const projectName = (cwd: string) => {
   return name || trimmed || "/";
 };
 
-type ProjectSort = "recent" | "name";
+type ProjectSort = "recent" | "name" | "name-reverse";
 const projectSort = ref<ProjectSort>("recent");
+
+const sortMenuIcon = computed<LucideIconName>(() => {
+  if (projectSort.value === "name") return "arrow-down-a-z";
+  if (projectSort.value === "name-reverse") return "arrow-up-a-z";
+  return "arrow-down-wide-narrow";
+});
 
 const projectGroups = computed(() => {
   const groups = new Map<string, SessionInfo[]>();
@@ -138,6 +144,7 @@ const projectGroups = computed(() => {
     }))
     .sort((a, b) => {
       if (projectSort.value === "name") return projectName(a.cwd).localeCompare(projectName(b.cwd));
+      if (projectSort.value === "name-reverse") return projectName(b.cwd).localeCompare(projectName(a.cwd));
       const aT = toTime(a.sessions[0]?.modified);
       const bT = toTime(b.sessions[0]?.modified);
       if (bT !== aT) return bT - aT;
@@ -313,6 +320,7 @@ const sortMenuGroups = computed(() => [{
   items: [
     { id: "recent", label: t("sidebar.sortByRecent"), value: "recent", active: projectSort.value === "recent" },
     { id: "name", label: t("sidebar.sortByName"), value: "name", active: projectSort.value === "name" },
+    { id: "name-reverse", label: t("sidebar.sortByNameReverse"), value: "name-reverse", active: projectSort.value === "name-reverse" },
   ],
 }]);
 
@@ -322,7 +330,7 @@ const toggleSortMenu = () => {
 };
 
 const selectProjectSort = (item: { value: string }) => {
-  if (item.value !== "recent" && item.value !== "name") return;
+  if (item.value !== "recent" && item.value !== "name" && item.value !== "name-reverse") return;
   projectSort.value = item.value;
   closeSortMenu();
 };
@@ -456,7 +464,7 @@ onMounted(async () => {
           <CheckboxMultipleIcon />
         </IconButton>
         <IconButton class="sidebar__sort-trigger" :label="t('sidebar.sortProjects')" :pressed="sortMenuOpen" @click="toggleSortMenu">
-          <SortDescIcon />
+          <MorphIcon :icon="lucideIcon(sortMenuIcon)" spring="snappy" />
         </IconButton>
       </div>
     </div>

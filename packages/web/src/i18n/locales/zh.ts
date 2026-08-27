@@ -42,6 +42,7 @@ export default {
     sortProjects: "排序项目",
     sortByRecent: "最近活跃",
     sortByName: "项目名称",
+    sortByNameReverse: "项目名称（倒序）",
     selectedSessions: "已选择 {count} 项",
     selectAllSessions: "全选",
     clearSelection: "清除",

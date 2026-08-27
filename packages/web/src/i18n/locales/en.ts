@@ -43,6 +43,7 @@ export default {
     sortProjects: "Sort projects",
     sortByRecent: "Recently active",
     sortByName: "Project name",
+    sortByNameReverse: "Project name (reverse)",
     selectedSessions: "{count} selected",
     selectAllSessions: "Select all",
     clearSelection: "Clear",
