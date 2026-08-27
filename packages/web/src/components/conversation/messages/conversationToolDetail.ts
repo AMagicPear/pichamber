@@ -166,6 +166,19 @@ export const conversationToolDetail = ({
     };
   }
 
+  // Agent-family tools (Agent / get_subagent_result / steer_subagent /
+  // SubagentWorkflow / ...): single shared `bot` icon, no extra label handling.
+  if (/agent/i.test(toolName)) {
+    return {
+      labelKey,
+      labelParams,
+      preview: inline(output),
+      body: toolBody({ toolName, args, output, isError }),
+      icon: "bot",
+      isError: failed,
+    };
+  }
+
   return {
     labelKey,
     labelParams,
