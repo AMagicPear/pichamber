@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import CloseIcon from "lucide-static/icons/x.svg";
+import IconButton from "@/components/ui/IconButton.vue";
 
 defineProps<{
   ariaLabel: string;
@@ -16,9 +17,9 @@ defineEmits<{ close: [] }>();
       <div class="composer-surface__title"><slot name="title" /></div>
       <div class="composer-surface__actions">
         <slot name="meta" />
-        <button v-if="dismissible" type="button" class="composer-surface__close" :aria-label="closeLabel ?? ariaLabel" @click="$emit('close')">
+        <IconButton v-if="dismissible" size="compact" :label="closeLabel ?? ariaLabel" @click="$emit('close')">
           <CloseIcon aria-hidden="true" />
-        </button>
+        </IconButton>
       </div>
     </header>
     <div class="composer-surface__body"><slot /></div>
@@ -44,8 +45,6 @@ defineEmits<{ close: [] }>();
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-}
-.composer-surface__header {
   justify-content: space-between;
   min-height: 36px;
   padding: 0 8px 0 11px;
@@ -56,22 +55,6 @@ defineEmits<{ close: [] }>();
 .composer-surface__actions { display: inline-flex; min-width: 0; align-items: center; }
 .composer-surface__title { flex: 1 1 auto; overflow: hidden; }
 .composer-surface__actions { flex: 0 0 auto; gap: 9px; }
-.composer-surface__close {
-  display: inline-flex;
-  width: 18px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--ui-text-tertiary);
-  cursor: pointer;
-}
-.composer-surface__close:hover { background: var(--ui-surface-hover); color: var(--ui-text); }
-.composer-surface__close:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: -2px; }
-.composer-surface__close :deep(svg) { width: 11px; height: 11px; }
 .composer-surface__body {
   display: flex;
   flex: 1 1 auto;
