@@ -10,6 +10,7 @@ import TargetIcon from "lucide-static/icons/target.svg";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import IconButton from "@/components/ui/IconButton.vue";
+import ConfirmModal from "@/components/modals/ConfirmModal.vue";
 import ConversationMessages from "@/components/conversation/messages/ConversationMessages.vue";
 import UserInputBlock from "@/components/conversation/composer/UserInputBlock.vue";
 import ExtensionUiHost from "@/components/conversation/ExtensionUiHost.vue";
@@ -39,7 +40,7 @@ import {
   thinking,
 } from "@/stores/workspace";
 import { settings } from "@/stores/settings";
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -74,13 +75,23 @@ const onSend = (behavior?: "steer" | "followUp") => {
 
 const hasConversation = computed(() => conversation.value.length > 0);
 
-/** Extract the selected persisted message path into a separate session and
- * navigate there, leaving the source conversation unchanged. */
-const onMessageFork = async (entryId: string) => {
+const pendingFork = ref<{ sessionId: string; entryId: string } | null>(null);
+
+/** Keep the selected persisted entry until the user confirms the fork. */
+const onMessageFork = (entryId: string) => {
   const sessionId = workspace.sessionId;
   if (!sessionId) return;
+  pendingFork.value = { sessionId, entryId };
+};
+
+/** Extract the selected message path into a separate session and navigate
+ * there, leaving the source conversation unchanged. */
+const confirmFork = async () => {
+  const target = pendingFork.value;
+  if (!target) return;
+  pendingFork.value = null;
   try {
-    const forkId = await forkSessionFromEntry(sessionId, entryId);
+    const forkId = await forkSessionFromEntry(target.sessionId, target.entryId);
     await router.push({ name: "session", params: { sessionId: forkId } });
   } catch (error) {
     pushErrorToast(toMessage(error));
@@ -152,6 +163,15 @@ watch(
       @respond="respondToExtension"
       @defer="deferExtensionInteraction"
       @dismiss-notification="dismissNotification"
+    />
+
+    <ConfirmModal
+      :show="pendingFork !== null"
+      :title="t('conversation.forkConfirmTitle')"
+      :message="t('conversation.forkConfirmMessage')"
+      :confirm-label="t('messages.forkHere')"
+      @close="pendingFork = null"
+      @confirm="confirmFork"
     />
 
     <div v-if="conversation.length === 0" class="presets" :aria-label="t('conversation.promptStarters')">

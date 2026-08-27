@@ -11,6 +11,9 @@ export default {
     save: "Save",
     add: "Add",
     remove: "Remove",
+    fontSmaller: "Decrease font size",
+    fontReset: "Reset font size",
+    fontLarger: "Increase font size",
     update: "Update",
     refresh: "Refresh",
     close: "Close",
@@ -381,6 +384,8 @@ export default {
     addPromptStarter: "Add prompt starter",
     copiedMessage: "Copied message to clipboard",
     copyFailed: "Failed to copy message",
+    forkConfirmTitle: "Fork conversation?",
+    forkConfirmMessage: "This creates a new session from this message. The original conversation is unchanged.",
     presets: {
       exploreCodebase: "Explore the codebase",
       catchMeUp: "Catch me up",

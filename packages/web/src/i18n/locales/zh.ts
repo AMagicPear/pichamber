@@ -10,6 +10,9 @@ export default {
     save: "保存",
     add: "添加",
     remove: "移除",
+    fontSmaller: "缩小字体",
+    fontReset: "重置字体大小",
+    fontLarger: "放大字体",
     update: "更新",
     refresh: "刷新",
     close: "关闭",
@@ -380,6 +383,8 @@ export default {
     addPromptStarter: "添加提示词起始",
     copiedMessage: "已复制消息到剪贴板",
     copyFailed: "复制消息失败",
+    forkConfirmTitle: "创建分支会话？",
+    forkConfirmMessage: "将从此消息创建一个分支会话，原会话不会受到影响。",
     presets: {
       exploreCodebase: "探索代码库",
       catchMeUp: "给我补补课",
@@ -478,7 +483,7 @@ export default {
   },
 
   messages: {
-    forkHere: "在此处派生",
+    forkHere: "从此处创建分支会话",
     copyText: "复制文本",
   },
 

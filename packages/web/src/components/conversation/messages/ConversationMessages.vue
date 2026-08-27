@@ -233,6 +233,19 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
 .conversation-message--tool-result + .conversation-message--assistant,
 .conversation-message--tool-result + .conversation-message--user { margin-top: 24px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 24px; }
+
+/* Markstream's font-size menu is positioned outside its code block. Keep all
+ * messages content-culled by default, but release paint containment only for
+ * the message that currently owns an open menu. The scrollable chat viewport
+ * remains the clipping boundary. */
+.conversation-message:has(.code-more-menu),
+.conversation-message:has(.code-more-menu) .markdown-renderer {
+  content-visibility: visible;
+}
+.conversation-message:has(.code-more-menu) {
+  position: relative;
+  z-index: 1;
+}
 </style>
 
 <style scoped>
