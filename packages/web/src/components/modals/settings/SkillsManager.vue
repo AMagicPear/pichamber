@@ -124,7 +124,7 @@ onMounted(load);
 <style scoped>
 .skills-manager { display: grid; gap: 30px; }
 .skills-manager__state { margin: 0; color: var(--ui-text-muted); font-size: 12px; }
-.skills-manager__diagnostics { display: grid; gap: 4px; margin: 0 0 12px; padding: 10px 12px; border-left: 3px solid var(--ui-error-strong); border-radius: 4px; background: var(--ui-error-bg); color: var(--ui-error-fg); font-size: 12px; }
+.skills-manager__diagnostics { display: grid; gap: 4px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--ui-error-strong); border-radius: 4px; background: var(--ui-error-bg); color: var(--ui-error-fg); font-size: 12px; }
 .skills-manager__diagnostics strong { font-weight: 600; }
 .skills-manager__diagnostics code { font-family: var(--ui-font-mono); overflow-wrap: anywhere; }
 .skills-manager__list { margin: 0; padding: 0; border-top: 1px solid var(--ui-border-subtle); list-style: none; }

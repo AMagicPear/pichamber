@@ -240,6 +240,5 @@ const elapsed = computed(() => {
 
 .conversation-detail.is-expanded .conversation-detail__body-inner {
   padding-left: 24px;
-  border-left: 1px solid var(--ui-border);
 }
 </style>

@@ -286,7 +286,7 @@ onMounted(async () => {
   gap: 4px;
   margin: 0 0 12px;
   padding: 10px 12px;
-  border-left: 3px solid var(--ui-error-strong);
+  border: 1px solid var(--ui-error-strong);
   border-radius: 4px;
   background: var(--ui-error-bg);
   color: var(--ui-error-fg);

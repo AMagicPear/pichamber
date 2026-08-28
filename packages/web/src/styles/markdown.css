@@ -13,7 +13,7 @@
   --ms-text-h4: 14px;
   --ms-text-h5: 14px;
   --ms-text-h6: 14px;
-  --ms-flow-paragraph-y: 10px;
+  --ms-flow-paragraph-y: 0px;
   --ms-flow-list-y: 8px;
   --ms-flow-list-item-y: 2px;
   --ms-flow-codeblock-y: 12px;
@@ -66,13 +66,21 @@
  * Keep them compact to match the chat density. */
 .markstream-vue[data-custom-id="chat"] ul,
 .markstream-vue[data-custom-id="chat"] ol {
-  margin: 0;
   padding-left: 1.5em;
 }
 .markstream-vue[data-custom-id="chat"] li {
   margin-block: var(--ms-flow-list-item-y, 2px);
   line-height: var(--ms-leading-body, 1.6);
 }
+
+/* Paragraphs have no container-edge margin. The renderer wraps top-level
+ * nodes in `.node-slot`, so apply rhythm only when one paragraph follows
+ * another. The direct-sibling form also covers non-wrapped render paths. */
+.markstream-vue[data-custom-id="chat"] .paragraph-node + .paragraph-node,
+.markstream-vue[data-custom-id="chat"] .node-slot:has(> .paragraph-node) + .node-slot:has(> .paragraph-node) > .paragraph-node {
+  margin-top: 8px;
+}
+
 /* Nested lists: tighter spacing for sub-lists. */
 .markstream-vue[data-custom-id="chat"] li > ul,
 .markstream-vue[data-custom-id="chat"] li > ol {

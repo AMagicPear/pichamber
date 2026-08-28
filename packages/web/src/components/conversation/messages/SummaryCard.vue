@@ -1,9 +1,8 @@
 <script setup lang="ts">
 /** Quiet inset card shared by CompactionSummaryMessage and
- *  CustomSummaryMessage — both want a left-accent border, muted
- *  background, and rounded corners. Visual variant differs in padding
- *  and font size: `regular` matches the larger compaction block,
- *  `compact` matches the smaller custom / branch-summary block. */
+ *  CustomSummaryMessage. The regular variant marks a compaction block;
+ *  the compact variant uses the same restrained surface treatment as
+ *  other inline message metadata. */
 defineProps<{
   size?: "compact" | "regular";
 }>();
@@ -20,14 +19,22 @@ defineProps<{
 
 <style scoped>
 .summary-card {
-  border: 1px solid var(--ui-border-subtle);
-  border-left: 3px solid var(--ui-border);
-  border-radius: 10px;
-  background: var(--ui-surface-muted);
   color: var(--ui-text-secondary);
 }
-.summary-card--regular { padding: 12px 16px; font-size: 14px; }
-.summary-card--compact { padding: 10px 14px; font-size: 13px; }
+.summary-card--regular {
+  padding: 12px 16px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 10px;
+  background: var(--ui-surface-muted);
+}
+.summary-card--compact {
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 8px;
+  background: var(--ui-surface-subtle);
+  font-size: 13px;
+}
+.summary-card--regular { font-size: 14px; }
 .summary-card__header {
   display: flex;
   align-items: baseline;

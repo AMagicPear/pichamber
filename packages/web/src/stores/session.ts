@@ -1,5 +1,6 @@
 import { computed, ref, shallowRef } from "vue";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
 import type {
   AgentActivity,
   AgentSessionEvent,
@@ -227,12 +228,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
     }
     case "message_update": {
       if (!("message" in event)) {
-        const delta = event.assistantMessageEvent as {
-          type: string;
-          contentIndex?: number;
-          delta?: string;
-          content?: string;
-        };
+        const delta = event.assistantMessageEvent as AssistantMessageEvent;
         let index = -1;
         for (let i = items.length - 1; i >= 0; i--) {
           const item = items[i];
@@ -243,17 +239,22 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
         }
         const item = index === -1 ? undefined : items[index];
         if (item?.kind === "message" && item.message.role === "assistant") {
-          const message = JSON.parse(JSON.stringify(item.message)) as typeof item.message;
-          const content = message.content as Array<{ type: string; text?: string; thinking?: string }>;
-          const contentIndex = delta.contentIndex ?? 0;
-          const block = content[contentIndex];
-          if (delta.type === "text_start" && !block) content[contentIndex] = { type: "text", text: "" };
-          if (delta.type === "text_delta") {
-            if (!content[contentIndex]) content[contentIndex] = { type: "text", text: "" };
-            content[contentIndex]!.text = `${content[contentIndex]!.text ?? ""}${delta.delta ?? ""}`;
+          const message = JSON.parse(JSON.stringify(item.message)) as AssistantMessage;
+          const content = message.content;
+          const contentIndex = "contentIndex" in delta ? delta.contentIndex : 0;
+          if (delta.type === "text_start" || delta.type === "text_delta" || delta.type === "text_end") {
+            const block = content[contentIndex]?.type === "text"
+              ? content[contentIndex]
+              : (content[contentIndex] = { type: "text", text: "" });
+            if (delta.type === "text_delta") block.text += delta.delta;
+            if (delta.type === "text_end") block.text = delta.content;
           }
-          if (delta.type === "text_end" && content[contentIndex]) {
-            content[contentIndex]!.text = delta.content ?? content[contentIndex]!.text ?? "";
+          if (delta.type === "thinking_start" || delta.type === "thinking_delta" || delta.type === "thinking_end") {
+            const block = content[contentIndex]?.type === "thinking"
+              ? content[contentIndex]
+              : (content[contentIndex] = { type: "thinking", thinking: "" });
+            if (delta.type === "thinking_delta") block.thinking += delta.delta;
+            if (delta.type === "thinking_end") block.thinking = delta.content;
           }
           replaceItem(index, { ...item, message });
         }

@@ -70,6 +70,38 @@ describe("session protocol reducer", () => {
     expect(thinking.value.level).toBe("high");
   });
 
+  test("keeps interleaved thinking and text deltas in their official content blocks", () => {
+    applyServerMessage(snapshot(), () => {});
+    applyServerMessage(
+      { type: "message_start", seq: 1, message: assistantMessage("model") },
+      () => {},
+    );
+    applyServerMessage(
+      {
+        type: "message_update",
+        seq: 2,
+        assistantMessageEvent: { type: "thinking_delta", contentIndex: 0, delta: "reasoning" },
+      } as unknown as ServerMessage,
+      () => {},
+    );
+    applyServerMessage(
+      {
+        type: "message_update",
+        seq: 3,
+        assistantMessageEvent: { type: "text_delta", contentIndex: 1, delta: "answer" },
+      } as unknown as ServerMessage,
+      () => {},
+    );
+
+    const item = conversation.value[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind !== "message" || item.message.role !== "assistant") throw new Error("Expected assistant message");
+    expect(item.message.content).toEqual([
+      { type: "thinking", thinking: "reasoning" },
+      { type: "text", text: "answer" },
+    ]);
+  });
+
   test("describes settlement and errors as effects instead of touching browser APIs", () => {
     applyServerMessage(snapshot(), () => {});
     applyServerMessage({ type: "agent_start", seq: 1 }, () => {});
