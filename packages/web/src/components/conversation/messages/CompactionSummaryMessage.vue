@@ -19,11 +19,11 @@ const markdownRenderProps = useMarkdownRender();
 
 <template>
   <article class="conversation-message conversation-message--compaction">
-    <SummaryCard>
-      <template #header>
-        <span class="compaction-summary__label">[{{ t('conversation.compaction') }}]</span>
-        <span class="compaction-summary__meta">{{ t('conversation.compactedFrom', { count: message.tokensBefore.toLocaleString() }) }}</span>
-      </template>
+    <SummaryCard
+      kind="compaction"
+      :label="t('conversation.compaction')"
+      :meta="t('conversation.compactedFrom', { count: message.tokensBefore.toLocaleString() })"
+    >
       <MarkdownRender class="markdown-chat" v-bind="markdownRenderProps" :content="message.summary" />
     </SummaryCard>
   </article>
@@ -31,6 +31,4 @@ const markdownRenderProps = useMarkdownRender();
 
 <style scoped>
 .conversation-message--compaction { content-visibility: auto; contain-intrinsic-size: auto 120px; }
-.compaction-summary__label { font-weight: 700; color: var(--ui-text); }
-.compaction-summary__meta { color: var(--ui-text-tertiary); font-size: 12px; }
 </style>

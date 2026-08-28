@@ -7,10 +7,17 @@ import {
   workspace,
 } from "@/stores/workspace";
 import { createRouter, createWebHistory } from "vue-router";
+import MessageSamplesView from "@/views/MessageSamplesView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: "/debug",
+      name: "message-samples",
+      component: MessageSamplesView,
+      meta: { standalone: true },
+    },
     {
       path: "/new",
       name: "new-session",

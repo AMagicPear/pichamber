@@ -16,11 +16,17 @@
   --inline-code-fg: var(--ui-text-muted);
 }
 
-/* DiffView carries its own scroll box; just stretch to the expanded width. */
-.tool-body-view__diff {
-  max-width: 100%;
-  min-width: 0;
+/* In a conversation detail, short viewers should size to their content. The
+ * full-height Git panel supplies its own minimum size where it is needed. */
+.tool-body-view__diff.diff-view,
+.tool-body-view__code.code-view {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
 }
+.tool-body-view__diff.diff-view { max-width: 100%; min-width: 0; }
 
 /* Image attachment thumbnails: capped width, never force-enlarged. */
 .tool-body-view__images {
@@ -30,7 +36,7 @@
 }
 
 /* Plain text (bash / unknown tools / JSON fallback): bare monospace output —
- * no box, the expanded body's left border anchors it. Auto-wrap at the
+ * no extra box. Auto-wrap at the
  * container edge (pre-wrap keeps newlines + indentation); long unbroken
  * tokens (JSON values, paths, URLs) break via overflow-wrap so nothing
  * forces horizontal scroll. Only vertical scrolling remains for long
@@ -46,6 +52,13 @@
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: normal;
+}
+.tool-body-view__text-notes {
+  margin: 8px 0 0;
+  padding-top: 4px;
+  border-top: 1px dashed var(--ui-border-subtle);
+  color: var(--ui-text-muted);
+  font-size: 12px;
 }
 
 /* Structured list (ls / find / grep): inset card with a muted heading and
@@ -101,19 +114,20 @@
 .tool-body-view__list-row:hover {
   background: var(--ui-surface);
 }
-.tool-body-view__list-icon {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-}
 .tool-body-view__list-name {
   flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
+.tool-body-view__list-stats {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  font-family: var(--ui-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.tool-body-view__list-stat-add { color: var(--ui-skill-fg); }
+.tool-body-view__list-stat-remove { color: var(--ui-error-strong); }
 .tool-body-view__match {
   display: flex;
   align-items: baseline;

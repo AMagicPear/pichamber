@@ -166,6 +166,7 @@ export default defineComponent({
     providerId: { type: String, default: undefined },
     modelId: { type: String, default: undefined },
     size: { type: [Number, String] as PropType<number | string>, default: 16 },
+    color: { type: String, default: undefined },
     alt: { type: String, default: "" },
     class: { type: String, default: "" },
   },
@@ -177,7 +178,7 @@ export default defineComponent({
         role="img"
         aria-label={props.alt || `${props.providerId || "model"} logo`}
         style={{
-          color: "var(--ui-text)",
+          color: props.color ?? "var(--ui-text)",
           display: "block",
           width: toPixels(props.size),
           height: toPixels(props.size),

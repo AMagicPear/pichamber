@@ -60,7 +60,7 @@ const markdownRenderProps = useMarkdownRender(() => props.final);
     :class="{ 'conversation-message--assistant-error': error }">
     <template v-if="error">
       <header class="conversation-message__author conversation-message__author--error">
-        <ProviderLogo :provider-id="provider" :model-id="modelId" :size="16" />
+        <ProviderLogo :provider-id="provider" :model-id="modelId" :size="16" color="var(--ui-error-strong)" />
         {{ label }}
         <span class="conversation-message__error-tag">{{ error.reason }}</span>
       </header>

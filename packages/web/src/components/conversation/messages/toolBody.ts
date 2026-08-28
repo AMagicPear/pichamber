@@ -7,7 +7,7 @@
  * preview of the row still live in `conversationToolDetail.ts` — this module
  * is only about the expanded body.
  */
-import { applyPatchDiff, displayPath, isFileTool, stringArg, toolDiff } from "./toolDiff";
+import { applyPatchDiff, displayPath, isFileTool, parseApplyPatch, stringArg, toolDiff } from "./toolDiff";
 
 /** 单张图片附件，data 是 base64（不含前缀），由渲染层补 data: URL。 */
 export type ToolImage = { data: string; mimeType: string };
@@ -18,7 +18,7 @@ export type ToolBody =
   | { kind: "images"; images: ToolImage[] }
   | { kind: "markdown"; content: string }
   | { kind: "grep"; output: string }
-  | { kind: "paths"; output: string }
+  | { kind: "paths"; output: string; stats?: Record<string, { added: number; removed: number }> }
   | { kind: "text"; content: string };
 
 type BodyInput = {
@@ -59,7 +59,27 @@ export const toolBody = ({
   }
 
   if (toolName === "apply_patch") {
-    const patch = applyPatchDiff((args as { input?: unknown }).input);
+    const input = (args as { input?: unknown }).input;
+    const operations = typeof input === "string" ? parseApplyPatch(input) : undefined;
+    // DiffView renders a single unified diff file. For a multi-file patch,
+    // show the affected paths using the same compact list as find instead of
+    // silently dropping every file after the first one.
+    if (!failed && operations && operations.length > 1) {
+      const stats: Record<string, { added: number; removed: number }> = {};
+      for (const operation of operations) {
+        const path = displayPath(operation.moveTo ?? operation.path);
+        stats[path] = {
+          added: operation.lines.filter((line) => line.kind === "add").length,
+          removed: operation.lines.filter((line) => line.kind === "del").length,
+        };
+      }
+      return {
+        kind: "paths",
+        output: Object.keys(stats).join("\n"),
+        stats,
+      };
+    }
+    const patch = applyPatchDiff(input);
     if (!failed && patch) return { kind: "diff", patch };
     return { kind: "text", content: output };
   }

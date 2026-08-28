@@ -5,10 +5,12 @@ import MarkdownRender from "markstream-vue";
 import { messageText } from "./messageContent";
 import SummaryCard from "./SummaryCard.vue";
 import { useMarkdownRender } from "./useMarkdownRender";
+import { useI18n } from "vue-i18n";
 
 type CustomOrBranch = AgentMessage & { role: "custom" | "branchSummary" };
 
 const props = defineProps<{ message: CustomOrBranch }>();
+const { t } = useI18n();
 
 const text = computed(() => messageText(props.message));
 const markdownRenderProps = useMarkdownRender();
@@ -16,10 +18,10 @@ const markdownRenderProps = useMarkdownRender();
 
 <template>
   <article class="conversation-message conversation-message--custom">
-    <SummaryCard size="compact">
-      <template #header>
-        <span class="custom-summary__label">[{{ message.role }}]</span>
-      </template>
+    <SummaryCard
+      :kind="message.role"
+      :label="t(message.role === 'branchSummary' ? 'conversation.branchSummary' : 'conversation.customSummary')"
+    >
       <MarkdownRender v-if="text" class="markdown-chat" v-bind="markdownRenderProps" :content="text" />
     </SummaryCard>
   </article>
@@ -27,11 +29,4 @@ const markdownRenderProps = useMarkdownRender();
 
 <style scoped>
 .conversation-message--custom { content-visibility: auto; contain-intrinsic-size: auto 80px; }
-.custom-summary__label {
-  font-weight: 600;
-  color: var(--ui-text-tertiary);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 </style>

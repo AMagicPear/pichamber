@@ -5,7 +5,7 @@ import Modal from "@/components/ui/Modal.vue";
 import { ui } from "@/stores/ui";
 import SessionHeader from "@/components/shell/SessionHeader.vue";
 import SessionSidebar from "@/components/shell/SessionSidebar.vue";
-import { RouterView } from "vue-router";
+import { RouterView, useRoute } from "vue-router";
 import { computed, defineAsyncComponent, KeepAlive } from "vue";
 import { MorphIcon } from "morphicons/vue";
 import { lucideIcon } from "@/components/ui/morphIcons";
@@ -28,10 +28,12 @@ const rightPanel = computed(() => ({
   files: AsyncFilesPanel,
   context: AsyncContextPanel,
 })[ui.activeRightPanel]);
+const route = useRoute();
 </script>
 
 <template>
-  <div class="app-shell">
+  <RouterView v-if="route.meta.standalone" />
+  <div v-else class="app-shell">
     <IconButton class="app-shell__sidebar-toggle" :label="$t('app.toggleSidebar')" @click="ui.toggle('left')">
       <MorphIcon :icon="lucideIcon(ui.panels.left.open ? 'panel-left-close' : 'panel-left')" spring="snappy"/>
     </IconButton>

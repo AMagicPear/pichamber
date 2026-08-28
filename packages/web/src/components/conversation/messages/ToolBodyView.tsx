@@ -1,12 +1,7 @@
-import { defineComponent, type PropType, type FunctionalComponent, type SVGAttributes } from "vue";
+import { defineComponent, type PropType } from "vue";
 import type { VNode } from "vue";
-// vite-svg-loader turns each .svg into a Vue component at build time, but the
-// bare `*.svg` module type here is `string`; cast to the component contract so
-// the JSX/<FolderIcon/> usage type-checks.
-import FolderIconSrc from "lucide-static/icons/folder.svg";
-import FileTextIconSrc from "lucide-static/icons/file-text.svg";
+import FilePathLabel from "@/components/ui/FilePathLabel.vue";
 import MarkdownRender from "markstream-vue";
-import { getEntryIcon } from "../../ui/fileIcon";
 import CodeView from "../../ui/CodeView.vue";
 import DiffView from "../../panels/DiffView.vue";
 import ImageThumbnail from "../../ui/ImageThumbnail.vue";
@@ -19,9 +14,6 @@ import "./ToolBodyView.css";
 // 模块级工具结果解析文本也走 i18n（不依赖组件上下文）。
 const gt = (key: string, params?: Record<string, unknown>) =>
   params ? i18n.global.t(key, params) : i18n.global.t(key);
-
-const FolderIcon = FolderIconSrc as unknown as FunctionalComponent<SVGAttributes>;
-const FileTextIcon = FileTextIconSrc as unknown as FunctionalComponent<SVGAttributes>;
 
 /* ── Tool-result body renderer (TSX) ─────────────────────────────
  *
@@ -38,63 +30,53 @@ type ListRows = {
   heading: string;
   empty: string;
   /** Classes appended to the `<ul>` (grep rows use a wider gap). */
-  itemsClass: string;
+  itemsClass?: string;
   notes: string[];
   rows: VNode[];
 };
 
-/** Pi appends truncation/limit notices as bracketed lines like
- *  `[Truncated: 50 entries limit]`. Split them off so the structured lists
- *  show only real entries; the notes are rendered as a muted footnote. */
-const splitNotes = (output: string): { lines: string[]; notes: string[] } => {
+type PathStats = { added: number; removed: number };
+
+/** Pi appends its truncation notice as a standalone bracketed line. Keep it
+ * out of the result body so both structured lists and shell output can show
+ * the full-output location as a quiet footnote. */
+const TRUNCATION_NOTE = /^\[(?:Truncated: .+|Showing (?:lines|last) .+\. Full output: .+)\]$/;
+
+const splitTruncationNotes = (output: string): { lines: string[]; notes: string[] } => {
   const raw = output.replace(/\r\n/g, "\n").split("\n");
   const lines: string[] = [];
   const notes: string[] = [];
   for (const line of raw) {
-    if (line.startsWith("[") && line.endsWith("]")) notes.push(line);
+    if (TRUNCATION_NOTE.test(line)) notes.push(line);
     else lines.push(line);
   }
   return { lines, notes };
 };
 
-const isDirName = (name: string) => name.endsWith("/");
-
-/** List row leading icon: catppuccin sprite when one exists for the name,
- *  otherwise the Folder/FileText glyph. `fileFallback` toggles whether a
- *  bare file line gets the generic file icon. */
-const rowIcon = (name: string, isDir: boolean, fileFallback: boolean) => {
-  const icon = getEntryIcon(name, isDir, false);
-  if (icon) {
-    return (
-      <svg class="tool-body-view__list-icon" aria-hidden="true">
-        <use href={icon} />
-      </svg>
-    );
-  }
-  if (isDir) return <FolderIcon class="tool-body-view__list-icon" aria-hidden="true" />;
-  if (fileFallback) return <FileTextIcon class="tool-body-view__list-icon" aria-hidden="true" />;
-  return null;
-};
-
-const renderListRows = (output: string): ListRows => {
-  const { lines, notes } = splitNotes(output);
+const renderListRows = (output: string, stats?: Record<string, PathStats>): ListRows => {
+  const { lines, notes } = splitTruncationNotes(output);
   const items = lines.filter((l) => l.length > 0).map(displayPath);
   return {
     heading: items.length === 0 ? gt('toolBody.noFiles') : gt('toolBody.nFiles', { count: items.length }),
     empty: gt('toolBody.noFiles'),
-    itemsClass: " tool-body-view__list-items--flow",
+    itemsClass: "tool-body-view__list-items--flow",
     notes,
     rows: items.map((name) => (
       <li class="tool-body-view__list-row" key={name}>
-        {rowIcon(name, isDirName(name), true)}
-        <span class="tool-body-view__list-name">{name}</span>
+        <FilePathLabel class="tool-body-view__list-name" path={name} showPrefix />
+        {stats?.[name] && (
+          <span class="tool-body-view__list-stats">
+            <span class="tool-body-view__list-stat-add">+{stats[name].added}</span>
+            <span class="tool-body-view__list-stat-remove">-{stats[name].removed}</span>
+          </span>
+        )}
       </li>
     )),
   };
 };
 
 const renderGrepRows = (output: string): ListRows => {
-  const { lines, notes } = splitNotes(output);
+  const { lines, notes } = splitTruncationNotes(output);
   const matches: { file: string; line: number; text: string }[] = [];
   for (const line of lines) {
     // ripgrep convention: <path>:<line>:<text>. The matched line can itself
@@ -111,7 +93,7 @@ const renderGrepRows = (output: string): ListRows => {
   return {
     heading: matches.length === 0 ? gt('toolBody.noMatches') : gt('toolBody.nMatches', { count: matches.length }),
     empty: gt('toolBody.noMatches'),
-    itemsClass: " tool-body-view__list-items--matches",
+    itemsClass: "tool-body-view__list-items--matches",
     notes,
     rows: matches.map((m) => (
       <li class="tool-body-view__match" key={`${m.file}:${m.line}`}>
@@ -124,12 +106,12 @@ const renderGrepRows = (output: string): ListRows => {
 };
 
 const listBody = (body: Extract<ToolBody, { kind: "grep" | "paths" }>) => {
-  const parsed = body.kind === "grep" ? renderGrepRows(body.output) : renderListRows(body.output);
+  const parsed = body.kind === "grep" ? renderGrepRows(body.output) : renderListRows(body.output, body.stats);
   return (
     <div class="tool-body-view__list">
       <div class="tool-body-view__list-heading">{parsed.heading}</div>
       {parsed.rows.length > 0 ? (
-        <ul class={`tool-body-view__list-items${parsed.itemsClass}`}>{parsed.rows}</ul>
+        <ul class={["tool-body-view__list-items", parsed.itemsClass]}>{parsed.rows}</ul>
       ) : (
         <p class="tool-body-view__list-empty">{parsed.empty}</p>
       )}
@@ -140,7 +122,7 @@ const listBody = (body: Extract<ToolBody, { kind: "grep" | "paths" }>) => {
   );
 };
 
-export const ToolBodyView = defineComponent({
+const ToolBodyView = defineComponent({
   name: "ToolBodyView",
   props: {
     body: { type: Object as PropType<ToolBody>, required: true },
@@ -170,9 +152,17 @@ export const ToolBodyView = defineComponent({
             </div>
           );
         case "code":
-          return <CodeView content={body.content} fileName={body.fileName} />;
+          return <CodeView class="tool-body-view__code" content={body.content} fileName={body.fileName} />;
         case "text":
-          return <pre class="tool-body-view__text">{body.content}</pre>;
+          {
+            const { lines, notes } = splitTruncationNotes(body.content);
+            return (
+              <>
+                <pre class="tool-body-view__text">{lines.join("\n")}</pre>
+                {notes.length > 0 && <p class="tool-body-view__text-notes">{notes.join(" · ")}</p>}
+              </>
+            );
+          }
         case "grep":
         case "paths":
           return listBody(body);

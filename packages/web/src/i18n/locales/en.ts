@@ -50,7 +50,8 @@ export default {
     selectSession: "Select {title}",
     deleteSelectedSessions: "Delete {count} selected",
     deleteSelectedConfirmTitle: "Delete selected sessions?",
-    deleteSelectedConfirmMessage: "{count} sessions and their conversation histories will be deleted. Continue?",
+    deleteSelectedConfirmMessage:
+      "{count} sessions and their conversation histories will be deleted. Continue?",
     newSessionInProject: "New session in project",
     sessionOptions: "Session options",
     applyRename: "Apply rename",
@@ -149,13 +150,16 @@ export default {
       description: "Local preferences for the conversation view. These never sync across devices.",
       composer: "Composer",
       sendKey: "Send key",
-      sendKeyDesc: "Pick the key combo that submits a message. Plain Enter is faster; Cmd/Ctrl+Enter leaves the newline key free.",
+      sendKeyDesc:
+        "Pick the key combo that submits a message. Plain Enter is faster; Cmd/Ctrl+Enter leaves the newline key free.",
       sendKeyEnter: "Enter (default)",
       display: "Display",
       showTimestamps: "Show timestamps",
-      showTimestampsDesc: "Render a local timestamp under every committed message in the conversation.",
+      showTimestampsDesc:
+        "Render a local timestamp under every committed message in the conversation.",
       expandToolResults: "Expand tool results by default",
-      expandToolResultsDesc: "Open committed tool result details when the page first renders. You'll still be able to fold them.",
+      expandToolResultsDesc:
+        "Open committed tool result details when the page first renders. You'll still be able to fold them.",
     },
 
     notifications: {
@@ -163,9 +167,11 @@ export default {
       description: "Decide how Pi Chamber lets you know the agent has finished a turn.",
       onTurnComplete: "On agent turn complete",
       sound: "Sound",
-      soundDesc: "Play a short chime when the agent becomes idle. Respects your device's mute switch.",
+      soundDesc:
+        "Play a short chime when the agent becomes idle. Respects your device's mute switch.",
       desktopNotification: "Desktop notification",
-      desktopNotificationDesc: "Show a system notification when the turn ends. Requires browser permission below.",
+      desktopNotificationDesc:
+        "Show a system notification when the turn ends. Requires browser permission below.",
       browserPermission: "Browser permission",
       unsupportedTitle: "Browser unsupported",
       unsupportedDesc: "This browser does not expose the system Notification API.",
@@ -174,7 +180,8 @@ export default {
       allowedDesc: "Desktop notifications are enabled in this browser.",
       allowedAction: "Granted",
       blockedTitle: "Notifications blocked",
-      blockedDesc: "Reset the permission from your browser's site settings, then re-open this page.",
+      blockedDesc:
+        "Reset the permission from your browser's site settings, then re-open this page.",
       blockedAction: "Denied",
       requestTitle: "Allow desktop notifications",
       requestDesc: "Asks the browser to show a system notification when an agent turn completes.",
@@ -192,7 +199,8 @@ export default {
       description: "Control how Pi Chamber refreshes remote branch information.",
       remoteUpdates: "Remote updates",
       autoFetch: "Automatically fetch remotes",
-      autoFetchDesc: "Run git fetch periodically while the Git panel is open. This refreshes remote refs without changing your working tree.",
+      autoFetchDesc:
+        "Run git fetch periodically while the Git panel is open. This refreshes remote refs without changing your working tree.",
     },
 
     behavior: {
@@ -236,7 +244,8 @@ export default {
       title: "Extensions",
       description: "Manage Pi extensions and inspect the active session.",
       builtinExtensions: "Built-in extensions",
-      builtinHint: "Installed into your Pi agent directory and available to Pi Chamber and {code}. Updates are explicit.",
+      builtinHint:
+        "Installed into your Pi agent directory and available to Pi Chamber and {code}. Updates are explicit.",
       noBuiltins: "No built-in extensions available.",
       configure: "Configure",
       packageSources: "Package sources",
@@ -276,10 +285,12 @@ export default {
 
     skills: {
       title: "Skills",
-      description: "Inspect the skills Pi discovers for this session and control their slash commands.",
+      description:
+        "Inspect the skills Pi discovers for this session and control their slash commands.",
       commands: "Skill commands",
       enableCommands: "Enable /skill commands",
-      enableCommandsDesc: "Register each discovered skill as /skill:name. This reloads the current session.",
+      enableCommandsDesc:
+        "Register each discovered skill as /skill:name. This reloads the current session.",
       discovered: "Discovered skills",
       loading: "Loading skills…",
       none: "No skills discovered for this session.",
@@ -299,7 +310,29 @@ export default {
         "top-level": "local",
       },
     },
-    mcp: { title: "MCP", description: "Manage servers provided by the installed Pi MCP adapter.", provider: "Provides this MCP integration", servers: "Servers", unavailable: "pi-mcp-adapter is not installed. Install it from Extensions to configure MCP servers.", none: "No MCP servers are configured.", disable: "Disable", restore: "Restore", refresh: "Connect & refresh", showDetails: "Show tools", hideDetails: "Hide tools", directTools: "Direct tools", tools: "{count} tools", resources: "{count} resources", prompts: "{count} prompts", toolsTitle: "Tools", resourcesTitle: "Resources", promptsTitle: "Prompts", transport: { stdio: "Stdio", http: "HTTP", socket: "Socket" }, status: { cached: "Cached", "not-connected": "Not connected", disabled: "Disabled" } },
+    mcp: {
+      title: "MCP",
+      description: "Manage servers provided by the installed Pi MCP adapter.",
+      provider: "Provides this MCP integration",
+      servers: "Servers",
+      unavailable:
+        "pi-mcp-adapter is not installed. Install it from Extensions to configure MCP servers.",
+      none: "No MCP servers are configured.",
+      disable: "Disable",
+      restore: "Restore",
+      refresh: "Connect & refresh",
+      showDetails: "Show tools",
+      hideDetails: "Hide tools",
+      directTools: "Direct tools",
+      tools: "{count} tools",
+      resources: "{count} resources",
+      prompts: "{count} prompts",
+      toolsTitle: "Tools",
+      resourcesTitle: "Resources",
+      promptsTitle: "Prompts",
+      transport: { stdio: "Stdio", http: "HTTP", socket: "Socket" },
+      status: { cached: "Cached", "not-connected": "Not connected", disabled: "Disabled" },
+    },
 
     providers: {
       title: "Providers",
@@ -396,7 +429,8 @@ export default {
     copiedMessage: "Copied message to clipboard",
     copyFailed: "Failed to copy message",
     forkConfirmTitle: "Fork conversation?",
-    forkConfirmMessage: "This creates a new session from this message. The original conversation is unchanged.",
+    forkConfirmMessage:
+      "This creates a new session from this message. The original conversation is unchanged.",
     presets: {
       exploreCodebase: "Explore the codebase",
       catchMeUp: "Catch me up",
@@ -409,6 +443,8 @@ export default {
     thinkingLabel: "Thinking",
     compaction: "compaction",
     compactedFrom: "Compacted from {count} tokens",
+    customSummary: "Custom",
+    branchSummary: "Branch summary",
     skill: "Skill",
   },
 

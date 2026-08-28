@@ -298,7 +298,28 @@ export default {
         "top-level": "本地",
       },
     },
-    mcp: { title: "MCP", description: "管理已安装 Pi MCP 适配器提供的服务器。", provider: "提供此 MCP 集成", servers: "服务器", unavailable: "未安装 pi-mcp-adapter。请在扩展页面安装后再配置 MCP 服务器。", none: "未配置 MCP 服务器。", disable: "禁用", restore: "恢复", refresh: "连接并刷新", showDetails: "查看工具", hideDetails: "收起工具", directTools: "直接工具", tools: "{count} 个工具", resources: "{count} 个资源", prompts: "{count} 个提示词", toolsTitle: "工具", resourcesTitle: "资源", promptsTitle: "提示词", transport: { stdio: "stdio", http: "HTTP", socket: "Socket" }, status: { cached: "已缓存", "not-connected": "未连接", disabled: "已禁用" } },
+    mcp: {
+      title: "MCP",
+      description: "管理已安装 Pi MCP 适配器提供的服务器。",
+      provider: "提供此 MCP 集成",
+      servers: "服务器",
+      unavailable: "未安装 pi-mcp-adapter。请在扩展页面安装后再配置 MCP 服务器。",
+      none: "未配置 MCP 服务器。",
+      disable: "禁用",
+      restore: "恢复",
+      refresh: "连接并刷新",
+      showDetails: "查看工具",
+      hideDetails: "收起工具",
+      directTools: "直接工具",
+      tools: "{count} 个工具",
+      resources: "{count} 个资源",
+      prompts: "{count} 个提示词",
+      toolsTitle: "工具",
+      resourcesTitle: "资源",
+      promptsTitle: "提示词",
+      transport: { stdio: "stdio", http: "HTTP", socket: "Socket" },
+      status: { cached: "已缓存", "not-connected": "未连接", disabled: "已禁用" },
+    },
 
     providers: {
       title: "提供商",
@@ -408,6 +429,8 @@ export default {
     thinkingLabel: "思考",
     compaction: "压缩",
     compactedFrom: "已从 {count} 个 token 压缩",
+    customSummary: "自定义",
+    branchSummary: "分支摘要",
     skill: "技能",
   },
 
@@ -534,7 +557,7 @@ export default {
     mcpScript: "MCP Script",
     tool: "工具",
     custom: "{name}",
-    failed: "{name}失败",
+    failed: "{name} 失败",
   },
 
   language: {
