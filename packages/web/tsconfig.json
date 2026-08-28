@@ -1,5 +1,13 @@
 {
   "files": [],
+  "compilerOptions": {
+    // Bun's test runner resolves config against this solution tsconfig, not the
+    // referenced tsconfig.app.json. Re-declare the @/ alias here so tests that
+    // import source files with @/ paths can resolve them at runtime.
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
   "references": [
     { "path": "./tsconfig.node.json" },
     { "path": "./tsconfig.app.json" }

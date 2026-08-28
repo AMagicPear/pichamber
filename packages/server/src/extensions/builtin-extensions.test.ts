@@ -17,6 +17,21 @@ describe("builtin extensions", () => {
     expect(def.sourceDir).toBeTruthy();
   });
 
+  test("exposes the apply-patch built-in with its source files", () => {
+    const def = getBuiltinExtension("apply-patch");
+    expect(def.name).toBe("Apply Patch");
+    expect(def.files).toEqual([
+      "index.ts",
+      "package.json",
+      "src/index.ts",
+      "src/write-file-atomic.ts",
+      "LICENSE",
+      "NOTICE",
+    ]);
+    expect(installedExtensionPath(def.id)).toContain("/pichamber-apply-patch");
+    expect(existsSync(join(def.sourceDir, "src/index.ts"))).toBe(true);
+  });
+
   test("throws on unknown id", () => {
     expect(() => getBuiltinExtension("nope")).toThrow("Unknown built-in extension");
   });
@@ -52,5 +67,22 @@ describe("builtin extensions", () => {
     const def = getBuiltinExtension("ark-agent-plan");
     expect(existsSync(join(def.sourceDir, "index.ts"))).toBe(true);
     expect(existsSync(join(def.sourceDir, "package.json"))).toBe(true);
+  });
+
+  test("installs the apply-patch source tree", () => {
+    const def = getBuiltinExtension("apply-patch");
+    const agentDir = mkdtempSync(join(tmpdir(), "pichamber-builtin-apply-patch-"));
+    try {
+      installBuiltinExtension(def, agentDir);
+      const target = installedExtensionPath(def.id, agentDir);
+      expect(existsSync(join(target, "index.ts"))).toBe(true);
+      expect(existsSync(join(target, "package.json"))).toBe(true);
+      expect(existsSync(join(target, "src/index.ts"))).toBe(true);
+      expect(existsSync(join(target, "src/write-file-atomic.ts"))).toBe(true);
+      expect(existsSync(join(target, "LICENSE"))).toBe(true);
+      expect(existsSync(join(target, "NOTICE"))).toBe(true);
+    } finally {
+      rmSync(agentDir, { recursive: true, force: true });
+    }
   });
 });

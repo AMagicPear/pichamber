@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.1] - 2026-08-28
+
+### Added
+
+- Bundled the Codex-style `apply_patch` tool as an optional built-in extension.
+- Included built-in extension source files in the published npm package.
+
+### Changed
+
+- Extended built-in extension installation to support multi-file extensions.
+- Removed the standalone runtime dependency from the bundled `apply_patch`
+  extension so it can be configured without a separate package install.
+
 ## [1.0.0] - 2026-08-27
 
 ### Added

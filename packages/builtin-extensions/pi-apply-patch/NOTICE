@@ -1,0 +1,5 @@
+pi-apply-patch
+
+This package includes code ported from code-yeongyu/senpi-mono's builtin GPT apply_patch extension.
+
+The apply_patch patch language and grammar mirror OpenAI Codex.

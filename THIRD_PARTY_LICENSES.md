@@ -23,6 +23,11 @@ source.
 - **@earendil-works/pi-ai** — <https://github.com/earendil-works/pi>
   Model adapters used to talk to provider APIs.
 
+- **pi-apply-patch** — <https://github.com/code-yeongyu/pi-apply-patch>
+  Codex-style `apply_patch` extension bundled as a pichamber built-in. The
+  bundled source includes code ported from senpi-mono; see the extension's
+  `LICENSE` and `NOTICE` files for the applicable attribution.
+
 - **bun-pty** — <https://github.com/leeoniya/bun-pty>
   Node-pty-compatible PTY bindings for Bun, used by the in-app terminal panel.
 
