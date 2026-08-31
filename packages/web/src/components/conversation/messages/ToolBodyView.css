@@ -5,15 +5,8 @@
 
 .tool-body-view__markdown {
   margin: 0;
-}
-
-/* Chat renderer tokens are intentionally more specific than a plain class.
- * Thinking and tool Markdown remain secondary content in the detail panel.
- * Inline code owns its foreground token, so it must opt into the same tone
- * instead of falling back to the primary Markdown palette. */
-.tool-body-view__markdown.markstream-vue[data-custom-id="chat"] {
-  color: var(--ui-text-muted);
-  --inline-code-fg: var(--ui-text-muted);
+  --chat-markdown-text: var(--ui-text-muted);
+  --chat-markdown-inline-code-fg: var(--ui-text-muted);
 }
 
 /* In a conversation detail, short viewers should size to their content. The

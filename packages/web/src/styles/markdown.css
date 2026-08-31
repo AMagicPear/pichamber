@@ -31,7 +31,10 @@
   --ms-flow-heading-5-mb: 6px;
   --ms-flow-heading-6-mt: 14px;
   --ms-flow-heading-6-mb: 6px;
-  color: var(--ui-text);
+  /* The surrounding surface supplies a semantic tone when Markdown is
+   * secondary content (for example, a Thinking detail). Do not define the
+   * token here: nested renderers must inherit the enclosing surface's tone. */
+  color: var(--chat-markdown-text, var(--ui-text));
   font-family: var(--ui-font-sans);
   /* Aggressive break for long URLs / file paths in mixed CJK+Latin user
    * messages — `overflow-wrap: anywhere` alone still leaves unbroken runs
@@ -49,7 +52,7 @@
  * color tokens here rather than reaching into generated node internals. */
 .markstream-vue[data-custom-id="chat"] {
   --inline-code-bg: var(--ui-code-inline-bg);
-  --inline-code-fg: var(--ui-code-inline-fg);
+  --inline-code-fg: var(--chat-markdown-inline-code-fg, var(--ui-code-inline-fg));
   --table-border: var(--ui-border);
   --table-header-bg: var(--ui-table-header-bg);
 }
