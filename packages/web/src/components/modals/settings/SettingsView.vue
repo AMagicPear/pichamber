@@ -27,6 +27,7 @@ import RuntimeSettings from "@/components/modals/settings/RuntimeSettings.vue";
 import PiProvidersSettings from "@/components/modals/settings/PiProvidersSettings.vue";
 import SettingsGroup from "@/components/modals/settings/SettingsGroup.vue";
 import SettingsOption from "@/components/modals/settings/SettingsOption.vue";
+import SettingsSelect from "@/components/modals/settings/SettingsSelect.vue";
 import SettingsPageHeader from "@/components/modals/settings/SettingsPageHeader.vue";
 import ExtensionsManager from "@/components/modals/settings/ExtensionsManager.vue";
 import SkillsManager from "@/components/modals/settings/SkillsManager.vue";
@@ -266,13 +267,13 @@ const selectItem = (key: string) => {
 
             <SettingsGroup :title="t('settings.editor.localFileLinks')">
               <SettingsOption inline :title="t('settings.editor.openFilesWith')" :description="t('settings.editor.openFilesWithDesc')">
-                <select :value="fileEditor" @change="saveFileEditor(($event.target as HTMLSelectElement).value as FileEditor)">
+                <SettingsSelect :value="fileEditor" @change="saveFileEditor(($event.target as HTMLSelectElement).value as FileEditor)">
                   <option value="vscode">VS Code (default)</option>
                   <option value="cursor">Cursor</option>
                   <option value="zed">Zed</option>
                   <option value="webstorm">WebStorm</option>
                   <option value="system">{{ t('settings.editor.systemDefault') }}</option>
-                </select>
+                </SettingsSelect>
               </SettingsOption>
             </SettingsGroup>
           </template>
@@ -282,10 +283,10 @@ const selectItem = (key: string) => {
 
             <SettingsGroup :title="t('settings.chat.composer')">
               <SettingsOption inline :title="t('settings.chat.sendKey')" :description="t('settings.chat.sendKeyDesc')">
-                <select v-model="settings.sendKey">
+                <SettingsSelect v-model="settings.sendKey">
                   <option value="enter">{{ t('settings.chat.sendKeyEnter') }}</option>
                   <option value="modEnter">{{ t('settings.chat.sendKeyModEnter') }}</option>
-                </select>
+                </SettingsSelect>
               </SettingsOption>
             </SettingsGroup>
 

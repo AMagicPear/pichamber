@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { fetchExecutionBackend, toMessage, updateExecutionBackend } from "@/api/client";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsOption from "./SettingsOption.vue";
+import SettingsSelect from "./SettingsSelect.vue";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
 
 const { t } = useI18n();
@@ -45,10 +46,10 @@ onMounted(load);
   <p v-else-if="loading" class="runtime-settings__state">{{ t('settings.runtime.loadingRuntime') }}</p>
   <SettingsGroup v-else :title="t('settings.runtime.piExecution')">
     <SettingsOption inline :title="t('settings.runtime.executionBackend')" :description="t('settings.runtime.executionBackendDesc')">
-      <select :value="executionBackend" :disabled="saving" @change="save(($event.target as HTMLSelectElement).value as 'sdk' | 'rpc')">
+      <SettingsSelect :value="executionBackend" :disabled="saving" @change="save(($event.target as HTMLSelectElement).value as 'sdk' | 'rpc')">
         <option value="sdk">{{ t('settings.runtime.embeddedSdk') }}</option>
         <option value="rpc">{{ t('settings.runtime.cliRpc') }}</option>
-      </select>
+      </SettingsSelect>
     </SettingsOption>
   </SettingsGroup>
 </template>

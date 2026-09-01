@@ -6,6 +6,7 @@ import { fetchPiBehavior, toMessage, updatePiBehavior } from "@/api/client";
 import { workspace } from "@/stores/workspace";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsOption from "./SettingsOption.vue";
+import SettingsSelect from "./SettingsSelect.vue";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
 
 const { t } = useI18n();
@@ -76,16 +77,16 @@ watch(() => workspace.sessionId, load, { immediate: true });
 
     <SettingsGroup :title="t('settings.behavior.messageDelivery')" class="behavior-settings__section">
       <SettingsOption inline :title="t('settings.behavior.steeringMode')" :description="t('settings.behavior.steeringModeDesc')">
-        <select :value="behavior.steeringMode" :disabled="saving" @change="save({ steeringMode: ($event.target as HTMLSelectElement).value as PiBehaviorSettings['steeringMode'] })"><option value="one-at-a-time">{{ t('settings.behavior.oneAtATime') }}</option><option value="all">{{ t('settings.behavior.allAtOnce') }}</option></select>
+        <SettingsSelect :value="behavior.steeringMode" :disabled="saving" @change="save({ steeringMode: ($event.target as HTMLSelectElement).value as PiBehaviorSettings['steeringMode'] })"><option value="one-at-a-time">{{ t('settings.behavior.oneAtATime') }}</option><option value="all">{{ t('settings.behavior.allAtOnce') }}</option></SettingsSelect>
       </SettingsOption>
       <SettingsOption inline :title="t('settings.behavior.followUpMode')" :description="t('settings.behavior.followUpModeDesc')">
-        <select :value="behavior.followUpMode" :disabled="saving" @change="save({ followUpMode: ($event.target as HTMLSelectElement).value as PiBehaviorSettings['followUpMode'] })"><option value="one-at-a-time">{{ t('settings.behavior.oneAtATime') }}</option><option value="all">{{ t('settings.behavior.allAtOnce') }}</option></select>
+        <SettingsSelect :value="behavior.followUpMode" :disabled="saving" @change="save({ followUpMode: ($event.target as HTMLSelectElement).value as PiBehaviorSettings['followUpMode'] })"><option value="one-at-a-time">{{ t('settings.behavior.oneAtATime') }}</option><option value="all">{{ t('settings.behavior.allAtOnce') }}</option></SettingsSelect>
       </SettingsOption>
     </SettingsGroup>
 
     <SettingsGroup :title="t('settings.behavior.transport')" class="behavior-settings__section">
       <SettingsOption inline :title="t('settings.behavior.providerTransport')" :description="t('settings.behavior.providerTransportDesc')">
-        <select :value="behavior.transport" :disabled="saving" @change="save({ transport: ($event.target as HTMLSelectElement).value as PiBehaviorSettings['transport'] })"><option value="auto">Automatic</option><option value="sse">Server-sent events</option><option value="websocket">WebSocket</option><option value="websocket-cached">Cached WebSocket</option></select>
+        <SettingsSelect :value="behavior.transport" :disabled="saving" @change="save({ transport: ($event.target as HTMLSelectElement).value as PiBehaviorSettings['transport'] })"><option value="auto">Automatic</option><option value="sse">Server-sent events</option><option value="websocket">WebSocket</option><option value="websocket-cached">Cached WebSocket</option></SettingsSelect>
       </SettingsOption>
       <SettingsOption inline :title="t('settings.behavior.httpIdleTimeout')" :description="t('settings.behavior.httpIdleTimeoutDesc')">
         <input :value="behavior.httpIdleTimeoutMs" type="number" min="0" step="1000" :disabled="saving" @change="saveIdleTimeout" />

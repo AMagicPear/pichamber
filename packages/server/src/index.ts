@@ -70,6 +70,7 @@ import {
   removePiExtensionSource,
   updatePiExtensions,
 } from "./extensions/pi-extensions";
+import { searchPiMarketplace } from "./extensions/marketplace";
 import {
   getBuiltinExtension,
   installBuiltinExtension,
@@ -445,6 +446,25 @@ const server = Bun.serve({
           await updatePiExtensions(result.session, result.cwd, body.source?.trim() || undefined);
           await result.session.reload();
           return Response.json({ updates: await checkPiExtensionUpdates(result.session, result.cwd) });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
+      },
+    },
+    "/api/pi/extensions/marketplace": {
+      GET: async (req) => {
+        const url = new URL(req.url);
+        const raw = url.searchParams.get("page") ?? "1";
+        try {
+          const page = Math.max(1, Math.floor(Number(raw)) || 1);
+          return Response.json(
+            await searchPiMarketplace({
+              name: url.searchParams.get("name") ?? "",
+              type: url.searchParams.get("type") ?? "",
+              sort: url.searchParams.get("sort") ?? "downloads",
+              page,
+            }),
+          );
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 400 });
         }

@@ -59,4 +59,6 @@ withDefaults(defineProps<{
 .command-button--danger { color: var(--ui-error-strong); }
 .command-button--danger.command-button--outline { border-color: var(--ui-error-border); }
 .command-button--danger:hover:not(:disabled) { border-color: var(--ui-error-border); background: var(--ui-error-hover); color: var(--ui-error-strong); }
+.command-button :deep(svg) { width: 14px; height: 14px; flex: 0 0 auto; color: var(--ui-panel-active); }
+.command-button--danger :deep(svg) { color: currentColor; }
 </style>

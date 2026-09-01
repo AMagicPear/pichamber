@@ -95,6 +95,40 @@ export type PiExtensionUpdate = {
   scope: "user" | "project";
 };
 
+/** A package shown in the app-market browser (pi.dev/packages gallery, or npm fallback). */
+export type PiMarketplacePackage = {
+  /** npm package name, e.g. `pi-mcp-adapter` or `@scope/pkg`. */
+  name: string;
+  description: string;
+  /** First author / maintainer name. */
+  author: string;
+  /** Resource types it ships, e.g. `["extension", "skill"]`. */
+  types: string[];
+  /** Monthly downloads, when the source reports them. */
+  downloads?: number;
+  /** Publish date (ISO 8601), when known. */
+  date?: string;
+  /** Install spec to pass to `installPiExtensionSource` (always `npm:<name>`). */
+  source: string;
+};
+
+/** One page of the app-market catalog, normalized for the settings UI. */
+export type PiMarketplaceResult = {
+  packages: PiMarketplacePackage[];
+  total: number;
+  page: number;
+  /** Where the catalog was read from — the official gallery, or the npm fallback. */
+  source: "pi.dev" | "npm";
+};
+
+/** Wire payload from the server's app-market endpoint.
+ *  `pi.dev` exposes no CORS, so the server proxies its raw HTML and the
+ *  client parses it with `DOMParser`; the npm fallback returns structured
+ *  packages (npm's registry already sends `Access-Control-Allow-Origin: *`). */
+export type PiMarketplaceResponse =
+  | { source: "pi.dev"; html: string; page: number }
+  | { source: "npm"; packages: PiMarketplacePackage[]; total: number; page: number };
+
 /** One pichamber-shipped built-in extension (e.g. Ark Agent Plan). */
 export type PiBuiltinExtension = {
   id: string;

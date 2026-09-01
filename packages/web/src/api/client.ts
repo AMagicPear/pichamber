@@ -21,6 +21,7 @@ import type {
   PiBuiltinExtension,
   PiExtensionSource,
   PiExtensionUpdate,
+  PiMarketplaceResponse,
   PiProviderSettings,
   ExtensionsOverview,
   SkillsOverview,
@@ -378,6 +379,18 @@ export const checkPiExtensionUpdates = (sessionId: string) =>
   fetch(`${BASE}/pi/extensions/updates?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
     jsonOrThrow<{ updates: PiExtensionUpdate[] }>(r),
   );
+
+export const fetchPiMarketplace = (query: { name: string; type: string; sort: string; page: number }) => {
+  const params = new URLSearchParams({
+    name: query.name,
+    type: query.type,
+    sort: query.sort,
+    page: String(query.page),
+  });
+  return fetch(`${BASE}/pi/extensions/marketplace?${params.toString()}`).then((r) =>
+    jsonOrThrow<PiMarketplaceResponse>(r),
+  );
+};
 
 export const updatePiExtensions = (sessionId: string, source?: string) =>
   fetch(`${BASE}/pi/extensions/updates?sessionId=${encodeURIComponent(sessionId)}`, {
