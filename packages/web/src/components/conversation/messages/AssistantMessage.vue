@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "@amagicpear/pichamber-shared";
+import { settings } from "@/stores/settings";
 import MarkdownRender from "markstream-vue";
 import ConversationDetail from "./ConversationDetail.vue";
 import MessageActions from "./MessageActions.vue";
@@ -75,7 +76,8 @@ const markdownRenderProps = useMarkdownRender(() => props.final);
           @copy="emit('copy', text)" />
       </header>
       <ConversationDetail v-if="thinking" class="conversation-message__details" icon="brain" label-key="conversation.thinkingLabel"
-        :preview="inline(thinking)" :body="{ kind: 'markdown', content: thinking }" :final="props.final" :auto-expand="thinkingStreaming"
+        :preview="inline(thinking)" :body="{ kind: 'markdown', content: thinking }" :final="props.final"
+        :auto-expand="settings.expandWhileStreaming && thinkingStreaming"
         hide-preview-on-expand />
       <MarkdownRender
         v-if="text"

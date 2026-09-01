@@ -29,18 +29,13 @@ const props = defineProps<{
   startedAt?: number;
   /** Body shape — the dispatcher picks a renderer from `body.kind`. */
   body: ToolBody;
-  /** Whether Markdown content is complete; thinking bodies inherit the
-   * assistant stream state while tool results use the completed default. */
+  /** Whether Markdown content is complete; the renderer uses this to choose
+   * the appropriate streaming or completed Markdown behavior. */
   final?: boolean;
   /** Auto-expand while true (caller flips it when streaming starts) and
    *  auto-collapse when it flips false (streaming segment ended). Manual
    *  toggles between the flips are respected. */
   autoExpand?: boolean;
-  /** Initial expanded state for tool-result details where there's no
-   *  streaming segment to react to. Only consults at mount — doesn't
-   *  override later manual toggles — so the user's collapse preference
-   *  survives a re-render. */
-  defaultExpanded?: boolean;
   /** Hide the plain preview line while expanded. Summary-type previews
    *  (Thinking: same text as the body) are redundant when open; header-type
    *  previews (bash command / ls path) stay visible. */
@@ -55,11 +50,9 @@ const labelText = computed(() => {
   return props.isError ? t("tools.failed", { name }) : name;
 });
 
-// Initial state honours the per-item preference (tool results want a
-// quiet default; Thinking wants to start collapsed). The autoExpand
-// watcher below only kicks in for callers that flip `autoExpand` during
-// the lifetime (Thinking during streaming); tool-result callers leave it
-// undefined and never trip the watcher.
+// Start collapsed. Callers opt into the streaming lifecycle through
+// `autoExpand`; its value changes open the detail at stream start and close it
+// when the stream ends, while manual toggles remain respected in between.
 /** Lucide chevron icons, sourced from `lucide-static` (the same SVG
  *  files `lucide-vue-next` exports). Single subpath each, so the 90° turn
  *  between them morphs cleanly under morphicons' Procrustes alignment. */
@@ -67,7 +60,7 @@ const chevronDown = lucideIcon("chevron-down");
 const chevronRight = lucideIcon("chevron-right");
 const toolIcon = lucideIcon(props.icon ?? "wrench");
 
-const expanded = ref(!!props.defaultExpanded);
+const expanded = ref(false);
 // Hover mirrors the old CSS `:hover` affordance: while collapsed, hovering
 // morphs the tool icon into a right-pointing chevron; leaving returns it.
 const hovered = ref(false);

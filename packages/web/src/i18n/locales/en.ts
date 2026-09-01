@@ -157,9 +157,9 @@ export default {
       showTimestamps: "Show timestamps",
       showTimestampsDesc:
         "Render a local timestamp under every committed message in the conversation.",
-      expandToolResults: "Expand tool results by default",
-      expandToolResultsDesc:
-        "Open committed tool result details when the page first renders. You'll still be able to fold them.",
+      expandWhileStreaming: "Expand while streaming",
+      expandWhileStreamingDesc:
+        "Automatically open thinking and tool output while it streams, then fold it when the stream ends.",
     },
 
     notifications: {

@@ -153,8 +153,8 @@ export default {
       display: "显示",
       showTimestamps: "显示时间戳",
       showTimestampsDesc: "在每条已提交消息下方显示本地时间戳",
-      expandToolResults: "默认展开工具结果",
-      expandToolResultsDesc: "首次渲染时展开已提交的工具结果详情。仍可手动折叠",
+      expandWhileStreaming: "流式输出时展开",
+      expandWhileStreamingDesc: "流式输出时自动展开思考内容和工具结果，输出结束后自动折叠",
     },
 
     notifications: {

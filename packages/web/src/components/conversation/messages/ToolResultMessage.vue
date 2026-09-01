@@ -12,7 +12,7 @@ defineProps<{
   <article class="conversation-message conversation-message--tool-result"
     :class="{ 'conversation-message--tool-error': detail.isError }">
     <ConversationDetail class="conversation-message__details" v-bind="detail"
-      :default-expanded="settings.expandedToolResults" />
+      :auto-expand="settings.expandWhileStreaming && detail.running" />
   </article>
 </template>
 

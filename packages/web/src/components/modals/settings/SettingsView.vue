@@ -289,8 +289,8 @@ const selectItem = (key: string) => {
               <SettingsOption :title="t('settings.chat.showTimestamps')" :description="t('settings.chat.showTimestampsDesc')">
                 <input v-model="settings.showTimestamps" type="checkbox" />
               </SettingsOption>
-              <SettingsOption :title="t('settings.chat.expandToolResults')" :description="t('settings.chat.expandToolResultsDesc')">
-                <input v-model="settings.expandedToolResults" type="checkbox" />
+              <SettingsOption :title="t('settings.chat.expandWhileStreaming')" :description="t('settings.chat.expandWhileStreamingDesc')">
+                <input v-model="settings.expandWhileStreaming" type="checkbox" />
               </SettingsOption>
             </SettingsGroup>
           </template>

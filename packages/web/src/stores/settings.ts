@@ -9,8 +9,8 @@ export interface SettingsState {
   sendKey: SendKey;
   /** Render a local timestamp under each committed message (default on). */
   showTimestamps: boolean;
-  /** Render committed tool result details expanded by default. */
-  expandedToolResults: boolean;
+  /** Expand thinking and tool output while it is streaming. */
+  expandWhileStreaming: boolean;
   /** Play a short chime when the agent turn completes. */
   notifySound: boolean;
   /** Fire a desktop notification when the agent turn completes. */
@@ -26,9 +26,9 @@ const hydrate = (raw: Partial<SettingsState>): SettingsState => ({
     typeof raw.hideTemporarySessions === "boolean" ? raw.hideTemporarySessions : true,
   sendKey: isSendKey(raw.sendKey) ? raw.sendKey : "enter",
   showTimestamps: typeof raw.showTimestamps === "boolean" ? raw.showTimestamps : true,
-  expandedToolResults:
-    typeof raw.expandedToolResults === "boolean" ? raw.expandedToolResults : false,
-  notifySound: typeof raw.notifySound === "boolean" ? raw.notifySound : false,
+  expandWhileStreaming:
+    typeof raw.expandWhileStreaming === "boolean" ? raw.expandWhileStreaming : true,
+  notifySound: typeof raw.notifySound === "boolean" ? raw.notifySound : true,
   notifyDesktop: typeof raw.notifyDesktop === "boolean" ? raw.notifyDesktop : false,
   gitAutoFetch: typeof raw.gitAutoFetch === "boolean" ? raw.gitAutoFetch : true,
 });
@@ -39,8 +39,8 @@ export const settings = persistedState<SettingsState>(
     hideTemporarySessions: true,
     sendKey: "enter",
     showTimestamps: true,
-    expandedToolResults: false,
-    notifySound: false,
+    expandWhileStreaming: true,
+    notifySound: true,
     notifyDesktop: false,
     gitAutoFetch: true,
   },
