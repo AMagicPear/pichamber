@@ -7,6 +7,7 @@ import { workspace } from "@/stores/workspace";
 import ProviderLogo from "@/components/ui/ProviderLogo";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
+import CommandButton from "@/components/ui/CommandButton.vue";
 
 const { t } = useI18n();
 
@@ -111,20 +112,20 @@ watch(() => workspace.sessionId, load, { immediate: true });
             @enter="saveApiKey(provider.id)"
             @keydown.esc="editingProviderId = null"
           />
-          <button type="button" :disabled="saving || !apiKey.trim()" @click="saveApiKey(provider.id)">{{ t('settings.providers.save') }}</button>
-          <button type="button" :disabled="saving" @click="editingProviderId = null">{{ t('common.cancel') }}</button>
+          <CommandButton variant="compact" :disabled="saving || !apiKey.trim()" @click="saveApiKey(provider.id)">{{ t('settings.providers.save') }}</CommandButton>
+          <CommandButton variant="compact" :disabled="saving" @click="editingProviderId = null">{{ t('common.cancel') }}</CommandButton>
         </template>
         <template v-else>
-          <button type="button" :disabled="saving" @click="startEditing(provider.id)">
+          <CommandButton variant="compact" :disabled="saving" @click="startEditing(provider.id)">
             {{ provider.auth.configured ? t('settings.providers.updateKey') : t('settings.providers.setKey') }}
-          </button>
-          <button
+          </CommandButton>
+          <CommandButton
             v-if="provider.auth.canRemove"
-            type="button"
-            class="is-danger"
+            variant="compact"
+            danger
             :disabled="saving"
             @click="removeCredential(provider)"
-          >{{ t('settings.providers.removeCredential') }}</button>
+          >{{ t('settings.providers.removeCredential') }}</CommandButton>
         </template>
       </div>
     </article>
@@ -145,9 +146,5 @@ watch(() => workspace.sessionId, load, { immediate: true });
 .provider-settings__meta > span.is-ready { color: var(--ui-extension-fg); }
 .provider-settings__actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; min-width: 190px; }
 .provider-settings__actions > .search-box { width: 170px; flex: 0 0 auto; }
-.provider-settings__actions button { min-height: 27px; padding: 3px 7px; border-radius: 5px; color: var(--ui-text-muted); font: inherit; font-size: 11px; }
-.provider-settings__actions button:hover:not(:disabled) { background: var(--ui-surface-hover); color: var(--ui-text-strong); }
-.provider-settings__actions button.is-danger:hover:not(:disabled) { background: var(--ui-error-hover); color: var(--ui-error-strong); }
-.provider-settings__actions button:disabled { cursor: default; opacity: 0.5; }
 @media (max-width: 640px) { .provider-settings__row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 10px 0; } .provider-settings__meta { display: none; } .provider-settings__actions { grid-column: 1 / -1; justify-content: flex-start; min-width: 0; } }
 </style>

@@ -44,6 +44,10 @@ import {
 import { closeSessionSockets, sessionWsHandler } from "./core/ws";
 import { refreshSessionModelState } from "./core/ws";
 import { type PtyWsData, type SessionWsData, type WsData, type WsHandler } from "./core/ws";
+import { FileLogger, errorEvent, setSharedLogger } from "./diagnostics/logger";
+import { installGlobalHandlers } from "./diagnostics/global-handlers";
+import { getDiagnosticsLogDir } from "./diagnostics/paths";
+import { readServerTail } from "./diagnostics/server-tail";
 import { browseProjectDirectories } from "./services/projects";
 import { getProviderQuota, listQuotaProviders } from "./providers/quota";
 import { SdkSessionDriver } from "./core/driver";
@@ -84,6 +88,20 @@ const instanceId = process.env.PICHAMBER_INSTANCE_ID;
 const daemonToken = process.env.PICHAMBER_DAEMON_TOKEN;
 const startedAt = new Date().toISOString();
 
+// ─── Diagnostics: install a process-wide JSONL logger before anything
+// else can throw. Unhandled exceptions and rejections get funneled here so
+// even unexpected failures leave a trace in the local report. ────────
+const diagnosticsLogger = new FileLogger();
+setSharedLogger(diagnosticsLogger);
+installGlobalHandlers(diagnosticsLogger);
+const bootLogger = diagnosticsLogger.child({ scope: "server.boot" });
+bootLogger.emit({
+  level: "info",
+  scope: "server.boot",
+  msg: `startup pichamber ${version}`,
+  extra: { hostname, port: configuredPort, instanceId, pi: PI_VERSION },
+});
+
 // ─── WebSocket protocol multiplexing ───────────────────────────────────
 //
 // Bun's `websocket` callbacks receive (ws, message) — the data payload is
@@ -102,7 +120,7 @@ const fsErrorResponse = (err: unknown): Response => {
   if (code === "ENOENT") return Response.json({ error: "Not found" }, { status: 404 });
   if (code === "EACCES") return Response.json({ error: "Permission denied" }, { status: 403 });
   const message = toMessage(err);
-  console.error("Filesystem operation failed:", err);
+  diagnosticsLogger.emit(errorEvent("Filesystem operation failed", err, "server.fs"));
   return Response.json({ error: message }, { status: 500 });
 };
 
@@ -666,6 +684,26 @@ const server = Bun.serve({
       },
     },
 
+    // ── Diagnostics ───────────────────────────────────────
+    // Local-only endpoints. The browser calls /api/diagnostics/server to
+    // pull a bounded tail of recent JSONL events so it can bundle them
+    // into a single export. Both endpoints intentionally avoid echoing
+    // any user-provided content — the report is built from server-local
+    // records only.
+    "/api/diagnostics/server": {
+      GET: async (req) => {
+        const url = new URL(req.url);
+        const raw = Number(url.searchParams.get("tail") ?? "500");
+        const tail = Number.isFinite(raw) ? Math.min(5_000, Math.max(1, Math.floor(raw))) : 500;
+        try {
+          const events = await readServerTail(tail);
+          return Response.json({ directory: getDiagnosticsLogDir(), events });
+        } catch (error) {
+          return Response.json({ directory: getDiagnosticsLogDir(), events: [], error: toMessage(error) });
+        }
+      },
+    },
+
     // ── Terminal (PTY) ─────────────────────────────────────────────
     // Spawn a real shell. Returns { ptyId, shell, cwd, title }. The
     // client then opens a WebSocket on /ws/pty/:ptyId to drive it.
@@ -994,18 +1032,47 @@ const server = Bun.serve({
     // `data` here declares the ws.data type for the callbacks below.
     data: {} as WsData,
     async open(ws) {
-      await ws.data.handler.open(ws);
+      diagnosticsLogger.emit({
+        level: "debug",
+        scope: "server.ws",
+        msg: "socket open",
+        extra: { protocol: ws.data.protocol },
+      });
+      try {
+        await ws.data.handler.open(ws);
+      } catch (error) {
+        diagnosticsLogger.emit(errorEvent("socket open failed", error, "server.ws"));
+        throw error;
+      }
     },
     async message(ws, message) {
-      await ws.data.handler.message(ws, message);
+      try {
+        await ws.data.handler.message(ws, message);
+      } catch (error) {
+        diagnosticsLogger.emit(errorEvent("socket message failed", error, "server.ws"));
+        throw error;
+      }
     },
-    close(ws) {
-      ws.data.handler.close(ws);
+    close(ws, code, reason) {
+      try {
+        ws.data.handler.close(ws);
+      } finally {
+        diagnosticsLogger.emit({
+          level: "debug",
+          scope: "server.ws",
+          msg: "socket close",
+          extra: { protocol: ws.data.protocol, code, reason: reason.toString() },
+        });
+      }
     },
   },
 });
 
-console.log(`Pi Chamber ${version} listening on http://${hostname}:${configuredPort}`);
+bootLogger.emit({
+  scope: "server.boot",
+  msg: `listening on http://${hostname}:${configuredPort}`,
+  extra: { hostname, port: configuredPort },
+});
 
 // Best-effort cleanup on shutdown. Useful when Bun restarts in --hot mode.
 const shutdown = () => {

@@ -13,6 +13,7 @@ import router from "./router";
 import { initializeTheme } from "./stores/theme";
 import { initializeSessionEffects } from "./stores/sessionEffects";
 import { i18n } from "./i18n";
+import { getDiagnostics } from "./diagnostics/browser-events";
 
 initializeTheme();
 initializeSessionEffects();
@@ -24,5 +25,9 @@ setCustomComponents("chat", {
   link: LocalFileLink,
 });
 app.use(router);
+
+void getDiagnostics().then((handle) => {
+  handle.installGlobalHandlers(app);
+});
 
 app.mount("#app");

@@ -47,10 +47,17 @@ export const connectSessionWs = (
   sessionId: string,
   onMessage: (message: ServerMessage) => void,
   onStatus?: (status: WsStatus) => void,
+  onOpen?: () => void,
 ): WsHandle<ClientMessage> =>
-  createSocket(wsUrl(`/ws/${sessionId}`), (data) => {
-    onMessage(JSON.parse(data) as ServerMessage);
-  }, onStatus);
+  createSocket(
+    wsUrl(`/ws/${sessionId}`),
+    (data) => {
+      onMessage(JSON.parse(data) as ServerMessage);
+    },
+    onStatus,
+    undefined,
+    onOpen,
+  );
 
 export type PtyMessage = string | { type: "resize"; cols: number; rows: number };
 

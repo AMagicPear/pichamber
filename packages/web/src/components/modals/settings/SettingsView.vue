@@ -32,7 +32,10 @@ import ExtensionsManager from "@/components/modals/settings/ExtensionsManager.vu
 import SkillsManager from "@/components/modals/settings/SkillsManager.vue";
 import McpManager from "@/components/modals/settings/McpManager.vue";
 import McpIcon from "@/assets/icons/MCP.svg";
+import DiagnosticsSettings from "@/components/modals/settings/DiagnosticsSettings.vue";
+import ActivityIcon from "lucide-static/icons/activity.svg";
 import { fetchFileEditor, updateFileEditor, type FileEditor } from "@/api/client";
+import CommandButton from "@/components/ui/CommandButton.vue";
 
 defineOptions({ name: "SettingsView" });
 
@@ -67,6 +70,7 @@ const navItems: NavItem[] = [
   { key: "git", label: () => "Git", icon: GitBranchIcon, searchTerms: searchTerms("git", "Git") },
   { key: "behavior", label: () => t("settings.nav.behavior"), icon: BrainIcon, searchTerms: searchTerms("behavior") },
   { key: "runtime", label: () => t("settings.nav.runtime"), icon: ServerIcon, searchTerms: searchTerms("runtime", "SDK", "RPC") },
+  { key: "diagnostics", label: () => t("settings.nav.diagnostics"), icon: ActivityIcon, searchTerms: searchTerms("diagnostics", "log", "crash", "export") },
   { key: "extensions", label: () => t("settings.nav.extensions"), icon: CodeBoxIcon, searchTerms: searchTerms("extensions") },
   { key: "skills", label: () => t("settings.nav.skills"), icon: BookOpenIcon, searchTerms: searchTerms("skills", "SKILL.md") },
   { key: "mcp", label: () => "MCP", icon: McpIcon, searchTerms: searchTerms("mcp", "MCP", "pi-mcp-adapter") },
@@ -313,12 +317,10 @@ const selectItem = (key: string) => {
                 :title="permissionLabel.title"
                 :description="permissionLabel.description"
               >
-                <button
-                  type="button"
-                  class="settings-permission-button"
+                <CommandButton
                   :disabled="permissionLabel.disabled"
                   @click="requestNotificationPermission"
-                >{{ permissionLabel.action }}</button>
+                >{{ permissionLabel.action }}</CommandButton>
               </SettingsOption>
             </SettingsGroup>
           </template>
@@ -348,6 +350,7 @@ const selectItem = (key: string) => {
 
           <PiBehaviorSettings v-else-if="activeKey === 'behavior'" />
           <RuntimeSettings v-else-if="activeKey === 'runtime'" />
+          <DiagnosticsSettings v-else-if="activeKey === 'diagnostics'" />
         </div>
       </section>
     </template>
@@ -466,23 +469,4 @@ const selectItem = (key: string) => {
 .language-options > button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 .language-options strong { font-weight: 500; }
 
-/* Permission button: matches the input/select control surface so the
- * inline option row stays visually balanced. Disabled reads muted so
- * "Granted" / "Denied" / "Unavailable" don't pull focus. */
-.settings-permission-button {
-  min-width: 132px;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--ui-border);
-  border-radius: 5px;
-  background: var(--ui-surface);
-  color: var(--ui-text);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.settings-permission-button:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
 </style>

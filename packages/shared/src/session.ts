@@ -205,17 +205,39 @@ export type ServerMessage =
    *  前端消费方负责——服务端不懂扩展的私有前缀协议）。 */
   | RpcExtensionUIRequest
   | { type: "draft_restore"; messages: string[] }
-  | { type: "error"; error: string };
+  | { type: "error"; error: string }
+  | {
+      type: "operation_result";
+      operationId: string;
+      operation: TrackedOperation;
+      ok: boolean;
+      /** Free-form success payload: only safe, server-known fields. */
+      applied?: { [key: string]: unknown };
+      /** When `ok` is false, a short, user-safe error message. Full stacks
+       *  remain in the diagnostics log under the matching operationId. */
+      error?: string;
+    };
 
 /** JSON messages the client sends to the session WebSocket server. */
 export type ClientMessage =
   | { type: "prompt"; message: string; images?: ImageContent[]; streamingBehavior?: "steer" | "followUp" }
-  | { type: "abort"; restorePending?: boolean }
+  | { type: "abort"; restorePending?: boolean; operationId?: string }
   | { type: "restore_pending" }
-  | { type: "compact"; customInstructions?: string }
-  | { type: "reload" }
-  | { type: "set_model"; provider: string; modelId: string }
-  | { type: "set_thinking_level"; level: ThinkingLevel }
+  | { type: "compact"; customInstructions?: string; operationId?: string }
+  | { type: "reload"; operationId?: string }
+  | { type: "set_model"; provider: string; modelId: string; operationId?: string }
+  | { type: "set_thinking_level"; level: ThinkingLevel; operationId?: string }
   | { type: "resync" }
   /** 扩展 UI 应答直接使用官方 RPC 形状。 */
   | RpcExtensionUIResponse;
+
+/** Operations the server will ack with an `operation_result` so the browser
+ *  can correlate user intent with state changes (especially useful when the
+ *  user reports a state that "didn't stick" — the report tells us exactly
+ *  which step failed). */
+export type TrackedOperation =
+  | "abort"
+  | "compact"
+  | "reload"
+  | "set_model"
+  | "set_thinking_level";

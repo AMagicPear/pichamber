@@ -13,7 +13,9 @@ import {
   resetSessionState,
 } from "@/stores/session";
 import { applySessionEffects } from "@/stores/sessionEffects";
-import type { ClientMessage, ModelDescriptor, ServerMessage } from "@amagicpear/pichamber-shared";
+import { createId } from "@/utils/id";
+import { getDiagnostics } from "@/diagnostics/browser-events";
+import type { ClientMessage, ModelDescriptor, ServerMessage, TrackedOperation } from "@amagicpear/pichamber-shared";
 
 /* ── WS 生命周期与协议动作 ─────────────────────────────────────────
  *  这里不定义任何会话状态 —— 所有会话状态与事件应用都在
@@ -34,6 +36,7 @@ let activeSessionId: string | null = null;
 let refCount = 0;
 
 const onMessage = (message: ServerMessage) => {
+  void recordSessionMessage(message);
   applySessionEffects(applyServerMessage(message, () => ws?.send({ type: "resync" })));
 };
 
@@ -41,11 +44,48 @@ const onStatus = (status: WsStatus) => {
   switch (status.type) {
     case "closed":
       connected.value = false;
+      void recordWebEvent({
+        level: "warn",
+        scope: "web.ws",
+        msg: "WebSocket closed",
+        extra: { code: status.code ?? null, reason: status.reason ?? null },
+      });
       break;
     case "error":
       pushErrorToast(status.error);
+      void recordWebEvent({
+        level: "error",
+        scope: "web.ws",
+        msg: status.error,
+      });
       break;
   }
+};
+
+/** Records key wire-level events into the browser diagnostics ring. The
+ *  Promise never rejects — a missing IndexedDB just means the event is
+ *  dropped. */
+const recordWebEvent = async (event: Parameters<Awaited<ReturnType<typeof getDiagnostics>>["record"]>[0]) => {
+  try {
+    const handle = await getDiagnostics();
+    handle.record({ ...event, ...(activeSessionId ? { sessionId: activeSessionId } : {}) });
+  } catch {
+    /* swallow */
+  }
+};
+
+/** Observe operation_result frames so the browser can correlate user intent
+ *  with server outcome even when the operation changes session state via
+ *  separate broadcasts. */
+const recordSessionMessage = async (message: ServerMessage) => {
+  if (message.type !== "operation_result") return;
+  void recordWebEvent({
+    level: message.ok ? "info" : "error",
+    scope: "web.operation",
+    msg: `${message.operation} ${message.ok ? "applied" : "failed"}`,
+    operationId: message.operationId,
+    ...(message.ok ? { extra: { applied: message.applied } } : { extra: { error: message.error } }),
+  });
 };
 
 /** 对齐官方 `AgentSession.prompt(text, options?)`：`options` 直接复用官方
@@ -77,14 +117,15 @@ const prompt = (text: string, options?: PromptOptions) => {
   images.value = [];
 };
 
-const abort = () => ws?.send({ type: "abort", restorePending: true });
+const abort = () => sendTracked("abort", (operationId) => ({ type: "abort", restorePending: true, operationId }));
 /** 对齐官方 `clearQueue()` 的语义：把排队消息取回输入框（服务器发
  *  `draft_restore` 帧）。 */
 const restorePending = () => ws?.send({ type: "restore_pending" });
-const compact = (customInstructions?: string) => ws?.send({ type: "compact", customInstructions });
+const compact = (customInstructions?: string) =>
+  sendTracked("compact", (operationId) => ({ type: "compact", customInstructions, operationId }));
 /** Reload extensions, prompts, themes, and context files — mirrors the
  *  TUI's `/reload`. The server guards against streaming/compaction. */
-const reload = () => ws?.send({ type: "reload" });
+const reload = () => sendTracked("reload", (operationId) => ({ type: "reload", operationId }));
 
 const respondToExtension = (response: RpcExtensionUIResponse) => {
   ws?.send(response);
@@ -94,12 +135,35 @@ const respondToExtension = (response: RpcExtensionUIResponse) => {
 /** Pi owns the model and thinking state. Wait for its state broadcast
  *  instead of guessing locally: setModel can fail after the user selects a
  *  model (for example when auth has just expired). */
-const setModel = (next: ModelDescriptor) => {
-  ws?.send({ type: "set_model", provider: next.provider, modelId: next.id });
-};
+const setModel = (next: ModelDescriptor) =>
+  sendTracked("set_model", (operationId) => ({
+    type: "set_model",
+    provider: next.provider,
+    modelId: next.id,
+    operationId,
+  }));
 
-const setThinkingLevel = (level: ThinkingLevel) => {
-  ws?.send({ type: "set_thinking_level", level });
+const setThinkingLevel = (level: ThinkingLevel) =>
+  sendTracked("set_thinking_level", (operationId) => ({
+    type: "set_thinking_level",
+    level,
+    operationId,
+  }));
+
+/** Send a state-mutating command with a fresh correlation id and log the
+ *  user intent. The matching `operation_result` from the server is logged
+ *  separately so the pair appears as "intent" → "applied|failed" in the
+ *  browser's diagnostics ring. */
+const sendTracked = (operation: TrackedOperation, build: (operationId: string) => ClientMessage) => {
+  if (!ws) return;
+  const operationId = createId();
+  void recordWebEvent({
+    level: "info",
+    scope: "web.operation",
+    msg: `${operation} requested`,
+    operationId,
+  });
+  ws.send(build(operationId));
 };
 
 const disconnect = () => {
@@ -113,8 +177,19 @@ const connect = (sessionId: string) => {
   if (activeSessionId === sessionId) return;
   disconnect();
   activeSessionId = sessionId;
+  void recordWebEvent({
+    level: "info",
+    scope: "web.ws",
+    msg: "WebSocket connecting",
+  });
   try {
-    ws = connectSessionWs(sessionId, onMessage, onStatus);
+    ws = connectSessionWs(sessionId, onMessage, onStatus, () => {
+      void recordWebEvent({
+        level: "info",
+        scope: "web.ws",
+        msg: "WebSocket open",
+      });
+    });
   } catch (error) {
     pushErrorToast(toMessage(error));
   }

@@ -30,48 +30,6 @@
   font-size: 12px;
 }
 
-/* Shared empty-state primary action: a subtle outline button with an
- * accent icon. Used by panels so "create the thing" actions read the
- * same everywhere (e.g. "New terminal" and "Initialize repository").
- * The accent comes from the theme-aware --ui-panel-active token. */
-.ui-empty-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--ui-border);
-  border-radius: 4px;
-  background: var(--ui-surface);
-  color: var(--ui-text-strong);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgb(16 15 15 / 4%);
-  cursor: pointer;
-  transition:
-    border-color 120ms ease,
-    background-color 120ms ease,
-    color 120ms ease;
-}
-.ui-empty-action svg {
-  width: 14px;
-  height: 14px;
-  color: var(--ui-panel-active);
-}
-.ui-empty-action:hover:not(:disabled) {
-  border-color: var(--ui-panel-active);
-  background: var(--ui-surface-hover);
-}
-.ui-empty-action:focus-visible {
-  outline: 2px solid var(--ui-panel-active);
-  outline-offset: 2px;
-}
-.ui-empty-action:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
 /* Font utilities for one-off overrides. */
 .ui-font-sans {
   font-family: var(--ui-font-sans);

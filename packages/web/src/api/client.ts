@@ -274,6 +274,20 @@ export const fetchProviderQuota = (sessionId: string, provider: string) =>
     (r) => jsonOrThrow<ProviderQuota>(r),
   );
 
+// ─── Diagnostics ───────────────────────────────────────────────────────────────
+// Local-only. The browser pulls a bounded JSONL tail from the server and
+// merges it with its own IndexedDB ring; nothing leaves the device unless
+// the user attaches the export to a bug report.
+
+export type DiagnosticsServerResponse = {
+  directory: string;
+  events: Array<{ v: 1; ts: string; level: string; scope: string; msg: string; [key: string]: unknown }>;
+  error?: string;
+};
+
+export const fetchDiagnosticsServer = (tail = 500) =>
+  fetch(`/api/diagnostics/server?tail=${encodeURIComponent(String(tail))}`).then((r) => jsonOrThrow<DiagnosticsServerResponse>(r));
+
 // ─── Pi SDK configuration ───────────────────────────────────────────
 
 export const fetchPiProviders = (sessionId: string) =>

@@ -6,6 +6,7 @@ import { fetchPiSkillsOverview, setPiSkillCommands, setPiSkillEnabled, toMessage
 import { workspace } from "@/stores/workspace";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsOption from "./SettingsOption.vue";
+import CommandButton from "@/components/ui/CommandButton.vue";
 
 const { t } = useI18n();
 const overview = ref<SkillsOverview | null>(null);
@@ -96,7 +97,7 @@ onMounted(load);
             <strong>{{ skill.name }}</strong>
             <div class="skills-manager__meta">
               <small>{{ t(`settings.skills.scope.${skill.scope}`) }} · {{ t(`settings.skills.origin.${skill.origin}`) }}</small>
-              <button type="button" class="skills-manager__disable" :disabled="saving" @click="setSkillEnabled(skill.path, false)">{{ t('settings.skills.disable') }}</button>
+              <CommandButton variant="compact" danger :disabled="saving" @click="setSkillEnabled(skill.path, false)">{{ t('settings.skills.disable') }}</CommandButton>
             </div>
           </header>
           <p>{{ skill.description }}</p>
@@ -111,7 +112,7 @@ onMounted(load);
         <li v-for="skill in disabledSkills" :key="skill.path" class="skills-manager__skill">
           <header>
             <strong>{{ skill.name }}</strong>
-            <button type="button" :disabled="saving" @click="setSkillEnabled(skill.path, true)">{{ t('settings.skills.restore') }}</button>
+            <CommandButton variant="compact" :disabled="saving" @click="setSkillEnabled(skill.path, true)">{{ t('settings.skills.restore') }}</CommandButton>
           </header>
           <p v-if="skill.description">{{ skill.description }}</p>
           <small class="skills-manager__path" :title="skill.path">{{ skill.path }}</small>
@@ -136,9 +137,5 @@ onMounted(load);
 .skills-manager__skill p { margin: 0; color: var(--ui-text-muted); font-size: 12px; line-height: 1.45; }
 .skills-manager__explicit { color: var(--ui-status-text); }
 .skills-manager__path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skills-manager__skill button { min-height: 27px; padding: 3px 10px; border-radius: 5px; color: var(--ui-text-muted); font: inherit; font-size: 11px; }
-.skills-manager__skill button:hover:not(:disabled) { background: var(--ui-surface-hover); color: var(--ui-text-strong); }
-.skills-manager__skill button:disabled { cursor: default; opacity: 0.5; }
-.skills-manager__disable:hover:not(:disabled) { background: var(--ui-error-hover) !important; color: var(--ui-error-strong) !important; }
 @media (max-width: 640px) { .skills-manager__skill header { align-items: flex-start; flex-direction: column; gap: 5px; } .skills-manager__meta { width: 100%; justify-content: space-between; } }
 </style>

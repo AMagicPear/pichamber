@@ -120,6 +120,7 @@ export default {
       skills: "Skills",
       mcp: "MCP",
       providers: "Providers",
+      diagnostics: "Diagnostics",
     },
 
     appearance: {
@@ -345,6 +346,28 @@ export default {
       setKey: "Set key",
       removeCredential: "Remove",
       removeCredentialConfirm: "Remove the stored credential for {name}?",
+    },
+
+    diagnostics: {
+      title: "Diagnostics",
+      description: "Inspect local logs and export a diagnostic report. Nothing leaves this device unless you attach the report to a bug report.",
+      localState: "Local state",
+      browserEvents: "Browser events",
+      browserEventsDesc: "Captured in this browser tab via IndexedDB. Up to 2,000 most recent records are retained.",
+      serverEvents: "Server events (tail)",
+      serverEventsDesc: "Most recent entries from the server's rolling JSONL log. Up to the cap returned by the server endpoint.",
+      serverLogDir: "Server log directory",
+      serverLogDirDesc: "pichamber stores one JSONL file per UTC day under this directory, retained for 14 days / 100 MB total.",
+      actions: "Actions",
+      exportTitle: "Export diagnostic report",
+      exportDesc: "Combine browser + server events into a single JSON file. Review before sharing — it does not include prompt or tool content.",
+      exportAction: "Export",
+      exporting: "Exporting…",
+      clearTitle: "Clear browser diagnostics",
+      clearDesc: "Remove all browser-side events. The server log is unaffected.",
+      clearAction: "Clear",
+      clearing: "Clearing…",
+      privacy: "Reports exclude prompt content, model output, tool inputs/outputs, API keys, environment variables, and arbitrary request payloads. Paths under your home directory are replaced with <home>. Review the file before sharing.",
     },
   },
 

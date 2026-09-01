@@ -12,6 +12,7 @@ import StopIcon from "lucide-static/icons/square.svg";
 import TargetIcon from "lucide-static/icons/target.svg";
 import QuestionIcon from "lucide-static/icons/message-circle-question.svg";
 import IconButton from "@/components/ui/IconButton.vue";
+import CommandButton from "@/components/ui/CommandButton.vue";
 import ConfirmModal from "@/components/modals/ConfirmModal.vue";
 import ComposerSuggestions from "@/components/conversation/composer/ComposerSuggestions.vue";
 import ModelSelector from "@/components/ui/ModelSelector.vue";
@@ -520,12 +521,12 @@ const placeholder = computed(() => {
               <span>{{ t('composer.followUpQueue') }}</span>
               <p>{{ message }}</p>
             </div>
-            <button v-if="canRestorePending" type="button" @click="emit('restorePending')">{{ t('composer.restoreAll') }}</button>
+            <CommandButton v-if="canRestorePending" variant="compact" @click="emit('restorePending')">{{ t('composer.restoreAll') }}</CommandButton>
           </div>
           <div v-if="hasDeferredExtensionInteraction" class="composer__pending-interaction" role="status">
             <QuestionIcon aria-hidden="true" />
             <span>{{ t('extensionUi.waitingForInteraction') }}</span>
-            <button type="button" class="composer__pending-interaction-action" @click="emit('reopenExtensionInteraction')">{{ t('extensionUi.openInteraction') }}</button>
+            <CommandButton @click="emit('reopenExtensionInteraction')">{{ t('extensionUi.openInteraction') }}</CommandButton>
           </div>
           <div class="composer__footer">
             <div class="composer__footer-leading">
@@ -829,34 +830,6 @@ const placeholder = computed(() => {
   overflow-wrap: anywhere;
 }
 
-.composer__pending-interaction-action {
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--ui-border);
-  border-radius: 4px;
-  background: var(--ui-surface);
-  color: var(--ui-text-strong);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  box-shadow: 0 1px 2px rgb(16 15 15 / 4%);
-  cursor: pointer;
-  transition:
-    border-color 120ms ease,
-    background 120ms ease,
-    color 120ms ease;
-}
-
-.composer__pending-interaction-action:hover {
-  border-color: #b65323;
-  background: var(--ui-surface-hover);
-}
-
-.composer__pending-interaction-action:focus-visible {
-  outline: 2px solid #b65323;
-  outline-offset: 2px;
-}
 
 /* Status footnote lives OUTSIDE the composer box — no border, no
  * background, just muted text below the input. The ActivityToggle (its
@@ -940,16 +913,7 @@ const placeholder = computed(() => {
   white-space: nowrap;
 }
 
-.composer__queue>button {
-  justify-self: end;
-  padding: 3px 6px;
-  border: 0;
-  background: transparent;
-  color: var(--ui-text-muted);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
+.composer__queue :deep(.command-button) { justify-self: end; }
 
 /* Footer: leading actions, trailing actions (model + thinking + mode +
  * send/stop). The trailing block uses `flex: 1 1 auto; min-width: 0;` so

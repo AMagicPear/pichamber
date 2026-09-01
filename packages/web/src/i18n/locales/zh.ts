@@ -118,6 +118,7 @@ export default {
       skills: "技能",
       mcp: "MCP",
       providers: "提供商",
+      diagnostics: "诊断",
     },
 
     appearance: {
@@ -332,6 +333,28 @@ export default {
       setKey: "设置密钥",
       removeCredential: "移除",
       removeCredentialConfirm: "移除 {name} 的已存储凭据？",
+    },
+
+    diagnostics: {
+      title: "诊断",
+      description: "查看本地日志并导出诊断报告。除非你将报告附加到 bug 反馈，否则不会上传任何内容。",
+      localState: "本地状态",
+      browserEvents: "浏览器事件",
+      browserEventsDesc: "由本浏览器标签页通过 IndexedDB 捕获，保留最近 2,000 条记录。",
+      serverEvents: "服务器事件（尾部）",
+      serverEventsDesc: "服务器滚动 JSONL 日志中最近的记录，上限由接口返回的最大条数决定。",
+      serverLogDir: "服务器日志目录",
+      serverLogDirDesc: "pichamber 在该目录下按 UTC 日期生成 JSONL 文件，保留 14 天或 100 MB 以内。",
+      actions: "操作",
+      exportTitle: "导出诊断报告",
+      exportDesc: "合并浏览器与服务器事件为单个 JSON 文件，分享前请检查——其中不包含提示词或工具内容。",
+      exportAction: "导出",
+      exporting: "导出中…",
+      clearTitle: "清除浏览器诊断",
+      clearDesc: "删除所有浏览器端事件，不影响服务器日志。",
+      clearAction: "清除",
+      clearing: "清除中…",
+      privacy: "报告中不包含提示词内容、模型输出、工具输入/输出、API 密钥、环境变量或任意请求负载。家目录下的路径会被替换为 <home>。分享前请检查文件。",
     },
   },
 

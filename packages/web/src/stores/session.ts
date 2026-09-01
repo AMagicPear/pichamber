@@ -427,6 +427,13 @@ export const applyServerMessage = (message: ServerMessage, resync: () => void): 
     case "draft_restore":
       draft.value = [...message.messages, draft.value?.trim()].filter(Boolean).join("\n\n");
       break;
+    case "operation_result":
+      // Intent-only frame: the state mutation has already been broadcast
+      // through the official event stream; this frame is purely a
+      // correlation marker so the diagnostics log can pair the browser
+      // intent with the server's outcome (especially when the user
+      // reports a state that "didn't stick" — refresh-to-recover bugs).
+      break;
     case "error":
       effects.push({ type: "error", message: message.error });
       break;

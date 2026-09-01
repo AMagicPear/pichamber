@@ -30,6 +30,7 @@ import FullscreenIcon from "lucide-static/icons/fullscreen.svg";
 import FullscreenExitIcon from "lucide-static/icons/minimize.svg";
 import TerminalIcon from "lucide-static/icons/terminal.svg";
 import IconButton from "@/components/ui/IconButton.vue";
+import CommandButton from "@/components/ui/CommandButton.vue";
 import TerminalView from "@/components/panels/TerminalView.vue";
 import { startPty, stopPty, toMessage } from "@/api/client";
 import { ui } from "@/stores/ui";
@@ -226,10 +227,10 @@ watch(
       <template v-if="tabs.length === 0">
         <div class="terminal__empty">
           <p>{{ t('terminal.noTerminals') }}</p>
-          <button type="button" class="ui-empty-action" @click="createTab">
+          <CommandButton @click="createTab">
             <AddIcon />
             <span>{{ t('terminal.newTab') }}</span>
-          </button>
+          </CommandButton>
         </div>
       </template>
       <template v-else>
@@ -249,18 +250,18 @@ watch(
               <strong>{{ t('terminal.failedToStart') }}</strong>
               <span>{{ tab.errorMessage }}</span>
             </p>
-            <button type="button" class="terminal__action" @click="reopenTab(tab.id)">
+            <CommandButton @click="reopenTab(tab.id)">
               {{ t('terminal.tryAgain') }}
-            </button>
+            </CommandButton>
           </div>
           <div v-else class="terminal__state">
             <p>
               <strong>{{ t('terminal.closed') }}</strong>
               <span>{{ tab.errorMessage || t('terminal.shellExited') }}</span>
             </p>
-            <button type="button" class="terminal__action" @click="reopenTab(tab.id)">
+            <CommandButton @click="reopenTab(tab.id)">
               {{ t('terminal.restart') }}
-            </button>
+            </CommandButton>
           </div>
         </div>
       </template>
@@ -406,39 +407,6 @@ watch(
   height: 100%;
   color: var(--ui-text-muted);
   font-size: 13px;
-}
-.terminal__action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--ui-border);
-  border-radius: 4px;
-  background: var(--ui-surface);
-  color: var(--ui-text-strong);
-  font-size: 12px;
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgb(16 15 15 / 4%);
-  cursor: pointer;
-  transition:
-    border-color 120ms ease,
-    background 120ms ease,
-    color 120ms ease;
-}
-.terminal__action :deep(svg) {
-  width: 14px;
-  height: 14px;
-  color: #b65323;
-}
-.terminal__action:hover {
-  border-color: #b65323;
-  background: var(--ui-surface-hover);
-  color: var(--ui-text-strong);
-}
-.terminal__action:focus-visible {
-  outline: 2px solid #b65323;
-  outline-offset: 2px;
 }
 .terminal__state strong {
   color: #b65323;

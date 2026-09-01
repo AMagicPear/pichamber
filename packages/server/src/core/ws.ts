@@ -39,8 +39,13 @@ import type {
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
 import { createUiBridge, WEB_EXTENSION_HOST_MODE, type UiBridge } from "../extensions/extension-ui";
+import { errorEvent, getLogger } from "../diagnostics/logger";
 import { deactivateSession, getSessionDriver } from "./session";
 import { RpcSessionDriver, SdkSessionDriver, type SessionDriver } from "./driver";
+
+/** Lazy scope logger. Resolves once `installGlobalHandlers` has wired the
+ *  process-wide handlers. */
+const sessionChannelLogger = (sessionId: string) => getLogger("ws.session").child({ sessionId });
 
 // ─── WebSocket protocol multiplexing types ─────────────────────────────
 //
@@ -432,7 +437,7 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
             stats: channel.state.stats,
           });
         } catch (error) {
-          console.error("Failed to snapshot model state", sessionId, error);
+          sessionChannelLogger(sessionId).emit(errorEvent("Failed to snapshot model state", error));
         }
       })();
     });
@@ -493,12 +498,12 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
       channel.compactionQueue = [];
       driver
         .prompt(first.text, first.images ? { images: first.images } : undefined)
-        .catch((err: unknown) => console.error("flush queued prompt failed", sessionId, err));
+        .catch((err: unknown) => sessionChannelLogger(sessionId).emit(errorEvent("flush queued prompt failed", err)));
       for (const m of rest) {
         const submit = m.mode === "followUp"
           ? driver.prompt(m.text, { streamingBehavior: "followUp", images: m.images })
           : driver.prompt(m.text, { streamingBehavior: "steer", images: m.images });
-        submit.catch((err: unknown) => console.error("flush queued message failed", sessionId, err));
+        submit.catch((err: unknown) => sessionChannelLogger(sessionId).emit(errorEvent("flush queued message failed", err)));
       }
     }
 
@@ -542,7 +547,7 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
             broadcastState(channel, { stats });
           }
         } catch (error) {
-          console.error("Failed to refresh session stats", sessionId, error);
+          sessionChannelLogger(sessionId).emit(errorEvent("Failed to refresh session stats", error));
         }
       }
       statsRefreshRunning = false;
@@ -655,18 +660,18 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
     try {
       await reconcile(channel);
     } catch (error) {
-      console.error("Failed to reconcile session", sessionId, error);
+      sessionChannelLogger(sessionId).emit(errorEvent("Failed to reconcile session", error));
     }
     if (sdkDriver) {
       try {
         await sdkDriver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: WEB_EXTENSION_HOST_MODE });
       } catch (error) {
-        console.error("Failed to bind extensions", sessionId, error);
+        sessionChannelLogger(sessionId).emit(errorEvent("Failed to bind extensions", error));
       }
       try {
         channel.state.resources = snapshotResources(sdkDriver);
       } catch (error) {
-        console.error("Failed to snapshot resources", sessionId, error);
+        sessionChannelLogger(sessionId).emit(errorEvent("Failed to snapshot resources", error));
       }
     }
   })();
@@ -684,7 +689,7 @@ const detachListener = (sessionId: string, ws: BunWS) => {
     channel.unsubscribe();
     channelsBySession.delete(sessionId);
     deactivateSession(sessionId).catch((error) => {
-      console.error("Failed to deactivate session", sessionId, error);
+      sessionChannelLogger(sessionId).emit(errorEvent("Failed to deactivate session", error));
     });
   });
 };
@@ -714,6 +719,54 @@ const sendError = (ws: BunWS, error: string) => {
   if (ws.readyState === 1) ws.send(JSON.stringify(msg));
 };
 
+/** Send an `operation_result` frame to a single socket so the browser can
+ *  correlate its user-intent id with the server's outcome. The body is
+ *  always short — full stacks are in the diagnostics log. */
+const sendOperationResult = (
+  ws: BunWS,
+  result: Extract<ServerMessage, { type: "operation_result" }>,
+) => {
+  if (ws.readyState !== 1) return;
+  ws.send(JSON.stringify(result));
+};
+
+/** Convenience wrapper for tracked operations. Records "received" before
+ *  the action, "applied" on success (with safe `applied` payload), or
+ *  "failed" on error (with user-safe message and full stack in the log). */
+type TrackedOp = Extract<ServerMessage, { type: "operation_result" }>["operation"];
+
+const trackOperation = async (
+  ws: BunWS,
+  sessionId: string,
+  operation: TrackedOp,
+  operationId: string | undefined,
+  run: () => Promise<{ applied?: { [key: string]: unknown } }>,
+): Promise<void> => {
+  const log = sessionChannelLogger(sessionId);
+  log.emit({ scope: "operation", msg: `received ${operation}`, ...(operationId ? { operationId } : {}) });
+  if (operationId === undefined) {
+    // No correlation id — still run the action, but don't emit a result frame.
+    try {
+      await run();
+    } catch (error) {
+      log.emit(errorEvent(`operation ${operation} failed`, error, "operation"));
+      sendError(ws, toMessage(error));
+    }
+    return;
+  }
+  try {
+    const { applied } = await run();
+    log.emit({ scope: "operation", msg: `applied ${operation}`, operationId, ...(applied ? { extra: applied } : {}) });
+    sendOperationResult(ws, { type: "operation_result", operationId, operation, ok: true, ...(applied ? { applied } : {}) });
+  } catch (error) {
+    const built = errorEvent(`operation ${operation} failed`, error, "operation");
+    log.emit({ ...built, operationId });
+    const safe = toMessage(error);
+    sendError(ws, safe);
+    sendOperationResult(ws, { type: "operation_result", operationId, operation, ok: false, error: safe });
+  }
+};
+
 export const sessionWsHandler: WsHandler = {
   async open(ws) {
     const bunWS = ws as BunWS;
@@ -723,7 +776,7 @@ export const sessionWsHandler: WsHandler = {
     if (bunWS.data.closed) {
       if (!channelsBySession.has(sessionId)) {
         deactivateSession(sessionId).catch((error) => {
-          console.error("Failed to deactivate session", sessionId, error);
+          sessionChannelLogger(sessionId).emit(errorEvent("Failed to deactivate session", error));
         });
       }
       return;
@@ -745,7 +798,7 @@ export const sessionWsHandler: WsHandler = {
       channel.state.thinking = snapshot.thinking;
       channel.state.stats = snapshot.stats;
     } catch (error) {
-      console.error("Failed to load model snapshot", sessionId, error);
+      sessionChannelLogger(sessionId).emit(errorEvent("Failed to load model snapshot", error));
     }
     replayExtensionUiState(channel, bunWS);
     bunWS.send(JSON.stringify(snapshotMessage(channel)));
@@ -842,14 +895,17 @@ export const sessionWsHandler: WsHandler = {
         return;
       }
       case "abort": {
-        if (input.restorePending !== false && driver instanceof SdkSessionDriver) {
-          const restored = driver.clearQueue();
-          const messages = [...restored.steering, ...restored.followUp];
-          if (messages.length > 0 && bunWS.readyState === 1) {
-            bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
+        await trackOperation(bunWS, sessionId, "abort", input.operationId, async () => {
+          if (input.restorePending !== false && driver instanceof SdkSessionDriver) {
+            const restored = driver.clearQueue();
+            const messages = [...restored.steering, ...restored.followUp];
+            if (messages.length > 0 && bunWS.readyState === 1) {
+              bunWS.send(JSON.stringify({ type: "draft_restore", messages } satisfies ServerMessage));
+            }
           }
-        }
-        driver.abort().catch((error) => sendError(bunWS, toMessage(error)));
+          await driver.abort();
+          return {};
+        });
         return;
       }
       case "compact": {
@@ -857,9 +913,10 @@ export const sessionWsHandler: WsHandler = {
           typeof input.customInstructions === "string" && input.customInstructions.trim()
             ? input.customInstructions.trim()
             : undefined;
-        driver
-          .compact(customInstructions)
-          .catch((err: unknown) => console.error("compact failed", sessionId, toMessage(err)));
+        await trackOperation(bunWS, sessionId, "compact", input.operationId, async () => {
+          await driver.compact(customInstructions);
+          return {};
+        });
         return;
       }
       case "reload": {
@@ -875,29 +932,27 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "Wait for compaction to finish before reloading.");
           return;
         }
-        try {
+        await trackOperation(bunWS, sessionId, "reload", input.operationId, async () => {
           await driver.reload();
-        } catch (err) {
-          sendError(bunWS, toMessage(err));
-          return;
-        }
-        // Reload rebuilds the extension runner, so any UI bindings from
-        // the old runner are stale. Re-bind before re-snapshotting so the
-        // next prompt sees fresh state.
-        const channel = channelsBySession.get(sessionId);
-        if (channel) {
-          try {
-            await driver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: WEB_EXTENSION_HOST_MODE });
-          } catch (err) {
-            console.error("Failed to re-bind extensions after reload", sessionId, err);
+          // Reload rebuilds the extension runner, so any UI bindings from
+          // the old runner are stale. Re-bind before re-snapshotting so the
+          // next prompt sees fresh state.
+          const channel = channelsBySession.get(sessionId);
+          if (channel) {
+            try {
+              await driver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: WEB_EXTENSION_HOST_MODE });
+            } catch (err) {
+              sessionChannelLogger(sessionId).emit(errorEvent("Failed to re-bind extensions after reload", err, "operation"));
+            }
+            try {
+              channel.state.resources = snapshotResources(driver);
+            } catch (err) {
+              sessionChannelLogger(sessionId).emit(errorEvent("Failed to snapshot resources after reload", err, "operation"));
+            }
+            broadcastState(channel, { resources: channel.state.resources });
           }
-          try {
-            channel.state.resources = snapshotResources(driver);
-          } catch (err) {
-            console.error("Failed to snapshot resources after reload", sessionId, err);
-          }
-          broadcastState(channel, { resources: channel.state.resources });
-        }
+          return {};
+        });
         return;
       }
       case "set_model": {
@@ -905,12 +960,11 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "set_model requires provider+modelId strings");
           return;
         }
-        try {
+        await trackOperation(bunWS, sessionId, "set_model", input.operationId, async () => {
           await driver.setModel(input.provider, input.modelId);
           channelsBySession.get(sessionId)?.queueModelStateBroadcast();
-        } catch (err) {
-          sendError(bunWS, toMessage(err));
-        }
+          return { applied: { provider: input.provider, modelId: input.modelId } };
+        });
         return;
       }
       case "set_thinking_level": {
@@ -918,11 +972,10 @@ export const sessionWsHandler: WsHandler = {
           sendError(bunWS, "set_thinking_level requires a level string");
           return;
         }
-        try {
+        await trackOperation(bunWS, sessionId, "set_thinking_level", input.operationId, async () => {
           await driver.setThinkingLevel(input.level);
-        } catch (err) {
-          sendError(bunWS, toMessage(err));
-        }
+          return { applied: { level: input.level } };
+        });
         return;
       }
       case "resync": {

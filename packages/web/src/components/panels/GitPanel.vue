@@ -35,6 +35,7 @@ import ArchiveIcon from "lucide-static/icons/archive.svg";
 import PlusIcon from "lucide-static/icons/circle-plus.svg";
 import DiffView from "@/components/panels/DiffView.vue";
 import IconButton from "@/components/ui/IconButton.vue";
+import CommandButton from "@/components/ui/CommandButton.vue";
 import FilePathLabel from "@/components/ui/FilePathLabel.vue";
 import FloatingPanel from "@/components/ui/FloatingPanel.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
@@ -417,15 +418,13 @@ watch(() => workspace.cwd, () => {
       <GitBranchIcon />
       <p>{{ t('git.notARepo') }}</p>
       <span>{{ statusError }}</span>
-      <button
-        type="button"
-        class="ui-empty-action"
+      <CommandButton
         :disabled="syncBusy === 'init'"
         @click="doInit"
       >
         <GitBranchIcon />
         <span>{{ syncBusy === "init" ? t('git.initializing') : t('git.initializeRepository') }}</span>
-      </button>
+      </CommandButton>
     </div>
 
     <div v-else class="git-pane">
@@ -553,14 +552,12 @@ watch(() => workspace.cwd, () => {
           @keydown.ctrl.enter="commit"
         />
         <div class="git-pane__commit-actions">
-          <button
-            type="button"
-            class="git-pane__btn git-pane__btn--primary"
+          <CommandButton
             :disabled="!hasStaged || !commitMsg.trim() || committing"
             @click="commit"
           >
             {{ committing ? "Committing…" : "Commit" }}
-          </button>
+          </CommandButton>
         </div>
       </section>
 
@@ -581,14 +578,13 @@ watch(() => workspace.cwd, () => {
             label="Stash message"
             @enter="doStashPush"
           />
-          <button
-            type="button"
-            class="git-pane__btn"
+          <CommandButton
+            variant="compact"
             :disabled="syncBusy !== null"
             @click="doStashPush"
           >
             {{ syncBusy === "stash" ? "…" : "Stash" }}
-          </button>
+          </CommandButton>
         </div>
         <ul v-if="hasStashes" class="git-pane__stash-list">
           <li v-for="entry in stashes?.stashes" :key="entry.ref" class="git-pane__stash-row">
@@ -596,22 +592,21 @@ watch(() => workspace.cwd, () => {
               {{ entry.message || entry.ref }}
             </span>
             <div class="git-pane__stash-actions">
-              <button
-                type="button"
-                class="git-pane__btn git-pane__btn--small"
+              <CommandButton
+                variant="compact"
                 :disabled="syncBusy !== null"
                 @click="doStashPop"
               >
                 Pop
-              </button>
-              <button
-                type="button"
-                class="git-pane__btn git-pane__btn--small git-pane__btn--danger"
+              </CommandButton>
+              <CommandButton
+                variant="compact"
+                danger
                 :disabled="syncBusy !== null"
                 @click="doStashDrop(entry.index)"
               >
                 Drop
-              </button>
+              </CommandButton>
             </div>
           </li>
         </ul>
@@ -1021,46 +1016,4 @@ watch(() => workspace.cwd, () => {
   white-space: pre-wrap;
 }
 
-/* ── Buttons ─────────────────────────────────────────────────────── */
-.git-pane__btn {
-  height: 28px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 5px;
-  background: var(--ui-surface-hover);
-  color: var(--ui-text-strong);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-
-.git-pane__btn--small {
-  height: 22px;
-  padding: 0 8px;
-  font-size: 11px;
-}
-
-.git-pane__btn--primary {
-  background: var(--ui-surface-hover);
-  color: var(--ui-text-strong);
-}
-
-.git-pane__btn--danger {
-  color: var(--ui-error-strong);
-}
-
-.git-pane__btn--primary:hover:not(:disabled) {
-  background: var(--ui-surface-selected);
-}
-
-.git-pane__btn--danger:hover:not(:disabled) {
-  background: var(--ui-error-hover);
-}
-
-.git-pane__btn:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
 </style>

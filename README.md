@@ -30,6 +30,21 @@ State and logs are stored under
 Windows. Set `PICHAMBER_STATE_DIR` to override that location or
 `PICHAMBER_PORT` to change the default port.
 
+## Diagnostics and privacy
+
+pichamber keeps local diagnostic events to make intermittent failures
+actionable. Server events are stored as rolling JSONL files under the state
+directory's `logs/` folder; browser events are retained in IndexedDB. Nothing
+is uploaded automatically.
+
+Use **Settings → Diagnostics → Export diagnostic report** to download a report
+containing recent browser and server events for a bug report. The report
+excludes conversation content, thinking, tool input/output, credentials, and
+environment-variable values. Review an export before sharing it. A renderer
+crash cannot write a final browser event, but the report preserves the events
+recorded before the crash and marks an unclean previous page lifetime when the
+browser can detect one.
+
 ## Develop
 
 A monorepo workspace using [Bun](https://bun.sh) workspaces.

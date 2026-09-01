@@ -15,6 +15,7 @@ import { workspace } from "@/stores/workspace";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsOption from "./SettingsOption.vue";
 import SearchBox from "@/components/ui/SearchBox.vue";
+import CommandButton from "@/components/ui/CommandButton.vue";
 
 const { t } = useI18n();
 
@@ -177,10 +178,10 @@ onMounted(async () => {
           </div>
           <div class="extension-manager__actions">
             <template v-if="ext.installed">
-              <button type="button" :disabled="saving" @click="install(ext)">{{ t('common.update') }}</button>
-              <button type="button" class="is-danger" :disabled="saving" @click="remove(ext)">{{ t('common.remove') }}</button>
+              <CommandButton variant="compact" :disabled="saving" @click="install(ext)">{{ t('common.update') }}</CommandButton>
+              <CommandButton variant="compact" danger :disabled="saving" @click="remove(ext)">{{ t('common.remove') }}</CommandButton>
             </template>
-            <button v-else type="button" :disabled="saving" @click="install(ext)">{{ t('settings.extensions.configure') }}</button>
+            <CommandButton v-else variant="compact" :disabled="saving" @click="install(ext)">{{ t('settings.extensions.configure') }}</CommandButton>
           </div>
         </li>
       </ul>
@@ -195,10 +196,10 @@ onMounted(async () => {
           <span v-else>{{ t('settings.extensions.updatesNotChecked') }}</span>
         </span>
         <div class="extension-manager__actions">
-          <button type="button" :disabled="saving || checkingUpdates" @click="checkUpdates">{{ t('settings.extensions.checkAgain') }}</button>
-          <button v-if="updates.length" type="button" :disabled="saving || checkingUpdates" @click="updatePackages()">
+          <CommandButton variant="compact" :disabled="saving || checkingUpdates" @click="checkUpdates">{{ t('settings.extensions.checkAgain') }}</CommandButton>
+          <CommandButton v-if="updates.length" variant="compact" :disabled="saving || checkingUpdates" @click="updatePackages()">
             {{ t('settings.extensions.updateAll') }}
-          </button>
+          </CommandButton>
         </div>
       </div>
       <SettingsOption inline :title="t('settings.extensions.addSource')" :description="t('settings.extensions.addSourceDesc')">
@@ -216,7 +217,7 @@ onMounted(async () => {
             <option value="user">Global</option>
             <option value="project">Project</option>
           </select>
-          <button type="button" :disabled="saving || !newSource.trim()" @click="addSource">{{ t('common.add') }}</button>
+          <CommandButton variant="compact" :disabled="saving || !newSource.trim()" @click="addSource">{{ t('common.add') }}</CommandButton>
         </span>
       </SettingsOption>
       <p class="extension-manager__hint">{{ t('settings.extensions.newSourcesHint') }}</p>
@@ -233,13 +234,13 @@ onMounted(async () => {
             </small>
           </div>
           <div class="extension-manager__actions">
-            <button
+            <CommandButton
               v-if="updates.some((update) => update.source === entry.source && update.scope === entry.scope)"
-              type="button"
+              variant="compact"
               :disabled="saving || checkingUpdates"
               @click="updatePackages(entry.source)"
-            >{{ t('common.update') }}</button>
-            <button type="button" class="is-danger" :disabled="saving" @click="removeSource(entry)">{{ t('common.remove') }}</button>
+            >{{ t('common.update') }}</CommandButton>
+            <CommandButton variant="compact" danger :disabled="saving" @click="removeSource(entry)">{{ t('common.remove') }}</CommandButton>
           </div>
         </li>
       </ul>
@@ -323,10 +324,6 @@ onMounted(async () => {
 .extension-manager__update-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: var(--ui-text-muted); font-size: 12px; }
 .extension-manager__update-bar strong { color: var(--ui-status-text); font-weight: 600; }
 .extension-manager__add select { min-width: 82px !important; }
-.extension-manager__add button, .extension-manager__actions button { min-height: 27px; padding: 3px 10px; border-radius: 5px; color: var(--ui-text-muted); font: inherit; font-size: 11px; }
-.extension-manager__add button:hover:not(:disabled), .extension-manager__actions button:hover:not(:disabled) { background: var(--ui-surface-hover); color: var(--ui-text-strong); }
-.extension-manager__actions button.is-danger:hover:not(:disabled) { background: var(--ui-error-hover); color: var(--ui-error-strong); }
-.extension-manager__add button:disabled, .extension-manager__actions button:disabled { cursor: default; opacity: 0.5; }
 @media (max-width: 640px) {
   .extension-manager__manage-row { flex-wrap: wrap; }
   .extension-manager__actions { width: 100%; }

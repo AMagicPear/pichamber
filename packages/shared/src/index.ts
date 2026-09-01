@@ -12,6 +12,7 @@ export * from "./git";
 export * from "./fs";
 export * from "./pty";
 export * from "./server";
+export * from "./diagnostics";
 
 export type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 export type {
