@@ -230,14 +230,14 @@ export default {
     },
 
     runtime: {
-      title: "Runtime",
-      description: "Choose the Pi process mode used by this Pi Chamber server.",
-      piRuntime: "Pi runtime",
-      executionMode: "Execution mode",
-      executionModeDesc: "Changing this stops active agent runs and reloads the application.",
-      sdkRuntime: "SDK runtime",
-      localPiRpc: "Local Pi RPC",
-      loadingRuntime: "Loading runtime settings...",
+      title: "Pi Execution",
+      description: "Choose how Pi runs on this Pi Chamber server. The browser extension UI remains RPC-compatible in either backend.",
+      piExecution: "Pi execution",
+      executionBackend: "Execution backend",
+      executionBackendDesc: "Embedded SDK is the full pichamber integration. CLI RPC runs Pi in a separate local process for compatibility or isolation. Changing this stops active agent runs and reloads the application.",
+      embeddedSdk: "Embedded SDK (recommended)",
+      cliRpc: "Pi CLI subprocess (RPC)",
+      loadingRuntime: "Loading execution settings...",
     },
 
     extensions: {

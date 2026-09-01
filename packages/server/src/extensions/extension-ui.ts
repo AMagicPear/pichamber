@@ -6,6 +6,12 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 
+/**
+ * The browser implements Pi's documented RPC extension-UI protocol. This
+ * describes the extension host, not whether pichamber runs Pi in-process.
+ */
+export const WEB_EXTENSION_HOST_MODE = "rpc" as const;
+
 type PendingDialog = {
   resolve: (response: RpcExtensionUIResponse) => void;
 };

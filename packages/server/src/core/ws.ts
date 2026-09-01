@@ -38,7 +38,7 @@ import type {
 } from "@amagicpear/pichamber-shared";
 import type { ServerWebSocket } from "bun";
 import { toMessage } from "../error";
-import { createUiBridge, type UiBridge } from "../extensions/extension-ui";
+import { createUiBridge, WEB_EXTENSION_HOST_MODE, type UiBridge } from "../extensions/extension-ui";
 import { deactivateSession, getSessionDriver } from "./session";
 import { RpcSessionDriver, SdkSessionDriver, type SessionDriver } from "./driver";
 
@@ -659,7 +659,7 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
     }
     if (sdkDriver) {
       try {
-        await sdkDriver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
+        await sdkDriver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: WEB_EXTENSION_HOST_MODE });
       } catch (error) {
         console.error("Failed to bind extensions", sessionId, error);
       }
@@ -887,7 +887,7 @@ export const sessionWsHandler: WsHandler = {
         const channel = channelsBySession.get(sessionId);
         if (channel) {
           try {
-            await driver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: "rpc" });
+            await driver.session.bindExtensions({ uiContext: channel.uiBridge.context, mode: WEB_EXTENSION_HOST_MODE });
           } catch (err) {
             console.error("Failed to re-bind extensions after reload", sessionId, err);
           }

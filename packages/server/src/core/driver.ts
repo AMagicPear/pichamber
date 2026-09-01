@@ -28,7 +28,8 @@ const piCliPath = fileURLToPath(
   new URL("./cli.js", import.meta.resolve("@earendil-works/pi-coding-agent")),
 );
 
-export type SessionDriverMode = "sdk" | "rpc";
+/** How pichamber executes Pi. This is independent from the extension UI host. */
+export type PiExecutionBackend = "sdk" | "rpc";
 
 export type PromptOptions = {
   images?: ImageContent[];
@@ -49,7 +50,7 @@ export type SessionSnapshot = {
 };
 
 export interface SessionDriver {
-  readonly mode: SessionDriverMode;
+  readonly mode: PiExecutionBackend;
   readonly sessionId: string;
   readonly sessionFile: string;
   readonly cwd: string;

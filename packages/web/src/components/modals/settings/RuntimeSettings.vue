@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { fetchRuntimeMode, toMessage, updateRuntimeMode } from "@/api/client";
+import { fetchExecutionBackend, toMessage, updateExecutionBackend } from "@/api/client";
 import SettingsGroup from "./SettingsGroup.vue";
 import SettingsOption from "./SettingsOption.vue";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
 
 const { t } = useI18n();
 
-const runtimeMode = ref<"sdk" | "rpc">("sdk");
+const executionBackend = ref<"sdk" | "rpc">("sdk");
 const loading = ref(true);
 const saving = ref(false);
 const error = ref<string | null>(null);
@@ -16,7 +16,7 @@ const error = ref<string | null>(null);
 const load = async () => {
   loading.value = true;
   try {
-    runtimeMode.value = (await fetchRuntimeMode()).runtimeMode;
+    executionBackend.value = (await fetchExecutionBackend()).executionBackend;
   } catch (cause) {
     error.value = toMessage(cause);
   } finally {
@@ -24,11 +24,11 @@ const load = async () => {
   }
 };
 
-const save = async (mode: "sdk" | "rpc") => {
+const save = async (backend: "sdk" | "rpc") => {
   saving.value = true;
   error.value = null;
   try {
-    if ((await updateRuntimeMode(mode)).reload) window.location.reload();
+    if ((await updateExecutionBackend(backend)).reload) window.location.reload();
   } catch (cause) {
     error.value = toMessage(cause);
   } finally {
@@ -43,11 +43,11 @@ onMounted(load);
   <SettingsPageHeader :title="t('settings.runtime.title')" :description="t('settings.runtime.description')" />
   <p v-if="error" class="settings-page__error" role="alert">{{ error }}</p>
   <p v-else-if="loading" class="runtime-settings__state">{{ t('settings.runtime.loadingRuntime') }}</p>
-  <SettingsGroup v-else :title="t('settings.runtime.piRuntime')">
-    <SettingsOption inline :title="t('settings.runtime.executionMode')" :description="t('settings.runtime.executionModeDesc')">
-      <select :value="runtimeMode" :disabled="saving" @change="save(($event.target as HTMLSelectElement).value as 'sdk' | 'rpc')">
-        <option value="sdk">{{ t('settings.runtime.sdkRuntime') }}</option>
-        <option value="rpc">{{ t('settings.runtime.localPiRpc') }}</option>
+  <SettingsGroup v-else :title="t('settings.runtime.piExecution')">
+    <SettingsOption inline :title="t('settings.runtime.executionBackend')" :description="t('settings.runtime.executionBackendDesc')">
+      <select :value="executionBackend" :disabled="saving" @change="save(($event.target as HTMLSelectElement).value as 'sdk' | 'rpc')">
+        <option value="sdk">{{ t('settings.runtime.embeddedSdk') }}</option>
+        <option value="rpc">{{ t('settings.runtime.cliRpc') }}</option>
       </select>
     </SettingsOption>
   </SettingsGroup>

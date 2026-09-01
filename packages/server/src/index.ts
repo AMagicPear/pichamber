@@ -29,7 +29,7 @@ import {
   hasUsableSessionCwd,
   listAllSessions,
   renameSession,
-  switchRuntimeMode,
+  switchExecutionBackend,
 } from "./core/session";
 import {
   hasPty,
@@ -48,7 +48,7 @@ import { browseProjectDirectories } from "./services/projects";
 import { getProviderQuota, listQuotaProviders } from "./providers/quota";
 import { SdkSessionDriver } from "./core/driver";
 import { RuntimeModeError, toMessage } from "./error";
-import { getFileEditor, getRuntimeMode, loadAppConfig, setFileEditor } from "./settings/app-config";
+import { getExecutionBackend, getFileEditor, loadAppConfig, setFileEditor } from "./settings/app-config";
 import { getMcpOverview, setMcpServerEnabled } from "./settings/mcp-config";
 import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./services/workspace";
 import type { DisabledSkillInfo, ExtensionsOverview, LoadedExtensionInfo, LoadedSkillInfo, SkillsOverview } from "@amagicpear/pichamber-shared";
@@ -265,19 +265,19 @@ const server = Bun.serve({
         }
       },
     },
-    "/api/settings/runtime": {
+    "/api/settings/execution-backend": {
       GET: async () => {
         await loadAppConfig();
-        return Response.json({ runtimeMode: getRuntimeMode() });
+        return Response.json({ executionBackend: getExecutionBackend() });
       },
       PUT: async (req) => {
-        const body = (await req.json().catch(() => ({}))) as { runtimeMode?: unknown };
-        if (body.runtimeMode !== "sdk" && body.runtimeMode !== "rpc") {
-          return Response.json({ error: "runtimeMode must be sdk or rpc" }, { status: 400 });
+        const body = (await req.json().catch(() => ({}))) as { executionBackend?: unknown };
+        if (body.executionBackend !== "sdk" && body.executionBackend !== "rpc") {
+          return Response.json({ error: "executionBackend must be sdk or rpc" }, { status: 400 });
         }
         try {
-          await switchRuntimeMode(body.runtimeMode, closeSessionSockets);
-          return Response.json({ runtimeMode: body.runtimeMode, reload: true });
+          await switchExecutionBackend(body.executionBackend, closeSessionSockets);
+          return Response.json({ executionBackend: body.executionBackend, reload: true });
         } catch (error) {
           return Response.json({ error: toMessage(error) }, { status: 500 });
         }
@@ -313,7 +313,7 @@ const server = Bun.serve({
           const update = (await req.json().catch(() => ({}))) as Record<string, unknown>;
           const current = await getSessionDriver(sessionId);
           if (!current) return Response.json({ error: "session not found" }, { status: 404 });
-          if (getRuntimeMode() !== "sdk") {
+          if (getExecutionBackend() !== "sdk") {
             const error = new RuntimeModeError("sdk");
             return Response.json({ error: error.message }, { status: error.status });
           }

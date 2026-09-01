@@ -221,14 +221,14 @@ export default {
     },
 
     runtime: {
-      title: "运行时",
-      description: "选择此 Pi Chamber 服务器使用的 Pi 进程模式",
-      piRuntime: "Pi 运行时",
-      executionMode: "执行模式",
-      executionModeDesc: "更改此项会停止正在运行的智能体并重新加载应用",
-      sdkRuntime: "SDK 运行时",
-      localPiRpc: "本地 Pi RPC",
-      loadingRuntime: "正在加载运行时设置...",
+      title: "Pi 执行",
+      description: "选择此 Pi Chamber 服务器运行 Pi 的方式。两种后端下，浏览器扩展 UI 均遵循 RPC 兼容协议。",
+      piExecution: "Pi 执行",
+      executionBackend: "执行后端",
+      executionBackendDesc: "内嵌 SDK 提供完整的 pichamber 集成。CLI RPC 会在独立本地进程中运行 Pi，适用于兼容性排查或进程隔离。更改此项会停止正在运行的智能体并重新加载应用。",
+      embeddedSdk: "内嵌 SDK（推荐）",
+      cliRpc: "Pi CLI 子进程（RPC）",
+      loadingRuntime: "正在加载执行设置...",
     },
 
     extensions: {

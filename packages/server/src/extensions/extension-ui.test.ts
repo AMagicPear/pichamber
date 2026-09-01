@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { RpcExtensionUIRequest } from "@earendil-works/pi-coding-agent";
-import { createUiBridge } from "./extension-ui";
+import { createUiBridge, WEB_EXTENSION_HOST_MODE } from "./extension-ui";
 
 describe("extension UI bridge", () => {
+  test("declares the browser as Pi's RPC-compatible extension UI host", () => {
+    expect(WEB_EXTENSION_HOST_MODE).toBe("rpc");
+  });
+
   test("resolves browser dialog responses", async () => {
     const requests: RpcExtensionUIRequest[] = [];
     const bridge = createUiBridge((request) => requests.push(request));

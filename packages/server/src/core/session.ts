@@ -16,12 +16,12 @@ import {
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { toMessage } from "../error";
-import { getRuntimeMode, loadAppConfig, setRuntimeMode } from "../settings/app-config";
+import { getExecutionBackend, loadAppConfig, setExecutionBackend } from "../settings/app-config";
 import {
   RpcSessionDriver,
   SdkSessionDriver,
   type SessionDriver,
-  type SessionDriverMode,
+  type PiExecutionBackend,
 } from "./driver";
 
 const sessionFileLookup = new Map<string, string>();
@@ -88,14 +88,14 @@ export const createSdkDriver = (sessionManager: SessionManager) => {
   );
 };
 
-const createDriver = (sessionManager: SessionManager, mode: SessionDriverMode): SessionDriver => {
-  if (mode === "sdk") return createSdkDriver(sessionManager);
+const createDriver = (sessionManager: SessionManager, backend: PiExecutionBackend): SessionDriver => {
+  if (backend === "sdk") return createSdkDriver(sessionManager);
   const { id, sessionFile, cwd } = sessionIdentity(sessionManager);
   return new RpcSessionDriver({ sessionId: id, sessionFile, cwd });
 };
 
-const createNewDriver = (sessionManager: SessionManager, mode: SessionDriverMode) => {
-  if (mode === "sdk") return createSdkDriver(sessionManager);
+const createNewDriver = (sessionManager: SessionManager, backend: PiExecutionBackend) => {
+  if (backend === "sdk") return createSdkDriver(sessionManager);
   return new RpcSessionDriver({
     sessionId: sessionManager.getSessionId(),
     cwd: sessionManager.getCwd(),
@@ -133,7 +133,7 @@ export const getSessionDriver = async (id: string): Promise<SessionDriver | null
     const sessionManager = SessionManager.open(sessionFile);
     if (!hasUsableSessionCwd(sessionManager.getCwd())) return null;
     try {
-      const driver = createDriver(sessionManager, getRuntimeMode());
+      const driver = createDriver(sessionManager, getExecutionBackend());
       await driver.start();
       return registerDriver(driver);
     } catch (error) {
@@ -149,7 +149,7 @@ export const getSessionDriver = async (id: string): Promise<SessionDriver | null
   }
 };
 
-export { getRuntimeMode } from "../settings/app-config";
+export { getExecutionBackend } from "../settings/app-config";
 
 export const getSessionCwd = async (id: string): Promise<string | null> => {
   const active = activeSessions.get(id);
@@ -206,7 +206,7 @@ export const renameSession = async (id: string, name: string): Promise<boolean> 
 export const createSessionWithCwd = async (cwd: string): Promise<SessionDriver> => {
   await loadAppConfig();
   if (runtimeTransition) await runtimeTransition;
-  const driver = createNewDriver(SessionManager.create(cwd), getRuntimeMode());
+  const driver = createNewDriver(SessionManager.create(cwd), getExecutionBackend());
   await driver.start();
   return registerDriver(driver);
 };
@@ -247,13 +247,13 @@ export const copySessionToCwd = async (id: string, cwd: string) => {
   return { sessionId: copy.getSessionId(), cwd: copy.getCwd(), sessionFile: copyFile };
 };
 
-export const switchRuntimeMode = async (
-  mode: SessionDriverMode,
+export const switchExecutionBackend = async (
+  backend: PiExecutionBackend,
   closeChannel: (sessionId: string) => Promise<void>,
 ) => {
   await loadAppConfig();
   if (runtimeTransition) await runtimeTransition;
-  if (mode === getRuntimeMode()) return;
+  if (backend === getExecutionBackend()) return;
 
   const sessions = [...activeSessions.entries()];
   const drivers = sessions.map(([, driver]) => driver);
@@ -262,7 +262,7 @@ export const switchRuntimeMode = async (
     await Promise.all(sessions.map(([sessionId]) => closeChannel(sessionId)));
     activeSessions.clear();
     await Promise.all(drivers.map((driver) => driver.dispose()));
-    await setRuntimeMode(mode);
+    await setExecutionBackend(backend);
   })();
   runtimeTransition = transition;
   try {
