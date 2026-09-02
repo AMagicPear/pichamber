@@ -16,7 +16,8 @@
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { basename, delimiter, isAbsolute, join, resolve as pathResolve } from "node:path";
+import { basename, delimiter, join } from "node:path";
+import { resolveInWorkspace } from "./workspace";
 
 const MAX_FD_RESULTS = 100;
 const TOP_N = 20;
@@ -139,7 +140,7 @@ const runFd = (
         // fd prints paths relative to --base-directory. Resolve to absolute
         // so the caller can `relative()` against the workspace root the
         // same way it does for the BFS fallback.
-        const absolutePath = isAbsolute(display) ? display : pathResolve(baseDir, display);
+        const absolutePath = resolveInWorkspace(display, baseDir);
         entries.push({ path: absolutePath, isDirectory: hasTrailingSeparator });
       }
       finish(entries);

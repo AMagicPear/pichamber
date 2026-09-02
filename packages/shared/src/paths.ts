@@ -40,7 +40,7 @@ const rootLength = (path: string): number => {
 };
 
 /** Trim cosmetic trailing separators without destroying `/` or `C:\`. */
-const trimTrailing = (path: string): string => {
+export const pathTrimTrailing = (path: string): string => {
   let end = path.length;
   const root = rootLength(path);
   while (end > root) {
@@ -50,6 +50,8 @@ const trimTrailing = (path: string): string => {
   }
   return end === path.length ? path : path.slice(0, end);
 };
+
+const trimTrailing = pathTrimTrailing;
 
 /** Index of the last separator in `path` (either `/` or `\`), or -1. The
  *  search range is computed after trimming trailing separators so a path

@@ -9,6 +9,7 @@ import "@/styles/panels.css";
 
 import App from "./App.vue";
 import LocalFileLink from "./components/ui/LocalFileLink.vue";
+import MarkdownImage from "./components/ui/MarkdownImage.vue";
 import router from "./router";
 import { initializeTheme } from "./stores/theme";
 import { initializeSessionEffects } from "./stores/sessionEffects";
@@ -23,6 +24,7 @@ app.use(i18n);
 
 setCustomComponents("chat", {
   link: LocalFileLink,
+  image: MarkdownImage,
 });
 app.use(router);
 

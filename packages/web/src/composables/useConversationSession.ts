@@ -28,6 +28,8 @@ import type { ClientMessage, ModelDescriptor, ServerMessage, TrackedOperation } 
 
 let ws: WsHandle<ClientMessage> | null = null;
 let activeSessionId: string | null = null;
+let streamUpdateFrame: number | undefined;
+let pendingStreamUpdates: ServerMessage[] = [];
 
 /** Number of components currently subscribed via the composable. The
  *  WebSocket only opens when the first one mounts and only closes when
@@ -35,9 +37,53 @@ let activeSessionId: string | null = null;
  *  connection ConversationPanel depends on. */
 let refCount = 0;
 
-const onMessage = (message: ServerMessage) => {
+const applyMessage = (message: ServerMessage) => {
   void recordSessionMessage(message);
   applySessionEffects(applyServerMessage(message, () => ws?.send({ type: "resync" })));
+};
+
+const isAssistantDelta = (message: ServerMessage) =>
+  message.type === "message_update" && !("message" in message);
+
+/** Vue batches synchronous mutations into one render. Buffer token-level
+ * deltas until the next paint so Markdown parsing, layout and scroll work run
+ * at most once per frame, while preserving the protocol's event order. */
+const flushStreamUpdates = () => {
+  if (streamUpdateFrame !== undefined) {
+    window.cancelAnimationFrame(streamUpdateFrame);
+    streamUpdateFrame = undefined;
+  }
+  const updates = pendingStreamUpdates;
+  pendingStreamUpdates = [];
+  for (const update of updates) applyMessage(update);
+};
+
+const scheduleStreamUpdateFlush = () => {
+  if (streamUpdateFrame !== undefined) return;
+  streamUpdateFrame = window.requestAnimationFrame(() => {
+    streamUpdateFrame = undefined;
+    const updates = pendingStreamUpdates;
+    pendingStreamUpdates = [];
+    for (const update of updates) applyMessage(update);
+  });
+};
+
+const discardStreamUpdates = () => {
+  if (streamUpdateFrame !== undefined) window.cancelAnimationFrame(streamUpdateFrame);
+  streamUpdateFrame = undefined;
+  pendingStreamUpdates = [];
+};
+
+const onMessage = (message: ServerMessage) => {
+  if (isAssistantDelta(message)) {
+    pendingStreamUpdates.push(message);
+    scheduleStreamUpdateFlush();
+    return;
+  }
+  // A terminal event/snapshot may arrive before the next animation frame.
+  // Apply its preceding deltas first so it cannot overwrite partial content.
+  flushStreamUpdates();
+  applyMessage(message);
 };
 
 const onStatus = (status: WsStatus) => {
@@ -167,6 +213,7 @@ const sendTracked = (operation: TrackedOperation, build: (operationId: string) =
 };
 
 const disconnect = () => {
+  discardStreamUpdates();
   ws?.close();
   ws = null;
   activeSessionId = null;

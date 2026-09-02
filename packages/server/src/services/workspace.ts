@@ -47,8 +47,15 @@ export const shortPath = (path: string, workspace?: string): string => {
 };
 
 /**
- * Resolve a user-supplied path against the workspace. Relative inputs are
- * joined onto the workspace root; absolute inputs pass through unchanged.
+ * Resolve a user-supplied path against the workspace.
+ *
+ * - `~` and `~/foo` always expand against the user's home directory
+ *   (`homedir()`), matching shell convention — this is true regardless of
+ *   which session is active, so `~/notes.md` means the same file whether
+ *   you're in /projects/foo or /projects/bar.
+ * - Absolute paths pass through unchanged.
+ * - Everything else is treated as relative to the workspace (the active
+ *   session cwd, or `homedir()` if no session is selected).
  *
  * Returns the resolved absolute path. Callers that care about workspace
  * containment should layer their own check on top — by design this helper
@@ -57,6 +64,7 @@ export const shortPath = (path: string, workspace?: string): string => {
  */
 export const resolveInWorkspace = (input: string, workspace?: string): string => {
   const ws = workspace ?? getWorkspace();
+  if (input === "~" || input.startsWith("~/")) return resolve(getWorkspace(), input.slice(2));
   return isAbsolute(input) ? input : resolve(ws, input);
 };
 

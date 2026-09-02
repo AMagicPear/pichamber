@@ -102,6 +102,16 @@ describe("session protocol reducer", () => {
     ]);
   });
 
+  test("marks event-appended rows live until a snapshot folds them into history", () => {
+    const message = assistantMessage("model");
+    applyServerMessage(snapshot(), () => {});
+    applyServerMessage({ type: "message_start", seq: 1, message }, () => {});
+    expect(conversation.value[0]?.liveRun).toBe(true);
+
+    applyServerMessage({ ...snapshot(1), messages: [message] }, () => {});
+    expect(conversation.value[0]?.liveRun).toBe(false);
+  });
+
   test("describes settlement and errors as effects instead of touching browser APIs", () => {
     applyServerMessage(snapshot(), () => {});
     applyServerMessage({ type: "agent_start", seq: 1 }, () => {});

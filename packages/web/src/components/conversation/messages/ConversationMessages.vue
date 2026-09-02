@@ -184,7 +184,7 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
 <template>
   <div ref="scroller" class="conversation__messages scroll-fade-bottom" @scroll="onScroll" @wheel="onWheel">
     <div ref="content" class="conversation__content">
-      <template v-for="item in items" :key="item.id">
+      <template v-for="item in items" :key="item.id" v-memo="[item]">
       <UserMessage
         v-if="item.kind === 'message' && item.message.role === 'user'"
         :message="item.message"
@@ -201,6 +201,7 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
         :show-timestamp="!!props.showTimestamps"
         :timestamp-text="messageTimestampText(item.message)"
         :fork-entry-id="item.entryId"
+        :class="{ 'conversation-message--live-run': item.liveRun }"
         @fork="emit('fork', $event)"
         @copy="(text) => emit('copy', text)"
       />
@@ -215,6 +216,7 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
       <ToolResultMessage
         v-else-if="item.kind === 'tool'"
         :detail="toolDetail(item)"
+        :class="{ 'conversation-message--live-run': item.liveRun }"
       />
       </template>
     </div>
@@ -235,14 +237,16 @@ const modelNameFor = (message: AgentMessage | undefined): string | undefined => 
 .conversation-message--tool-result + .conversation-message--user { margin-top: 24px; }
 .conversation-message--assistant-error + .conversation-message { margin-top: 24px; }
 
-/* Markstream's font-size menu is positioned outside its code block. Keep all
- * messages content-culled by default, but release paint containment only for
- * the message that currently owns an open menu. The scrollable chat viewport
- * remains the clipping boundary. */
-.conversation-message:has(.code-more-menu),
-.conversation-message:has(.code-more-menu) .markdown-renderer {
+/* A live Agent run appends several completed assistant/tool rows before it
+ * settles. Keep all of those rows painted until the next authoritative
+ * snapshot folds them into history; old transcript rows stay culled. */
+.conversation-message--live-run,
+.conversation-message--live-run .markdown-renderer {
   content-visibility: visible;
 }
+
+/* Markstream's font-size menu is positioned outside its code block. Keep its
+ * owning message above neighboring content while the menu is open. */
 .conversation-message:has(.code-more-menu) {
   position: relative;
   z-index: 1;

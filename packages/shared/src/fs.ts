@@ -33,7 +33,14 @@ export type OpenFileResult = {
 };
 
 export type ProjectBrowseResult = {
+  /** Canonical path actually being browsed. When the caller asked for a
+   *  path that doesn't exist (e.g. an orphan session's cwd), this falls
+   *  back to the nearest existing ancestor so the UI can offer a usable
+   *  starting point instead of failing outright. */
   path: string;
   parent: string | null;
   entries: Array<{ name: string; path: string }>;
+  /** The path the caller originally asked to browse, or null when it was
+   *  resolved directly. A non-null value means `path` is an ancestor fallback. */
+  requestedPath: string | null;
 };

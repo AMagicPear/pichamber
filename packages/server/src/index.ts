@@ -54,7 +54,7 @@ import { SdkSessionDriver } from "./core/driver";
 import { RuntimeModeError, toMessage } from "./error";
 import { getExecutionBackend, getFileEditor, loadAppConfig, setFileEditor } from "./settings/app-config";
 import { getMcpOverview, setMcpServerEnabled } from "./settings/mcp-config";
-import { canonicalWorkspace, getWorkspace, WorkspaceError } from "./services/workspace";
+import { canonicalWorkspace, getWorkspace, resolveInWorkspace, WorkspaceError } from "./services/workspace";
 import type { DisabledSkillInfo, ExtensionsOverview, LoadedExtensionInfo, LoadedSkillInfo, SkillsOverview } from "@amagicpear/pichamber-shared";
 import {
   getPiBehaviorSettings,
@@ -233,14 +233,18 @@ const server = Bun.serve({
         );
       },
       POST: async (req) => {
-        const { cwd } = (await req.json()) as { cwd: string };
-        const workspace = await canonicalWorkspace(cwd);
-        const driver = await createSessionWithCwd(workspace);
-        return Response.json({
-          sessionId: driver.sessionId,
-          cwd: workspace,
-          sessionFile: driver.sessionFile,
-        });
+        try {
+          const { cwd } = (await req.json()) as { cwd: string };
+          const workspace = await canonicalWorkspace(cwd);
+          const driver = await createSessionWithCwd(workspace);
+          return Response.json({
+            sessionId: driver.sessionId,
+            cwd: workspace,
+            sessionFile: driver.sessionFile,
+          });
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
       },
     },
     "/api/pi/providers": {
@@ -991,6 +995,30 @@ const server = Bun.serve({
         if (!path) return Response.json({ error: "path is required" }, { status: 400 });
         try {
           return Response.json(await openFile(path, await requestCwd(sessionId), getFileEditor()));
+        } catch (err) {
+          return fsErrorResponse(err);
+        }
+      },
+    },
+    // `/api/fs/raw` streams a workspace-resolved file back to the browser so
+    // markstream-vue's `LocalFileImage` can render `<img src="/api/fs/raw?…">`
+    // for local paths the same way `LocalFileLink` calls `/api/fs/open` for
+    // local links. Bun.file auto-detects Content-Type from the extension.
+    "/api/fs/raw": {
+      GET: async (req) => {
+        const url = new URL(req.url);
+        const path = url.searchParams.get("path") ?? "";
+        const sessionId = url.searchParams.get("sessionId");
+        if (!path) return Response.json({ error: "path is required" }, { status: 400 });
+        try {
+          // `requestCwd` throws on an unknown session, but an image src
+          // only needs a session cwd for relative `./…` paths — an
+          // absolute path doesn't care. Fall back to home instead of
+          // failing the whole request, so a stale or missing sessionId
+          // never breaks otherwise-displayable images.
+          const cwd = sessionId ? await requestCwd(sessionId).catch(() => getWorkspace()) : getWorkspace();
+          const file = Bun.file(resolveInWorkspace(path, cwd));
+          return new Response(file, { headers: { "Content-Type": file.type } });
         } catch (err) {
           return fsErrorResponse(err);
         }

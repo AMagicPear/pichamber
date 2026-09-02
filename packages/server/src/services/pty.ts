@@ -1,11 +1,10 @@
 /** PTY sessions backed by bun-pty. */
 
 import { statSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
 import { spawn, type IDisposable, type IPty } from "bun-pty";
 import type { PtyStartResult } from "@amagicpear/pichamber-shared";
 
-import { getWorkspace, shortPath } from "./workspace";
+import { getWorkspace, resolveInWorkspace, shortPath } from "./workspace";
 
 export interface PtyHandle {
   id: string;
@@ -32,7 +31,10 @@ const getDefaultShell = (): string => {
 const resolveCwd = (input: string | undefined): string => {
   const fallback = getWorkspace();
   if (!input) return fallback;
-  const cwd = isAbsolute(input) ? input : resolve(process.cwd(), input);
+  // Delegate the absolute/relative/`~/` plumbing to the shared resolver;
+  // the directory check stays here because it's a terminal-specific
+  // existence guarantee, not something the workspace helper should enforce.
+  const cwd = resolveInWorkspace(input, fallback);
   try {
     return statSync(cwd).isDirectory() ? cwd : fallback;
   } catch {

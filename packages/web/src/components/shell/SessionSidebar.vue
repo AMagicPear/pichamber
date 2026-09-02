@@ -2,10 +2,12 @@
 import AddIcon from "lucide-static/icons/plus.svg";
 import ChatNewIcon from "lucide-static/icons/message-square-plus.svg";
 import CheckboxMultipleIcon from "lucide-static/icons/list-checks.svg";
-import CopyIcon from "lucide-static/icons/copy.svg";
 import DeleteBinIcon from "lucide-static/icons/trash-2.svg";
 import FolderAddIcon from "lucide-static/icons/folder-plus.svg";
 import FileEditIcon from "lucide-static/icons/file-pen.svg";
+import GitBranchIcon from "lucide-static/icons/git-branch.svg";
+import HashIcon from "lucide-static/icons/hash.svg";
+import TriangleAlertIcon from "lucide-static/icons/triangle-alert.svg";
 import { MorphIcon } from "morphicons/vue";
 import InformationIcon from "lucide-static/icons/info.svg";
 import More2Icon from "lucide-static/icons/more-horizontal.svg";
@@ -25,7 +27,7 @@ import ProjectPickerModal from "@/components/modals/ProjectPickerModal.vue";
 import FloatingPanel from "@/components/ui/FloatingPanel.vue";
 import MenuPanel from "@/components/ui/MenuPanel.vue";
 import { usePopover } from "@/composables/usePopover";
-import { pathBasename } from "@amagicpear/pichamber-shared";
+import { pathBasename, pathTrimTrailing } from "@amagicpear/pichamber-shared";
 import type { SessionInfo } from "@amagicpear/pichamber-shared";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -46,7 +48,7 @@ import { settings } from "@/stores/settings";
 import { deleteSession, toMessage } from "@/api/client";
 import { lucideIcon } from "@/components/ui/morphIcons";
 import type { LucideIconName } from "@/components/ui/morphIcons";
-import { pushInfoToast } from "@/stores/extensionUi";
+import { pushErrorToast, pushInfoToast } from "@/stores/extensionUi";
 
 const { t } = useI18n();
 
@@ -110,7 +112,7 @@ const sessionAge = (session: SessionInfo) => {
   return `${Math.floor(months / 12)}y`;
 };
 
-const projectPath = (cwd: string) => cwd.replace(/[\\/]+$/, "") || "/";
+const projectPath = (cwd: string) => pathTrimTrailing(cwd) || "/";
 
 const projectName = (cwd: string) => {
   const trimmed = projectPath(cwd);
@@ -119,6 +121,13 @@ const projectName = (cwd: string) => {
   const name = pathBasename(trimmed);
   return name || trimmed || "/";
 };
+
+/** A project is "missing" when none of its sessions point at a cwd that
+ *  still exists on disk. For those projects the "+ new session" action
+ *  has no usable target — disabling the button is clearer than letting
+ *  the server reject the create with a generic 404. */
+const isMissingProjectCwd = (groups: SessionGroup[]) =>
+  groups.length > 0 && groups.every((group) => group.root.cwdAvailable === false);
 
 type ProjectSort = "recent" | "name" | "name-reverse";
 const projectSort = ref<ProjectSort>("recent");
@@ -138,10 +147,29 @@ type SessionGroup = {
   descendants: SessionInfo[];
 };
 
+/** cwd → comparison key. Trims trailing separators (already done by
+ *  `projectPath`), and on Windows also lowercases — NTFS is case-
+ *  insensitive so `C:\Users\foo\Bar` and `c:\users\foo\bar` refer to
+ *  the same directory. Without this, a cross-project fork on Windows
+ *  would be misattributed whenever server-side realpath returns a
+ *  different casing than the source session's cwd. */
+const cwdCompareKey = (cwd: string) => {
+  const trimmed = projectPath(cwd);
+  if (typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent ?? "")) {
+    return trimmed.toLowerCase();
+  }
+  return trimmed;
+};
+
 /** Walk `parentSessionPath` upward until we hit a session that has no
  *  parent (or whose parent isn't in the snapshot). Used to attribute
  *  grandchild sessions to their topmost ancestor instead of their direct
- *  parent — so C (child of B, B child of A) shows up in A's list, not B's. */
+ *  parent — so C (child of B, B child of A) shows up in A's list, not B's.
+ *  The chain stops at any edge where the parent's cwd differs from the
+ *  child's: a cross-project fork (Pi's `SessionManager.forkFrom` keeps
+ *  `parentSessionPath` even when the new session lives under a different
+ *  cwd) is really a "copy into another project" — it should fall under
+ *  its own project bucket, not be dragged into the source project. */
 const findRoot = (session: SessionInfo, byPath: Map<string, SessionInfo>): SessionInfo => {
   let current = session;
   const visited = new Set<string>();
@@ -149,6 +177,7 @@ const findRoot = (session: SessionInfo, byPath: Map<string, SessionInfo>): Sessi
     visited.add(current.path);
     const parent = byPath.get(current.parentSessionPath);
     if (!parent) return current;
+    if (cwdCompareKey(current.cwd) !== cwdCompareKey(parent.cwd)) return current;
     current = parent;
   }
   return current;
@@ -163,16 +192,20 @@ const projectGroups = computed(() => {
   const byRootPath = new Map<string, SessionGroup>();
   for (const session of visibleSessions.value) {
     const root = findRoot(session, byPath);
-    if (!byRootPath.has(root.path)) byRootPath.set(root.path, { root, descendants: [] });
-    if (session.path !== root.path) byRootPath.get(root.path)!.descendants.push(session);
+    // Multiple independent root sessions can share one cwd. Keep them as
+    // separate conversation groups; cwd is only the outer project bucket.
+    const key = root.path;
+    if (!byRootPath.has(key)) byRootPath.set(key, { root, descendants: [] });
+    if (session.path !== root.path) byRootPath.get(key)!.descendants.push(session);
   }
 
   const byCwd = new Map<string, { cwd: string; groups: SessionGroup[] }>();
   for (const group of byRootPath.values()) {
-    const cwd = projectPath(group.root.cwd);
-    const bucket = byCwd.get(cwd) ?? { cwd, groups: [] };
+    const displayCwd = projectPath(group.root.cwd);
+    const key = cwdCompareKey(group.root.cwd);
+    const bucket = byCwd.get(key) ?? { cwd: displayCwd, groups: [] };
     bucket.groups.push(group);
-    byCwd.set(cwd, bucket);
+    byCwd.set(key, bucket);
   }
 
   for (const bucket of byCwd.values()) {
@@ -458,7 +491,8 @@ const sessionMenuGroups = computed(() => [{
   id: "actions",
   items: [
     { id: "rename", label: t('sidebar.rename'), value: "rename", icon: FileEditIcon },
-    { id: "copy", label: t('sidebar.copySessionToProject'), value: "copy", icon: CopyIcon },
+    { id: "copy", label: t('sidebar.forkSession'), value: "copy", icon: GitBranchIcon },
+    { id: "copy-id", label: t('sidebar.copySessionId'), value: "copy-id", icon: HashIcon },
     { id: "delete", label: t('sidebar.deleteSession'), value: "delete", icon: DeleteBinIcon },
   ],
 }]);
@@ -469,12 +503,58 @@ const selectSessionMenuItem = (item: { value: string }) => {
   } else if (item.value === "copy") {
     const session = sessions.value.find((candidate: SessionInfo) => candidate.id === selectedSessionId.value);
     if (!session) return;
-    copyTargetSessionId.value = session.id;
-    projectPickerInitialPath.value = session.cwd;
-    closeSessionMenu();
-    projectPickerOpen.value = true;
+    openForkPickerForSession(session, { activate: false });
+  } else if (item.value === "copy-id") {
+    void copySessionIdToClipboard();
   } else {
     requestDeleteSelectedSession();
+  }
+};
+
+/** Open the project picker seeded with this session's cwd so the user can
+ *  create a fork of the conversation in another directory. Used both by
+ *  the per-row menu item and by clicking on an orphan-cwd session — the
+ *  picker itself handles missing-path fallback (climbs to the nearest
+ *  existing ancestor and shows the reason). `activate` decides whether
+ *  the caller wants to land on the freshly-forked session. */
+const openForkPickerForSession = (session: SessionInfo, { activate }: { activate: boolean }) => {
+  copyTargetSessionId.value = session.id;
+  copySessionActivates.value = activate;
+  projectPickerInitialPath.value = session.cwd;
+  closeSessionMenu();
+  projectPickerOpen.value = true;
+};
+
+/** Session-row click handler. When the session's cwd still exists this is
+ *  just `navigate()`; when it's gone we redirect the click into the fork
+ *  picker so the user can pick a new cwd without first landing on a
+ *  broken conversation screen. The fork is marked `activate: true` —
+ *  entering the conversation is the user's obvious intent. */
+const onSessionClick = (session: SessionInfo, navigate: () => void) => {
+  if (selectionMode.value) {
+    toggleSessionSelection(session.id);
+    return;
+  }
+  closeSessionMenu();
+  if (session.cwdAvailable === false) {
+    openForkPickerForSession(session, { activate: true });
+    return;
+  }
+  navigate();
+};
+
+/** Copy the selected session's id to the system clipboard. Toast on
+ *  success or failure — falling back silently leaves the user wondering
+ *  whether anything happened. */
+const copySessionIdToClipboard = async () => {
+  const sessionId = selectedSessionId.value;
+  if (!sessionId) return;
+  closeSessionMenu();
+  try {
+    await navigator.clipboard.writeText(sessionId);
+    pushInfoToast(t('sidebar.copySessionIdSuccess'));
+  } catch {
+    pushErrorToast(t('sidebar.copySessionIdFailed'));
   }
 };
 
@@ -511,15 +591,31 @@ const keyboardShortcutsOpen = ref(false);
 const projectPickerOpen = ref(false);
 const copyTargetSessionId = ref<string | null>(null);
 const projectPickerInitialPath = ref<string | undefined>();
+/** Whether the in-flight fork should land on the freshly-forked session
+ *  (true) or leave the caller on whatever session they're already in (false).
+ *  - Clicking an orphan-cwd session: the user's intent is to enter the
+ *    conversation, so we activate and navigate to the new session.
+ *  - Menu → "Create branch session": the user is just making a copy while
+ *    staying in the current conversation, so we leave them alone. */
+const copySessionActivates = ref(false);
 
 const openProject = async (cwd: string) => {
   projectPickerOpen.value = false;
   const sessionId = copyTargetSessionId.value;
+  const shouldActivate = copySessionActivates.value;
   copyTargetSessionId.value = null;
+  copySessionActivates.value = false;
   if (sessionId) {
     try {
       const copy = await copySessionToProject(sessionId, cwd);
-      pushInfoToast(t('sidebar.copySessionSuccess', { project: projectName(copy.cwd) }));
+      if (shouldActivate) {
+        workspace.sessionId = copy.sessionId;
+        workspace.cwd = copy.cwd;
+        workspace.folderName = projectName(copy.cwd);
+        workspace.sessionName = t('sidebar.newSessionLabel');
+        await router.replace({ name: "session", params: { sessionId: copy.sessionId } });
+      }
+      pushInfoToast(t('sidebar.forkSessionSuccess', { project: projectName(copy.cwd) }));
     } catch (error) {
       sessionsError.value = toMessage(error);
     }
@@ -531,6 +627,7 @@ const openProject = async (cwd: string) => {
 const closeProjectPicker = () => {
   projectPickerOpen.value = false;
   copyTargetSessionId.value = null;
+  copySessionActivates.value = false;
   projectPickerInitialPath.value = undefined;
 };
 
@@ -600,7 +697,8 @@ onMounted(async () => {
               </span>
               <span class="session-list__project-title">{{ projectName(project.cwd) }}</span>
             </button>
-            <IconButton class="session-list__project-new" :label="t('sidebar.newSessionInProject')" size="compact"
+            <IconButton class="session-list__project-new" :disabled="isMissingProjectCwd(project.groups)"
+              :label="isMissingProjectCwd(project.groups) ? t('sidebar.missingCwdTooltip', { cwd: project.cwd }) : t('sidebar.newSessionInProject')" size="compact"
               @click.stop="startProjectSession(project.cwd)">
               <AddIcon />
             </IconButton>
@@ -616,8 +714,11 @@ onMounted(async () => {
                   'is-selected': selectionMode && selectedSessionIds.has(item.session.id),
                   'is-selecting': selectionMode,
                   'is-descendant': item.isDescendant,
+                  'is-missing-cwd': item.session.cwdAvailable === false,
                 },
-              ]" @click="selectionMode ? toggleSessionSelection(item.session.id) : (closeSessionMenu(), navigate())">
+              ]" :title="item.session.cwdAvailable === false ? t('sidebar.missingCwdTooltip', { cwd: item.session.cwd }) : undefined"
+                :aria-label="item.session.cwdAvailable === false ? t('sidebar.missingCwdTooltip', { cwd: item.session.cwd }) : undefined"
+                @click="onSessionClick(item.session, navigate)">
                 <template v-if="renamingSessionId === item.session.id">
                   <span class="session-list__control-slot" aria-hidden="true" />
                   <input ref="renamingRef" v-model="renameInput" class="session-list__rename-input"
@@ -642,6 +743,7 @@ onMounted(async () => {
                       :aria-label="t('sidebar.selectSession', { title: sessionTitle(item.session) })" @click.stop @change="toggleSessionSelection(item.session.id)" />
                   </span>
                   <span class="session-list__title">
+                    <TriangleAlertIcon v-if="item.session.cwdAvailable === false && !selectionMode" class="session-list__missing-cwd-icon" />
                     <template v-for="(segment, i) in highlightTitle(sessionTitle(item.session))" :key="i">
                       <mark v-if="segment.hit" class="session-list__hit">{{ segment.text }}</mark>
                       <template v-else>{{ segment.text }}</template>
@@ -902,6 +1004,18 @@ onMounted(async () => {
   box-shadow: none;
 }
 
+/* Disabled buttons (e.g. project whose cwd no longer exists) stay hidden
+ *  at rest like every other "+", just dimmer when the header reveals them
+ *  on hover so users can see why it's inert. */
+.session-list__project-new:disabled {
+  opacity: 0;
+  cursor: not-allowed;
+}
+
+.session-list__project-header:is(:hover, :focus-within) .session-list__project-new:disabled {
+  opacity: 0.4;
+}
+
 .session-list__project-folder {
   position: relative;
   display: block;
@@ -981,6 +1095,28 @@ onMounted(async () => {
   line-height: 16px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+.session-list__missing-cwd-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  vertical-align: middle;
+  color: var(--ui-warning, #b88217);
+}
+
+.session-list__missing-cwd-icon :deep(svg) {
+  width: 12px;
+  height: 12px;
+}
+
+.session-list__item.is-missing-cwd .session-list__title {
+  color: var(--ui-text-muted);
+}
+
+.session-list__item.is-missing-cwd.is-active .session-list__title {
+  color: var(--ui-text);
 }
 
 .session-list__checkbox {

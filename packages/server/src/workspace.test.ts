@@ -6,6 +6,7 @@ import {
   canonicalPathInWorkspace,
   canonicalWorkspace,
   isWithinWorkspace,
+  resolveInWorkspace,
   WorkspaceError,
 } from "./services/workspace";
 
@@ -43,6 +44,33 @@ describe("workspace containment", () => {
     await writeFile(outside, "secret");
     await symlink(outside, join(workspace, "escape.txt"));
     await expect(canonicalPathInWorkspace("escape.txt", workspace)).rejects.toBeInstanceOf(WorkspaceError);
+  });
+});
+
+describe("resolveInWorkspace", () => {
+  const ws = "/work/project";
+
+  test("passes absolute paths through untouched", () => {
+    expect(resolveInWorkspace("/Users/me/foo.png", ws)).toBe("/Users/me/foo.png");
+  });
+
+  test("resolves relative paths against the workspace", () => {
+    expect(resolveInWorkspace("./assets/foo.png", ws)).toBe("/work/project/assets/foo.png");
+    expect(resolveInWorkspace("foo.png", ws)).toBe("/work/project/foo.png");
+  });
+
+  test("expands ~/ against the home directory (shell convention), independent of workspace", () => {
+    // `~/` is shell-shorthand for `$HOME/…` and must not be re-anchored to
+    // the active workspace — otherwise the meaning of `~/foo.png` shifts
+    // every time the user switches sessions, which is surprising.
+    const home = process.env.HOME ?? require("node:os").homedir();
+    expect(resolveInWorkspace("~", ws)).toBe(home);
+    expect(resolveInWorkspace("~/foo.png", ws)).toBe(`${home}/foo.png`);
+    expect(resolveInWorkspace("~/nested/foo.png", ws)).toBe(`${home}/nested/foo.png`);
+  });
+
+  test("falls back to homedir when no workspace is supplied", () => {
+    expect(resolveInWorkspace("~/foo.png")).toMatch(/(^|\/)foo\.png$/);
   });
 });
 

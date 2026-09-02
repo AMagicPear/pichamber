@@ -20,7 +20,7 @@ import { basename, relative, resolve } from "node:path";
 import type { DirEntry, ListResult, OpenFileResult } from "@amagicpear/pichamber-shared";
 
 import { fdSearch, isFdAvailable, scoreEntry } from "./fd-search";
-import { canonicalPathInWorkspace, canonicalWorkspace, getWorkspace, resolveInWorkspace, shortPath } from "./workspace";
+import { canonicalPathInWorkspace, canonicalWorkspace, resolveInWorkspace, shortPath } from "./workspace";
 
 /**
  * Reject any path that escapes the workspace, including symlink targets.
@@ -188,10 +188,7 @@ export const openFile = async (
   const workspace = await canonicalWorkspace(workspacePath);
   const line = /^(.*[^:\d]):(\d+)$/.exec(input);
   const fileInput = line && editor !== "system" ? line[1] : input;
-  const target =
-    fileInput === "~" || fileInput.startsWith("~/")
-      ? resolve(getWorkspace(), fileInput.slice(2))
-      : resolveInWorkspace(fileInput, workspace);
+  const target = resolveInWorkspace(fileInput, workspace);
   await new Promise<void>((resolve, reject) => {
     const editorTarget = line && editor !== "system" ? `${target}:${line[2]}` : target;
     const [cmd, ...args] = openCommand(editor, editorTarget);

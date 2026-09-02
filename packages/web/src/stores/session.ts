@@ -90,8 +90,8 @@ export type ConversationTool = {
 };
 
 export type ConversationItem =
-  | { id: string; kind: "message"; message: AgentMessage; entryId?: string; streaming: boolean }
-  | { id: string; kind: "tool"; tool: ConversationTool; message?: AgentMessage };
+  | { id: string; kind: "message"; message: AgentMessage; entryId?: string; streaming: boolean; liveRun?: boolean }
+  | { id: string; kind: "tool"; tool: ConversationTool; message?: AgentMessage; liveRun?: boolean };
 
 /** 会话显示列表；shallowRef：快照整体替换、事件整条重写，避免 ref 的
  *  UnwrapRef 在递归消息上深层展开（TS2589）。 */
@@ -122,7 +122,7 @@ const buildConversationItems = (
   for (const [messageIndex, message] of messages.entries()) {
     const entryId = messageEntryIds[messageIndex];
     if (message.role === "assistant") {
-      items.push({ id: nextId("a"), kind: "message", message, entryId, streaming: false });
+      items.push({ id: nextId("a"), kind: "message", message, entryId, streaming: false, liveRun: false });
       for (const part of message.content) {
         if (part.type === "toolCall") {
           items.push({
@@ -134,6 +134,7 @@ const buildConversationItems = (
               args: part.arguments,
               running: false,
             },
+            liveRun: false,
           });
           pendingTool.set(part.id, items.length - 1);
         }
@@ -160,10 +161,11 @@ const buildConversationItems = (
             running: false,
           },
           message,
+          liveRun: false,
         });
       }
     } else {
-      items.push({ id: nextId("m"), kind: "message", message, entryId, streaming: false });
+      items.push({ id: nextId("m"), kind: "message", message, entryId, streaming: false, liveRun: false });
     }
   }
   return items;
@@ -222,6 +224,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
           kind: "message",
           message: event.message,
           streaming: role === "assistant",
+          liveRun: true,
         },
       ];
       break;
@@ -239,20 +242,28 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
         }
         const item = index === -1 ? undefined : items[index];
         if (item?.kind === "message" && item.message.role === "assistant") {
-          const message = JSON.parse(JSON.stringify(item.message)) as AssistantMessage;
+          // Streaming deltas arrive at token frequency. Copy only the content
+          // array and the one changed block; cloning the entire accumulated
+          // message on each delta made a long turn grow quadratic in work.
+          const message = {
+            ...item.message,
+            content: [...item.message.content],
+          } as AssistantMessage;
           const content = message.content;
           const contentIndex = "contentIndex" in delta ? delta.contentIndex : 0;
           if (delta.type === "text_start" || delta.type === "text_delta" || delta.type === "text_end") {
             const block = content[contentIndex]?.type === "text"
-              ? content[contentIndex]
+              ? { ...content[contentIndex] }
               : (content[contentIndex] = { type: "text", text: "" });
+            content[contentIndex] = block;
             if (delta.type === "text_delta") block.text += delta.delta;
             if (delta.type === "text_end") block.text = delta.content;
           }
           if (delta.type === "thinking_start" || delta.type === "thinking_delta" || delta.type === "thinking_end") {
             const block = content[contentIndex]?.type === "thinking"
-              ? content[contentIndex]
+              ? { ...content[contentIndex] }
               : (content[contentIndex] = { type: "thinking", thinking: "" });
+            content[contentIndex] = block;
             if (delta.type === "thinking_delta") block.thinking += delta.delta;
             if (delta.type === "thinking_end") block.thinking = delta.content;
           }
@@ -318,6 +329,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
             running: true,
             startedAt: Date.now(),
           },
+          liveRun: true,
         },
       ];
       break;

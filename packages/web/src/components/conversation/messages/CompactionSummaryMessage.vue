@@ -28,7 +28,3 @@ const markdownRenderProps = useMarkdownRender();
     </SummaryCard>
   </article>
 </template>
-
-<style scoped>
-.conversation-message--compaction { content-visibility: auto; contain-intrinsic-size: auto 120px; }
-</style>

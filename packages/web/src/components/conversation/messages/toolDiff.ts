@@ -9,12 +9,13 @@
  * apply_patch 也在这里解析和转换，保证所有 diff 输入都走同一个出口。
  */
 
+import { stripParent } from "@amagicpear/pichamber-shared";
 import { workspace } from "@/stores/workspace";
 
 /** Strip the workspace prefix so in-workspace files read as relative paths. */
 export const displayPath = (path: string): string => {
   const cwd = workspace.cwd;
-  return cwd && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path;
+  return cwd ? (stripParent(cwd, path) ?? path) : path;
 };
 
 type Args = Record<string, unknown> | undefined;
