@@ -416,29 +416,42 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
   const sdkDriver = driver instanceof SdkSessionDriver ? driver : undefined;
 
   let modelStateBroadcastQueued = false;
+  let modelStateBroadcastRunning = false;
+  let modelStateBroadcastVersion = 0;
   const queueModelStateBroadcast = () => {
-    if (modelStateBroadcastQueued) return;
     modelStateBroadcastQueued = true;
+    modelStateBroadcastVersion += 1;
+    if (modelStateBroadcastRunning) return;
+    modelStateBroadcastRunning = true;
     queueMicrotask(() => {
-      modelStateBroadcastQueued = false;
       void (async () => {
-        const channel = channelsBySession.get(sessionId);
-        if (!channel) return;
-        try {
-          const snapshot = await driver.getSnapshot();
-          channel.state.model = snapshot.model;
-          channel.state.availableModels = snapshot.availableModels;
-          channel.state.thinking = snapshot.thinking;
-          channel.state.stats = snapshot.stats;
-          broadcastState(channel, {
-            model: snapshot.model,
-            availableModels: snapshot.availableModels,
-            thinking: channel.state.thinking,
-            stats: channel.state.stats,
-          });
-        } catch (error) {
-          sessionChannelLogger(sessionId).emit(errorEvent("Failed to snapshot model state", error));
+        while (modelStateBroadcastQueued) {
+          modelStateBroadcastQueued = false;
+          const requestedVersion = modelStateBroadcastVersion;
+          const channel = channelsBySession.get(sessionId);
+          if (!channel) break;
+          try {
+            const snapshot = await driver.getSnapshot();
+            // A newer model/thinking change happened while this snapshot was
+            // being built. Its result is stale; the loop will fetch the latest
+            // state before broadcasting anything.
+            if (requestedVersion !== modelStateBroadcastVersion) continue;
+            channel.state.model = snapshot.model;
+            channel.state.availableModels = snapshot.availableModels;
+            channel.state.thinking = snapshot.thinking;
+            channel.state.stats = snapshot.stats;
+            broadcastState(channel, {
+              model: snapshot.model,
+              availableModels: snapshot.availableModels,
+              thinking: channel.state.thinking,
+              stats: channel.state.stats,
+            });
+          } catch (error) {
+            sessionChannelLogger(sessionId).emit(errorEvent("Failed to snapshot model state", error));
+          }
         }
+        modelStateBroadcastRunning = false;
+        if (modelStateBroadcastQueued) queueModelStateBroadcast();
       })();
     });
   };
