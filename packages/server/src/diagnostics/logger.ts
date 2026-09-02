@@ -15,7 +15,7 @@
  * credentials, environment variables, or arbitrary request payloads.
  * `extra` is recorded verbatim; callers whitelist what they pass in.
  */
-import { appendFile, mkdir, readdir, rename, stat, unlink } from "node:fs/promises";
+import { appendFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type DiagnosticContext,

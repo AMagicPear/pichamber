@@ -104,7 +104,6 @@ describe("FileLogger", () => {
   });
 
   test("swallows I/O errors so they never reach the caller", async () => {
-    const logger = new FileLogger("debug");
     // Force the appendFile path to fail by pointing the day file at a path
     // that already exists as a directory.
     await rm(dir, { recursive: true });

@@ -8,11 +8,6 @@
  */
 import type { DiagnosticSink } from "@amagicpear/pichamber-shared";
 
-import { getLogger } from "./logger";
-
-/** Convenience: child logger for process-wide handlers. */
-const processLogger = () => getLogger("server.process");
-
 export const installGlobalHandlers = (logger: DiagnosticSink): void => {
   process.on("uncaughtException", (error, origin) => {
     logger.emit({
