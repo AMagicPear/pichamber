@@ -128,26 +128,20 @@ describe("OrcaRouter catalog fetch", () => {
     expect(calledHeaders?.Authorization).toBeUndefined();
   });
 
-  test("falls back to the local gateway models on HTTP errors", async () => {
+  test("surfaces HTTP errors instead of inventing fallback models", async () => {
     const fakeFetch = async () => new Response("boom", { status: 500 });
-    const models = await fetchOrcaChatModels("sk-test", fakeFetch);
-    expect(models.length).toBeGreaterThan(0);
-    for (const model of models) expect(model.id.startsWith("orcarouter/")).toBe(true);
+    await expect(fetchOrcaChatModels("sk-test", fakeFetch)).rejects.toThrow("HTTP 500");
   });
 
-  test("falls back to the local gateway models on an empty catalog", async () => {
+  test("surfaces an empty catalog instead of inventing fallback models", async () => {
     const fakeFetch = async () => new Response(JSON.stringify({ data: [] }), { status: 200 });
-    const models = await fetchOrcaChatModels("sk-test", fakeFetch);
-    expect(models.length).toBeGreaterThan(0);
-    for (const model of models) expect(model.id.startsWith("orcarouter/")).toBe(true);
+    await expect(fetchOrcaChatModels("sk-test", fakeFetch)).rejects.toThrow("empty chat model catalog");
   });
 
-  test("propagates network failures to the fallback table", async () => {
+  test("propagates network failures", async () => {
     const fakeFetch = async () => {
       throw new Error("network down");
     };
-    const models = await fetchOrcaChatModels("sk-test", fakeFetch);
-    expect(models.length).toBeGreaterThan(0);
-    expect(models.every((m) => m.id.startsWith("orcarouter/"))).toBe(true);
+    await expect(fetchOrcaChatModels("sk-test", fakeFetch)).rejects.toThrow("network down");
   });
 });

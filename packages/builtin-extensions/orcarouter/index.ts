@@ -15,9 +15,8 @@
  * capability=chat 是网关对「文本 chat / agent」的权威过滤：只返回可被 chat
  * 路由驱动的模型（排除 TTS / embedding / image-generation / openai-video 等
  * 专用 endpoint 与未加命名空间的杂项模型）。扩展在 Pi 初始化时拉取一次
- * （离线/失败时用本地静态回退表保证依然可选到模型，回退表只含 OrcaRouter
- * 自家 gateway 模型），并提供 `refreshModels` 让目录可被刷新。可调用模型只取
- * 真实 API 返回的 id，绝不由自由文本拼装。
+ * ，并提供 `refreshModels` 让目录可被刷新。可调用模型只取真实 API 返回的
+ * id；目录请求失败或返回空数据时显式报错，不用手写模型静默降级。
  */
 import type { ExtensionAPI, ProviderConfig } from "@earendil-works/pi-coding-agent";
 
@@ -95,48 +94,33 @@ export const toPiModel = (entry: OrcaModelCatalogEntry) => {
 
 // ─── 静态回退表 ─────────────────────────────────────────────────────────
 //
-// 目录拉取失败、超时或 key 尚未配置时使用。只含 OrcaRouter 自家 gateway
-// 模型（orcarouter/*），不冒充上游 vendor 模型。让用户在没有网络 / 还没
-// 配 key 时也能先选到 OrcaRouter 入口。
-const ORCAROUTER_FALLBACK_MODELS: ReturnType<typeof toPiModel>[] = [
-  "orcarouter/free",
-  "orcarouter/fusion-mini",
-  "orcarouter/fusion-flash",
-  "orcarouter/fusion",
-].map((id) => toPiModel({ id, architecture: { input_modalities: ["text"] } }));
-
-/** 把 `/v1/models` 的真实响应转成 Pi 模型清单。返回空数组时由调用方决定
- *  回退策略（fetchOrcaChatModels 回退静态表）。独立成纯函数便于测试。 */
+/** 把 `/v1/models` 的真实响应转成 Pi 模型清单。独立成纯函数便于测试。 */
 export const toPiModelsFromCatalog = (entries: OrcaModelCatalogEntry[]): ReturnType<typeof toPiModel>[] =>
   entries.map(toPiModel);
 
 /** fetch 的最小结构签名（便于测试注入；生产用全局 fetch）。 */
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-/** 拉取 chat 可调用目录并转成 Pi 模型；失败时回退静态表（静默降级）。
- *  真实响应的 data[] 直接决定模型清单；任何异常都不拼装自由文本。
+/** 拉取 chat 可调用目录并转成 Pi 模型。失败与空目录都显式抛错，
+ *  让设置页展示 auth/network/empty 状态并由用户重试；只有真实 API 响应可进入缓存。
  *  `fetchFn` 仅用于测试注入。 */
 export const fetchOrcaChatModels = async (
   apiKey: string | undefined,
   fetchFn: FetchLike = fetch,
 ): Promise<ReturnType<typeof toPiModel>[]> => {
-  try {
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const url = new URL("/v1/models", ORCAROUTER_BASE_URL);
-    url.searchParams.set("capability", "chat");
-    const response = await fetchFn(url, {
-      headers,
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-    const payload = (await response.json()) as OrcaModelCatalogResponse;
-    const entries = payload.data ?? [];
-    if (entries.length === 0) return ORCAROUTER_FALLBACK_MODELS;
-    return toPiModelsFromCatalog(entries);
-  } catch {
-    return ORCAROUTER_FALLBACK_MODELS;
-  }
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const url = new URL("/v1/models", ORCAROUTER_BASE_URL);
+  url.searchParams.set("capability", "chat");
+  const response = await fetchFn(url, {
+    headers,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`OrcaRouter model catalog returned HTTP ${response.status}`);
+  const payload = (await response.json()) as OrcaModelCatalogResponse;
+  const entries = payload.data ?? [];
+  if (entries.length === 0) throw new Error("OrcaRouter returned an empty chat model catalog");
+  return toPiModelsFromCatalog(entries);
 };
 
 /** 从刷新上下文里解析 API key：先存 credential（Settings 里填的 key 走
@@ -158,8 +142,8 @@ export default async function (pi: ExtensionAPI): Promise<void> {
     apiKey: `\${${ORCAROUTER_API_KEY_ENV}}`,
     api: "openai-completions",
     // Load once while Pi initializes the extension. This gives every new
-    // session a complete catalog before pichamber snapshots available models;
-    // fetchOrcaChatModels falls back locally when the key is unavailable.
+    // session a complete catalog sourced exclusively from the gateway before
+    // pichamber snapshots available models.
     models: await fetchOrcaChatModels(process.env[ORCAROUTER_API_KEY_ENV]),
     refreshModels: async (context) => {
       const refreshed = await fetchOrcaChatModels(apiKeyFromContext(context));

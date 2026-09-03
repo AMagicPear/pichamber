@@ -30,6 +30,11 @@ import { useDictation } from "@/composables/useDictation";
 import { pushErrorToast } from "@/stores/extensionUi";
 import { MorphIcon } from "morphicons/vue";
 import { lucideIcon } from "@/components/ui/morphIcons";
+import {
+  modelsForComposerInput,
+  selectedModelForComposerInput,
+  supportsImageInput,
+} from "@/components/ui/modelCapabilities";
 
 const { t } = useI18n();
 
@@ -393,11 +398,13 @@ const openFiles = () => {
 
 const pendingCount = computed(() => props.pending.steering.length + props.pending.followUp.length);
 
-/** 当前选中的模型被明确声明为不支持图片输入（Pi 元数据里 `input` 只有
- *  text，如文本专用模型）。`input` 未声明的运行时（如 RPC）不算——允许发送，
- *  由服务端裁决。发送前按需换用支持图片的模型即可。 */
+const needsImageInput = computed(() => images.value.length > 0);
+/** 附图时只把目录明确标记为 image input 的模型传入选择器；缺失能力
+ *  元数据的模型 fail closed。已选文本模型从选择器清空，并由发送 guard 阻止误发。 */
+const selectableModels = computed(() => modelsForComposerInput(props.availableModels, needsImageInput.value));
+const selectableModel = computed(() => selectedModelForComposerInput(props.model, needsImageInput.value));
 const selectedModelRejectsImages = computed(
-  () => images.value.length > 0 && props.model?.input != null && !props.model.input.includes("image"),
+  () => needsImageInput.value && !supportsImageInput(props.model),
 );
 /** 结构化 widget（非 lines）进活动卡片区；lines 走状态脚注（见下）。 */
 type CardEntry = {
@@ -565,7 +572,7 @@ const placeholder = computed(() => {
             </div>
             <div class="composer__footer-trailing">
               <div class="composer__models">
-                <ModelSelector :model="model" :available-models="availableModels"
+                <ModelSelector :model="selectableModel" :available-models="selectableModels"
                   @select="emit('selectModel', $event)" />
                 <ThinkingLevelSelector :level="thinkingLevel" :available-levels="availableThinkingLevels"
                   @select="emit('selectThinkingLevel', $event)" />
