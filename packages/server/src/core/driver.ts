@@ -71,12 +71,13 @@ const emptyUsage = () => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cac
 const numberFormat = new Intl.NumberFormat("en-US");
 const formatPercent = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
 
-const descriptor = (model: { provider: string; id: string; name?: string; reasoning?: boolean }, name = model.provider): ModelDescriptor => ({
+const descriptor = (model: { provider: string; id: string; name?: string; reasoning?: boolean; input?: Array<"text" | "image"> }, name = model.provider): ModelDescriptor => ({
   provider: model.provider,
   providerName: name,
   id: model.id,
   name: model.name || model.id,
   reasoning: Boolean(model.reasoning),
+  input: model.input,
 });
 
 const sdkModelState = (session: AgentSession) => {

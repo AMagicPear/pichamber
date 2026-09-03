@@ -111,6 +111,8 @@ const applyGoalPrefix = () => {
 
 const pendingDictationSend = ref<{ behavior?: "steer" | "followUp" } | null>(null);
 const emitSendNow = (behavior?: "steer" | "followUp") => {
+  // Fail closed: never send attachments to a model that is declared text-only.
+  if (selectedModelRejectsImages.value) return;
   applyGoalPrefix();
   emit("send", behavior);
 };
@@ -390,6 +392,13 @@ const openFiles = () => {
 };
 
 const pendingCount = computed(() => props.pending.steering.length + props.pending.followUp.length);
+
+/** 当前选中的模型被明确声明为不支持图片输入（Pi 元数据里 `input` 只有
+ *  text，如文本专用模型）。`input` 未声明的运行时（如 RPC）不算——允许发送，
+ *  由服务端裁决。发送前按需换用支持图片的模型即可。 */
+const selectedModelRejectsImages = computed(
+  () => images.value.length > 0 && props.model?.input != null && !props.model.input.includes("image"),
+);
 /** 结构化 widget（非 lines）进活动卡片区；lines 走状态脚注（见下）。 */
 type CardEntry = {
   widget: Exclude<ExtensionWidget, { kind: "lines" }>;
@@ -511,6 +520,9 @@ const placeholder = computed(() => {
                 />
               </div>
             </div>
+            <p v-if="selectedModelRejectsImages" class="composer__images-warning" role="alert">
+              {{ t('composer.modelRejectsImages') }}
+            </p>
           </div>
           <div v-if="pendingCount" class="composer__queue">
             <div v-for="(message, index) in pending.steering" :key="`steer:${index}:${message}`">
@@ -574,8 +586,9 @@ const placeholder = computed(() => {
                 <StopIcon />
               </IconButton>
               <IconButton size="compact"
-                :label="working ? (submitMode === 'steer' ? t('composer.steerAgent') : t('composer.queueFollowUp')) : t('composer.send')"
-                :disabled="!canSend && !isDictating" @click="emitSend(submitMode)">
+                :label="selectedModelRejectsImages ? t('composer.modelRejectsImages') : (working ? (submitMode === 'steer' ? t('composer.steerAgent') : t('composer.queueFollowUp')) : t('composer.send'))"
+                :disabled="!canSend && !isDictating || selectedModelRejectsImages"
+                @click="emitSend(submitMode)">
                 <SendIcon />
               </IconButton>
             </div>
@@ -757,6 +770,14 @@ const placeholder = computed(() => {
   align-items: center;
   gap: 7px;
   padding: 0 12px 10px;
+}
+
+.composer__images-warning {
+  width: 100%;
+  margin: 0;
+  color: var(--ui-status-text);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .composer__image {
