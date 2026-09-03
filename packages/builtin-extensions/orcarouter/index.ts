@@ -92,7 +92,7 @@ export const toPiModel = (entry: OrcaModelCatalogEntry) => {
   };
 };
 
-// ─── 静态回退表 ─────────────────────────────────────────────────────────
+// ─── 实时模型目录 ───────────────────────────────────────────────────────
 //
 /** 把 `/v1/models` 的真实响应转成 Pi 模型清单。独立成纯函数便于测试。 */
 export const toPiModelsFromCatalog = (entries: OrcaModelCatalogEntry[]): ReturnType<typeof toPiModel>[] =>
