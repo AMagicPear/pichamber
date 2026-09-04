@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import type { ImageNodeProps } from "markstream-vue";
 import ImageThumbnail from "./ImageThumbnail.vue";
 import { workspace } from "@/stores/workspace";
 
-const props = defineProps<Pick<ImageNodeProps, "node">>();
+/** Structural peek at the image node so we don't type-import markstream's
+ *  ImageNodeProps into defineProps (the SFC compiler can't resolve it
+ *  without an fs option, which the @vitejs/plugin-vue + bun + rolldown
+ *  pipeline doesn't supply — see LocalFileLink.vue for the same fix). */
+type ImageNode = {
+  src: string;
+  alt: string;
+  title: string | null;
+};
+
+const props = defineProps<{ node: ImageNode }>();
 
 const src = computed(() => {
   const value = props.node.src;
