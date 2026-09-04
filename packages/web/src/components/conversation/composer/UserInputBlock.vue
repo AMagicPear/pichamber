@@ -18,6 +18,7 @@ import ComposerSuggestions from "@/components/conversation/composer/ComposerSugg
 import ModelSelector from "@/components/ui/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/ui/ThinkingLevelSelector.vue";
 import ComposerSurfaceStack from "@/components/conversation/composer/ComposerSurfaceStack.vue";
+import SendModeToggle from "@/components/conversation/composer/SendModeToggle.vue";
 import ActivityPanel from "@/components/activity/ActivityPanel.vue";
 import ActivityToggle from "@/components/activity/ActivityToggle.vue";
 import { messageText } from "@/components/conversation/messages/messageContent";
@@ -559,13 +560,13 @@ const placeholder = computed(() => {
                   @select="emit('selectThinkingLevel', $event)" />
               </div>
               <!-- Mode toggle lives next to the action buttons now that it's
-               only meaningful while the agent is busy. -->
-              <div v-if="working" class="composer__mode" role="tablist" :aria-label="t('composer.sendMode')">
-                <button type="button" role="tab" :aria-selected="submitMode === 'steer'"
-                  :class="{ 'is-active': submitMode === 'steer' }" @click="submitMode = 'steer'">{{ t('composer.steer') }}</button>
-                <button type="button" role="tab" :aria-selected="submitMode === 'followUp'"
-                  :class="{ 'is-active': submitMode === 'followUp' }" @click="submitMode = 'followUp'">{{ t('composer.followUp') }}</button>
-              </div>
+               only meaningful while the agent is busy. The indicator span
+               below is purely visual: it slides between the two tabs via
+               CSS variables synced to the active button's rect, so the
+               tabs themselves only own their text colour. -->
+              <SendModeToggle v-if="working" v-model="submitMode"
+                :steer-label="t('composer.steer')" :follow-up-label="t('composer.followUp')"
+                :aria-label="t('composer.sendMode')" />
               <IconButton size="compact" :label="dictationLabel" :pressed="isDictating"
                 :tone="isDictating ? 'danger' : undefined" :disabled="!dictation.supported" @click="dictation.toggle">
                 <MorphIcon :icon="lucideIcon(isDictating ? 'square' : 'mic')" spring="snappy" reduced-motion="user" />
@@ -798,6 +799,7 @@ const placeholder = computed(() => {
   .composer__dictation-wave i {
     animation: none;
   }
+
 }
 
 /* Pending messages are separated from the editor by a quiet divider. */
@@ -961,38 +963,4 @@ const placeholder = computed(() => {
   gap: 4px;
 }
 
-/* Mode toggle (busy-only): sits next to the action buttons so its meaning
- * ("this is how your next message goes") is obvious. Slimmer than the
- * previous segmented control so it doesn't compete with the icons. */
-.composer__mode {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  height: 24px;
-  padding: 2px;
-  border-radius: 7px;
-  background: var(--ui-surface-selected);
-  margin-left: 2px;
-}
-
-.composer__mode button {
-  height: 20px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--ui-text-muted);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.composer__mode button.is-active {
-  background: var(--ui-surface);
-  box-shadow: var(--ui-shadow-control);
-  color: var(--ui-text-strong);
-}
 </style>
