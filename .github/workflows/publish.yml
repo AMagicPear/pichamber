@@ -27,4 +27,5 @@ jobs:
       - run: bun run type-check
       - run: bun test
       - run: bun run build
-      - run: bun publish --access public
+      - run: mkdir -p /tmp/pichamber-package && bun pm pack --destination /tmp/pichamber-package
+      - run: npm publish /tmp/pichamber-package/*.tgz --access public
