@@ -566,7 +566,7 @@ const placeholder = computed(() => {
                tabs themselves only own their text colour. -->
               <SendModeToggle v-if="working" v-model="submitMode"
                 :steer-label="t('composer.steer')" :follow-up-label="t('composer.followUp')"
-                :aria-label="t('composer.sendMode')" />
+                :ariaLabel="t('composer.sendMode')" />
               <IconButton size="compact" :label="dictationLabel" :pressed="isDictating"
                 :tone="isDictating ? 'danger' : undefined" :disabled="!dictation.supported" @click="dictation.toggle">
                 <MorphIcon :icon="lucideIcon(isDictating ? 'square' : 'mic')" spring="snappy" reduced-motion="user" />

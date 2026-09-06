@@ -23,9 +23,9 @@
 		]
 	},
 	"peerDependencies": {
-		"@earendil-works/pi-agent-core": "*",
-		"@earendil-works/pi-ai": "*",
-		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-agent-core": "catalog:",
+		"@earendil-works/pi-ai": "catalog:",
+		"@earendil-works/pi-coding-agent": "catalog:",
 		"@earendil-works/pi-tui": "*",
 		"typebox": "*"
 	}
