@@ -27,7 +27,8 @@
     "url": "https://github.com/AMagicPear/pichamber/issues"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "packages/builtin-extensions/pi-apply-patch"
   ],
   "catalog": {
     "@earendil-works/pi-agent-core": "^0.85.1",

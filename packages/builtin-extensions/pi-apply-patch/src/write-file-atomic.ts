@@ -1,35 +1,61 @@
-import { rename, unlink, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, chmod, lstat, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 export type AtomicWriteOperations = {
-	writeFile: (filePath: string, content: string, encoding: "utf-8") => Promise<void>;
-	rename: (fromPath: string, toPath: string) => Promise<void>;
-	unlink: (filePath: string) => Promise<void>;
+	writeFile: (filePath: string, content: string, options: { encoding: "utf-8"; flag: "wx"; mode: number }) => Promise<void>;
+	 rename: (fromPath: string, toPath: string) => Promise<void>;
+	 unlink: (filePath: string) => Promise<void>;
+	access: typeof access;
+	chmod: typeof chmod;
+	lstat: typeof lstat;
+	realpath: typeof realpath;
+	stat: typeof stat;
 };
 
 const ATOMIC_WRITE_OPERATIONS: AtomicWriteOperations = {
+	access,
+	chmod,
+	lstat,
+	realpath,
+	stat,
 	writeFile,
 	rename,
 	unlink,
 };
 
-function hasErrorCode(error: unknown, code: string): boolean {
+const hasErrorCode = (error: unknown, code: string) => {
 	return Boolean(error && typeof error === "object" && "code" in error && error.code === code);
-}
+};
 
-export async function writeFileAtomic(
+export const writeFileAtomic = async (
 	absPath: string,
 	content: string,
+	mode?: number,
 	operations: AtomicWriteOperations = ATOMIC_WRITE_OPERATIONS,
-): Promise<void> {
-	const tempPath = `${absPath}.tmp.${process.pid}.${Math.random().toString(16).slice(2)}`;
-	await operations.writeFile(tempPath, content, "utf-8");
-	try {
-		await operations.rename(tempPath, absPath);
-	} catch (error) {
-		if (!hasErrorCode(error, "EEXIST")) {
-			throw error;
-		}
-		await operations.unlink(absPath);
-		await operations.rename(tempPath, absPath);
+) => {
+	const existing = await operations.lstat(absPath).catch((error: unknown) => {
+		if (hasErrorCode(error, "ENOENT")) return undefined;
+		throw error;
+	});
+	// Replace the referent, not the symlink itself. Dangling links fail without being destroyed.
+	const target = existing?.isSymbolicLink() ? await operations.realpath(absPath) : absPath;
+	if (existing) {
+		await operations.access(target, constants.W_OK);
+		mode = Number((await operations.stat(target)).mode) & 0o7777;
 	}
-}
+	const tempPath = join(dirname(target), `.apply-patch-${crypto.randomUUID()}`);
+	let written = false;
+	try {
+		await operations.writeFile(tempPath, content, { encoding: "utf-8", flag: "wx", mode: mode ?? 0o666 });
+		written = true;
+		if (mode !== undefined) await operations.chmod(tempPath, mode);
+		await operations.rename(tempPath, target);
+	} catch (error) {
+		// Never unlink the original, or a temporary file owned by another writer.
+		if (written || !hasErrorCode(error, "EEXIST")) {
+			await operations.unlink(tempPath).catch(() => {});
+		}
+		throw error;
+	}
+};

@@ -1,10 +1,14 @@
 {
 	"name": "@amagicpear/pichamber-builtin-apply-patch",
-	"version": "0.1.2",
+	"version": "0.2.0",
 	"description": "Codex-style apply_patch tool extension for the pi coding agent. Registers a freeform grammar patch tool for OpenAI GPT models and applies patches with Node path resolution.",
 	"type": "module",
 	"license": "MIT",
 	"private": true,
+	"scripts": {
+		"test": "bun test src",
+		"type-check": "tsc --noEmit"
+	},
 	"keywords": [
 		"pi",
 		"pi-mono",
@@ -26,7 +30,7 @@
 		"@earendil-works/pi-agent-core": "catalog:",
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
-		"@earendil-works/pi-tui": "*",
+		"@earendil-works/pi-tui": "^0.85.1",
 		"typebox": "*"
 	}
 }
