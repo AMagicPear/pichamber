@@ -132,10 +132,10 @@ export const listDirectory = async (sessionId?: string | null, path?: string) =>
   return await jsonOrThrow<ListResult>(r);
 };
 
-export const searchFiles = async (sessionId: string | null | undefined, query: string) => {
+export const searchFiles = async (sessionId: string | null | undefined, query: string, signal?: AbortSignal) => {
   const params = new URLSearchParams({ q: query });
   const qs = withSessionId(params, sessionId);
-  const r = await fetch(`${BASE}/fs/search?${qs}`);
+  const r = await fetch(`${BASE}/fs/search?${qs}`, { signal });
   return await jsonOrThrow<SearchResult>(r);
 };
 

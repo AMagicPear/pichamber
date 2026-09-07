@@ -981,7 +981,7 @@ const server = Bun.serve({
         const q = url.searchParams.get("q") ?? "";
         const sessionId = url.searchParams.get("sessionId");
         try {
-          return Response.json({ entries: await searchFiles(q, 60, await requestCwd(sessionId)) });
+          return Response.json({ entries: await searchFiles(q, 60, await requestCwd(sessionId), req.signal) });
         } catch (err) {
           return fsErrorResponse(err);
         }
