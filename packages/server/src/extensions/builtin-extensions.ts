@@ -48,6 +48,13 @@ export const builtinExtensions: BuiltinExtensionDef[] = [
     sourceDir: join(BUILTIN_EXTENSIONS_ROOT, "ark-agent-plan"),
   },
   {
+    id: "orcarouter",
+    name: "OrcaRouter",
+    description:
+      "Registers OrcaRouter as a provider. Model list is fetched dynamically from the OrcaRouter gateway catalog (GET /v1/models) and filtered to chat-capable models.",
+    sourceDir: join(BUILTIN_EXTENSIONS_ROOT, "orcarouter"),
+  },
+  {
     id: "apply-patch",
     name: "Apply Patch",
     description:

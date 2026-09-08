@@ -59,6 +59,7 @@ import type { DisabledSkillInfo, ExtensionsOverview, LoadedExtensionInfo, Loaded
 import {
   getPiBehaviorSettings,
   listPiProviders,
+  refreshPiProviderModels,
   removePiProviderCredential,
   setPiProviderApiKey,
   updatePiBehaviorSettings,
@@ -254,6 +255,21 @@ const server = Bun.serve({
         const result = await getSdkSession(sessionId);
         if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
         return Response.json({ providers: listPiProviders(result.session) });
+      },
+    },
+    "/api/pi/providers/:provider/models/refresh": {
+      POST: async (req) => {
+        const sessionId = new URL(req.url).searchParams.get("sessionId");
+        if (!sessionId) return Response.json({ error: "sessionId required" }, { status: 400 });
+        try {
+          const result = await getSdkSession(sessionId);
+          if ("error" in result) return Response.json({ error: result.error }, { status: result.status });
+          const providers = await refreshPiProviderModels(result.session, req.params.provider);
+          refreshSessionModelState(sessionId);
+          return Response.json({ providers });
+        } catch (error) {
+          return Response.json({ error: toMessage(error) }, { status: 400 });
+        }
       },
     },
     "/api/pi/providers/:provider/credential": {

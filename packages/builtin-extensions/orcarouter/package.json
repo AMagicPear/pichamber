@@ -1,0 +1,14 @@
+{
+  "name": "@amagicpear/pichamber-builtin-orcarouter",
+  "version": "0.1.0",
+  "description": "Registers OrcaRouter as a pi provider (dynamic model list via GET https://api.orcarouter.ai/v1/models).",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:"
+  }
+}

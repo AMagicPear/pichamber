@@ -17,6 +17,20 @@ describe("builtin extensions", () => {
     expect(def.sourceDir).toBeTruthy();
   });
 
+  test("exposes the orcarouter built-in", () => {
+    const def = getBuiltinExtension("orcarouter");
+    expect(def.name).toBe("OrcaRouter");
+    expect(existsSync(join(def.sourceDir, "index.ts"))).toBe(true);
+    expect(existsSync(join(def.sourceDir, "package.json"))).toBe(true);
+  });
+
+  test("orcarouter source registers the provider with the gateway base URL", () => {
+    const source = readFileSync(join(getBuiltinExtension("orcarouter").sourceDir, "index.ts"), "utf8");
+    expect(source).toContain("pi.registerProvider(ORCAROUTER_PROVIDER_ID, config)");
+    expect(source).toContain("https://api.orcarouter.ai/v1");
+    expect(source).toContain("capability=chat");
+  });
+
   test("exposes the apply-patch built-in with its source files", () => {
     const def = getBuiltinExtension("apply-patch");
     expect(def.name).toBe("Apply Patch");

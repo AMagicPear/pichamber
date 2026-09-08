@@ -89,6 +89,10 @@ export type ModelDescriptor = {
   name: string;
   /** Whether the model supports extended thinking. */
   reasoning: boolean;
+  /** Input modalities Pi's registry declares for this model (`text` and/or
+   *  `image`). Absent when the runtime has no modality metadata (e.g. RPC);
+   *  capability-sensitive controls must fail closed for the requested input. */
+  input?: Array<"text" | "image">;
 };
 
 export type ThinkingState = {
