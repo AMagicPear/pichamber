@@ -1103,7 +1103,7 @@ onMounted(async () => {
   height: 12px;
   margin-right: 4px;
   vertical-align: middle;
-  color: var(--ui-warning, #b88217);
+  color: var(--ui-warning);
 }
 
 .session-list__missing-cwd-icon :deep(svg) {
