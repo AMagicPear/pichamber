@@ -46,9 +46,9 @@ const jsonOrThrow = async <T>(res: Response): Promise<T> => {
   return data as T;
 };
 
-// `catch` variables are `unknown` since TS 4.0. Every throw in this codebase
-// is an `Error`, so this narrowing is the single conversion site.
-export const toMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
+// `toMessage` is shared with the server so both narrow `unknown` identically.
+// Re-exported from `@/api/client` because that is where most call sites import it.
+export { toMessage } from "@amagicpear/pichamber-shared";
 
 /** Append an optional `sessionId` query param. Omitted entirely when the
  *  session id is falsy — a bare `sessionId=` is meaningless to the server,

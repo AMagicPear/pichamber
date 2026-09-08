@@ -6,6 +6,7 @@
  * re-export，消费方只 import 这一个入口。
  */
 export * from "./paths";
+export * from "./error";
 export * from "./session";
 export * from "./providers";
 export * from "./git";

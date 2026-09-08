@@ -1,6 +1,6 @@
-// `catch` variables are `unknown` since TS 4.0. This is the single
-// narrowing site — every throw in this codebase is an `Error`.
-export const toMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
+// `toMessage` lives in shared so the server and the browser narrow `unknown`
+// the same way; re-exported here so existing `../error` imports keep working.
+export { toMessage } from "@amagicpear/pichamber-shared";
 
 export class RuntimeModeError extends Error {
   readonly status = 409;
