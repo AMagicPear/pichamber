@@ -148,17 +148,19 @@ type SessionGroup = {
 };
 
 /** cwd → comparison key. Trims trailing separators (already done by
- *  `projectPath`), and on Windows also lowercases — NTFS is case-
- *  insensitive so `C:\Users\foo\Bar` and `c:\users\foo\bar` refer to
- *  the same directory. Without this, a cross-project fork on Windows
- *  would be misattributed whenever server-side realpath returns a
- *  different casing than the source session's cwd. */
+ *  `projectPath`), and lowercases Windows paths — NTFS is case-insensitive,
+ *  so `C:\Users\foo\Bar` and `c:\users\foo\bar` refer to the same
+ *  directory. Without this, a cross-project fork on Windows would be
+ *  misattributed whenever server-side realpath returns a different casing
+ *  than the source session's cwd.
+ *
+ *  Windows-ness is decided from the path shape, not the browser's
+ *  userAgent: the paths come from the server, so a Mac browser driving a
+ *  Windows backend would otherwise compare them case-sensitively. */
+const isWindowsPath = (path: string) => /^[A-Za-z]:[\\/]/.test(path) || path.includes("\\");
 const cwdCompareKey = (cwd: string) => {
   const trimmed = projectPath(cwd);
-  if (typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent ?? "")) {
-    return trimmed.toLowerCase();
-  }
-  return trimmed;
+  return isWindowsPath(trimmed) ? trimmed.toLowerCase() : trimmed;
 };
 
 /** Walk `parentSessionPath` upward until we hit a session that has no
