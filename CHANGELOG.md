@@ -2,6 +2,82 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.0] - 2026-09-08
+
+### Added
+
+- Bundled `apply_patch` tool upgraded to track upstream Codex conventions
+  (improved failure semantics, atomic writes via `write-file-atomic`, and
+  an expanded test suite).
+
+### Changed
+
+- Web design tokens centralised in `styles/tokens.css` — previously colors
+  lived in `App.vue` and the `--ui-warning*` tokens were referenced but
+  never declared.
+- Server route table split out of `index.ts` (1132 → 165 lines): routes
+  organised by domain (`routes/system.ts`, `sessions.ts`, `pi.ts`,
+  `settings.ts`, `pty.ts`, `git.ts`, `fs.ts`, `diagnostics.ts`), with
+  shared session resolution, error mapping, and the SDK-runtime guard
+  centralised in `routes/http.ts`. Route paths and response behaviour
+  unchanged (verified route-for-route across 51 paths).
+- Sidebar session grouping / sort / search extracted into a
+  `useSessionGroups()` composable with tests covering grandchild
+  attribution, cross-project fork boundaries, Windows path grouping,
+  search, and pagination. `SessionSidebar.vue` dropped from 1222 → 987
+  lines.
+- Shared `toMessage` helper moved into `@pichamber/shared` so the server
+  and web consume the same conversion.
+- Session stats now formatted in the active UI language instead of the
+  runtime locale.
+- CLI daemon / command boundary now strongly typed.
+- File-tree shared styles extracted from `FileTree.vue` into
+  `file-tree.css`, now reused by `FileTree.vue`, `FileTreeNode.tsx`,
+  and `FileSearchResult.vue`.
+
+### Fixed
+
+- Server no longer leaks file descriptors in long-running sessions
+  (was accumulating massive fd counts in the background).
+- Dev-only `/debug` message-samples route was shipping in production;
+  now gated behind `import.meta.env.DEV` and lazy-loaded so it is
+  tree-shaken out.
+- `cwdCompareKey` correctly decides Windows case-insensitivity from the
+  host's path shape rather than the browser's `navigator.platform`.
+
+### Documentation
+
+- Documented intentional convention exceptions in `AGENTS.md`
+  (`pi-apply-patch` upstream alignment, `ConversationMessages.vue`
+  global styles, `file-tree.css` cross-component reuse).
+
+## [1.1.3] - 2026-09-06
+
+### Fixed
+
+- Release: `npm publish` now ships the manifest produced by `bun pm pack`
+  instead of the workspace manifest.
+
+## [1.1.2] - 2026-09-06
+
+### Fixed
+
+- Release: catalogued dependencies (`@earendil-works/*`, `bun-pty`) are
+  now published with the package instead of being stripped from the
+  packed output.
+
+## [1.1.1] - 2026-09-06
+
+### Fixed
+
+- Newly installed `pichamber` CLI was non-executable on first install
+  (entry file lost its executable bit during packaging).
+- Send-mode toggle in the conversation composer no longer drifts while
+  the user drags across it; pointer-drag state now follows the toggle
+  consistently.
+- `<MarkdownImage>` prop type no longer resolves to an unresolved
+  inference (`unknown`) when the image source is undefined.
+
 ## [1.1.0] - 2026-09-02
 
 ### Added
