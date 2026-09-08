@@ -445,6 +445,8 @@ export default {
     dropImageIndicator: "拖放图片以附加",
     shelfFiles: "文件",
     shelfCommands: "Pi 命令",
+    builtinCompact: "手动压缩会话上下文",
+    builtinReload: "重新加载扩展、提示词、主题和上下文文件",
     commandSource: {
       extension: "扩展",
       skill: "技能",
@@ -616,6 +618,11 @@ export default {
     tool: "工具",
     custom: "{name}",
     failed: "{name} 失败",
+  },
+
+  notifications: {
+    sessionSettled: "Agent 已完成回复。",
+    sessionSettledModel: "{model} 已完成回复。",
   },
 
   language: {

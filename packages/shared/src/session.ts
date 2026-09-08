@@ -108,47 +108,37 @@ export type LastAssistantUsage = {
   cacheWrite: number;
 };
 
-/** Pre-computed, ready-to-render session stats. The server builds this from
- *  pi's `AgentSession` so the client doesn't have to duplicate the
- *  formatting (date, percent, cost, cache hit, etc.). Display strings are
- *  already produced; the view also carries the raw values so the client
- *  can re-format if it ever needs to. */
+/** Raw session stats the server computes from pi's `AgentSession`.
+ *
+ *  Everything here is locale-neutral data — counts, ratios, a timestamp.
+ *  Display strings (date, grouped numbers, percent) are produced by the
+ *  client in the active UI language, so a Chinese user sees Chinese dates
+ *  and number grouping. The server owns the *facts*; the client owns the
+ *  *presentation*. */
 export type SessionStatsView = {
   /** Active model descriptor; mirrors the standalone `state.model` field
    *  but bundled so the Context pane can render without an extra lookup. */
   model: ModelDescriptor | undefined;
-  /** Localized "Jul 20, 2026, 9:10 AM" string; empty when no entry has
-   *  been recorded yet. */
-  modified: string;
+  /** Epoch ms of the most recent session entry; null when none recorded. */
+  modified: number | null;
   context: {
     /** Estimated context tokens; null when unknown (e.g. right after a
      *  compaction, before the next assistant turn reports usage). */
     tokens: number | null;
     contextWindow: number;
-    /** "0.0%"–"100.0%" formatted to one decimal; null while `tokens` is null. */
-    percent: string | null;
-    /** Comma-grouped token count, e.g. "95,881"; "—" while unknown. */
-    tokensText: string;
+    /** Context fill ratio (0..1); null while `tokens` is unknown. */
+    percent: number | null;
   };
   messages: {
     total: number;
     user: number;
     assistant: number;
-    /** Comma-grouped render of each count, e.g. "1,234". The server owns
-     *  the formatting so the client doesn't need a locale-specific
-     *  number formatter (project rule: display strings come from the
-     *  server). */
-    totalText: string;
-    userText: string;
-    assistantText: string;
   };
   cost: number;
   lastAssistant: LastAssistantUsage;
-  /** Comma-grouped render of `lastAssistant`, one string per bucket,
-   *  for the same reason `messages.*Text` exists. */
-  lastAssistantText: { [K in keyof LastAssistantUsage]: string };
-  /** Cache hit rate, e.g. "99.4%". `cacheRead / (cacheRead + input)`. */
-  cacheHit: string;
+  /** Cache hit ratio (0..1): `cacheRead / (cacheRead + input)`; null when no
+   *  input tokens have been recorded. */
+  cacheHit: number | null;
 };
 
 /** Ordered messages in the session stream. A client applies only this union

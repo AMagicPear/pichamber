@@ -1,5 +1,6 @@
 import type { SourceInfo } from "@earendil-works/pi-coding-agent";
 import type { RuntimeSlashCommand } from "@amagicpear/pichamber-shared";
+import { i18n } from "@/i18n";
 
 /** 浏览器包不能引入 pi 运行时（会带 `process` 等 Node 依赖），
  *  与 pi 的 `createSyntheticSourceInfo` 输出同形的本地工厂。 */
@@ -14,7 +15,7 @@ const builtinSourceInfo = (name: string): SourceInfo => ({
  * 前端内置 slash 命令。
  *
  * 拥有两件事：
- * 1. GUI 内置命令 shelf（`BUILTIN_COMMANDS`）：进 `shelfCommands` 让用户在
+ * 1. GUI 内置命令 shelf（`builtinCommands()`）：进 `shelfCommands` 让用户在
  *    输入框里能发现 /compact、/reload。只列有干净后端动作的 builtin——
  *    TUI 专属流程（/new、/name、/resume、/fork、/clone）在 web 里没有对应
  *    后端函数（提交只会把文本原样发给模型），所以不进 shelf。
@@ -27,17 +28,17 @@ const builtinSourceInfo = (name: string): SourceInfo => ({
 /** 有 GUI 直接动作的 builtin，按匹配优先级排列。 */
 const GUI_BUILTIN_COMMANDS = ["reload", "compact"] as const;
 
-/** 命令选择器 shelf 里的内置条目（描述对齐 TUI 的 builtin 提示）。 */
-export const BUILTIN_COMMANDS: RuntimeSlashCommand[] = [
+/** 命令选择器 shelf 里的内置条目（描述随语言变化，故每次调用时解析）。 */
+export const builtinCommands = (): RuntimeSlashCommand[] => [
   {
     name: "compact",
-    description: "Manually compact the session context",
+    description: i18n.global.t("composer.builtinCompact"),
     source: "builtin",
     sourceInfo: builtinSourceInfo("compact"),
   },
   {
     name: "reload",
-    description: "Reload extensions, prompts, themes, and context files",
+    description: i18n.global.t("composer.builtinReload"),
     source: "builtin",
     sourceInfo: builtinSourceInfo("reload"),
   },

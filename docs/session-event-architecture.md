@@ -33,10 +33,16 @@ server never invents a parallel event shape.
 
 The genuinely expensive derived state is still computed on Bun (server-side)
 and pushed as compact `state` frames: the model inventory, thinking available
-levels, session stats (`buildContextEntries` + formatting), extension/tool
-resources, and the compaction-merged `pending` (a server-side buffer the
-browser cannot derive). The browser only performs O(1) ref assignments for
-state fields — it never recomputes heavy derivations.
+levels, raw session stats (`buildContextEntries` + token/cost facts), the
+extension/tool resources, and the compaction-merged `pending` (a server-side
+buffer the browser cannot derive). The browser only performs O(1) ref
+assignments for state fields — it never recomputes heavy derivations.
+
+Display strings (dates, grouped numbers, percentages) are NOT part of the
+wire protocol. The server sends locale-neutral facts (counts, ratios, epoch
+ms); the client formats them in the active UI language via
+`packages/web/src/utils/format.ts`. The server owns the facts; the client
+owns the presentation.
 
 ## Message Classes
 

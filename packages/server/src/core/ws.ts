@@ -272,20 +272,16 @@ const initialModelState = (): Pick<
   thinking: { level: "off", availableLevels: ["off"] },
   stats: {
     model: undefined,
-    modified: "",
-    context: { tokens: null, contextWindow: 0, percent: null, tokensText: "—" },
+    modified: null,
+    context: { tokens: null, contextWindow: 0, percent: null },
     messages: {
       total: 0,
       user: 0,
       assistant: 0,
-      totalText: "0",
-      userText: "0",
-      assistantText: "0",
     },
     cost: 0,
     lastAssistant: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
-    lastAssistantText: { input: "0", output: "0", reasoning: "0", cacheRead: "0", cacheWrite: "0" },
-    cacheHit: "0.0%",
+    cacheHit: null,
   },
   resources: {
     commands: [],
@@ -298,24 +294,21 @@ const initialModelState = (): Pick<
 
 /** Cheap shallow diff on the fields the client actually renders. Skips the
  *  broadcast when nothing visible changed, so idle ticks don't wake the UI. */
-const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean => {
-  if (prev.modified !== next.modified) return true;
-  if (prev.context.tokens !== next.context.tokens) return true;
-  if (prev.context.percent !== next.context.percent) return true;
-  if (prev.context.tokensText !== next.context.tokensText) return true;
-  if (prev.context.contextWindow !== next.context.contextWindow) return true;
-  if (prev.messages.total !== next.messages.total) return true;
-  if (prev.messages.user !== next.messages.user) return true;
-  if (prev.messages.assistant !== next.messages.assistant) return true;
-  if (prev.cost !== next.cost) return true;
-  if (prev.cacheHit !== next.cacheHit) return true;
-  if (prev.lastAssistant.input !== next.lastAssistant.input) return true;
-  if (prev.lastAssistant.output !== next.lastAssistant.output) return true;
-  if (prev.lastAssistant.reasoning !== next.lastAssistant.reasoning) return true;
-  if (prev.lastAssistant.cacheRead !== next.lastAssistant.cacheRead) return true;
-  if (prev.lastAssistant.cacheWrite !== next.lastAssistant.cacheWrite) return true;
-  return false;
-};
+const statsChanged = (prev: SessionStatsView, next: SessionStatsView): boolean =>
+  prev.modified !== next.modified ||
+  prev.cost !== next.cost ||
+  prev.cacheHit !== next.cacheHit ||
+  prev.context.tokens !== next.context.tokens ||
+  prev.context.percent !== next.context.percent ||
+  prev.context.contextWindow !== next.context.contextWindow ||
+  prev.messages.total !== next.messages.total ||
+  prev.messages.user !== next.messages.user ||
+  prev.messages.assistant !== next.messages.assistant ||
+  prev.lastAssistant.input !== next.lastAssistant.input ||
+  prev.lastAssistant.output !== next.lastAssistant.output ||
+  prev.lastAssistant.reasoning !== next.lastAssistant.reasoning ||
+  prev.lastAssistant.cacheRead !== next.lastAssistant.cacheRead ||
+  prev.lastAssistant.cacheWrite !== next.lastAssistant.cacheWrite;
 
 /** `reconcile` rebuilds the official `AgentMessage[]` from the authoritative
  *  session entries (compaction-aware, via pi's own conversion helpers). */

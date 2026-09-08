@@ -14,7 +14,7 @@ import type {
   SessionStatsView,
   ThinkingState,
 } from "@amagicpear/pichamber-shared";
-import { BUILTIN_COMMANDS } from "@/composables/builtin-commands";
+import { builtinCommands } from "@/composables/builtin-commands";
 import { applyExtensionUiRequest, resetExtensionUi } from "@/stores/extensionUi";
 import type { SessionEffect } from "@/stores/sessionEffects";
 
@@ -48,7 +48,7 @@ export const resources = ref<RuntimeResources>({
  *  skill 命令。builtin 定义在 `@/composables/builtin-commands`，服务端不再
  * 下发它们。 */
 export const shelfCommands = computed<RuntimeSlashCommand[]>(() => [
-  ...BUILTIN_COMMANDS,
+  ...builtinCommands(),
   ...resources.value.commands,
 ]);
 

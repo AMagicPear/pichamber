@@ -35,7 +35,7 @@ const localeState = persistedState<{ preference: LocaleId }>(
  *  "system" using the browser language. */
 const resolveLocale = (preference: LocaleId): "en" | "zh" => {
   if (preference !== "system") return preference;
-  if (typeof navigator === "undefined") return "en";
+  if (typeof navigator === "undefined" || typeof navigator.language !== "string") return "en";
   return navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
 };
 

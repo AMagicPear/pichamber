@@ -458,6 +458,8 @@ export default {
     dropImageIndicator: "Drop image to attach",
     shelfFiles: "Files",
     shelfCommands: "Pi commands",
+    builtinCompact: "Manually compact the session context",
+    builtinReload: "Reload extensions, prompts, themes, and context files",
     commandSource: {
       extension: "Extension",
       skill: "Skill",
@@ -630,6 +632,11 @@ export default {
     tool: "Tool",
     custom: "{name}",
     failed: "{name} failed",
+  },
+
+  notifications: {
+    sessionSettled: "Agent finished responding.",
+    sessionSettledModel: "{model} finished responding.",
   },
 
   language: {

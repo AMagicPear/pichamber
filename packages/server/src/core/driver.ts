@@ -68,8 +68,6 @@ export interface SessionDriver {
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
 }
 const emptyUsage = () => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
-const numberFormat = new Intl.NumberFormat("en-US");
-const formatPercent = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
 
 const descriptor = (model: { provider: string; id: string; name?: string; reasoning?: boolean }, name = model.provider): ModelDescriptor => ({
   provider: model.provider,
@@ -92,28 +90,22 @@ const sdkModelState = (session: AgentSession) => {
 
 const rpcStatsView = (stats: SessionStats, model: ModelDescriptor | undefined): SessionStatsView => {
   const totalRead = stats.tokens.cacheRead + stats.tokens.input;
-  const lastAssistant = emptyUsage();
   return {
     model,
-    modified: "",
+    modified: null,
     context: {
       tokens: stats.contextUsage?.tokens ?? null,
       contextWindow: stats.contextUsage?.contextWindow ?? 0,
-      percent: stats.contextUsage?.percent == null ? null : formatPercent(stats.contextUsage.percent / 100),
-      tokensText: stats.contextUsage?.tokens == null ? "—" : numberFormat.format(stats.contextUsage.tokens),
+      percent: stats.contextUsage?.percent == null ? null : stats.contextUsage.percent / 100,
     },
     messages: {
       total: stats.totalMessages,
       user: stats.userMessages,
       assistant: stats.assistantMessages,
-      totalText: numberFormat.format(stats.totalMessages),
-      userText: numberFormat.format(stats.userMessages),
-      assistantText: numberFormat.format(stats.assistantMessages),
     },
     cost: stats.cost,
-    lastAssistant,
-    lastAssistantText: { input: "0", output: "0", reasoning: "0", cacheRead: "0", cacheWrite: "0" },
-    cacheHit: totalRead > 0 ? formatPercent(stats.tokens.cacheRead / totalRead) : "0.0%",
+    lastAssistant: emptyUsage(),
+    cacheHit: totalRead > 0 ? stats.tokens.cacheRead / totalRead : null,
   };
 };
 
