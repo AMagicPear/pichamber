@@ -23,6 +23,8 @@ import folderOpenRaw from "lucide-static/icons/folder-open.svg?raw";
 import copyRaw from "lucide-static/icons/copy.svg?raw";
 import loaderCircleRaw from "lucide-static/icons/loader-circle.svg?raw";
 import micRaw from "lucide-static/icons/mic.svg?raw";
+import playRaw from "lucide-static/icons/play.svg?raw";
+import sendRaw from "lucide-static/icons/send.svg?raw";
 import CheckRaw from "lucide-static/icons/check.svg?raw";
 import panelLeftCloseRaw from "lucide-static/icons/panel-left-close.svg?raw";
 import panelLeft from "lucide-static/icons/panel-left.svg?raw";
@@ -59,6 +61,8 @@ const RAWS = {
   "chevron-up": chevronUpRaw,
   "loader-circle": loaderCircleRaw,
   mic: micRaw,
+  play: playRaw,
+  send: sendRaw,
   check: CheckRaw,
   "panel-left-close": panelLeftCloseRaw,
   "panel-left": panelLeft,

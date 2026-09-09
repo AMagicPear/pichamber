@@ -365,6 +365,28 @@ export const canSend = computed(
   () => connected.value && (Boolean(draft.value?.trim()) || images.value.length > 0),
 );
 
+/** 被打断/出错后的可继续状态：回合已结束（非 working），且最后一条
+ *  assistant 消息没有正常收尾。正常完成的回合以 stopReason "stop" 告终；
+ *  工具执行中被打断时 assistant 是 "toolUse"、尾部跟着错误 toolResult（
+ *  显示列表里是工具条目），所以从尾部扫过已结束的工具条目再看最后的
+ *  assistant 消息。compaction 摘要等其他消息类型都视为不可继续。 */
+export const canContinue = computed(() => {
+  if (working.value) return false;
+  const items = conversation.value;
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (!item) continue;
+    if (item.kind === "tool") {
+      if (item.tool.running) return false;
+      continue;
+    }
+    if (item.kind !== "message" || item.message.role !== "assistant") return false;
+    const stopReason = item.message.stopReason;
+    return stopReason === "aborted" || stopReason === "error" || stopReason === "toolUse" || stopReason === "length";
+  }
+  return false;
+});
+
 // ─── 消息帧应用（事件驱动）──────────────────────────────────────────
 // WS 层只负责把帧交给这里；本函数是客户端唯一的"官方事件处理"入口：
 // snapshot 重建、event 应用官方事件、state 落服务器算好的显示状态。

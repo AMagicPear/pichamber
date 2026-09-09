@@ -28,6 +28,7 @@ import { toMessage } from "@/api/client";
 import {
   activity,
   availableModels,
+  canContinue,
   canRestorePending,
   canSend,
   conversation,
@@ -59,6 +60,7 @@ const {
   abort,
   compact,
   connect,
+  continueTurn,
   disconnect,
   prompt,
   respondToExtension,
@@ -135,6 +137,7 @@ watch(
       v-model="draft"
       v-model:images="images"
       :can-send="canSend"
+      :can-continue="canContinue"
       :activity="activity"
       :pending="pending"
       :can-restore-pending="canRestorePending"
@@ -148,6 +151,7 @@ watch(
       :available-thinking-levels="thinking.availableLevels"
       :send-key="settings.sendKey"
       @send="onSend"
+      @continue="continueTurn"
       @abort="abort"
       @compact="compact"
       @restore-pending="restorePending"

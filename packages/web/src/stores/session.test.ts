@@ -4,6 +4,7 @@ import type { ServerMessage } from "@amagicpear/pichamber-shared";
 import {
   activity,
   applyServerMessage,
+  canContinue,
   conversation,
   lastAssistantModel,
   pending,
@@ -120,5 +121,34 @@ describe("session protocol reducer", () => {
 
     expect(settled).toEqual([{ type: "session-settled" }]);
     expect(failed).toEqual([{ type: "error", message: "transport failed" }]);
+  });
+
+  test("marks an unnaturally ended turn continuable, a completed one not", () => {
+    applyServerMessage(snapshot(), () => {});
+    let seq = 0;
+    const endTurnWith = (stopReason: string) => {
+      seq += 1;
+      applyServerMessage({ type: "message_start", seq, message: { role: "assistant", content: [] } as unknown as AgentMessage }, () => {});
+      seq += 1;
+      applyServerMessage({ type: "message_end", seq, message: { role: "assistant", content: [], stopReason } as unknown as AgentMessage }, () => {});
+    };
+
+    endTurnWith("aborted");
+    expect(canContinue.value).toBe(true);
+
+    endTurnWith("error");
+    expect(canContinue.value).toBe(true);
+
+    // 工具执行中被打断的回合也以 toolUse 收尾（后跟错误 toolResult），
+    // 与纯流式中断的 aborted 一样可继续。
+    endTurnWith("toolUse");
+    expect(canContinue.value).toBe(true);
+
+    endTurnWith("stop");
+    expect(canContinue.value).toBe(false);
+
+    // 工作中一律不可继续（例如正常 turn 里工具运行时）。
+    applyServerMessage({ type: "agent_start", seq: seq + 1 }, () => {});
+    expect(canContinue.value).toBe(false);
   });
 });

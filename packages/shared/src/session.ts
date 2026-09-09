@@ -211,6 +211,7 @@ export type ServerMessage =
 /** JSON messages the client sends to the session WebSocket server. */
 export type ClientMessage =
   | { type: "prompt"; message: string; images?: ImageContent[]; streamingBehavior?: "steer" | "followUp" }
+  | { type: "continue" }
   | { type: "abort"; restorePending?: boolean; operationId?: string }
   | { type: "restore_pending" }
   | { type: "compact"; customInstructions?: string; operationId?: string }

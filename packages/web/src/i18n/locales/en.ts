@@ -436,6 +436,7 @@ export default {
     dictationPermissionDenied: "Microphone permission was denied",
     dictationFailed: "Dictation could not start. Check your microphone and try again.",
     stopAgent: "Stop agent",
+    continueTurn: "Continue interrupted response",
     steer: "Steer",
     followUp: "Follow up",
     restoreAll: "Restore all",

@@ -423,6 +423,7 @@ export default {
     dictationPermissionDenied: "麦克风权限被拒绝",
     dictationFailed: "无法启动语音输入，请检查麦克风后重试",
     stopAgent: "停止智能体",
+    continueTurn: "继续被打断的回复",
     steer: "引导",
     followUp: "后续消息",
     restoreAll: "全部恢复",

@@ -888,6 +888,13 @@ export const sessionWsHandler: WsHandler = {
           .catch((err: unknown) => sendError(bunWS, toMessage(err)));
         return;
       }
+      case "continue": {
+        // Fire-and-await like `prompt`: the run itself is observed through
+        // the broadcast event stream; only setup/semantic failures surface
+        // here as an error frame (→ client error toast).
+        driver.continue().catch((err: unknown) => sendError(bunWS, toMessage(err)));
+        return;
+      }
       case "restore_pending": {
         if (!(driver instanceof SdkSessionDriver)) {
           sendError(bunWS, "Restoring pending messages is not supported by the RPC runtime.");
