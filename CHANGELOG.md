@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.4.0] - 2026-09-11
+
+### Added
+
+- Keep background sessions running across reconnects: streaming messages
+  and pending extension dialogs survive a reconnect, idle session teardown
+  is deferred, and the session sidebar surfaces background activity.
+- Resume an interrupted turn from the composer: after an abort or errored
+  response the send icon becomes a continue button (empty draft only) that
+  calls `agent.continue()` directly instead of requiring a nudge message.
+
 ## [1.2.0] - 2026-09-08
 
 ### Added
