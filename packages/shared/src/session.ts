@@ -21,9 +21,12 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { ImageContent } from "@earendil-works/pi-ai";
 
-/** A persisted Pi session enriched with the current availability of its cwd. */
+/** A persisted Pi session enriched with the current availability of its cwd
+ *  and whether an agent turn is currently running (possibly in the
+ *  background — the browser may not be attached to it). */
 export type SessionInfo = PiSessionInfo & {
   cwdAvailable: boolean;
+  running?: boolean;
 };
 
 /** Composer 状态行的"当前在干嘛"，与 TUI 的 `StatusIndicatorKind`

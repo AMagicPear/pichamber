@@ -125,6 +125,8 @@ type SessionChannel = {
   compactionQueue: CompactionQueuedMessage[];
   /** Driver backing this channel — captured for snapshot helpers. */
   driver: SessionDriver;
+  /** 空闲会话断开后的宽限期定时器；重连时不清除，触发时重查 sockets。 */
+  idleDetachTimer?: ReturnType<typeof setTimeout>;
 };
 
 /** A message held while compaction is running, mirroring the TUI's
@@ -365,9 +367,9 @@ const applyExtensionUiRequest = (state: ExtensionUiState, request: RpcExtensionU
   }
 };
 
-/** Send the durable extension UI snapshot to one socket. This is separate
- *  from the session snapshot because extension UI is event-shaped in the
- *  public protocol, while the client already applies these setters idempotently. */
+/** 发送持久扩展 UI 快照 + 未决对话框请求，使新连接的 socket 追上当前
+ *  扩展 UI 状态。持久状态（statuses/widgets/title）是幂等的 setter；未决
+ *  对话框是后台会话断开期间弹出的，重放后用户可以正常应答。 */
 const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
   const send = (request: RpcExtensionUIRequest) => {
     if (socket.readyState === 1) {
@@ -401,9 +403,36 @@ const replayExtensionUiState = (channel: SessionChannel, socket: BunWS) => {
       title: channel.extensionUi.title,
     });
   }
+  for (const request of channel.uiBridge.pendingRequests()) send(request);
 };
 
-const attachListener = (sessionId: string, driver: SessionDriver): SessionChannel => {
+/** 空闲会话最后一个浏览器断开后，先给页面刷新/快速切换留一段宽限期，
+ *  期内重连则免掉 driver 的 dispose + 重启成本。 */
+const IDLE_DETACH_DELAY_MS = 2000;
+
+/** 真正回收一个 channel：取消挂起的扩展对话框、退订事件流、dispose driver。
+ *  只在「不会再有客户端」时调用：socket 全部断开且（宽限期满 | 回合已 settle）。 */
+const teardownChannel = (sessionId: string, channel: SessionChannel) => {
+  if (channel.idleDetachTimer !== undefined) clearTimeout(channel.idleDetachTimer);
+  channel.uiBridge.cancelPending();
+  channel.unsubscribe();
+  if (channelsBySession.get(sessionId) === channel) channelsBySession.delete(sessionId);
+  deactivateSession(sessionId).catch((error) => {
+    sessionChannelLogger(sessionId).emit(errorEvent("Failed to deactivate session", error));
+  });
+};
+
+/** 回合 settle 后的后台回收：无客户端且空闲（且没有因 flush 排队新工作）
+ *  才回收，否则继续作为后台会话运行。 */
+const maybeDetachAfterSettle = (sessionId: string, channel: SessionChannel) => {
+  if (channelsBySession.get(sessionId) !== channel || channel.sockets.size !== 0) return;
+  if (channel.state.activity.phase !== "idle") return;
+  teardownChannel(sessionId, channel);
+};
+
+/** Bind the driver's event stream to a per-session channel. Exported for
+ *  tests that exercise the background keep-alive / teardown decision. */
+export const attachListener = (sessionId: string, driver: SessionDriver): SessionChannel => {
   const existing = channelsBySession.get(sessionId);
   if (existing) return existing;
   const sdkDriver = driver instanceof SdkSessionDriver ? driver : undefined;
@@ -498,6 +527,8 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
   const settleChannel = async (options?: { flushQueue?: boolean }) => {
     const state = channel.state;
     state.activity = { phase: "idle" };
+    // flush 会立即触发新一轮 prompt，此时不能当作「后台工作已结束」回收。
+    const flushedQueue = Boolean(options?.flushQueue && channel.compactionQueue.length > 0);
 
     if (options?.flushQueue && channel.compactionQueue.length > 0) {
       const [first, ...rest] = channel.compactionQueue;
@@ -533,6 +564,7 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
       fields.stats = settledStats;
     }
     broadcastState(channel, fields);
+    if (!flushedQueue) maybeDetachAfterSettle(sessionId, channel);
   };
 
   /** Coalesce message-end stats refreshes so a flurry of message_end
@@ -684,19 +716,22 @@ const attachListener = (sessionId: string, driver: SessionDriver): SessionChanne
   return channel;
 };
 
-const detachListener = (sessionId: string, ws: BunWS) => {
+/** Drop one socket from its session channel and schedule teardown when it
+ *  was the last one. Exported for tests alongside `attachListener`. */
+export const detachListener = (sessionId: string, ws: BunWS) => {
   const channel = channelsBySession.get(sessionId);
   if (!channel) return;
   channel.sockets.delete(ws);
   if (channel.sockets.size !== 0) return;
   void channel.ready.then(() => {
     if (channelsBySession.get(sessionId) !== channel || channel.sockets.size !== 0) return;
-    channel.uiBridge.cancelPending();
-    channel.unsubscribe();
-    channelsBySession.delete(sessionId);
-    deactivateSession(sessionId).catch((error) => {
-      sessionChannelLogger(sessionId).emit(errorEvent("Failed to deactivate session", error));
-    });
+    // 运行中的会话留在后台继续跑完当前回合，由 maybeDetachAfterSettle 接手。
+    if (channel.state.activity.phase !== "idle") return;
+    if (channel.idleDetachTimer !== undefined) return;
+    channel.idleDetachTimer = setTimeout(() => {
+      channel.idleDetachTimer = undefined;
+      maybeDetachAfterSettle(sessionId, channel);
+    }, IDLE_DETACH_DELAY_MS);
   });
 };
 
@@ -718,6 +753,13 @@ export const closeSessionSockets = (sessionId: string) => {
 /** Recompute model inventory after a server-side credential mutation. */
 export const refreshSessionModelState = (sessionId: string) => {
   channelsBySession.get(sessionId)?.queueModelStateBroadcast();
+};
+
+/** Whether the session currently runs an agent turn — powers the sidebar's
+ *  background-running badge for sessions the browser is not attached to. */
+export const isSessionRunning = (sessionId: string): boolean => {
+  const channel = channelsBySession.get(sessionId);
+  return channel !== undefined && channel.state.activity.phase !== "idle";
 };
 
 const sendError = (ws: BunWS, error: string) => {
@@ -799,6 +841,10 @@ export const sessionWsHandler: WsHandler = {
     if (bunWS.data.closed || !bunWS.data.attached) return;
     try {
       const snapshot = await driver.getSnapshot();
+      // 运行中的会话 channel.state.messages 可能落后于 runtime（只在 settle
+      // 时 reconcile）：重连必须基于权威消息重建，否则当前回合已产生的
+      // 消息会从界面上消失。
+      await reconcile(channel, Promise.resolve(snapshot));
       channel.state.model = snapshot.model;
       channel.state.availableModels = snapshot.availableModels;
       channel.state.thinking = snapshot.thinking;

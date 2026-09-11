@@ -7,7 +7,7 @@ import {
   listAllSessions,
   renameSession,
 } from "../core/session";
-import { closeSessionSockets } from "../core/ws";
+import { closeSessionSockets, isSessionRunning } from "../core/ws";
 import { toMessage } from "../error";
 import { browseProjectDirectories } from "../services/projects";
 import { canonicalWorkspace, WorkspaceError } from "../services/workspace";
@@ -30,6 +30,7 @@ export const sessionRoutes: Routes<Paths> = {
             ...session,
             cwd: await canonicalWorkspace(session.cwd).catch(() => session.cwd),
             cwdAvailable: hasUsableSessionCwd(session.cwd),
+            running: isSessionRunning(session.id),
           })),
         ),
       );

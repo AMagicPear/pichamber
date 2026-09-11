@@ -158,8 +158,13 @@ export class SdkSessionDriver implements SessionDriver {
   async getSnapshot(): Promise<SessionSnapshot> {
     const session = this.session;
     const { model, availableModels } = sdkModelState(session);
+    const persisted = sessionMessages(session.sessionManager);
+    // 流式中的消息只挂在 agent state、尚未落盘到 session 文件；把它附在
+    // 快照尾部，重连到运行中的会话时客户端才能无缝续上流式回复。
+    const streaming = session.agent.state.streamingMessage;
     return {
-      ...sessionMessages(session.sessionManager),
+      messages: streaming ? [...persisted.messages, streaming] : persisted.messages,
+      messageEntryIds: streaming ? [...persisted.messageEntryIds, undefined] : persisted.messageEntryIds,
       model,
       availableModels,
       thinking: { level: session.thinkingLevel, availableLevels: session.getAvailableThinkingLevels() },

@@ -50,7 +50,9 @@ const sessionIdentity = (sessionManager: SessionManager) => {
   };
 };
 
-const registerDriver = <T extends SessionDriver>(driver: T): T => {
+/** Register an active driver so lookups, deactivation, and backend switches
+ *  can reach it. Exposed for tests that wire fake drivers into the registry. */
+export const registerDriver = <T extends SessionDriver>(driver: T): T => {
   activeSessions.set(driver.sessionId, driver);
   sessionFileLookup.set(driver.sessionId, driver.sessionFile);
   return driver;

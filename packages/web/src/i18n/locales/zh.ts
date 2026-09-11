@@ -73,6 +73,7 @@ export default {
     copySessionIdSuccess: "已复制会话ID",
     copySessionIdFailed: "复制会话ID失败",
     missingCwdTooltip: "工作目录已不存在：{cwd}。点击以创建分支会话到其他位置",
+    runningTooltip: "此会话正在运行",
     deleteSession: "删除会话",
     newSessionLabel: "新建会话",
     sessionFallback: "会话 {id}",

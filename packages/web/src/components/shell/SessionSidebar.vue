@@ -41,6 +41,7 @@ import {
   sessions,
   sessionsError,
   sessionsLoading,
+  startSessionPolling,
   workspace,
 } from "@/stores/workspace";
 import { deleteSession, toMessage } from "@/api/client";
@@ -397,6 +398,7 @@ const closeProjectPicker = () => {
 };
 
 onMounted(async () => {
+  startSessionPolling();
   await loadSessions();
 });
 </script>
@@ -515,7 +517,10 @@ onMounted(async () => {
                     </template>
                   </span>
                   <span v-if="item.isParent && !selectionMode" class="session-list__child-count" aria-hidden="true">{{ item.descendantCount }}</span>
-                  <span v-if="!selectionMode" class="session-list__age">{{ sessionAge(item.session) }}</span>
+                  <span v-if="!selectionMode && item.session.running" class="session-list__age session-list__age--running" :title="t('sidebar.runningTooltip')">
+                    <span class="session-list__running-dot" />
+                  </span>
+                  <span v-else-if="!selectionMode" class="session-list__age">{{ sessionAge(item.session) }}</span>
                   <IconButton v-if="!selectionMode" class="session-list__menu-trigger"
                     :class="{ 'is-menu-target': sessionMenuOpen && selectedSessionId === item.session.id }"
                     :label="t('sidebar.sessionOptions')" size="compact" @click.stop="openSessionMenu(item.session.id)">
@@ -923,6 +928,38 @@ onMounted(async () => {
 
 .session-list__item:is(:hover, .is-menu-open) .session-list__age {
   opacity: 0;
+}
+
+.session-list__age--running {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-list__running-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ui-primary);
+  animation: session-running-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes session-running-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-list__running-dot {
+    animation: none;
+    opacity: 0.8;
+  }
 }
 
 .session-list__rename-input {

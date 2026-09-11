@@ -122,7 +122,11 @@ const buildConversationItems = (
   for (const [messageIndex, message] of messages.entries()) {
     const entryId = messageEntryIds[messageIndex];
     if (message.role === "assistant") {
-      items.push({ id: nextId("a"), kind: "message", message, entryId, streaming: false, liveRun: false });
+      // 没有 stopReason 的 assistant 消息是快照携带的流式中消息（运行中
+      // 重连时由 agent state 附上）；标为 streaming 让后续 delta 续写到
+      // 同一条目上。
+      const streaming = message.stopReason === undefined;
+      items.push({ id: nextId("a"), kind: "message", message, entryId, streaming, liveRun: streaming });
       for (const part of message.content) {
         if (part.type === "toolCall") {
           items.push({
@@ -302,6 +306,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
         }
         break;
       }
+      let replaced = false;
       for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i];
         if (
@@ -311,8 +316,17 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
           (role !== "assistant" || item.streaming)
         ) {
           replaceItem(i, { ...item, message, streaming: false });
+          replaced = true;
           break;
         }
+      }
+      // 运行中重连后，进行中的消息可能不在快照里（RPC runtime 不附
+      // streamingMessage）：message_end 时直接补上，而不是静默丢弃。
+      if (!replaced && role === "assistant") {
+        conversation.value = [
+          ...items,
+          { id: nextId("a"), kind: "message", message, streaming: false, liveRun: true },
+        ];
       }
       break;
     }

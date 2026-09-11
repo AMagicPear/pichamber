@@ -75,6 +75,7 @@ export default {
     copySessionIdSuccess: "Copied session ID",
     copySessionIdFailed: "Failed to copy session ID",
     missingCwdTooltip: "Working directory is gone: {cwd}. Click to fork the session into another location.",
+    runningTooltip: "This session is running",
     deleteSession: "Delete session",
     newSessionLabel: "New Session",
     sessionFallback: "Session {id}",
