@@ -14,8 +14,8 @@
  * 模型列表的唯一事实源是 OrcaRouter 目录 API `GET /v1/models?capability=chat`。
  * capability=chat 是网关对「文本 chat / agent」的权威过滤：只返回可被 chat
  * 路由驱动的模型（排除 TTS / embedding / image-generation / openai-video 等
- * 专用 endpoint 与未加命名空间的杂项模型）。扩展在 Pi 初始化时拉取一次
- * ，并提供 `refreshModels` 让目录可被刷新。可调用模型只取真实 API 返回的
+ * 专用 endpoint 与未加命名空间的杂项模型）。模型目录通过 Pi 的
+ * `refreshModels` 路径显式刷新。可调用模型只取真实 API 返回的
  * id；目录请求失败或返回空数据时显式报错，不用手写模型静默降级。
  */
 import type { ExtensionAPI, ProviderConfig } from "@earendil-works/pi-coding-agent";
@@ -26,9 +26,6 @@ export const ORCAROUTER_PROVIDER_ID = "orcarouter";
 export const ORCAROUTER_PROVIDER_NAME = "OrcaRouter";
 export const ORCAROUTER_BASE_URL = "https://api.orcarouter.ai/v1";
 export const ORCAROUTER_API_KEY_ENV = "ORCAROUTER_API_KEY";
-/** 目录拉取超时（毫秒）。注册是 Pi 启动关键路径，不能无限等待。 */
-const FETCH_TIMEOUT_MS = 8_000;
-
 // ─── OrcaRouter 目录 API 类型（本扩展自包含所需的最小字段）───────────────
 
 type OrcaModelCatalogEntry = {
@@ -107,6 +104,7 @@ type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<
 export const fetchOrcaChatModels = async (
   apiKey: string | undefined,
   fetchFn: FetchLike = fetch,
+  signal?: AbortSignal,
 ): Promise<ReturnType<typeof toPiModel>[]> => {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -114,7 +112,7 @@ export const fetchOrcaChatModels = async (
   url.searchParams.set("capability", "chat");
   const response = await fetchFn(url, {
     headers,
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal,
   });
   if (!response.ok) throw new Error(`OrcaRouter model catalog returned HTTP ${response.status}`);
   const payload = (await response.json()) as OrcaModelCatalogResponse;
@@ -132,7 +130,7 @@ const apiKeyFromContext = (context: { credential?: { type?: string; key?: string
 
 // ─── Provider 注册 ─────────────────────────────────────────────────────
 
-export default async function (pi: ExtensionAPI): Promise<void> {
+const registerOrcaRouter = async (pi: ExtensionAPI) => {
   const config: ProviderConfig = {
     name: ORCAROUTER_PROVIDER_NAME,
     baseUrl: ORCAROUTER_BASE_URL,
@@ -141,14 +139,11 @@ export default async function (pi: ExtensionAPI): Promise<void> {
     // 存储的 credential 优先。key 始终留在服务端进程里，浏览器不持有。
     apiKey: `\${${ORCAROUTER_API_KEY_ENV}}`,
     api: "openai-completions",
-    // Load once while Pi initializes the extension. This gives every new
-    // session a complete catalog sourced exclusively from the gateway before
-    // pichamber snapshots available models.
-    models: await fetchOrcaChatModels(process.env[ORCAROUTER_API_KEY_ENV]),
-    refreshModels: async (context) => {
-      const refreshed = await fetchOrcaChatModels(apiKeyFromContext(context));
-      return refreshed;
-    },
+    models: [],
+    refreshModels: ({ credential, signal }) =>
+      fetchOrcaChatModels(apiKeyFromContext({ credential }), fetch, signal),
   };
   pi.registerProvider(ORCAROUTER_PROVIDER_ID, config);
-}
+};
+
+export default registerOrcaRouter;

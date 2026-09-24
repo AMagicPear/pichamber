@@ -67,6 +67,7 @@ export const refreshPiProviderModels = async (session: AgentSession, providerId:
     providers: [providerId],
     allowNetwork: true,
     force: true,
+    signal: AbortSignal.timeout(15_000),
   });
   if (result.aborted) throw new Error("Model catalog refresh was aborted");
   const errors = [...result.errors.entries()];

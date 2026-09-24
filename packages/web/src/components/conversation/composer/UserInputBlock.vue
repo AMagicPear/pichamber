@@ -6,7 +6,6 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AddCircleIcon from "lucide-static/icons/circle-plus.svg";
 import ImageUpIcon from "lucide-static/icons/image-up.svg";
-import SendIcon from "lucide-static/icons/send.svg";
 import LensConcaveIcon from "lucide-static/icons/lens-concave.svg";
 import StopIcon from "lucide-static/icons/square.svg";
 import TargetIcon from "lucide-static/icons/target.svg";
@@ -22,7 +21,7 @@ import ActivityPanel from "@/components/activity/ActivityPanel.vue";
 import ActivityToggle from "@/components/activity/ActivityToggle.vue";
 import { messageText } from "@/components/conversation/messages/messageContent";
 import type { SendKey } from "@/stores/settings";
-import { conversation, working, type DraftImage } from "@/stores/session";
+import { connected, conversation, working, type DraftImage } from "@/stores/session";
 import { createId } from "@/utils/id";
 import AttachmentIcon from "lucide-static/icons/paperclip.svg";
 import ImageThumbnail from "@/components/ui/ImageThumbnail.vue";
@@ -43,6 +42,7 @@ const images = defineModel<DraftImage[]>("images", { required: true });
 
 const emit = defineEmits<{
   send: [behavior?: "steer" | "followUp"];
+  continue: [];
   abort: [];
   compact: [];
   restorePending: [];
@@ -53,6 +53,7 @@ const emit = defineEmits<{
 
 const props = defineProps<{
   canSend: boolean;
+  canContinue: boolean;
   activity: AgentActivity;
   pending: PendingMessages;
   canRestorePending: boolean;
@@ -115,6 +116,8 @@ const applyGoalPrefix = () => {
 };
 
 const pendingDictationSend = ref<{ behavior?: "steer" | "followUp" } | null>(null);
+const hasDraftContent = computed(() => Boolean(draft.value?.trim()) || images.value.length > 0);
+const continueMode = computed(() => !working.value && props.canContinue && !hasDraftContent.value);
 const emitSendNow = (behavior?: "steer" | "followUp") => {
   // Fail closed: never send attachments to a model that is declared text-only.
   if (selectedModelRejectsImages.value) return;
@@ -126,6 +129,10 @@ const emitSend = (behavior?: "steer" | "followUp") => {
   if (dictation.listening.value) {
     pendingDictationSend.value = { behavior };
     dictation.stop();
+    return;
+  }
+  if (continueMode.value) {
+    emit("continue");
     return;
   }
   emitSendNow(behavior);
@@ -593,10 +600,10 @@ const placeholder = computed(() => {
                 <StopIcon />
               </IconButton>
               <IconButton size="compact"
-                :label="selectedModelRejectsImages ? t('composer.modelRejectsImages') : (working ? (submitMode === 'steer' ? t('composer.steerAgent') : t('composer.queueFollowUp')) : t('composer.send'))"
-                :disabled="!canSend && !isDictating || selectedModelRejectsImages"
+                :label="selectedModelRejectsImages ? t('composer.modelRejectsImages') : (working ? (submitMode === 'steer' ? t('composer.steerAgent') : t('composer.queueFollowUp')) : continueMode ? t('composer.continueTurn') : t('composer.send'))"
+                :disabled="(continueMode ? !connected : (!canSend && !isDictating)) || selectedModelRejectsImages"
                 @click="emitSend(submitMode)">
-                <SendIcon />
+                <MorphIcon :icon="lucideIcon(continueMode ? 'play' : 'send')" spring="snappy" reduced-motion="user" />
               </IconButton>
             </div>
           </div>
