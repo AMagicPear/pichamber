@@ -164,6 +164,13 @@ const prompt = (text: string, options?: PromptOptions) => {
 };
 
 const abort = () => sendTracked("abort", (operationId) => ({ type: "abort", restorePending: true, operationId }));
+/** 继续被打断/出错的回合：无需草稿，服务端直接续跑（SDK runtime）。顺带
+ *  清掉旧回合的错误 toast，避免与新回合的事件混在一起。 */
+const continueTurn = () => {
+  if (!connected.value || !ws) return;
+  extensionUi.notifications = extensionUi.notifications.filter((n) => n.type !== "error");
+  ws.send({ type: "continue" });
+};
 /** 对齐官方 `clearQueue()` 的语义：把排队消息取回输入框（服务器发
  *  `draft_restore` 帧）。 */
 const restorePending = () => ws?.send({ type: "restore_pending" });
@@ -259,6 +266,7 @@ export const useConversationSession = () => {
     abort,
     compact,
     connect,
+    continueTurn,
     disconnect,
     prompt,
     reload,

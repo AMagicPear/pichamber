@@ -70,6 +70,19 @@ export const refreshSessions = () => {
   return sessionsRefreshPromise;
 };
 
+/** 侧栏要展示「哪些会话正在后台运行」——切换会话后 agent 仍在服务端
+ *  继续跑完当前回合，`running` 标记随会话列表一起轮询回来。端点含目录
+ *  扫描，间隔取宽松值；标签页不可见时跳过，回前台后下一个周期自动续上。 */
+const SESSION_POLL_INTERVAL_MS = 4000;
+let sessionPollTimer: ReturnType<typeof setInterval> | undefined;
+
+export const startSessionPolling = () => {
+  if (sessionPollTimer) return;
+  sessionPollTimer = setInterval(() => {
+    if (document.visibilityState === "visible") void refreshSessions();
+  }, SESSION_POLL_INTERVAL_MS);
+};
+
 export const renameSessionInStore = async (sessionId: string, name: string) => {
   const trimmed = name.trim();
   await renameSession(sessionId, trimmed);

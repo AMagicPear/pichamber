@@ -3,6 +3,7 @@ import { settings } from "@/stores/settings";
 import { pushErrorToast } from "@/stores/extensionUi";
 import { refreshSessions, workspace } from "@/stores/workspace";
 import { model, windowTitle } from "@/stores/session";
+import { i18n } from "@/i18n";
 
 /** Effects are the narrow boundary between session protocol reduction and the
  * browser. Reducers return these descriptions; only this module touches DOM,
@@ -45,7 +46,9 @@ const notifySessionSettled = () => {
   try {
     const label = model.value?.name?.trim() || model.value?.id || model.value?.provider || "";
     const notification = new Notification("Pi Chamber", {
-      body: label ? `${label} finished responding.` : "Agent finished responding.",
+      body: label
+        ? i18n.global.t("notifications.sessionSettledModel", { model: label })
+        : i18n.global.t("notifications.sessionSettled"),
       silent: true,
       tag: "pichamber-completion",
     });

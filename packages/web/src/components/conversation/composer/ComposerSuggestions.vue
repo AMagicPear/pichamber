@@ -31,6 +31,7 @@ const error = ref<string | null>(null);
 const selectedIndex = ref(0);
 let requestVersion = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
+let searchAbort = new AbortController();
 
 const commandResults = computed(() => {
   const query = props.query.toLowerCase();
@@ -44,15 +45,18 @@ const title = computed(() => props.mode === "files" ? t("composer.shelfFiles") :
 
 const runFileSearch = async () => {
   const current = ++requestVersion;
+  searchAbort.abort();
+  searchAbort = new AbortController();
   loading.value = true;
   error.value = null;
   try {
     const query = props.query.trim();
     const entries = query
-      ? (await searchFiles(workspace.sessionId, query)).entries
+      ? (await searchFiles(workspace.sessionId, query, searchAbort.signal)).entries
       : (await listDirectory(workspace.sessionId)).entries;
     if (current === requestVersion) files.value = entries;
   } catch (cause) {
+    if (current === requestVersion && cause instanceof DOMException && cause.name === "AbortError") return;
     if (current === requestVersion) error.value = toMessage(cause);
   } finally {
     if (current === requestVersion) loading.value = false;

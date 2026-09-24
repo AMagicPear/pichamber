@@ -141,15 +141,14 @@ export const searchFiles = async (
   query: string,
   limit = 60,
   workspacePath?: string | null,
+  signal?: AbortSignal,
 ): Promise<DirEntry[]> => {
   const trimmed = query.trim();
   if (!trimmed) return [];
+  if (signal?.aborted) return [];
   const workspace = await canonicalWorkspace(workspacePath);
-  // AbortSignal kept around the whole call so the WS route can drop us on
-  // disconnect. fd's child process gets SIGKILL via the handler in fd-search.
-  const ac = new AbortController();
   if (isFdAvailable()) {
-    const result = await fdSearch(trimmed, workspace, ac.signal);
+    const result = await fdSearch(trimmed, workspace, signal ?? new AbortController().signal);
     if (result !== "unavailable") {
       return result.map((entry) => toEntry(basename(entry.path), entry.path, entry.isDirectory, workspace));
     }

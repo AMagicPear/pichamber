@@ -61,6 +61,8 @@ export interface SessionDriver {
 
   getSnapshot(): Promise<SessionSnapshot>;
   prompt(message: string, options?: PromptOptions): Promise<void>;
+  /** Resume a turn that ended in abort/error/truncation instead of a normal stop. */
+  continue(): Promise<void>;
   compact(customInstructions?: string): Promise<void>;
   setModel(provider: string, modelId: string): Promise<void>;
   setThinkingLevel(level: ThinkingLevel): Promise<void>;
@@ -68,8 +70,6 @@ export interface SessionDriver {
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
 }
 const emptyUsage = () => ({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 });
-const numberFormat = new Intl.NumberFormat("en-US");
-const formatPercent = (ratio: number) => `${(ratio * 100).toFixed(1)}%`;
 
 const descriptor = (model: { provider: string; id: string; name?: string; reasoning?: boolean; input?: Array<"text" | "image"> }, name = model.provider): ModelDescriptor => ({
   provider: model.provider,
@@ -93,28 +93,22 @@ const sdkModelState = (session: AgentSession) => {
 
 const rpcStatsView = (stats: SessionStats, model: ModelDescriptor | undefined): SessionStatsView => {
   const totalRead = stats.tokens.cacheRead + stats.tokens.input;
-  const lastAssistant = emptyUsage();
   return {
     model,
-    modified: "",
+    modified: null,
     context: {
       tokens: stats.contextUsage?.tokens ?? null,
       contextWindow: stats.contextUsage?.contextWindow ?? 0,
-      percent: stats.contextUsage?.percent == null ? null : formatPercent(stats.contextUsage.percent / 100),
-      tokensText: stats.contextUsage?.tokens == null ? "—" : numberFormat.format(stats.contextUsage.tokens),
+      percent: stats.contextUsage?.percent == null ? null : stats.contextUsage.percent / 100,
     },
     messages: {
       total: stats.totalMessages,
       user: stats.userMessages,
       assistant: stats.assistantMessages,
-      totalText: numberFormat.format(stats.totalMessages),
-      userText: numberFormat.format(stats.userMessages),
-      assistantText: numberFormat.format(stats.assistantMessages),
     },
     cost: stats.cost,
-    lastAssistant,
-    lastAssistantText: { input: "0", output: "0", reasoning: "0", cacheRead: "0", cacheWrite: "0" },
-    cacheHit: totalRead > 0 ? formatPercent(stats.tokens.cacheRead / totalRead) : "0.0%",
+    lastAssistant: emptyUsage(),
+    cacheHit: totalRead > 0 ? stats.tokens.cacheRead / totalRead : null,
   };
 };
 
@@ -165,8 +159,13 @@ export class SdkSessionDriver implements SessionDriver {
   async getSnapshot(): Promise<SessionSnapshot> {
     const session = this.session;
     const { model, availableModels } = sdkModelState(session);
+    const persisted = sessionMessages(session.sessionManager);
+    // 流式中的消息只挂在 agent state、尚未落盘到 session 文件；把它附在
+    // 快照尾部，重连到运行中的会话时客户端才能无缝续上流式回复。
+    const streaming = session.agent.state.streamingMessage;
     return {
-      ...sessionMessages(session.sessionManager),
+      messages: streaming ? [...persisted.messages, streaming] : persisted.messages,
+      messageEntryIds: streaming ? [...persisted.messageEntryIds, undefined] : persisted.messageEntryIds,
       model,
       availableModels,
       thinking: { level: session.thinkingLevel, availableLevels: session.getAvailableThinkingLevels() },
@@ -178,6 +177,38 @@ export class SdkSessionDriver implements SessionDriver {
 
   prompt(message: string, options?: PromptOptions) {
     return this.session.prompt(message, options);
+  }
+
+  /** Resume the interrupted turn, mirroring AgentSession's own auto-retry:
+   * `agent.continue()` refuses a trailing assistant message, so an
+   * aborted/errored/truncated response is dropped from agent state first
+   * (it stays in the session history). `agent.continue()` emits the full
+   * agent event stream — persistence, extensions and broadcasts all ride
+   * AgentSession's permanent agent subscription — but the isStreaming flag
+   * and the closing `agent_settled` live inside prompt()'s private wrapper,
+   * so replicate that minimal lifecycle here. */
+  async continue() {
+    const session = this.session;
+    if (session.isCompacting) throw new Error("Cannot continue while compaction is in progress");
+    const messages = session.agent.state.messages;
+    const last = messages[messages.length - 1];
+    if (!last) throw new Error("Nothing to continue from an empty session");
+    if (last.role === "assistant") {
+      if (last.stopReason !== "aborted" && last.stopReason !== "error" && last.stopReason !== "length") {
+        throw new Error("The last turn completed; there is nothing to continue");
+      }
+      session.agent.state.messages = messages.slice(0, -1);
+    }
+    const lifecycle = session as unknown as {
+      _isAgentRunActive: boolean;
+      _emitAgentSettled(): Promise<void>;
+    };
+    lifecycle._isAgentRunActive = true;
+    try {
+      await session.agent.continue();
+    } finally {
+      await lifecycle._emitAgentSettled();
+    }
   }
 
   compact(customInstructions?: string) {
@@ -305,6 +336,10 @@ export class RpcSessionDriver implements SessionDriver {
     if (options?.streamingBehavior === "steer") return client.steer(message, options.images);
     if (options?.streamingBehavior === "followUp") return client.followUp(message, options.images);
     return client.prompt(message, options?.images);
+  }
+
+  continue() {
+    return Promise.reject(new Error("Continuing an interrupted turn is only supported by the SDK runtime."));
   }
 
   compact(customInstructions?: string) {

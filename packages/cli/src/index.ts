@@ -33,9 +33,9 @@ const program = createProgram({
   runServe,
 });
 
-program.parseAsync(process.argv).catch((e) => {
-  if (e.code === "commander.version") process.exit(0);
-  if (e.code === "commander.help") process.exit(0);
-  console.error(`pichamber: ${e.message}`);
-  process.exit(e.exitCode ?? 1);
+program.parseAsync(process.argv).catch((error: unknown) => {
+  const code = (error as { code?: string }).code;
+  if (code === "commander.version" || code === "commander.help") process.exit(0);
+  console.error(`pichamber: ${(error as Error).message}`);
+  process.exit((error as { exitCode?: number }).exitCode ?? 1);
 });

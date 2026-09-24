@@ -4,8 +4,9 @@ import { useI18n } from "vue-i18n";
 import ContextIcon from "lucide-static/icons/square-text.svg";
 import type { SessionStatsView } from "@amagicpear/pichamber-shared";
 import { lastAssistantModel, stats } from "@/stores/session";
+import { formatCount, formatDateTime, formatPercent, formatUsage } from "@/utils/format";
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const view = computed<SessionStatsView | undefined>(() => stats.value);
 
@@ -15,17 +16,18 @@ const view = computed<SessionStatsView | undefined>(() => stats.value);
 const hasData = computed(
   () =>
     !!view.value &&
-    (!!view.value.model || view.value.messages.total > 0 || !!view.value.modified),
+    (!!view.value.model || view.value.messages.total > 0 || view.value.modified !== null),
 );
 
 const usageRows = computed(() => {
-  const text = view.value?.lastAssistantText ?? {
-    input: "0",
-    output: "0",
-    reasoning: "0",
-    cacheRead: "0",
-    cacheWrite: "0",
+  const usage = view.value?.lastAssistant ?? {
+    input: 0,
+    output: 0,
+    reasoning: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
   };
+  const text = formatUsage(usage, locale.value);
   // Order matches the openchamber reference; reasoning sits between output
   // and cacheRead so the eye scans the production tokens first, then the
   // billing-relevant cache buckets.
@@ -63,14 +65,14 @@ const modelTitle = computed(() => {
           <span v-if="view?.model" class="context-pane__model-sep">/</span>
           <span class="context-pane__model-id">{{ lastAssistantModel ?? view?.model?.id ?? "" }}</span>
         </div>
-        <div v-if="view?.modified" class="context-pane__date">{{ view.modified }}</div>
+        <div v-if="view?.modified" class="context-pane__date">{{ formatDateTime(view.modified, locale) }}</div>
       </header>
 
       <section class="context-pane__section">
         <h3 class="context-pane__heading ui-section-title">{{ t('context.contextHeading') }}</h3>
         <div class="context-pane__stat">
-          <span class="context-pane__value">{{ view?.context.tokensText ?? "-" }}</span>
-          <span class="context-pane__sub">{{ t('context.used', { value: view?.context.percent ?? "-" }) }}</span>
+          <span class="context-pane__value">{{ formatCount(view?.context.tokens, locale) }}</span>
+          <span class="context-pane__sub">{{ t('context.used', { value: formatPercent(view?.context.percent) }) }}</span>
         </div>
         <div
           v-if="view?.context.contextWindow && view.context.tokens != null"
@@ -90,15 +92,15 @@ const modelTitle = computed(() => {
       <section class="context-pane__section">
         <h3 class="context-pane__heading ui-section-title">{{ t('context.messages') }}</h3>
         <div class="context-pane__stat">
-          <span class="context-pane__value">{{ view?.messages.totalText ?? "0" }}</span>
+          <span class="context-pane__value">{{ formatCount(view?.messages.total, locale) }}</span>
         </div>
         <div class="context-pane__row">
           <span class="context-pane__row-label">{{ t('context.user') }}</span>
-          <span class="context-pane__row-value">{{ view?.messages.userText ?? "0" }}</span>
+          <span class="context-pane__row-value">{{ formatCount(view?.messages.user, locale) }}</span>
         </div>
         <div class="context-pane__row">
           <span class="context-pane__row-label">{{ t('context.assistant') }}</span>
-          <span class="context-pane__row-value">{{ view?.messages.assistantText ?? "0" }}</span>
+          <span class="context-pane__row-value">{{ formatCount(view?.messages.assistant, locale) }}</span>
         </div>
       </section>
 
@@ -120,7 +122,7 @@ const modelTitle = computed(() => {
       <section class="context-pane__section">
         <h3 class="context-pane__heading ui-section-title">{{ t('context.cacheHit') }}</h3>
         <div class="context-pane__stat">
-          <span class="context-pane__value">{{ view?.cacheHit ?? "0.0%" }}</span>
+          <span class="context-pane__value">{{ formatPercent(view?.cacheHit) }}</span>
         </div>
       </section>
     </div>

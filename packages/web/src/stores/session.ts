@@ -14,7 +14,7 @@ import type {
   SessionStatsView,
   ThinkingState,
 } from "@amagicpear/pichamber-shared";
-import { BUILTIN_COMMANDS } from "@/composables/builtin-commands";
+import { builtinCommands } from "@/composables/builtin-commands";
 import { applyExtensionUiRequest, resetExtensionUi } from "@/stores/extensionUi";
 import type { SessionEffect } from "@/stores/sessionEffects";
 
@@ -48,7 +48,7 @@ export const resources = ref<RuntimeResources>({
  *  skill 命令。builtin 定义在 `@/composables/builtin-commands`，服务端不再
  * 下发它们。 */
 export const shelfCommands = computed<RuntimeSlashCommand[]>(() => [
-  ...BUILTIN_COMMANDS,
+  ...builtinCommands(),
   ...resources.value.commands,
 ]);
 
@@ -122,7 +122,11 @@ const buildConversationItems = (
   for (const [messageIndex, message] of messages.entries()) {
     const entryId = messageEntryIds[messageIndex];
     if (message.role === "assistant") {
-      items.push({ id: nextId("a"), kind: "message", message, entryId, streaming: false, liveRun: false });
+      // 没有 stopReason 的 assistant 消息是快照携带的流式中消息（运行中
+      // 重连时由 agent state 附上）；标为 streaming 让后续 delta 续写到
+      // 同一条目上。
+      const streaming = message.stopReason === undefined;
+      items.push({ id: nextId("a"), kind: "message", message, entryId, streaming, liveRun: streaming });
       for (const part of message.content) {
         if (part.type === "toolCall") {
           items.push({
@@ -302,6 +306,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
         }
         break;
       }
+      let replaced = false;
       for (let i = items.length - 1; i >= 0; i--) {
         const item = items[i];
         if (
@@ -311,8 +316,17 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
           (role !== "assistant" || item.streaming)
         ) {
           replaceItem(i, { ...item, message, streaming: false });
+          replaced = true;
           break;
         }
+      }
+      // 运行中重连后，进行中的消息可能不在快照里（RPC runtime 不附
+      // streamingMessage）：message_end 时直接补上，而不是静默丢弃。
+      if (!replaced && role === "assistant") {
+        conversation.value = [
+          ...items,
+          { id: nextId("a"), kind: "message", message, streaming: false, liveRun: true },
+        ];
       }
       break;
     }
@@ -364,6 +378,28 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
 export const canSend = computed(
   () => connected.value && (Boolean(draft.value?.trim()) || images.value.length > 0),
 );
+
+/** 被打断/出错后的可继续状态：回合已结束（非 working），且最后一条
+ *  assistant 消息没有正常收尾。正常完成的回合以 stopReason "stop" 告终；
+ *  工具执行中被打断时 assistant 是 "toolUse"、尾部跟着错误 toolResult（
+ *  显示列表里是工具条目），所以从尾部扫过已结束的工具条目再看最后的
+ *  assistant 消息。compaction 摘要等其他消息类型都视为不可继续。 */
+export const canContinue = computed(() => {
+  if (working.value) return false;
+  const items = conversation.value;
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index];
+    if (!item) continue;
+    if (item.kind === "tool") {
+      if (item.tool.running) return false;
+      continue;
+    }
+    if (item.kind !== "message" || item.message.role !== "assistant") return false;
+    const stopReason = item.message.stopReason;
+    return stopReason === "aborted" || stopReason === "error" || stopReason === "toolUse" || stopReason === "length";
+  }
+  return false;
+});
 
 // ─── 消息帧应用（事件驱动）──────────────────────────────────────────
 // WS 层只负责把帧交给这里；本函数是客户端唯一的"官方事件处理"入口：

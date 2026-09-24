@@ -1,7 +1,9 @@
-/* Central font tokens so every surface (inputs, chat bubbles, Markdown,
- * code, side panels) resolves to the same cross-platform stack. The stack
- * puts system fonts first for Latin glyphs, then explicit Chinese fallbacks
- * so Windows / Linux render CJK as cleanly as macOS. */
+/* Central design tokens. Every surface (inputs, chat bubbles, Markdown,
+ * code, side panels) resolves to these, so a theme switch is a single
+ * [data-theme] attribute flip and no component invents its own colors or
+ * radii. The font stack puts system fonts first for Latin glyphs, then
+ * explicit Chinese fallbacks so Windows / Linux render CJK as cleanly as
+ * macOS. */
 :root {
   --ui-font-sans:
     system-ui,
@@ -44,6 +46,104 @@
   --ui-radius-xl: 10px;
   --ui-row-height: 28px;
   --ui-input-height: 32px;
+
+  /* Color tokens (light theme). Every surface resolves to these, so a theme
+   * switch is a single [data-theme] attribute flip. */
+  --ui-text: #171717;
+  --ui-text-strong: #242320;
+  --ui-text-muted: #76746d;
+  --ui-surface: #fff;
+  --ui-surface-subtle: #fafaf7;
+  --ui-surface-muted: #f7f6f2;
+  --ui-surface-hover: #f5f4f0;
+  --ui-surface-selected: #e5e1d9;
+  --ui-border: #dedbd2;
+  --ui-border-subtle: #e7e4dc;
+  --ui-border-focus: #bcb8ae;
+  --ui-primary: #35332f;
+  --ui-primary-hover: #242320;
+  --ui-extension-bg: #eee9df;
+  --ui-extension-fg: #6e604f;
+  --ui-skill-bg: #e8f0e7;
+  --ui-skill-fg: #476548;
+  --ui-prompt-bg: #f2eade;
+  --ui-prompt-fg: #765a34;
+  --ui-builtin-bg: #dfe5eb;
+  --ui-builtin-fg: #4a5868;
+  --ui-code-inline-bg: #eeece7;
+  --ui-code-inline-fg: #4e4a43;
+  --ui-table-header-bg: #f0eee8;
+  --ui-table-stripe-bg: #faf9f6;
+  --ui-error-bg: rgb(255 240 240 / 72%);
+  --ui-error-border: #e8b5b5;
+  --ui-error-fg: #6f2828;
+  --ui-error-strong: #a83838;
+  --ui-error-hover: rgb(168 56 56 / 12%);
+  --ui-warning: #b88217;
+  --ui-warning-soft: #fdf3d8;
+  --ui-warning-text: #6f4f00;
+  --ui-overlay: rgb(0 0 0 / 45%);
+  --ui-focus: #a89274;
+  --ui-panel-active: #8a735b;
+  --ui-accent-soft: rgb(168 146 116 / 16%);
+  --ui-accent-text: #765f45;
+  --ui-status-text: #8a735b;
+  --ui-thinking-text: #8a8062;
+  --ui-icon-folder: #d9936c;
+  --ui-icon-file: #399cf0;
+  --ui-shadow-raised: 0 8px 24px rgb(35 32 27 / 10%);
+  --ui-shadow-control: 0 1px 2px rgb(36 33 28 / 18%);
+  --ui-duration-fast: 120ms;
+  --ui-duration-medium: 160ms;
+  --ui-ease-standard: ease;
+  --ui-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root[data-theme="dark"] {
+  --ui-text: #e8e6e1;
+  --ui-text-strong: #f5f3ee;
+  --ui-text-muted: #aaa69f;
+  --ui-surface: #1d1d1b;
+  --ui-surface-subtle: #232321;
+  --ui-surface-muted: #282825;
+  --ui-surface-hover: #2d2d29;
+  --ui-surface-selected: #383731;
+  --ui-border: #3b3a36;
+  --ui-border-subtle: #34332f;
+  --ui-border-focus: #67645d;
+  --ui-primary: #e6e2da;
+  --ui-primary-hover: #f5f2ec;
+  --ui-extension-bg: #302d28;
+  --ui-extension-fg: #b4a58f;
+  --ui-skill-bg: #252e27;
+  --ui-skill-fg: #879b88;
+  --ui-prompt-bg: #302a23;
+  --ui-prompt-fg: #a08d72;
+  --ui-builtin-bg: #262c33;
+  --ui-builtin-fg: #9eb0c4;
+  --ui-code-inline-bg: #292927;
+  --ui-code-inline-fg: #b7b3ac;
+  --ui-table-header-bg: #292927;
+  --ui-table-stripe-bg: #222220;
+  --ui-error-bg: #2b2223;
+  --ui-error-border: #523638;
+  --ui-error-fg: #d9a0a0;
+  --ui-error-strong: #e0aaaa;
+  --ui-error-hover: rgb(224 170 170 / 10%);
+  --ui-warning: #d9a441;
+  --ui-warning-soft: #332a18;
+  --ui-warning-text: #e8c579;
+  --ui-overlay: rgb(0 0 0 / 62%);
+  --ui-focus: #c4aa88;
+  --ui-panel-active: #c4aa88;
+  --ui-accent-soft: rgb(196 170 136 / 18%);
+  --ui-accent-text: #d2b991;
+  --ui-status-text: #c4aa88;
+  --ui-thinking-text: #b9aa7b;
+  --ui-icon-folder: #d9a384;
+  --ui-icon-file: #7ab0e6;
+  --ui-shadow-raised: 0 10px 28px rgb(0 0 0 / 32%);
+  --ui-shadow-control: 0 1px 2px rgb(0 0 0 / 28%);
 }
 
 /* Chat typography belongs to the renderer's explicit custom-id boundary. */

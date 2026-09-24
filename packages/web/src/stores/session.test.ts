@@ -4,6 +4,7 @@ import type { ServerMessage } from "@amagicpear/pichamber-shared";
 import {
   activity,
   applyServerMessage,
+  canContinue,
   conversation,
   lastAssistantModel,
   pending,
@@ -11,9 +12,15 @@ import {
   thinking,
 } from "./session";
 
-/** A minimal assistant message; the reducer only reads role/content/model. */
+/** A minimal completed assistant message; the reducer only reads role/
+ *  content/model/stopReason. */
 const assistantMessage = (model: string): AgentMessage =>
-  ({ role: "assistant", content: [], model }) as unknown as AgentMessage;
+  ({ role: "assistant", content: [], model, stopReason: "stop" }) as unknown as AgentMessage;
+
+/** An in-flight assistant message as attached by mid-run snapshots (no
+ *  stopReason yet). */
+const streamingMessage = (): AgentMessage =>
+  ({ role: "assistant", content: [], model: "model" }) as unknown as AgentMessage;
 
 const snapshot = (seq = 0): ServerMessage => ({
   type: "snapshot",
@@ -112,6 +119,59 @@ describe("session protocol reducer", () => {
     expect(conversation.value[0]?.liveRun).toBe(false);
   });
 
+  test("resumes streaming onto a mid-run snapshot's in-flight message after reconnect", () => {
+    const inFlight = streamingMessage();
+    applyServerMessage({ ...snapshot(), messages: [inFlight], messageEntryIds: [undefined] }, () => {});
+    // 快照里没有 stopReason 的 assistant 消息 = 运行中重连带回来的流式消息。
+    const item = conversation.value[0];
+    expect(item?.kind).toBe("message");
+    if (item?.kind !== "message") throw new Error("Expected message item");
+    expect(item.streaming).toBe(true);
+    expect(item.liveRun).toBe(true);
+
+    // 重连后的 delta 续写到同一条目，message_end 正常收尾。
+    applyServerMessage(
+      {
+        type: "message_update",
+        seq: 1,
+        assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "continued" },
+      } as unknown as ServerMessage,
+      () => {},
+    );
+    applyServerMessage(
+      {
+        type: "message_end",
+        seq: 2,
+        message: { role: "assistant", content: [{ type: "text", text: "partialcontinued" }], model: "model", stopReason: "stop" },
+      } as unknown as ServerMessage,
+      () => {},
+    );
+    expect(conversation.value).toHaveLength(1);
+    const settled = conversation.value[0];
+    if (settled?.kind !== "message") throw new Error("Expected message item");
+    expect(settled.streaming).toBe(false);
+    expect(settled.message.content).toEqual([{ type: "text", text: "partialcontinued" }]);
+  });
+
+  test("appends a missed in-flight message on message_end when the snapshot lacks it", () => {
+    // RPC runtime 的快照不附 streamingMessage：重连后第一条 message_end
+    // 应补上消息，而不是静默丢弃。
+    applyServerMessage(snapshot(), () => {});
+    applyServerMessage(
+      {
+        type: "message_end",
+        seq: 1,
+        message: { role: "assistant", content: [], model: "model", stopReason: "stop" },
+      } as unknown as ServerMessage,
+      () => {},
+    );
+    expect(conversation.value).toHaveLength(1);
+    const item = conversation.value[0];
+    if (item?.kind !== "message") throw new Error("Expected message item");
+    expect(item.streaming).toBe(false);
+    expect(item.liveRun).toBe(true);
+  });
+
   test("describes settlement and errors as effects instead of touching browser APIs", () => {
     applyServerMessage(snapshot(), () => {});
     applyServerMessage({ type: "agent_start", seq: 1 }, () => {});
@@ -120,5 +180,34 @@ describe("session protocol reducer", () => {
 
     expect(settled).toEqual([{ type: "session-settled" }]);
     expect(failed).toEqual([{ type: "error", message: "transport failed" }]);
+  });
+
+  test("marks an unnaturally ended turn continuable, a completed one not", () => {
+    applyServerMessage(snapshot(), () => {});
+    let seq = 0;
+    const endTurnWith = (stopReason: string) => {
+      seq += 1;
+      applyServerMessage({ type: "message_start", seq, message: { role: "assistant", content: [] } as unknown as AgentMessage }, () => {});
+      seq += 1;
+      applyServerMessage({ type: "message_end", seq, message: { role: "assistant", content: [], stopReason } as unknown as AgentMessage }, () => {});
+    };
+
+    endTurnWith("aborted");
+    expect(canContinue.value).toBe(true);
+
+    endTurnWith("error");
+    expect(canContinue.value).toBe(true);
+
+    // 工具执行中被打断的回合也以 toolUse 收尾（后跟错误 toolResult），
+    // 与纯流式中断的 aborted 一样可继续。
+    endTurnWith("toolUse");
+    expect(canContinue.value).toBe(true);
+
+    endTurnWith("stop");
+    expect(canContinue.value).toBe(false);
+
+    // 工作中一律不可继续（例如正常 turn 里工具运行时）。
+    applyServerMessage({ type: "agent_start", seq: seq + 1 }, () => {});
+    expect(canContinue.value).toBe(false);
   });
 });

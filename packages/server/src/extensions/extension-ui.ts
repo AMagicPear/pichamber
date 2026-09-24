@@ -14,6 +14,8 @@ export const WEB_EXTENSION_HOST_MODE = "rpc" as const;
 
 type PendingDialog = {
   resolve: (response: RpcExtensionUIResponse) => void;
+  /** 发给客户端的原始请求帧；后台会话重连时原样重放。 */
+  request: RpcExtensionUIRequest;
 };
 
 /** Omit 在联合类型上不分配，这里手动做分配版。 */
@@ -26,6 +28,10 @@ export type UiBridge = {
   handleResponse: (response: RpcExtensionUIResponse) => void;
   /** 频道销毁时取消所有挂起请求（按取消语义 resolve 默认值）。 */
   cancelPending: () => void;
+  /** 当前尚未应答的对话框请求帧。后台会话的浏览器断开期间弹出的
+   *  审批/确认框会挂在这里，重连时重放给新客户端，否则用户回来看不到
+   *  对话框、工具永远等不到应答。 */
+  pendingRequests: () => RpcExtensionUIRequest[];
 };
 
 /**
@@ -64,13 +70,15 @@ export const createUiBridge = (send: (request: RpcExtensionUIRequest) => void): 
           resolve(defaultValue);
         }, opts.timeout);
       }
+      const outgoing = { ...request, id } as RpcExtensionUIRequest;
       pending.set(id, {
         resolve: (response) => {
           cleanup();
           resolve(parseResponse(response));
         },
+        request: outgoing,
       });
-      send({ ...request, id });
+      send(outgoing);
     });
   };
 
@@ -208,5 +216,6 @@ export const createUiBridge = (send: (request: RpcExtensionUIRequest) => void): 
         dialog.resolve({ type: "extension_ui_response", id, cancelled: true });
       }
     },
+    pendingRequests: () => [...pending.values()].map((dialog) => dialog.request),
   };
 };

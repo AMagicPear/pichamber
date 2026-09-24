@@ -24,6 +24,16 @@
 
 TypeSript中的函数定义优先使用 `const foo = (...) => {}`；`void` / `Promise<void>` 的语法，不要使用`function`。返回类型通常交给 TypeScript 推断，不要标注 `void` 返回类型。
 
+注释语言：新代码用中文写「为什么」（架构/领域决策），用英文写公开 API 与类型文档；避免在同一文件内无理由地切换。
+
+### 约定例外
+
+下列情况有意偏离上述通用约定，请勿“顺手”改回去：
+
+- `packages/builtin-extensions/pi-apply-patch` 的行为与实现对齐上游 [openai/codex](https://github.com/openai/codex) 的 apply_patch，保留其原有的 `function` 声明、tab 缩进与命名，便于与上游 diff 对照；不要按本仓库的箭头函数约定改写。
+- `packages/web/src/components/conversation/messages/ConversationMessages.vue` 的全局 `<style>` 是有意为之：它约束的是不同子组件渲染出的相邻 article 之间的间距，scoped CSS 的 `+` 选择器无法跨越组件边界。
+- `packages/web/src/components/panels/file-tree.css` 由 `FileTree.vue`、`FileTreeNode.tsx`、`FileSearchResult.vue` 共用，因此不放在任一组件的 scoped 样式里。
+
 ## 项目背景
 
 项目配置了`vite-svg-loader` 可把 SVG 当 Vue 组件导入。当前项目内图标分为以下几种：

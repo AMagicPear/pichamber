@@ -138,8 +138,8 @@ const localizedError = computed(() => {
   padding: 6px 8px;
   border: 1px solid var(--ui-border-subtle);
   border-radius: 6px;
-  background: var(--ui-warning-soft, #fdf3d8);
-  color: var(--ui-warning-text, #6f4f00);
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning-text);
   font-size: 12px;
   line-height: 16px;
 }

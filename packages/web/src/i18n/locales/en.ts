@@ -75,6 +75,7 @@ export default {
     copySessionIdSuccess: "Copied session ID",
     copySessionIdFailed: "Failed to copy session ID",
     missingCwdTooltip: "Working directory is gone: {cwd}. Click to fork the session into another location.",
+    runningTooltip: "This session is running",
     deleteSession: "Delete session",
     newSessionLabel: "New Session",
     sessionFallback: "Session {id}",
@@ -440,6 +441,7 @@ export default {
     dictationPermissionDenied: "Microphone permission was denied",
     dictationFailed: "Dictation could not start. Check your microphone and try again.",
     stopAgent: "Stop agent",
+    continueTurn: "Continue interrupted response",
     steer: "Steer",
     followUp: "Follow up",
     restoreAll: "Restore all",
@@ -462,6 +464,8 @@ export default {
     dropImageIndicator: "Drop image to attach",
     shelfFiles: "Files",
     shelfCommands: "Pi commands",
+    builtinCompact: "Manually compact the session context",
+    builtinReload: "Reload extensions, prompts, themes, and context files",
     commandSource: {
       extension: "Extension",
       skill: "Skill",
@@ -634,6 +638,11 @@ export default {
     tool: "Tool",
     custom: "{name}",
     failed: "{name} failed",
+  },
+
+  notifications: {
+    sessionSettled: "Agent finished responding.",
+    sessionSettledModel: "{model} finished responding.",
   },
 
   language: {
