@@ -13,6 +13,7 @@ const props = defineProps<{ show: boolean; initialPath?: string }>();
 const emit = defineEmits<{ close: []; select: [path: string] }>();
 
 const path = ref("");
+const roots = ref<Array<{ name: string; path: string }>>([]);
 const entries = ref<Array<{ name: string; path: string }>>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -27,6 +28,7 @@ const browse = async (target?: string) => {
     const result = await browseProjectDirectories(target);
     if (current !== requestVersion) return;
     path.value = result.path;
+    roots.value = result.roots;
     entries.value = result.entries;
     requestedPath.value = result.requestedPath;
   } catch (cause) {
@@ -57,9 +59,10 @@ const dismissAncestorNotice = () => {
  *  renders platform-correct segments (Windows: \foo\bar, Unix: /foo/bar). */
 const breadcrumbSegments = computed(() => {
   if (!path.value) return [] as Array<{ name: string; path: string }>;
+  const sep = /^(?:[A-Za-z]:[\\/]|\\\\)/.test(path.value) ? "\\" : "/";
   const trimmed = path.value.replace(/[\\/]+$/, "");
   const segments: Array<{ name: string; path: string }> = [];
-  const sep = trimmed.includes("\\") && !trimmed.includes("/") ? "\\" : "/";
+  if (sep === "/") segments.push({ name: "/", path: "/" });
   const parts = trimmed.split(/[\\/]/).filter(Boolean);
   let running = sep === "/" ? "/" : "";
   for (let i = 0; i < parts.length; i += 1) {
@@ -75,6 +78,7 @@ const breadcrumbSegments = computed(() => {
   }
   return segments;
 });
+const breadcrumbSeparator = computed(() => path.value.includes("\\") ? "\\" : "/");
 
 /** Resolve a user-facing error message via i18n. We only translate the two
  *  shapes the server actually emits (`ENOENT` / generic); everything else
@@ -100,8 +104,15 @@ const localizedError = computed(() => {
         </div>
         <nav v-if="breadcrumbSegments.length" class="project-picker__breadcrumb" :aria-label="t('projectPicker.pathLabel')">
           <template v-for="(segment, index) in breadcrumbSegments" :key="segment.path">
-            <span v-if="index > 0" class="project-picker__breadcrumb-sep" aria-hidden="true">/</span>
-            <button type="button"
+            <span v-if="index > 0 && breadcrumbSegments[index - 1]?.path !== '/'" class="project-picker__breadcrumb-sep" aria-hidden="true">{{ breadcrumbSeparator }}</span>
+            <select v-if="roots.length > 1 && roots.some((root) => root.path === segment.path)"
+              class="project-picker__root-select"
+              :aria-label="t('projectPicker.drive')"
+              :value="segment.path"
+              @change="browse(($event.target as HTMLSelectElement).value)">
+              <option v-for="root in roots" :key="root.path" :value="root.path">{{ root.name }}</option>
+            </select>
+            <button v-else type="button"
               :class="['project-picker__breadcrumb-segment', { 'is-current': index === breadcrumbSegments.length - 1 }]"
               :title="segment.path"
               :aria-current="index === breadcrumbSegments.length - 1 ? 'location' : undefined"
@@ -119,7 +130,6 @@ const localizedError = computed(() => {
           <p v-else-if="entries.length === 0">{{ t('projectPicker.noSubdirectories') }}</p>
         </div>
         <footer>
-          <span class="project-picker__hint">{{ t('projectPicker.hint') }}</span>
           <button type="button" class="project-picker__cancel" @click="emit('close')">{{ t('common.cancel') }}</button>
           <button type="button" class="project-picker__open" :disabled="loading || !path.trim()" @click="choose">{{ t('projectPicker.useThisFolder') }}</button>
         </footer>
@@ -209,6 +219,22 @@ const localizedError = computed(() => {
   white-space: nowrap;
 }
 
+.project-picker__root-select {
+  max-width: 16ch;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-text-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.project-picker__root-select:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
 .project-picker__breadcrumb-segment:hover:not(.is-current) {
   background: var(--ui-surface-hover);
   color: var(--ui-text-strong);
@@ -275,6 +301,7 @@ const localizedError = computed(() => {
 .project-picker footer {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
   min-height: 22px;
   padding: 1px 4px 0;
@@ -290,12 +317,6 @@ const localizedError = computed(() => {
   font-size: 12px;
   cursor: pointer;
   transition: background-color var(--ui-duration-fast) var(--ui-ease-standard), color var(--ui-duration-fast) var(--ui-ease-standard);
-}
-
-.project-picker__hint {
-  flex: 1 1 auto;
-  color: var(--ui-text-muted);
-  font-size: 11px;
 }
 
 .project-picker__cancel:hover,

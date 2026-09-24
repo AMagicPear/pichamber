@@ -401,10 +401,10 @@ export default {
 
   projectPicker: {
     pathLabel: "当前路径",
+    drive: "选择磁盘",
     openFolder: "打开此文件夹",
     loadingDirectories: "正在加载目录...",
     noSubdirectories: "无子目录",
-    hint: "点击面包屑或文件夹进入，「使用此文件夹」作为分支会话的目标",
     useThisFolder: "使用此文件夹",
     ancestorNotice: "{requested} 已不存在，已跳转到最近的已存在目录 {current}",
     errorNotFound: "该路径不存在",

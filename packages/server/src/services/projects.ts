@@ -3,6 +3,23 @@ import { dirname, isAbsolute, join, parse, resolve } from "node:path";
 import type { ProjectBrowseResult } from "@amagicpear/pichamber-shared";
 import { canonicalWorkspace, getWorkspace } from "./workspace";
 
+let windowsRoots: Promise<Array<{ name: string; path: string }>> | null = null;
+
+const listWindowsRoots = () => {
+  windowsRoots ??= Promise.all(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(async (letter) => {
+      const path = `${letter}:\\`;
+      try {
+        await readdir(path);
+        return { name: `${letter}:`, path };
+      } catch {
+        return null;
+      }
+    }),
+  ).then((roots) => roots.filter((root): root is { name: string; path: string } => root !== null));
+  return windowsRoots;
+};
+
 /** Walk up `target` until `realpath` resolves, then return that ancestor.
  *  Returns `null` if even the root of the path doesn't exist — the caller
  *  can then fall back to a known-good root (home) instead of throwing. */
@@ -43,10 +60,14 @@ const readDirectory = async (
       }),
   );
   const root = parse(path).root;
+  const roots = process.platform === "win32"
+    ? await listWindowsRoots()
+    : [{ name: root, path: root }];
   return {
     path,
     parent: path === root ? null : dirname(path),
-      entries: directories
+    roots,
+    entries: directories
       .filter((entry): entry is { name: string; path: string } => entry !== null)
       .sort((a, b) => a.name.localeCompare(b.name)),
     requestedPath,

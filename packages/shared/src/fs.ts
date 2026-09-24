@@ -39,6 +39,7 @@ export type ProjectBrowseResult = {
    *  starting point instead of failing outright. */
   path: string;
   parent: string | null;
+  roots: Array<{ name: string; path: string }>;
   entries: Array<{ name: string; path: string }>;
   /** The path the caller originally asked to browse, or null when it was
    *  resolved directly. A non-null value means `path` is an ancestor fallback. */

@@ -414,10 +414,10 @@ export default {
 
   projectPicker: {
     pathLabel: "Current path",
+    drive: "Select drive",
     openFolder: "Open this folder",
     loadingDirectories: "Loading directories...",
     noSubdirectories: "No subdirectories",
-    hint: "Click a breadcrumb segment or folder to enter it, then “Use this folder” as the fork target",
     useThisFolder: "Use this folder",
     ancestorNotice: "{requested} no longer exists — opened the nearest existing directory {current} instead",
     errorNotFound: "Path not found",

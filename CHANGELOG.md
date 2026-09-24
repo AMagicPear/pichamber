@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.4.1] - 2026-09-24
+
+### Fixed
+
+- Project picker path navigation now reaches the filesystem root and can
+  switch between available Windows drives.
+
 ## [1.4.0] - 2026-09-11
 
 ### Added
