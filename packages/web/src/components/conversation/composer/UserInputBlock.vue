@@ -17,7 +17,6 @@ import ComposerSuggestions from "@/components/conversation/composer/ComposerSugg
 import ModelSelector from "@/components/ui/ModelSelector.vue";
 import ThinkingLevelSelector from "@/components/ui/ThinkingLevelSelector.vue";
 import ComposerSurfaceStack from "@/components/conversation/composer/ComposerSurfaceStack.vue";
-import SendModeToggle from "@/components/conversation/composer/SendModeToggle.vue";
 import ActivityPanel from "@/components/activity/ActivityPanel.vue";
 import ActivityToggle from "@/components/activity/ActivityToggle.vue";
 import { messageText } from "@/components/conversation/messages/messageContent";
@@ -30,6 +29,11 @@ import { useDictation } from "@/composables/useDictation";
 import { pushErrorToast } from "@/stores/extensionUi";
 import { MorphIcon } from "morphicons/vue";
 import { lucideIcon } from "@/components/ui/morphIcons";
+import {
+  modelsForComposerInput,
+  selectedModelForComposerInput,
+  supportsImageInput,
+} from "@/components/ui/modelCapabilities";
 
 const { t } = useI18n();
 
@@ -112,11 +116,11 @@ const applyGoalPrefix = () => {
 };
 
 const pendingDictationSend = ref<{ behavior?: "steer" | "followUp" } | null>(null);
-/** 被打断/出错后的空闲态：草稿为空时发送键变成"继续"键（草稿非空则
- *  仍是常规发送，用户可以不继续而是发新消息）。 */
 const hasDraftContent = computed(() => Boolean(draft.value?.trim()) || images.value.length > 0);
 const continueMode = computed(() => !working.value && props.canContinue && !hasDraftContent.value);
 const emitSendNow = (behavior?: "steer" | "followUp") => {
+  // Fail closed: never send attachments to a model that is declared text-only.
+  if (selectedModelRejectsImages.value) return;
   applyGoalPrefix();
   emit("send", behavior);
 };
@@ -400,6 +404,15 @@ const openFiles = () => {
 };
 
 const pendingCount = computed(() => props.pending.steering.length + props.pending.followUp.length);
+
+const needsImageInput = computed(() => images.value.length > 0);
+/** 附图时只把目录明确标记为 image input 的模型传入选择器；缺失能力
+ *  元数据的模型 fail closed。已选文本模型从选择器清空，并由发送 guard 阻止误发。 */
+const selectableModels = computed(() => modelsForComposerInput(props.availableModels, needsImageInput.value));
+const selectableModel = computed(() => selectedModelForComposerInput(props.model, needsImageInput.value));
+const selectedModelRejectsImages = computed(
+  () => needsImageInput.value && !supportsImageInput(props.model),
+);
 /** 结构化 widget（非 lines）进活动卡片区；lines 走状态脚注（见下）。 */
 type CardEntry = {
   widget: Exclude<ExtensionWidget, { kind: "lines" }>;
@@ -521,6 +534,9 @@ const placeholder = computed(() => {
                 />
               </div>
             </div>
+            <p v-if="selectedModelRejectsImages" class="composer__images-warning" role="alert">
+              {{ t('composer.modelRejectsImages') }}
+            </p>
           </div>
           <div v-if="pendingCount" class="composer__queue">
             <div v-for="(message, index) in pending.steering" :key="`steer:${index}:${message}`">
@@ -563,19 +579,19 @@ const placeholder = computed(() => {
             </div>
             <div class="composer__footer-trailing">
               <div class="composer__models">
-                <ModelSelector :model="model" :available-models="availableModels"
+                <ModelSelector :model="selectableModel" :available-models="selectableModels"
                   @select="emit('selectModel', $event)" />
                 <ThinkingLevelSelector :level="thinkingLevel" :available-levels="availableThinkingLevels"
                   @select="emit('selectThinkingLevel', $event)" />
               </div>
               <!-- Mode toggle lives next to the action buttons now that it's
-               only meaningful while the agent is busy. The indicator span
-               below is purely visual: it slides between the two tabs via
-               CSS variables synced to the active button's rect, so the
-               tabs themselves only own their text colour. -->
-              <SendModeToggle v-if="working" v-model="submitMode"
-                :steer-label="t('composer.steer')" :follow-up-label="t('composer.followUp')"
-                :ariaLabel="t('composer.sendMode')" />
+               only meaningful while the agent is busy. -->
+              <div v-if="working" class="composer__mode" role="tablist" :aria-label="t('composer.sendMode')">
+                <button type="button" role="tab" :aria-selected="submitMode === 'steer'"
+                  :class="{ 'is-active': submitMode === 'steer' }" @click="submitMode = 'steer'">{{ t('composer.steer') }}</button>
+                <button type="button" role="tab" :aria-selected="submitMode === 'followUp'"
+                  :class="{ 'is-active': submitMode === 'followUp' }" @click="submitMode = 'followUp'">{{ t('composer.followUp') }}</button>
+              </div>
               <IconButton size="compact" :label="dictationLabel" :pressed="isDictating"
                 :tone="isDictating ? 'danger' : undefined" :disabled="!dictation.supported" @click="dictation.toggle">
                 <MorphIcon :icon="lucideIcon(isDictating ? 'square' : 'mic')" spring="snappy" reduced-motion="user" />
@@ -584,8 +600,9 @@ const placeholder = computed(() => {
                 <StopIcon />
               </IconButton>
               <IconButton size="compact"
-                :label="working ? (submitMode === 'steer' ? t('composer.steerAgent') : t('composer.queueFollowUp')) : continueMode ? t('composer.continueTurn') : t('composer.send')"
-                :disabled="continueMode ? !connected : (!canSend && !isDictating)" @click="emitSend(submitMode)">
+                :label="selectedModelRejectsImages ? t('composer.modelRejectsImages') : (working ? (submitMode === 'steer' ? t('composer.steerAgent') : t('composer.queueFollowUp')) : continueMode ? t('composer.continueTurn') : t('composer.send'))"
+                :disabled="(continueMode ? !connected : (!canSend && !isDictating)) || selectedModelRejectsImages"
+                @click="emitSend(submitMode)">
                 <MorphIcon :icon="lucideIcon(continueMode ? 'play' : 'send')" spring="snappy" reduced-motion="user" />
               </IconButton>
             </div>
@@ -769,6 +786,14 @@ const placeholder = computed(() => {
   padding: 0 12px 10px;
 }
 
+.composer__images-warning {
+  width: 100%;
+  margin: 0;
+  color: var(--ui-status-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .composer__image {
   width: 42px;
   height: 42px;
@@ -808,7 +833,6 @@ const placeholder = computed(() => {
   .composer__dictation-wave i {
     animation: none;
   }
-
 }
 
 /* Pending messages are separated from the editor by a quiet divider. */
@@ -972,4 +996,38 @@ const placeholder = computed(() => {
   gap: 4px;
 }
 
+/* Mode toggle (busy-only): sits next to the action buttons so its meaning
+ * ("this is how your next message goes") is obvious. Slimmer than the
+ * previous segmented control so it doesn't compete with the icons. */
+.composer__mode {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 24px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--ui-surface-selected);
+  margin-left: 2px;
+}
+
+.composer__mode button {
+  height: 20px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ui-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.composer__mode button.is-active {
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-control);
+  color: var(--ui-text-strong);
+}
 </style>

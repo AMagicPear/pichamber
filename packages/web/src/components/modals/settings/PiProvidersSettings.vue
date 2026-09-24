@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { PiProviderSettings } from "@amagicpear/pichamber-shared";
-import { fetchPiProviders, removePiProviderCredential, setPiProviderApiKey, toMessage } from "@/api/client";
+import { fetchPiProviders, refreshPiProviderModels, removePiProviderCredential, setPiProviderApiKey, toMessage } from "@/api/client";
 import { workspace } from "@/stores/workspace";
 import ProviderLogo from "@/components/ui/ProviderLogo";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
@@ -17,6 +17,7 @@ const error = ref<string | null>(null);
 const editingProviderId = ref<string | null>(null);
 const apiKey = ref("");
 const saving = ref(false);
+const refreshingId = ref<string | null>(null);
 
 const orderedProviders = computed(() =>
   [...providers.value].sort((a, b) => Number(b.auth.configured) - Number(a.auth.configured) || a.name.localeCompare(b.name)),
@@ -74,6 +75,22 @@ const removeCredential = async (provider: PiProviderSettings) => {
   }
 };
 
+/** Refresh a dynamic provider's model catalog through Pi's own provider path
+ *  (OrcaRouter gateway catalogs re-fetch `GET /v1/models`). */
+const refreshModels = async (provider: PiProviderSettings) => {
+  const sessionId = workspace.sessionId;
+  if (!sessionId) return;
+  refreshingId.value = provider.id;
+  error.value = null;
+  try {
+    providers.value = (await refreshPiProviderModels(sessionId, provider.id)).providers;
+  } catch (cause) {
+    error.value = toMessage(cause);
+  } finally {
+    refreshingId.value = null;
+  }
+};
+
 watch(() => workspace.sessionId, load, { immediate: true });
 </script>
 
@@ -119,6 +136,12 @@ watch(() => workspace.sessionId, load, { immediate: true });
           <CommandButton variant="compact" :disabled="saving" @click="startEditing(provider.id)">
             {{ provider.auth.configured ? t('settings.providers.updateKey') : t('settings.providers.setKey') }}
           </CommandButton>
+          <CommandButton
+            variant="compact"
+            :disabled="saving || refreshingId === provider.id"
+            :aria-label="t('settings.providers.refreshModels')"
+            @click="refreshModels(provider)"
+          >{{ refreshingId === provider.id ? t('settings.providers.refreshing') : t('settings.providers.refresh') }}</CommandButton>
           <CommandButton
             v-if="provider.auth.canRemove"
             variant="compact"

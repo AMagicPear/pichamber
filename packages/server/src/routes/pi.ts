@@ -29,6 +29,7 @@ import { getMcpOverview, setMcpServerEnabled } from "../settings/mcp-config";
 import {
   getPiBehaviorSettings,
   listPiProviders,
+  refreshPiProviderModels,
   removePiProviderCredential,
   setPiProviderApiKey,
   updatePiBehaviorSettings,
@@ -45,6 +46,7 @@ import {
 type Paths =
   | "/api/pi/providers"
   | "/api/pi/providers/:provider/credential"
+  | "/api/pi/providers/:provider/models/refresh"
   | "/api/pi/behavior"
   | "/api/pi/extensions"
   | "/api/pi/extensions/overview"
@@ -78,6 +80,19 @@ export const piRoutes: Routes<Paths> = {
         const providers = await removePiProviderCredential(session, req.params.provider);
         refreshSessionModelState(sessionId);
         return Response.json({ providers });
+      }),
+  },
+
+  "/api/pi/providers/:provider/models/refresh": {
+    POST: (req) =>
+      withSdkSession(req, async (session, _cwd, sessionId) => {
+        try {
+          const providers = await refreshPiProviderModels(session, req.params.provider);
+          refreshSessionModelState(sessionId);
+          return Response.json({ providers });
+        } catch (error) {
+          return badRequest(toMessage(error));
+        }
       }),
   },
 

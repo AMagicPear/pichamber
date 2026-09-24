@@ -308,6 +308,11 @@ export const removePiProviderCredential = (sessionId: string, provider: string) 
     method: "DELETE",
   }).then((r) => jsonOrThrow<{ providers: PiProviderSettings[] }>(r));
 
+export const refreshPiProviderModels = (sessionId: string, provider: string) =>
+  fetch(`${BASE}/pi/providers/${encodeURIComponent(provider)}/models/refresh?sessionId=${encodeURIComponent(sessionId)}`, {
+    method: "POST",
+  }).then((r) => jsonOrThrow<{ providers: PiProviderSettings[] }>(r));
+
 export const fetchPiBehavior = (sessionId: string) =>
   fetch(`${BASE}/pi/behavior?sessionId=${encodeURIComponent(sessionId)}`).then((r) =>
     jsonOrThrow<PiBehaviorSettings>(r),
