@@ -17,7 +17,7 @@ import PaletteIcon from "lucide-static/icons/palette.svg";
 import FileCodeIcon from "lucide-static/icons/file-code.svg";
 import ServerIcon from "lucide-static/icons/server.svg";
 import { settings } from "@/stores/settings";
-import { preference as themePreference, setTheme, themeOptions } from "@/stores/theme";
+import { customThemeCss, preference as themePreference, setCustomThemeCss, setTheme, themeOptions } from "@/stores/theme";
 import { localeOptions, localePreference, setLocale } from "@/i18n";
 import { persistedState } from "@/stores/persisted";
 import en from "@/i18n/locales/en";
@@ -235,6 +235,16 @@ const selectItem = (key: string) => {
                   <span><strong>{{ t(option.labelKey) }}</strong><small>{{ t(option.descriptionKey) }}</small></span>
                 </button>
               </div>
+            </SettingsGroup>
+
+            <SettingsGroup :title="t('settings.appearance.customCssTitle')" class="custom-css-group">
+              <textarea
+                :value="customThemeCss"
+                rows="8"
+                spellcheck="false"
+                :aria-label="t('settings.appearance.customCssTitle')"
+                @input="setCustomThemeCss(($event.target as HTMLTextAreaElement).value)"
+              />
             </SettingsGroup>
 
             <SettingsGroup :title="t('settings.appearance.languageTitle')" class="language-group">
@@ -460,6 +470,9 @@ const selectItem = (key: string) => {
 .theme-options__preview.is-system::before { background: linear-gradient(135deg, #efede7 0 49.5%, #2a2a27 50%); }
 .theme-options__preview.is-system i { background: linear-gradient(135deg, #d5d1c8 0 49.5%, #565550 50%); }
 @media (max-width: 700px) { .theme-options { grid-template-columns: 1fr; } }
+.custom-css-group { margin-top: 22px; }
+.custom-css-group textarea { width: 100%; min-height: 160px; box-sizing: border-box; padding: 8px; border: 1px solid var(--ui-border); border-radius: 6px; background: var(--ui-surface); color: var(--ui-text); font: 12px/1.5 var(--ui-font-mono); resize: vertical; }
+.custom-css-group textarea:focus-visible { border-color: var(--ui-border-focus); outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 
 /* Language picker: simple text pills, no preview tiles needed. */
 .language-group { margin-top: 22px; }

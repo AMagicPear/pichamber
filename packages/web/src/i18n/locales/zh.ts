@@ -136,6 +136,7 @@ export default {
       themeLightDesc: "使用浅色界面",
       themeDark: "深色",
       themeDarkDesc: "使用深色界面",
+      customCssTitle: "自定义 CSS",
       languageTitle: "语言",
     },
 

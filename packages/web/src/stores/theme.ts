@@ -28,6 +28,27 @@ export const activeTheme = computed<ResolvedTheme>(() =>
 );
 export const preference = computed(() => themeState.preference);
 
+const customTheme = persistedState<{ css: string }>("pichamber.theme-css.v1", { css: "" }, (raw) => ({
+  css: typeof raw.css === "string" ? raw.css : "",
+}));
+export const customThemeCss = computed(() => customTheme.css);
+
+export const setCustomThemeCss = (css: string) => {
+  customTheme.css = css;
+  if (typeof document === "undefined") return;
+  let style = document.getElementById("pichamber-custom-theme-css") as HTMLStyleElement | null;
+  if (!css) {
+    style?.remove();
+    return;
+  }
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "pichamber-custom-theme-css";
+    document.head.append(style);
+  }
+  style.textContent = css;
+};
+
 let initialized = false;
 
 const applyTheme = () => {
@@ -44,6 +65,7 @@ export const initializeTheme = () => {
     systemTheme.value = media.matches ? "dark" : "light";
     applyTheme();
   };
+  setCustomThemeCss(customTheme.css);
   syncSystemTheme();
   media.addEventListener("change", syncSystemTheme);
 };

@@ -138,6 +138,7 @@ export default {
       themeLightDesc: "Use the light interface.",
       themeDark: "Dark",
       themeDarkDesc: "Use the dark interface.",
+      customCssTitle: "Custom CSS",
       languageTitle: "Language",
     },
 
