@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.5.1] - 2026-10-07
+
+### Changed
+
+- Replaced the MCP adapter integration with Pi's built-in MCP, codemode,
+  and tool-search extensions. MCP settings now show live connection status
+  and support reconnecting, OAuth, tool exposure, and project overrides.
+- Added provider OAuth sign-in and credential removal, prompt-cache warming
+  controls, and usage refreshes for cache-warming requests.
+- Codemode results now show scripts, nested calls, and text with images,
+  including partial results during execution.
+
+### Fixed
+
+- Resuming interrupted turns now respects Pi's canonical session context
+  and runs its retry, compaction, and pre-settlement lifecycle.
+- Streaming replies continue correctly after reconnecting to a pending
+  assistant message; nested tool calls remain grouped under their parent.
+- Virtual-model responses display the actual provider and model together.
+
+### Documentation
+
+- Documented the Pi 0.85.1 to 1.0.4 feature adaptations and MCP migration.
+
 ## [1.5.0] - 2026-10-07
 
 ### Changed
