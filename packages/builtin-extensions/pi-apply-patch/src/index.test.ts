@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext, Theme, ToolResultEvent } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionToolContext, Theme, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 import {
 	ApplyPatchError,
 	applyPatch,
@@ -29,8 +29,9 @@ const operations: ApplyPatchOperations = {
 	stat: fs.stat,
 	realpath: fs.realpath,
 };
+const toolContext = () => ({ cwd, tools: [] }) as unknown as ExtensionToolContext;
 const execute = (body: string, custom: ApplyPatchOperations = operations, signal?: AbortSignal) =>
-	createApplyPatchTool({ operations: custom }).execute("test", { input: wrap(body) }, signal, undefined, { cwd } as ExtensionContext);
+	createApplyPatchTool({ operations: custom }).execute("test", { input: wrap(body) }, signal, undefined, toolContext());
 const plainTheme = {
 	fg: (_name: string, text: string) => text,
 	bg: (_name: string, text: string) => text,
@@ -273,7 +274,7 @@ describe("failures, cancellation and concurrent writes", () => {
 
 	test("progress callback exceptions do not interrupt patch application", async () => {
 		const tool = createApplyPatchTool();
-		const result = await tool.execute("test", { input: wrap("*** Add File: a\n+new") }, undefined, () => { throw new Error("render failed"); }, { cwd } as ExtensionContext);
+		const result = await tool.execute("test", { input: wrap("*** Add File: a\n+new") }, undefined, () => { throw new Error("render failed"); }, toolContext());
 		expect(result.details?.result?.failures).toEqual([]);
 		expect(await get("a")).toBe("new\n");
 	});

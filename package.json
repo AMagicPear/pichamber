@@ -31,9 +31,9 @@
     "packages/builtin-extensions/pi-apply-patch"
   ],
   "catalog": {
-    "@earendil-works/pi-agent-core": "^0.85.1",
-    "@earendil-works/pi-ai": "^0.85.1",
-    "@earendil-works/pi-coding-agent": "^0.85.1",
+    "@earendil-works/pi-agent-core": "^1.0.4",
+    "@earendil-works/pi-ai": "^1.0.4",
+    "@earendil-works/pi-coding-agent": "^1.0.4",
     "@tsconfig/node24": "^24.0.5",
     "bun-pty": "^0.4.10",
     "typescript": "^7.0.2"
@@ -75,9 +75,9 @@
     "commander": "^15.0.0"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.6.2",
     "bun-types": "^1.4.2",
-    "oxlint": "~1.81.0",
+    "oxlint": "~1.85.0",
     "typescript": "catalog:"
   },
   "engines": {

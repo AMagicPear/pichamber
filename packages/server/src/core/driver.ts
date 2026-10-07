@@ -331,11 +331,13 @@ export class RpcSessionDriver implements SessionDriver {
     };
   }
 
+  /** The RPC client reports how the input was taken (`started` / `queued` / `handled`);
+   * pichamber reads the outcome from the event stream, so the disposition is dropped. */
   async prompt(message: string, options?: PromptOptions) {
     const client = this.rpcClient;
-    if (options?.streamingBehavior === "steer") return client.steer(message, options.images);
-    if (options?.streamingBehavior === "followUp") return client.followUp(message, options.images);
-    return client.prompt(message, options?.images);
+    if (options?.streamingBehavior === "steer") await client.steer(message, options.images);
+    else if (options?.streamingBehavior === "followUp") await client.followUp(message, options.images);
+    else await client.prompt(message, options?.images);
   }
 
   continue() {
