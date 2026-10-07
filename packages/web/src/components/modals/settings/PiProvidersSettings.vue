@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { PiProviderSettings } from "@amagicpear/pichamber-shared";
-import { fetchPiProviders, refreshPiProviderModels, removePiProviderCredential, setPiProviderApiKey, toMessage } from "@/api/client";
+import { fetchPiProviders, loginPiProvider, refreshPiProviderModels, removePiProviderCredential, setPiProviderApiKey, toMessage } from "@/api/client";
 import { workspace } from "@/stores/workspace";
 import ProviderLogo from "@/components/ui/ProviderLogo";
 import SettingsPageHeader from "./SettingsPageHeader.vue";
@@ -75,6 +75,15 @@ const removeCredential = async (provider: PiProviderSettings) => {
   }
 };
 
+const login = async (provider: PiProviderSettings) => {
+  if (!workspace.sessionId || saving.value) return;
+  saving.value = true;
+  error.value = null;
+  try { providers.value = (await loginPiProvider(workspace.sessionId, provider.id)).providers; }
+  catch (cause) { error.value = toMessage(cause); }
+  finally { saving.value = false; }
+};
+
 /** Refresh a dynamic provider's model catalog through Pi's own provider path
  *  (OrcaRouter gateway catalogs re-fetch `GET /v1/models`). */
 const refreshModels = async (provider: PiProviderSettings) => {
@@ -116,7 +125,7 @@ watch(() => workspace.sessionId, load, { immediate: true });
         </span>
         <small>{{ t('settings.providers.models', { count: provider.modelCount }) }}</small>
       </div>
-      <div v-if="provider.auth.supportsApiKey" class="provider-settings__actions">
+      <div class="provider-settings__actions">
         <template v-if="editingProviderId === provider.id">
           <SearchBox
             v-model="apiKey"
@@ -133,7 +142,8 @@ watch(() => workspace.sessionId, load, { immediate: true });
           <CommandButton variant="compact" :disabled="saving" @click="editingProviderId = null">{{ t('common.cancel') }}</CommandButton>
         </template>
         <template v-else>
-          <CommandButton variant="compact" :disabled="saving" @click="startEditing(provider.id)">
+          <CommandButton v-if="provider.auth.oauthLabel" variant="compact" :disabled="saving" @click="login(provider)">{{ provider.auth.oauthLabel }}</CommandButton>
+          <CommandButton v-if="provider.auth.supportsApiKey" variant="compact" :disabled="saving" @click="startEditing(provider.id)">
             {{ provider.auth.configured ? t('settings.providers.updateKey') : t('settings.providers.setKey') }}
           </CommandButton>
           <CommandButton

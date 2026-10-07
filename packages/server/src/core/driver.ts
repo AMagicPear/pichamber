@@ -179,36 +179,24 @@ export class SdkSessionDriver implements SessionDriver {
     return this.session.prompt(message, options);
   }
 
-  /** Resume the interrupted turn, mirroring AgentSession's own auto-retry:
-   * `agent.continue()` refuses a trailing assistant message, so an
-   * aborted/errored/truncated response is dropped from agent state first
-   * (it stays in the session history). `agent.continue()` emits the full
-   * agent event stream — persistence, extensions and broadcasts all ride
-   * AgentSession's permanent agent subscription — but the isStreaming flag
-   * and the closing `agent_settled` live inside prompt()'s private wrapper,
-   * so replicate that minimal lifecycle here. */
+  /** Resume without appending another user message; preserve failed attempts in raw history. */
   async continue() {
     const session = this.session;
+    if (session.isStreaming) throw new Error("Cannot continue while a run is in progress");
     if (session.isCompacting) throw new Error("Cannot continue while compaction is in progress");
-    const messages = session.agent.state.messages;
-    const last = messages[messages.length - 1];
+    const projection = session.sessionManager.buildSessionProjection();
+    const contribution = projection.entries.findLast((entry) => entry.messages.some((message) => message.role !== "system"));
+    const last = contribution?.messages.findLast((message) => message.role !== "system");
     if (!last) throw new Error("Nothing to continue from an empty session");
     if (last.role === "assistant") {
       if (last.stopReason !== "aborted" && last.stopReason !== "error" && last.stopReason !== "length") {
         throw new Error("The last turn completed; there is nothing to continue");
       }
-      session.agent.state.messages = messages.slice(0, -1);
+      session.sessionManager.appendContextEdit(contribution!.sourceEntry.id, null);
     }
-    const lifecycle = session as unknown as {
-      _isAgentRunActive: boolean;
-      _emitAgentSettled(): Promise<void>;
-    };
-    lifecycle._isAgentRunActive = true;
-    try {
-      await session.agent.continue();
-    } finally {
-      await lifecycle._emitAgentSettled();
-    }
+    session.refreshContext();
+    // 1.0.4 尚无公开 continue API；复用官方完整运行入口，保留重试、压缩和 settle 边界。
+    await (session as unknown as { _runAgentPrompt(messages: AgentMessage[]): Promise<void> })._runAgentPrompt([]);
   }
 
   compact(customInstructions?: string) {

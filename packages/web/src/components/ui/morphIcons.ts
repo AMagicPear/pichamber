@@ -6,6 +6,7 @@
 import { fitIcon } from "morphicons";
 import type { IconNode } from "morphicons";
 import brainRaw from "lucide-static/icons/brain.svg?raw";
+import codeRaw from "lucide-static/icons/code.svg?raw";
 import botRaw from "lucide-static/icons/bot.svg?raw";
 import chevronDownRaw from "lucide-static/icons/chevron-down.svg?raw";
 import chevronRightRaw from "lucide-static/icons/chevron-right.svg?raw";
@@ -43,6 +44,7 @@ import mcpRaw from "@/assets/icons/MCP.svg?raw";
  *  Parsed once into `ICONS` at module load; `lucideIcon` then is O(1). */
 const RAWS = {
   brain: brainRaw,
+  code: codeRaw,
   bot: botRaw,
   "chevron-down": chevronDownRaw,
   "chevron-right": chevronRightRaw,

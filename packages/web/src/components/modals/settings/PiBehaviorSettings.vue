@@ -73,6 +73,9 @@ watch(() => workspace.sessionId, load, { immediate: true });
       <SettingsOption :title="t('settings.behavior.retryTransient')" :description="t('settings.behavior.retryTransientDesc')">
         <input :checked="behavior.autoRetry" type="checkbox" :disabled="saving" @change="save({ autoRetry: ($event.target as HTMLInputElement).checked })" />
       </SettingsOption>
+      <SettingsOption inline :title="t('settings.behavior.cacheWarming')" :description="t('settings.behavior.cacheWarmingDesc')">
+        <SettingsSelect :value="behavior.cacheWarming" :disabled="saving" @change="save({ cacheWarming: ($event.target as HTMLSelectElement).value as PiBehaviorSettings['cacheWarming'] })"><option value="off">{{ t('settings.behavior.cacheWarmingOff') }}</option><option value="streaming">{{ t('settings.behavior.cacheWarmingStreaming') }}</option><option value="idle">{{ t('settings.behavior.cacheWarmingIdle') }}</option></SettingsSelect>
+      </SettingsOption>
     </SettingsGroup>
 
     <SettingsGroup :title="t('settings.behavior.messageDelivery')" class="behavior-settings__section">

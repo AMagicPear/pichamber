@@ -9,7 +9,7 @@ type ContentPart = { type?: unknown; [key: string]: unknown } | string;
 
 /** AgentMessage 是联合类型，并非每个变体都有 content（bashExecution /
  *  branchSummary 等自定义角色没有该字段），统一经宽松类型读取。 */
-const contentOf = (message?: AgentMessage): unknown =>
+const contentOf = (message?: unknown): unknown =>
   (message as { content?: unknown } | undefined)?.content;
 
 const partsOf = (content: unknown): ContentPart[] =>
@@ -52,7 +52,7 @@ export const thinkingText = (message?: AgentMessage): string =>
     .join("\n\n");
 
 /** Image parts (attachments / read-tool results), rendered as thumbnails. */
-export const messageImages = (message?: AgentMessage): Array<{ data: string; mimeType: string }> =>
+export const messageImages = (message?: unknown): Array<{ data: string; mimeType: string }> =>
   partsOf(contentOf(message)).flatMap((part) =>
     typeof part === "object" &&
     part?.type === "image" &&

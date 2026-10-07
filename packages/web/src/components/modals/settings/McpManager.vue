@@ -2,9 +2,11 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { McpOverview } from "@amagicpear/pichamber-shared";
-import { fetchPiMcpOverview, reconnectPiMcpServer, setPiMcpServerEnabled, toMessage } from "@/api/client";
+import { authenticatePiMcpServer, fetchPiMcpOverview, reconnectPiMcpServer, setPiMcpExposure, setPiMcpServerEnabled, toMessage } from "@/api/client";
+import type { McpExposure } from "@earendil-works/pi-coding-agent";
 import { workspace } from "@/stores/workspace";
 import SettingsGroup from "./SettingsGroup.vue";
+import SettingsSelect from "./SettingsSelect.vue";
 import CommandButton from "@/components/ui/CommandButton.vue";
 
 const { t } = useI18n();
@@ -15,6 +17,8 @@ const error = ref<string | null>(null);
 const load = async () => { if (!workspace.sessionId) return; try { overview.value = await fetchPiMcpOverview(workspace.sessionId); error.value = overview.value.error ?? null; } catch (cause) { error.value = toMessage(cause); } };
 const setEnabled = async (name: string, enabled: boolean) => { if (!workspace.sessionId || saving.value) return; saving.value = true; try { overview.value = await setPiMcpServerEnabled(workspace.sessionId, name, enabled); } catch (cause) { error.value = toMessage(cause); } finally { saving.value = false; } };
 const reconnect = async (name: string) => { if (!workspace.sessionId || saving.value) return; saving.value = true; error.value = null; try { overview.value = await reconnectPiMcpServer(workspace.sessionId, name); expanded.value = name; } catch (cause) { error.value = toMessage(cause); } finally { saving.value = false; } };
+const setExposure = async (name: string, event: Event) => { if (!workspace.sessionId || saving.value) return; saving.value = true; error.value = null; try { overview.value = await setPiMcpExposure(workspace.sessionId, name, (event.target as HTMLSelectElement).value as McpExposure); } catch (cause) { error.value = toMessage(cause); } finally { saving.value = false; } };
+const authenticate = async (name: string, action: "login" | "logout") => { if (!workspace.sessionId || saving.value) return; saving.value = true; error.value = null; try { overview.value = await authenticatePiMcpServer(workspace.sessionId, name, action); } catch (cause) { error.value = toMessage(cause); } finally { saving.value = false; } };
 const servers = computed(() => overview.value?.servers ?? []);
 watch(() => workspace.sessionId, load);
 onMounted(load);
@@ -23,17 +27,18 @@ onMounted(load);
 <template>
   <div class="mcp-manager">
     <p v-if="error" class="settings-page__error" role="alert">{{ error }}</p>
-    <div class="mcp-manager__provider"><strong>pi-mcp-adapter</strong><span>{{ t('settings.mcp.provider') }}</span></div>
+    <div class="mcp-manager__provider"><strong>Pi</strong><span>{{ t('settings.mcp.provider') }}</span></div>
     <SettingsGroup :title="t('settings.mcp.servers')">
       <p v-if="overview && !overview.available" class="mcp-manager__state">{{ t('settings.mcp.unavailable') }}</p>
       <p v-else-if="overview && servers.length === 0" class="mcp-manager__state">{{ t('settings.mcp.none') }}</p>
       <ul v-else class="mcp-manager__list">
         <li v-for="server in servers" :key="server.name" class="mcp-manager__server">
           <header><strong>{{ server.name }}</strong><span :class="`is-${server.status}`">{{ t(`settings.mcp.status.${server.status}`) }}</span></header>
-          <div class="mcp-manager__details"><small>{{ t(`settings.mcp.transport.${server.transport}`) }}</small><small>{{ t('settings.mcp.tools', { count: server.toolCount }) }}</small><small v-if="server.resourceCount">{{ t('settings.mcp.resources', { count: server.resourceCount }) }}</small><small v-if="server.promptCount">{{ t('settings.mcp.prompts', { count: server.promptCount }) }}</small><small v-if="server.directTools">{{ t('settings.mcp.directTools') }}</small></div>
+          <div class="mcp-manager__details"><small>{{ t(`settings.mcp.transport.${server.transport}`) }}</small><small>{{ t('settings.mcp.tools', { count: server.toolCount }) }}</small><SettingsSelect v-if="server.configurable" :value="server.exposure" :disabled="saving" :aria-label="t('settings.mcp.exposure')" @change="setExposure(server.name, $event)"><option v-for="exposure in ['codemode', 'deferred', 'direct', 'hidden']" :key="exposure" :value="exposure">{{ exposure }}</option></SettingsSelect><small v-else>{{ server.exposure }}</small></div>
           <small v-if="server.source" class="mcp-manager__path" :title="server.source">{{ server.source }}</small>
-          <div class="mcp-manager__actions"><CommandButton v-if="!server.disabled" variant="compact" :disabled="saving" @click="reconnect(server.name)">{{ t('settings.mcp.refresh') }}</CommandButton><CommandButton v-if="server.tools.length || server.resources.length || server.prompts.length" variant="compact" :disabled="saving" @click="expanded = expanded === server.name ? null : server.name">{{ t(expanded === server.name ? 'settings.mcp.hideDetails' : 'settings.mcp.showDetails') }}</CommandButton><CommandButton variant="compact" :danger="!server.disabled" :disabled="saving" @click="setEnabled(server.name, server.disabled)">{{ t(server.disabled ? 'settings.mcp.restore' : 'settings.mcp.disable') }}</CommandButton></div>
-          <div v-if="expanded === server.name" class="mcp-manager__catalog"><template v-for="group in [{ key: 'tools', items: server.tools }, { key: 'resources', items: server.resources }, { key: 'prompts', items: server.prompts }]" :key="group.key"><section v-if="group.items.length"><small>{{ t(`settings.mcp.${group.key}Title`) }}</small><ul><li v-for="item in group.items" :key="item.name"><strong>{{ item.name }}</strong><span v-if="item.description">{{ item.description }}</span></li></ul></section></template></div>
+          <small v-if="server.error" class="settings-page__error" role="alert">{{ server.error }}</small>
+          <div class="mcp-manager__actions"><CommandButton v-if="!server.disabled" variant="compact" :disabled="saving" @click="reconnect(server.name)">{{ t('settings.mcp.refresh') }}</CommandButton><CommandButton v-if="server.canAuthenticate && server.status === 'needs-auth'" variant="compact" :disabled="saving" @click="authenticate(server.name, 'login')">{{ t('settings.mcp.login') }}</CommandButton><CommandButton v-if="server.canAuthenticate && server.status === 'connected'" variant="compact" :disabled="saving" @click="authenticate(server.name, 'logout')">{{ t('settings.mcp.logout') }}</CommandButton><CommandButton v-if="server.tools.length" variant="compact" :disabled="saving" @click="expanded = expanded === server.name ? null : server.name">{{ t(expanded === server.name ? 'settings.mcp.hideDetails' : 'settings.mcp.showDetails') }}</CommandButton><CommandButton v-if="server.configurable" variant="compact" :danger="!server.disabled" :disabled="saving" @click="setEnabled(server.name, server.disabled)">{{ t(server.disabled ? 'settings.mcp.restore' : 'settings.mcp.disable') }}</CommandButton></div>
+          <div v-if="expanded === server.name" class="mcp-manager__catalog"><section><small>{{ t('settings.mcp.toolsTitle') }}</small><ul><li v-for="item in server.tools" :key="item.name"><strong>{{ item.name }} · {{ item.exposure }}</strong><span v-if="item.description">{{ item.description }}</span></li></ul></section></div>
         </li>
       </ul>
     </SettingsGroup>

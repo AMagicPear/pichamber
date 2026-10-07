@@ -3,12 +3,13 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import ContextIcon from "lucide-static/icons/square-text.svg";
 import type { SessionStatsView } from "@amagicpear/pichamber-shared";
-import { lastAssistantModel, stats } from "@/stores/session";
+import { lastAssistantSelection, stats } from "@/stores/session";
 import { formatCount, formatDateTime, formatPercent, formatUsage } from "@/utils/format";
 
 const { t, locale } = useI18n();
 
 const view = computed<SessionStatsView | undefined>(() => stats.value);
+const dispatchedModel = computed(() => lastAssistantSelection.value ?? view.value?.model);
 
 /** Distinguishes "no model loaded yet" from a populated zero state. The
  *  empty state copy ("Send a message to start…") is friendlier than a wall
@@ -45,8 +46,8 @@ const usageRows = computed(() => {
 const modelTitle = computed(() => {
   const m = view.value?.model;
   if (!m) return "";
-  const id = lastAssistantModel.value ?? m.id;
-  return m.name && m.name !== id ? `${m.provider} / ${m.name}` : `${m.provider} / ${id}`;
+  const actual = dispatchedModel.value;
+  return actual ? `${actual.provider} / ${actual.id}` : "";
 });
 </script>
 
@@ -61,9 +62,9 @@ const modelTitle = computed(() => {
     <div v-else class="context-pane__body">
       <header class="context-pane__header">
         <div class="context-pane__model" :title="modelTitle || undefined">
-          <span class="context-pane__model-provider">{{ view?.model?.provider ?? "" }}</span>
+          <span class="context-pane__model-provider">{{ dispatchedModel?.provider ?? "" }}</span>
           <span v-if="view?.model" class="context-pane__model-sep">/</span>
-          <span class="context-pane__model-id">{{ lastAssistantModel ?? view?.model?.id ?? "" }}</span>
+          <span class="context-pane__model-id">{{ dispatchedModel?.id ?? "" }}</span>
         </div>
         <div v-if="view?.modified" class="context-pane__date">{{ formatDateTime(view.modified, locale) }}</div>
       </header>

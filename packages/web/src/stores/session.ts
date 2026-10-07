@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef } from "vue";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, AssistantMessageEvent } from "@earendil-works/pi-ai";
+import type { AssistantMessage, AssistantMessageEvent, NestedToolCalls } from "@earendil-works/pi-ai";
 import type {
   AgentActivity,
   AgentSessionEvent,
@@ -87,6 +87,7 @@ export type ConversationTool = {
   running: boolean;
   /** 工具开始执行的时刻（ms），客户端用它校准 timeout 倒计时。 */
   startedAt?: number;
+  nestedCalls?: NestedToolCalls;
 };
 
 export type ConversationItem =
@@ -100,13 +101,14 @@ export const conversation = shallowRef<ConversationItem[]>([]);
 /** The actual provider model is durable message data, not a second mutable
  * store field. Snapshot rebuilds and incremental events therefore stay in sync
  * without special reset or reconciliation branches. */
-export const lastAssistantModel = computed(() => {
+export const lastAssistantSelection = computed(() => {
   for (let index = conversation.value.length - 1; index >= 0; index -= 1) {
     const item = conversation.value[index];
-    if (item?.kind === "message" && item.message.role === "assistant" && item.message.model) return item.message.model;
+    if (item?.kind === "message" && item.message.role === "assistant" && item.message.model) return { provider: item.message.provider, id: item.message.model };
   }
   return undefined;
 });
+export const lastAssistantModel = computed(() => lastAssistantSelection.value?.id);
 
 /** 显示条目 id 计数器：快照重建时归零，事件流按序递增。 */
 let conversationIdSeq = 0;
@@ -122,10 +124,10 @@ const buildConversationItems = (
   for (const [messageIndex, message] of messages.entries()) {
     const entryId = messageEntryIds[messageIndex];
     if (message.role === "assistant") {
-      // 没有 stopReason 的 assistant 消息是快照携带的流式中消息（运行中
+      // pending（兼容没有 stopReason）的 assistant 消息是快照携带的流式中消息（运行中
       // 重连时由 agent state 附上）；标为 streaming 让后续 delta 续写到
       // 同一条目上。
-      const streaming = message.stopReason === undefined;
+      const streaming = message.stopReason === undefined || message.stopReason === "pending";
       items.push({ id: nextId("a"), kind: "message", message, entryId, streaming, liveRun: streaming });
       for (const part of message.content) {
         if (part.type === "toolCall") {
@@ -189,6 +191,28 @@ const replaceItem = (index: number, item: ConversationItem) => {
 const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEffect[] => {
   const items = conversation.value;
   const effects: SessionEffect[] = [];
+  // 嵌套调用没有独立的 transcript 条目，归入父工具才能在快照重建后保持一致。
+  if ((event.type === "tool_execution_start" || event.type === "tool_execution_update" || event.type === "tool_execution_end") && event.parentToolCallId) {
+    const parentId = event.parentToolCallId;
+    const index = items.findIndex((item) => item.kind === "tool" && (item.tool.toolCallId === parentId || parentId.startsWith(`${item.tool.toolCallId}/`)));
+    const item = items[index];
+    if (item?.kind === "tool") {
+      const calls = [...(item.tool.nestedCalls?.calls ?? [])];
+      const callIndex = calls.findIndex((call) => call.id === event.toolCallId);
+      const previous = callIndex < 0 ? undefined : calls[callIndex];
+      const call = {
+        ...previous,
+        id: event.toolCallId,
+        name: event.toolName,
+        ...(event.type === "tool_execution_start" ? { arguments: event.args } : {}),
+        status: event.type === "tool_execution_end" ? event.isError ? "error" as const : "ok" as const : "unfinished" as const,
+      };
+      if (callIndex < 0) calls.push(call);
+      else calls[callIndex] = call;
+      replaceItem(index, { ...item, tool: { ...item.tool, nestedCalls: { calls, complete: false } } });
+    }
+    return effects;
+  }
   switch (event.type) {
     case "agent_start":
       activity.value = { phase: "working" };

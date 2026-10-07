@@ -13,6 +13,9 @@ import {
   createAgentSessionFromServices,
   createAgentSessionRuntime,
   createAgentSessionServices,
+  createCodemodeExtension,
+  createMcpExtension,
+  createToolSearchExtension,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { toMessage } from "../error";
@@ -70,7 +73,17 @@ const createRuntime: CreateAgentSessionRuntimeFactory = async ({
   sessionManager,
   sessionStartEvent,
 }) => {
-  const services = await createAgentSessionServices({ cwd, agentDir });
+  const services = await createAgentSessionServices({
+    cwd,
+    agentDir,
+    resourceLoaderOptions: {
+      extensionFactories: [
+        { name: "codemode", builtin: true, replaceable: true, factory: createCodemodeExtension() },
+        { name: "tool-search", builtin: true, replaceable: true, factory: createToolSearchExtension() },
+        { name: "mcp", builtin: true, replaceable: true, factory: createMcpExtension() },
+      ],
+    },
+  });
   const result = await createAgentSessionFromServices({
     services,
     sessionManager,

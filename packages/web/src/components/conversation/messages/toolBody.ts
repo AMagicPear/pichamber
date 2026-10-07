@@ -15,7 +15,7 @@ export type ToolImage = { data: string; mimeType: string };
 export type ToolBody =
   | { kind: "code"; content: string; fileName?: string }
   | { kind: "diff"; patch: string }
-  | { kind: "images"; images: ToolImage[] }
+  | { kind: "images"; images: ToolImage[]; content?: string }
   | { kind: "markdown"; content: string }
   | { kind: "grep"; output: string }
   | { kind: "paths"; output: string; stats?: Record<string, { added: number; removed: number }> }
@@ -42,12 +42,12 @@ export const toolBody = ({
   const failed = isError === true;
   const path = stringArg(args, "path");
 
+  if (!failed && images?.length) {
+    return { kind: "images", images, content: toolName === "read" ? undefined : output };
+  }
+
   if (isFileTool(toolName) && path) {
     const relative = displayPath(path);
-    // read 工具读取图片时，结果里只有 "Read image file [mime]" 这行占位文字，
-    // 真正的图在 image part 里。检测到图片附件时不要把占位文字当文件内容渲染。
-    const hasImages = !failed && toolName === "read" && !!images && images.length > 0;
-    if (hasImages) return { kind: "images", images: images! };
     // write/edit 用 args 里的真实编辑内容构造 diff，让 DiffView 渲染。
     if (!failed) {
       const patch = toolDiff(toolName, args);

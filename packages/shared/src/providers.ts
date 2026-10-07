@@ -61,6 +61,7 @@ export type PiProviderSettings = {
   auth: {
     configured: boolean;
     supportsApiKey: boolean;
+    oauthLabel?: string;
     canRemove: boolean;
     source?: string;
     label?: string;
@@ -75,6 +76,7 @@ export type PiBehaviorSettings = {
   followUpMode: "all" | "one-at-a-time";
   transport: "auto" | "sse" | "websocket" | "websocket-cached";
   httpIdleTimeoutMs: number;
+  cacheWarming: import("@earendil-works/pi-coding-agent").CacheWarmingMode;
 };
 
 /** A package or local source configured through Pi's package manager. */
@@ -97,7 +99,7 @@ export type PiExtensionUpdate = {
 
 /** A package shown in the app-market browser (pi.dev/packages gallery, or npm fallback). */
 export type PiMarketplacePackage = {
-  /** npm package name, e.g. `pi-mcp-adapter` or `@scope/pkg`. */
+  /** npm package name, e.g. `@scope/pkg`. */
   name: string;
   description: string;
   /** First author / maintainer name. */
@@ -196,16 +198,15 @@ export type SkillsOverview = {
 export type McpServerInfo = {
   name: string;
   source?: string;
-  transport: "stdio" | "http" | "socket";
-  status: "cached" | "not-connected" | "disabled";
+  transport: "stdio" | "http";
+  status: string;
   disabled: boolean;
-  directTools: boolean | string[];
+  configurable: boolean;
+  canAuthenticate: boolean;
+  exposure: import("@earendil-works/pi-coding-agent").McpExposure;
   toolCount: number;
-  resourceCount: number;
-  promptCount: number;
-  tools: Array<{ name: string; description?: string }>;
-  resources: Array<{ name: string; description?: string }>;
-  prompts: Array<{ name: string; description?: string }>;
+  tools: Array<Pick<import("@earendil-works/pi-coding-agent").ToolInfo, "name" | "description" | "exposure">>;
+  error?: string;
 };
 
 export type McpOverview = { available: boolean; servers: McpServerInfo[]; error?: string };

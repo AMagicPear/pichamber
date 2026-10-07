@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { RpcClient } from "@earendil-works/pi-coding-agent";
-import { RpcSessionDriver } from "./driver";
+import { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager, type AgentSessionRuntime, type RpcClient } from "@earendil-works/pi-coding-agent";
+import { createAssistantMessageEventStream, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
+import { RpcSessionDriver, SdkSessionDriver } from "./driver";
 
 const stats = {
   sessionFile: "/tmp/session.jsonl",
@@ -115,4 +116,43 @@ describe("RpcSessionDriver", () => {
     await expect(driver.start()).rejects.toThrow("cannot start");
     expect(client.stops).toBe(1);
   });
+});
+
+test("SDK continuation omits the failed attempt from canonical context and runs settle boundaries", async () => {
+  const model: Model<"openai-responses"> = { provider: "mock", id: "mock", name: "Mock", api: "openai-responses", baseUrl: "https://example.invalid", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100_000, maxTokens: 1000 };
+  const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+  const failed: AssistantMessage = { role: "assistant", content: [{ type: "text", text: "failed attempt" }], provider: "mock", model: "mock", api: "openai-responses", usage, stopReason: "aborted", timestamp: 1 };
+  const manager = SessionManager.inMemory(process.cwd());
+  manager.appendMessage({ role: "user", content: "question", timestamp: 0 });
+  const failedId = manager.appendMessage(failed);
+  let boundaries = 0;
+  const loader = new DefaultResourceLoader({ cwd: process.cwd(), agentDir: "/nonexistent-pichamber-test-agent", noContextFiles: true, noSkills: true, noPromptTemplates: true, extensionFactories: [(pi) => {
+    pi.on("agent_before_settle", () => {
+      boundaries += 1;
+      if (boundaries === 1) return { entries: [{ type: "custom_message", customType: "continue-test", content: "one more turn", display: false }], continue: true };
+    });
+  }] });
+  await loader.reload();
+  const { session } = await createAgentSession({ cwd: process.cwd(), agentDir: "/nonexistent-pichamber-test-agent", resourceLoader: loader, settingsManager: SettingsManager.inMemory({ cacheWarming: "off" }), sessionManager: manager, model });
+  const requests: unknown[] = [];
+  const events: string[] = [];
+  session.agent.streamFunction = (_model, context) => {
+    requests.push(context.messages);
+    const stream = createAssistantMessageEventStream();
+    stream.push({ type: "done", reason: "stop", message: { ...failed, content: [{ type: "text", text: "resumed" }], stopReason: "stop", timestamp: 2 } });
+    return stream;
+  };
+  session.subscribe((event) => events.push(event.type));
+  const driver = new SdkSessionDriver(manager.getSessionId(), "", process.cwd(), async () => ({ session }) as AgentSessionRuntime);
+  await driver.start();
+  try {
+    await session.bindExtensions({});
+    await driver.continue();
+    expect(requests).toHaveLength(2);
+    expect(JSON.stringify(requests)).not.toContain("failed attempt");
+    expect(manager.getEntry(failedId)?.type).toBe("message");
+    expect(manager.getBranch()).toContainEqual(expect.objectContaining({ type: "context_edit", targetId: failedId, replacement: null }));
+    expect(events.filter((event) => event === "agent_settled")).toHaveLength(1);
+    expect(manager.getBranch().filter((entry) => entry.type === "message" && entry.message.role === "user")).toHaveLength(1);
+  } finally { session.dispose(); }
 });

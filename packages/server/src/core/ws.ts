@@ -670,6 +670,7 @@ export const attachListener = (sessionId: string, driver: SessionDriver): Sessio
         break;
       }
       case "entry_appended": {
+        if (event.entry.type === "usage") queueStatsRefresh();
         const isModelEntry =
           event.entry.type === "model_change" || event.entry.type === "thinking_level_change";
         if (!isModelEntry && event.entry.type === "compaction") {

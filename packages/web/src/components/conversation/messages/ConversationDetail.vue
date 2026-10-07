@@ -7,6 +7,7 @@ import FilePathLabel from "@/components/ui/FilePathLabel.vue";
 import { lucideIcon, type LucideIconName } from "@/components/ui/morphIcons";
 import { type ToolBody } from "./toolBody";
 import ToolBodyView from "./ToolBodyView";
+import CodeView from "@/components/ui/CodeView.vue";
 
 const props = defineProps<{
   /** Lucide icon name (e.g. `"square-terminal"`); resolved via
@@ -27,6 +28,8 @@ const props = defineProps<{
   running?: boolean;
   /** 工具开始执行的时刻（ms）；倒计时按它校准，不随渲染时机漂移。 */
   startedAt?: number;
+  nestedCalls?: import("@earendil-works/pi-ai").NestedToolCalls;
+  code?: string;
   /** Body shape — the dispatcher picks a renderer from `body.kind`. */
   body: ToolBody;
   /** Whether Markdown content is complete; the renderer uses this to choose
@@ -134,7 +137,11 @@ const elapsed = computed(() => {
       <div class="conversation-detail__body-inner">
         <!-- Every body kind (markdown/diff/images/code/text/ls/grep/paths)
              is rendered by the ToolBodyView TSX component. -->
+        <CodeView v-if="code" :content="code" file-name="script.js" />
         <ToolBodyView :body="body" :final="final" />
+        <ul v-if="nestedCalls?.calls.length" class="conversation-detail__nested">
+          <li v-for="call in nestedCalls.calls" :key="call.id"><span>{{ call.name }}</span><small>{{ call.status }}<template v-if="call.durationMs !== undefined"> · {{ call.durationMs }} ms</template></small><pre v-if="call.error">{{ call.error }}</pre></li>
+        </ul>
       </div>
     </div>
   </section>
@@ -146,6 +153,11 @@ const elapsed = computed(() => {
   color: var(--ui-text);
   font-size: 14px;
 }
+
+.conversation-detail__nested { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; font-family: var(--ui-font-mono); font-size: 12px; }
+.conversation-detail__nested li { display: flex; flex-wrap: wrap; gap: 8px; }
+.conversation-detail__nested small { color: var(--ui-text-muted); }
+.conversation-detail__nested pre { width: 100%; margin: 0; white-space: pre-wrap; color: var(--ui-error-strong); }
 
 .conversation-detail__summary {
   display: flex;

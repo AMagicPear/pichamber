@@ -25,10 +25,11 @@ import {
   updatePiExtensions,
 } from "../extensions/pi-extensions";
 import { getExecutionBackend } from "../settings/app-config";
-import { getMcpOverview, setMcpServerEnabled } from "../settings/mcp-config";
+import { getMcpOverview, runMcpCommand, updateMcpServer } from "../settings/mcp-config";
 import {
   getPiBehaviorSettings,
   listPiProviders,
+  loginPiProvider,
   refreshPiProviderModels,
   removePiProviderCredential,
   setPiProviderApiKey,
@@ -46,6 +47,7 @@ import {
 type Paths =
   | "/api/pi/providers"
   | "/api/pi/providers/:provider/credential"
+  | "/api/pi/providers/:provider/login"
   | "/api/pi/providers/:provider/models/refresh"
   | "/api/pi/behavior"
   | "/api/pi/extensions"
@@ -59,6 +61,9 @@ type Paths =
   | "/api/pi/skills/commands"
   | "/api/pi/mcp/overview"
   | "/api/pi/mcp/:name/enabled"
+  | "/api/pi/mcp/:name/exposure"
+  | "/api/pi/mcp/:name/login"
+  | "/api/pi/mcp/:name/logout"
   | "/api/pi/mcp/:name/reconnect";
 
 export const piRoutes: Routes<Paths> = {
@@ -94,6 +99,14 @@ export const piRoutes: Routes<Paths> = {
           return badRequest(toMessage(error));
         }
       }),
+  },
+
+  "/api/pi/providers/:provider/login": {
+    POST: (req) => withSdkSession(req, async (session, _cwd, sessionId) => {
+      const providers = await loginPiProvider(session, req.params.provider, req.signal);
+      refreshSessionModelState(sessionId);
+      return Response.json({ providers });
+    }),
   },
 
   "/api/pi/behavior": {
@@ -297,25 +310,50 @@ export const piRoutes: Routes<Paths> = {
   },
 
   "/api/pi/mcp/overview": {
-    GET: (req) => withSdkSession(req, async (_session, cwd) => Response.json(await getMcpOverview(cwd))),
+    GET: (req) => withSdkSession(req, async (session) => Response.json(await getMcpOverview(session))),
   },
 
   "/api/pi/mcp/:name/enabled": {
     PUT: (req) =>
-      withSdkSession(req, async (session, cwd) => {
+      withSdkSession(req, async (session) => {
         const body = (await req.json().catch(() => ({}))) as { enabled?: unknown };
         if (typeof body.enabled !== "boolean") return badRequest("sessionId and enabled (boolean) required");
-        await setMcpServerEnabled(cwd, req.params.name, body.enabled);
-        await session.reload();
-        return Response.json(await getMcpOverview(cwd));
+        await updateMcpServer(session, req.params.name, { enabled: body.enabled });
+        return Response.json(await getMcpOverview(session));
       }),
+  },
+
+  "/api/pi/mcp/:name/exposure": {
+    PUT: (req) => withSdkSession(req, async (session) => {
+      const body = (await req.json()) as { exposure?: unknown };
+      if (body.exposure !== "direct" && body.exposure !== "codemode" && body.exposure !== "deferred" && body.exposure !== "hidden") return badRequest("Invalid MCP exposure");
+      await updateMcpServer(session, req.params.name, { exposure: body.exposure });
+      return Response.json(await getMcpOverview(session));
+    }),
+  },
+
+  "/api/pi/mcp/:name/login": {
+    POST: (req) => withSdkSession(req, async (session) => {
+      if (!/^[\w-]+$/.test(req.params.name)) return badRequest("Invalid MCP server name");
+      await runMcpCommand(session, `login ${req.params.name}`);
+      return Response.json(await getMcpOverview(session));
+    }),
+  },
+
+  "/api/pi/mcp/:name/logout": {
+    POST: (req) => withSdkSession(req, async (session) => {
+      if (!/^[\w-]+$/.test(req.params.name)) return badRequest("Invalid MCP server name");
+      await runMcpCommand(session, `logout ${req.params.name}`);
+      return Response.json(await getMcpOverview(session));
+    }),
   },
 
   "/api/pi/mcp/:name/reconnect": {
     POST: (req) =>
-      withSdkSession(req, async (session, cwd) => {
-        await session.prompt(`/mcp reconnect ${req.params.name}`);
-        return Response.json(await getMcpOverview(cwd));
+      withSdkSession(req, async (session) => {
+        if (!/^[\w-]+$/.test(req.params.name)) return badRequest("Invalid MCP server name");
+        await runMcpCommand(session, `reconnect ${req.params.name}`);
+        return Response.json(await getMcpOverview(session));
       }),
   },
 };

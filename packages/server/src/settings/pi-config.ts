@@ -16,6 +16,7 @@ const providerSettings = (session: AgentSession): PiProviderSettings[] =>
       auth: {
         configured: auth.configured,
         supportsApiKey: Boolean(provider.auth.apiKey),
+        oauthLabel: provider.auth.oauth?.loginLabel ?? provider.auth.oauth?.name,
         canRemove: auth.source === "stored",
         source: auth.source,
         label: auth.label,
@@ -47,11 +48,41 @@ export const setPiProviderApiKey = async (
 };
 
 export const removePiProviderCredential = async (session: AgentSession, providerId: string) => {
-  requireApiKeyProvider(session, providerId);
+  if (!session.modelRuntime.getProvider(providerId)) throw new Error(`Unknown provider: ${providerId}`);
   if (session.modelRuntime.getProviderAuthStatus(providerId).source !== "stored") {
     throw new Error("Only credentials stored by Pi can be removed here");
   }
   await session.modelRuntime.logout(providerId);
+  return providerSettings(session);
+};
+
+export const loginPiProvider = async (session: AgentSession, providerId: string, signal: AbortSignal) => {
+  if (!session.modelRuntime.getProvider(providerId)?.auth.oauth) throw new Error("Provider does not support OAuth");
+  if (!session.extensionRunner.hasUI()) throw new Error("Connect a browser to sign in");
+  const ui = session.extensionRunner.getUIContext();
+  const controller = new AbortController();
+  const interaction: AuthInteraction = {
+    signal: AbortSignal.any([signal, controller.signal, AbortSignal.timeout(300_000)]),
+    prompt: async (prompt) => {
+      const options = { signal: prompt.signal ? AbortSignal.any([prompt.signal, interaction.signal!]) : interaction.signal };
+      const value = prompt.type === "select"
+        ? await ui.select(prompt.message, prompt.options.map((option) => option.label), options)
+        : await ui.input(prompt.message, prompt.placeholder, options);
+      if (value === undefined) {
+        // 回调成功也会取消手动回填提示，不能因此中止整个 OAuth 登录。
+        if (!prompt.signal?.aborted) controller.abort();
+        throw new Error(prompt.signal?.aborted ? "Sign-in prompt closed" : "Sign-in cancelled");
+      }
+      return prompt.type === "select" ? prompt.options.find((option) => option.label === value)!.id : value;
+    },
+    notify: (event) => {
+      const text = event.type === "auth_url" ? [event.instructions, event.url].filter(Boolean).join("\n")
+        : event.type === "device_code" ? `${event.verificationUri}\n${event.userCode}`
+        : event.type === "info" ? [event.message, ...(event.links ?? []).map((link) => link.url)].join("\n") : event.message;
+      ui.notify(text, "info");
+    },
+  };
+  await session.modelRuntime.login(providerId, "oauth", interaction);
   return providerSettings(session);
 };
 
@@ -86,6 +117,7 @@ export const getPiBehaviorSettings = (session: AgentSession): PiBehaviorSettings
     followUpMode: settings.getFollowUpMode(),
     transport: settings.getTransport(),
     httpIdleTimeoutMs: settings.getHttpIdleTimeoutMs(),
+    cacheWarming: settings.getCacheWarmingMode(),
   };
 };
 
@@ -94,6 +126,9 @@ export const updatePiBehaviorSettings = async (
   update: Partial<PiBehaviorSettings>,
 ) => {
   const settings = session.settingsManager;
+  if (update.cacheWarming === "off" || update.cacheWarming === "streaming" || update.cacheWarming === "idle") {
+    session.setCacheWarmingMode(update.cacheWarming);
+  }
   if (typeof update.autoCompaction === "boolean") settings.setCompactionEnabled(update.autoCompaction);
   if (typeof update.autoRetry === "boolean") settings.setRetryEnabled(update.autoRetry);
   if (update.steeringMode === "all" || update.steeringMode === "one-at-a-time") {

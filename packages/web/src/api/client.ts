@@ -303,6 +303,9 @@ export const setPiProviderApiKey = (sessionId: string, provider: string, apiKey:
     body: JSON.stringify({ apiKey }),
   }).then((r) => jsonOrThrow<{ providers: PiProviderSettings[] }>(r));
 
+export const loginPiProvider = (sessionId: string, provider: string) =>
+  fetch(`${BASE}/pi/providers/${encodeURIComponent(provider)}/login?sessionId=${encodeURIComponent(sessionId)}`, { method: "POST" }).then((r) => jsonOrThrow<{ providers: PiProviderSettings[] }>(r));
+
 export const removePiProviderCredential = (sessionId: string, provider: string) =>
   fetch(`${BASE}/pi/providers/${encodeURIComponent(provider)}/credential?sessionId=${encodeURIComponent(sessionId)}`, {
     method: "DELETE",
@@ -431,3 +434,9 @@ export const setPiMcpServerEnabled = (sessionId: string, name: string, enabled: 
 
 export const reconnectPiMcpServer = (sessionId: string, name: string) =>
   fetch(`${BASE}/pi/mcp/${encodeURIComponent(name)}/reconnect?sessionId=${encodeURIComponent(sessionId)}`, { method: "POST" }).then((r) => jsonOrThrow<McpOverview>(r));
+
+export const setPiMcpExposure = (sessionId: string, name: string, exposure: import("@earendil-works/pi-coding-agent").McpExposure) =>
+  fetch(`${BASE}/pi/mcp/${encodeURIComponent(name)}/exposure?sessionId=${encodeURIComponent(sessionId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ exposure }) }).then((r) => jsonOrThrow<McpOverview>(r));
+
+export const authenticatePiMcpServer = (sessionId: string, name: string, action: "login" | "logout") =>
+  fetch(`${BASE}/pi/mcp/${encodeURIComponent(name)}/${action}?sessionId=${encodeURIComponent(sessionId)}`, { method: "POST" }).then((r) => jsonOrThrow<McpOverview>(r));

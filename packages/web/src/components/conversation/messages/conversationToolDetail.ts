@@ -26,6 +26,8 @@ export type ConversationToolDetail = {
   running?: boolean;
   /** 工具开始执行的时刻（ms），live 条目才有；倒计时按它校准。 */
   startedAt?: number;
+  nestedCalls?: import("@earendil-works/pi-ai").NestedToolCalls;
+  code?: string;
   isError: boolean;
 };
 
@@ -63,8 +65,10 @@ const labelKeyFor = (toolName: string): { labelKey: string; labelParams?: Record
       return { labelKey: "tools.mcp" };
     case "mcpScript":
       return { labelKey: "tools.mcpScript" };
+    case "codemode":
+      return { labelKey: "tools.custom", labelParams: { name: "Codemode" } };
     default:
-      // pi-mcp-adapter 的 `<prefix>_<server>_<tool>` 与未知工具保持原名展示。
+      // 官方 MCP 工具保留完整命名空间，便于识别服务器。
       return { labelKey: "tools.custom", labelParams: { name: toolName || i18n.global.t("tools.tool") } };
   }
 };
@@ -154,13 +158,22 @@ export const conversationToolDetail = ({
     };
   }
 
-  // MCP 插件工具（pi-mcp-adapter / pi-mcp-extension）：统一 mcp 图标与显示名。
-  if (toolName === "mcp" || toolName === "mcpScript" || toolName.startsWith("mcp_")) {
+  if (toolName === "codemode") {
+    const code = typeof args === "string" ? args : stringArg(args, "code");
+    return { labelKey, labelParams, code, preview: code ? inline(code) : inline(output), body: toolBody({ toolName, args, output, isError, images }), icon: "code", isError: failed };
+  }
+
+  if (toolName === "tool_search") {
+    return { labelKey, labelParams, preview: stringArg(args, "query") ?? inline(output), body: toolBody({ toolName, args, output, isError, images }), icon: "search", isError: failed };
+  }
+
+  // 保留历史 MCP 调用的展示，同时识别官方资源工具。
+  if (toolName === "mcp" || toolName === "mcpScript" || toolName.startsWith("mcp_") || toolName === "list_mcp_resources" || toolName === "list_mcp_resource_templates" || toolName === "read_mcp_resource") {
     return {
       labelKey,
       labelParams,
       preview: inline(output),
-      body: toolBody({ toolName, args, output, isError }),
+      body: toolBody({ toolName, args, output, isError, images }),
       icon: "mcp",
       isError: failed,
     };
@@ -173,7 +186,7 @@ export const conversationToolDetail = ({
       labelKey,
       labelParams,
       preview: inline(output),
-      body: toolBody({ toolName, args, output, isError }),
+      body: toolBody({ toolName, args, output, isError, images }),
       icon: "bot",
       isError: failed,
     };
@@ -183,7 +196,7 @@ export const conversationToolDetail = ({
     labelKey,
     labelParams,
     preview: inline(output),
-    body: toolBody({ toolName, args, output, isError }),
+    body: toolBody({ toolName, args, output, isError, images }),
     isError: failed,
   };
 };

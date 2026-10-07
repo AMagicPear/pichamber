@@ -140,6 +140,8 @@ const ToolBodyView = defineComponent({
           return <DiffView class="tool-body-view__diff" patch={body.patch} />;
         case "images":
           return (
+            <>
+            {body.content && <pre class="tool-body-view__text">{body.content}</pre>}
             <div class="tool-body-view__images">
               {body.images.map((img, i) => (
                 <ImageThumbnail
@@ -150,6 +152,7 @@ const ToolBodyView = defineComponent({
                 />
               ))}
             </div>
+            </>
           );
         case "code":
           return <CodeView class="tool-body-view__code" content={body.content} fileName={body.fileName} />;

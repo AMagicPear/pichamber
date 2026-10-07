@@ -74,7 +74,7 @@ const navItems: NavItem[] = [
   { key: "diagnostics", label: () => t("settings.nav.diagnostics"), icon: ActivityIcon, searchTerms: searchTerms("diagnostics", "log", "crash", "export") },
   { key: "extensions", label: () => t("settings.nav.extensions"), icon: CodeBoxIcon, searchTerms: searchTerms("extensions") },
   { key: "skills", label: () => t("settings.nav.skills"), icon: BookOpenIcon, searchTerms: searchTerms("skills", "SKILL.md") },
-  { key: "mcp", label: () => "MCP", icon: McpIcon, searchTerms: searchTerms("mcp", "MCP", "pi-mcp-adapter") },
+  { key: "mcp", label: () => "MCP", icon: McpIcon, searchTerms: searchTerms("mcp", "MCP", "codemode", "tool_search") },
   { key: "providers", label: () => t("settings.nav.providers"), icon: CloudIcon, searchTerms: searchTerms("providers", "API key", "OAuth") },
 ];
 

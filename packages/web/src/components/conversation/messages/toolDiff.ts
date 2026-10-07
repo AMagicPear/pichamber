@@ -20,7 +20,7 @@ export const displayPath = (path: string): string => {
 
 type Args = Record<string, unknown> | undefined;
 
-export const stringArg = (args: unknown, key: "command" | "path"): string | undefined => {
+export const stringArg = (args: unknown, key: string): string | undefined => {
   if (!args || typeof args !== "object") return undefined;
   const record = args as Record<string, unknown>;
   const value = key === "path" ? record.path ?? record.file_path : record.command;

@@ -143,7 +143,7 @@ const computeToolDetail = (
       : "";
   // 读图片时 message 里有 image part；live 阶段没有 message，partialResult
   // 只是占位文字，所以图片只在提交后出现。
-  const images = message ? messageImages(message) : [];
+  const images = messageImages(message ?? tool.result);
   // 计时只对正在运行的命令有意义：running 才标 running，startedAt
   // 由客户端在 tool_execution_start 写入，倒计时按它校准（重连/中途渲染也准）。
   return {
@@ -156,6 +156,7 @@ const computeToolDetail = (
     }),
     running: tool.running,
     startedAt: tool.startedAt,
+    nestedCalls: message?.role === "toolResult" ? message.nestedCalls : tool.nestedCalls,
   };
 };
 

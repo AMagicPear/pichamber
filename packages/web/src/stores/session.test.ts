@@ -7,6 +7,7 @@ import {
   canContinue,
   conversation,
   lastAssistantModel,
+  lastAssistantSelection,
   pending,
   resetSessionState,
   thinking,
@@ -17,10 +18,9 @@ import {
 const assistantMessage = (model: string): AgentMessage =>
   ({ role: "assistant", content: [], model, stopReason: "stop" }) as unknown as AgentMessage;
 
-/** An in-flight assistant message as attached by mid-run snapshots (no
- *  stopReason yet). */
+/** An in-flight assistant message as attached by mid-run snapshots. */
 const streamingMessage = (): AgentMessage =>
-  ({ role: "assistant", content: [], model: "model" }) as unknown as AgentMessage;
+  ({ role: "assistant", content: [], model: "model", stopReason: "pending" }) as unknown as AgentMessage;
 
 const snapshot = (seq = 0): ServerMessage => ({
   type: "snapshot",
@@ -45,12 +45,13 @@ describe("session protocol reducer", () => {
       () => {},
     );
     applyServerMessage(
-      { type: "message_end", seq: 2, message: assistantMessage("provider-resolved-id") },
+      { type: "message_end", seq: 2, message: { ...assistantMessage("provider-resolved-id"), provider: "routed-provider" } as AgentMessage },
       () => {},
     );
 
     expect(conversation.value).toHaveLength(1);
     expect(lastAssistantModel.value).toBe("provider-resolved-id");
+    expect(lastAssistantSelection.value).toEqual({ provider: "routed-provider", id: "provider-resolved-id" });
   });
 
   test("rejects a sequence gap without partially applying the event", () => {
@@ -122,7 +123,7 @@ describe("session protocol reducer", () => {
   test("resumes streaming onto a mid-run snapshot's in-flight message after reconnect", () => {
     const inFlight = streamingMessage();
     applyServerMessage({ ...snapshot(), messages: [inFlight], messageEntryIds: [undefined] }, () => {});
-    // 快照里没有 stopReason 的 assistant 消息 = 运行中重连带回来的流式消息。
+    // pending 的 assistant 消息 = 运行中重连带回来的流式消息。
     const item = conversation.value[0];
     expect(item?.kind).toBe("message");
     if (item?.kind !== "message") throw new Error("Expected message item");
@@ -209,5 +210,22 @@ describe("session protocol reducer", () => {
     // 工作中一律不可继续（例如正常 turn 里工具运行时）。
     applyServerMessage({ type: "agent_start", seq: seq + 1 }, () => {});
     expect(canContinue.value).toBe(false);
+  });
+
+  test("keeps nested tool calls under their parent across live events and history snapshots", () => {
+    applyServerMessage(snapshot(), () => {});
+    applyServerMessage({ type: "tool_execution_start", seq: 1, toolCallId: "parent", toolName: "codemode", args: { code: "return tools.read({path:'a'})" } }, () => {});
+    applyServerMessage({ type: "tool_execution_start", seq: 2, toolCallId: "parent/1", parentToolCallId: "parent", toolName: "read", args: { path: "a" } }, () => {});
+    applyServerMessage({ type: "tool_execution_end", seq: 3, toolCallId: "parent/1", parentToolCallId: "parent", toolName: "read", result: { content: [{ type: "text", text: "content" }], details: undefined }, isError: false }, () => {});
+    expect(conversation.value).toHaveLength(1);
+    const parent = conversation.value[0];
+    if (parent?.kind !== "tool") throw new Error("Expected parent tool");
+    expect(parent.tool.nestedCalls?.calls).toEqual([{ id: "parent/1", name: "read", arguments: { path: "a" }, status: "ok" }]);
+    const message: AgentMessage = { role: "toolResult", toolCallId: "parent", toolName: "codemode", content: [{ type: "text", text: "content" }], isError: false, timestamp: 1, nestedCalls: { calls: parent.tool.nestedCalls!.calls, complete: true } };
+    applyServerMessage({ ...snapshot(3), messages: [message] }, () => {});
+    expect(conversation.value).toHaveLength(1);
+    const restored = conversation.value[0];
+    if (restored?.kind !== "tool" || restored.message?.role !== "toolResult") throw new Error("Expected restored tool");
+    expect(restored.message.nestedCalls).toEqual(message.nestedCalls);
   });
 });
