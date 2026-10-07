@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.5.0] - 2026-10-07
+
+### Changed
+
+- Synced the embedded Pi SDK to v1.0.4 (was v0.85.1): Pi 0.99's codemode and
+  MCP support, and Pi 1.0's tool execute context, now typed as
+  `ExtensionToolContext`, and RPC `prompt()` disposition, which pichamber
+  drops in favour of the event stream.
+- Toolchain: `@types/node` 26.6.2 and `oxlint` 1.85.
+
 ## [1.4.1] - 2026-09-24
 
 ### Fixed
