@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.5.2] - 2026-10-11
+
+### Changed
+
+- Synced the embedded Pi SDK to v1.1.0.
+
 ## [1.5.1] - 2026-10-07
 
 ### Changed

@@ -1,6 +1,6 @@
 {
   "name": "@amagicpear/pichamber",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "A browser-based workspace for the Pi Coding Agent",
   "license": "MIT",
   "type": "module",
@@ -31,9 +31,9 @@
     "packages/builtin-extensions/pi-apply-patch"
   ],
   "catalog": {
-    "@earendil-works/pi-agent-core": "^1.0.4",
-    "@earendil-works/pi-ai": "^1.0.4",
-    "@earendil-works/pi-coding-agent": "^1.0.4",
+    "@earendil-works/pi-agent-core": "^1.1.0",
+    "@earendil-works/pi-ai": "^1.1.0",
+    "@earendil-works/pi-coding-agent": "^1.1.0",
     "@tsconfig/node24": "^24.0.5",
     "bun-pty": "^0.4.10",
     "typescript": "^7.0.2"

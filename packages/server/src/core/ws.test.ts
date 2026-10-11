@@ -91,7 +91,7 @@ describe("session channel background keep-alive", () => {
     expect(isSessionRunning("session-1")).toBe(true);
     expect(driver.disposed).toBe(false);
 
-    driver.emit({ type: "agent_settled" });
+    driver.emit({ type: "agent_settled", aborted: false });
     await flushAsync();
     // Settled with no browser reattached — reclaim now.
     expect(isSessionRunning("session-1")).toBe(false);
