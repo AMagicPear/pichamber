@@ -28,6 +28,7 @@ const props = defineProps<{
   running?: boolean;
   /** 工具开始执行的时刻（ms）；倒计时按它校准，不随渲染时机漂移。 */
   startedAt?: number;
+  durationMs?: number;
   nestedCalls?: import("@earendil-works/pi-ai").NestedToolCalls;
   code?: string;
   /** Body shape — the dispatcher picks a renderer from `body.kind`. */
@@ -132,6 +133,7 @@ const elapsed = computed(() => {
         :title="`Timeout ${timeout}s; running for ${elapsed ?? 0}s`">
         <template v-if="elapsed !== undefined">{{ elapsed }}s / </template>{{ remaining }}s
       </span>
+      <span v-if="durationMs !== undefined" class="conversation-detail__duration">{{ durationMs }} ms</span>
     </button>
     <div class="conversation-detail__body">
       <div class="conversation-detail__body-inner">
@@ -210,9 +212,9 @@ const elapsed = computed(() => {
   color: var(--ui-text-muted);
 }
 
-/* bash 行尾的 timeout 胶囊：mono + 圆角描边，复用 match-line 的视觉词汇；
- * flex: none 不参与省略号截断，长命令被省略号吃掉时它仍完整可见。 */
-.conversation-detail__timeout {
+/* 执行时间徽标使用 mono + 圆角描边；flex: none 保证它不被预览省略。 */
+.conversation-detail__timeout,
+.conversation-detail__duration {
   flex: none;
   padding: 1px 8px;
   border: 1px solid var(--ui-border-subtle);

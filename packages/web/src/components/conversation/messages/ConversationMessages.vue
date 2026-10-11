@@ -156,6 +156,7 @@ const computeToolDetail = (
     }),
     running: tool.running,
     startedAt: tool.startedAt,
+    durationMs: tool.durationMs,
     nestedCalls: message?.role === "toolResult" ? message.nestedCalls : tool.nestedCalls,
   };
 };

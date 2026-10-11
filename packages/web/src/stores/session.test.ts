@@ -173,13 +173,16 @@ describe("session protocol reducer", () => {
     expect(item.liveRun).toBe(true);
   });
 
-  test("describes settlement and errors as effects instead of touching browser APIs", () => {
+  test("describes completed and aborted settlements without touching browser APIs", () => {
     applyServerMessage(snapshot(), () => {});
     applyServerMessage({ type: "agent_start", seq: 1 }, () => {});
-    const settled = applyServerMessage({ type: "agent_settled", seq: 2 }, () => {});
+    const settled = applyServerMessage({ type: "agent_settled", seq: 2, aborted: false }, () => {});
+    applyServerMessage({ type: "agent_start", seq: 3 }, () => {});
+    const aborted = applyServerMessage({ type: "agent_settled", seq: 4, aborted: true }, () => {});
     const failed = applyServerMessage({ type: "error", error: "transport failed" }, () => {});
 
-    expect(settled).toEqual([{ type: "session-settled" }]);
+    expect(settled).toEqual([{ type: "session-settled", aborted: false }]);
+    expect(aborted).toEqual([{ type: "session-settled", aborted: true }]);
     expect(failed).toEqual([{ type: "error", message: "transport failed" }]);
   });
 
@@ -216,16 +219,26 @@ describe("session protocol reducer", () => {
     applyServerMessage(snapshot(), () => {});
     applyServerMessage({ type: "tool_execution_start", seq: 1, toolCallId: "parent", toolName: "codemode", args: { code: "return tools.read({path:'a'})" } }, () => {});
     applyServerMessage({ type: "tool_execution_start", seq: 2, toolCallId: "parent/1", parentToolCallId: "parent", toolName: "read", args: { path: "a" } }, () => {});
-    applyServerMessage({ type: "tool_execution_end", seq: 3, toolCallId: "parent/1", parentToolCallId: "parent", toolName: "read", result: { content: [{ type: "text", text: "content" }], details: undefined }, isError: false }, () => {});
+    applyServerMessage({ type: "tool_execution_end", seq: 3, toolCallId: "parent/1", parentToolCallId: "parent", toolName: "read", result: { content: [{ type: "text", text: "content" }], details: undefined }, isError: false, durationMs: 37 }, () => {});
     expect(conversation.value).toHaveLength(1);
     const parent = conversation.value[0];
     if (parent?.kind !== "tool") throw new Error("Expected parent tool");
-    expect(parent.tool.nestedCalls?.calls).toEqual([{ id: "parent/1", name: "read", arguments: { path: "a" }, status: "ok" }]);
+    expect(parent.tool.nestedCalls?.calls).toEqual([{ id: "parent/1", name: "read", arguments: { path: "a" }, status: "ok", durationMs: 37 }]);
     const message: AgentMessage = { role: "toolResult", toolCallId: "parent", toolName: "codemode", content: [{ type: "text", text: "content" }], isError: false, timestamp: 1, nestedCalls: { calls: parent.tool.nestedCalls!.calls, complete: true } };
     applyServerMessage({ ...snapshot(3), messages: [message] }, () => {});
     expect(conversation.value).toHaveLength(1);
     const restored = conversation.value[0];
     if (restored?.kind !== "tool" || restored.message?.role !== "toolResult") throw new Error("Expected restored tool");
     expect(restored.message.nestedCalls).toEqual(message.nestedCalls);
+  });
+
+  test("keeps Pi's recorded duration on completed tool results", () => {
+    applyServerMessage(snapshot(), () => {});
+    applyServerMessage({ type: "tool_execution_start", seq: 1, toolCallId: "tool-1", toolName: "bash", args: { command: "pwd" } }, () => {});
+    applyServerMessage({ type: "tool_execution_end", seq: 2, toolCallId: "tool-1", toolName: "bash", result: { content: [], details: undefined }, isError: false, durationMs: 1234 }, () => {});
+
+    const tool = conversation.value[0];
+    if (tool?.kind !== "tool") throw new Error("Expected tool item");
+    expect(tool.tool).toMatchObject({ running: false, durationMs: 1234 });
   });
 });

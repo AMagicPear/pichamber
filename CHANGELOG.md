@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.5.3] - 2026-10-11
+
+### Changed
+
+- Aborted runs no longer trigger completion notifications; tool execution
+  durations are now shown in the conversation.
+
 ## [1.5.2] - 2026-10-11
 
 ### Changed

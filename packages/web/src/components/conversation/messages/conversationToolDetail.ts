@@ -26,6 +26,7 @@ export type ConversationToolDetail = {
   running?: boolean;
   /** 工具开始执行的时刻（ms），live 条目才有；倒计时按它校准。 */
   startedAt?: number;
+  durationMs?: number;
   nestedCalls?: import("@earendil-works/pi-ai").NestedToolCalls;
   code?: string;
   isError: boolean;

@@ -87,6 +87,7 @@ export type ConversationTool = {
   running: boolean;
   /** 工具开始执行的时刻（ms），客户端用它校准 timeout 倒计时。 */
   startedAt?: number;
+  durationMs?: number;
   nestedCalls?: NestedToolCalls;
 };
 
@@ -206,6 +207,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
         name: event.toolName,
         ...(event.type === "tool_execution_start" ? { arguments: event.args } : {}),
         status: event.type === "tool_execution_end" ? event.isError ? "error" as const : "ok" as const : "unfinished" as const,
+        ...(event.type === "tool_execution_end" && event.durationMs !== undefined ? { durationMs: event.durationMs } : {}),
       };
       if (callIndex < 0) calls.push(call);
       else calls[callIndex] = call;
@@ -218,7 +220,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
       activity.value = { phase: "working" };
       break;
     case "agent_settled": {
-      const effect = advanceActivity({ phase: "idle" });
+      const effect = advanceActivity({ phase: "idle" }, event.aborted);
       if (effect) effects.push(effect);
       break;
     }
@@ -226,7 +228,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
       activity.value = { phase: "compacting" };
       break;
     case "compaction_end": {
-      const effect = advanceActivity({ phase: "idle" });
+      const effect = advanceActivity({ phase: "idle" }, event.aborted);
       if (effect) effects.push(effect);
       if (typeof event.errorMessage === "string" && event.errorMessage) {
         effects.push({ type: "error", message: event.errorMessage.replace(/^Compaction failed: /, "") });
@@ -390,7 +392,7 @@ const applyEvent = (event: AgentSessionEvent | JsonAgentSessionEvent): SessionEf
       if (item?.kind === "tool") {
         replaceItem(index, {
           ...item,
-          tool: { ...item.tool, result: event.result, isError: event.isError, running: false },
+          tool: { ...item.tool, result: event.result, isError: event.isError, running: false, durationMs: event.durationMs },
         });
       }
       break;
@@ -439,10 +441,10 @@ let resyncPending = false;
  *  compaction_start / auto_retry_start → 非 idle），重连时由 snapshot
  *  携带的服务端当前值初始化。wasWorking 只防一次会话内的重复 settle；
  *  全新连接恢复成 idle 时活动本为 idle，不会误触发。 */
-const advanceActivity = (next: AgentActivity): SessionEffect | undefined => {
+const advanceActivity = (next: AgentActivity, aborted = false): SessionEffect | undefined => {
   const wasWorking = activity.value.phase !== "idle";
   activity.value = next;
-  if (wasWorking && next.phase === "idle") return { type: "session-settled" };
+  if (wasWorking && next.phase === "idle") return { type: "session-settled", aborted };
 };
 
 const requestResync = (resync: () => void) => {

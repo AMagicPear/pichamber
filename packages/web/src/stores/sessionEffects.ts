@@ -9,7 +9,7 @@ import { i18n } from "@/i18n";
  * browser. Reducers return these descriptions; only this module touches DOM,
  * notifications, or audio. */
 export type SessionEffect =
-  | { type: "session-settled" }
+  | { type: "session-settled"; aborted: boolean }
   | { type: "error"; message: string };
 
 const playCompletionChime = () => {
@@ -63,7 +63,7 @@ export const applySessionEffects = (effects: SessionEffect[]) => {
   for (const effect of effects) {
     if (effect.type === "error") pushErrorToast(effect.message);
     else {
-      notifySessionSettled();
+      if (!effect.aborted) notifySessionSettled();
       void refreshSessions();
     }
   }
