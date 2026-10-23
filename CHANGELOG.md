@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.5.4] - 2026-10-23
+
+### Changed
+
+- Synced the embedded Pi SDK to v1.4.0 and `bun-pty` to v0.5.1.
+- Toolchain: `@types/node` 26.6.5, `bun-types` 1.4.4, and `oxlint` 1.89. The web
+  package stays on TypeScript 6 until `vue-tsc` supports TypeScript 7.
+
+### Fixed
+
+- Resuming interrupted turns no longer relies on Pi's removed private run
+  entry: the request is rebuilt through the core agent's public `continue()`,
+  keeping Pi's retry, compaction, and settle boundaries.
+- Resuming a turn that was cut off at the output limit now drops the failed
+  attempt together with its tool results, so later requests are not rejected.
+
 ## [1.5.3] - 2026-10-11
 
 ### Changed

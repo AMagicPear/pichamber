@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager, type AgentSessionRuntime, type RpcClient } from "@earendil-works/pi-coding-agent";
-import { createAssistantMessageEventStream, type AssistantMessage, type Model } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream, type AssistantMessage, type Model, type ToolResultMessage } from "@earendil-works/pi-ai";
 import { RpcSessionDriver, SdkSessionDriver } from "./driver";
 
 const stats = {
@@ -154,5 +154,40 @@ test("SDK continuation omits the failed attempt from canonical context and runs 
     expect(manager.getBranch()).toContainEqual(expect.objectContaining({ type: "context_edit", targetId: failedId, replacement: null }));
     expect(events.filter((event) => event === "agent_settled")).toHaveLength(1);
     expect(manager.getBranch().filter((entry) => entry.type === "message" && entry.message.role === "user")).toHaveLength(1);
+  } finally { session.dispose(); }
+});
+
+test("SDK continuation drops the failed attempt together with its tool results", async () => {
+  const model: Model<"openai-responses"> = { provider: "mock", id: "mock", name: "Mock", api: "openai-responses", baseUrl: "https://example.invalid", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 100_000, maxTokens: 1000 };
+  const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+  // 输出被截断的助手回复带着一个已经执行完的工具调用：只剔除助手消息会留下
+  // 没有对应调用的工具结果，之后每个请求都会被上游拒绝。
+  const failed: AssistantMessage = { role: "assistant", content: [{ type: "toolCall", id: "call-1", name: "read", arguments: {} }], provider: "mock", model: "mock", api: "openai-responses", usage, stopReason: "length", timestamp: 1 };
+  const toolResult: ToolResultMessage = { role: "toolResult", toolCallId: "call-1", toolName: "read", content: [{ type: "text", text: "file body" }], isError: false, timestamp: 2 };
+  const manager = SessionManager.inMemory(process.cwd());
+  manager.appendMessage({ role: "user", content: "question", timestamp: 0 });
+  const failedId = manager.appendMessage(failed);
+  const toolResultId = manager.appendMessage(toolResult);
+  const loader = new DefaultResourceLoader({ cwd: process.cwd(), agentDir: "/nonexistent-pichamber-test-agent", noContextFiles: true, noSkills: true, noPromptTemplates: true });
+  await loader.reload();
+  const { session } = await createAgentSession({ cwd: process.cwd(), agentDir: "/nonexistent-pichamber-test-agent", resourceLoader: loader, settingsManager: SettingsManager.inMemory({ cacheWarming: "off" }), sessionManager: manager, model });
+  const requests: unknown[] = [];
+  session.agent.streamFunction = (_model, context) => {
+    requests.push(context.messages);
+    const stream = createAssistantMessageEventStream();
+    stream.push({ type: "done", reason: "stop", message: { ...failed, content: [{ type: "text", text: "resumed" }], stopReason: "stop", timestamp: 3 } });
+    return stream;
+  };
+  const driver = new SdkSessionDriver(manager.getSessionId(), "", process.cwd(), async () => ({ session }) as AgentSessionRuntime);
+  await driver.start();
+  try {
+    await session.bindExtensions({});
+    await driver.continue();
+    expect(requests).toHaveLength(1);
+    expect(JSON.stringify(requests)).not.toContain("file body");
+    expect(manager.getEntry(failedId)?.type).toBe("message");
+    expect(manager.getEntry(toolResultId)?.type).toBe("message");
+    expect(manager.getBranch()).toContainEqual(expect.objectContaining({ type: "context_edit", targetId: failedId, replacement: null }));
+    expect(manager.getBranch()).toContainEqual(expect.objectContaining({ type: "context_edit", targetId: toolResultId, replacement: null }));
   } finally { session.dispose(); }
 });

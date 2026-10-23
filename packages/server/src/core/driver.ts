@@ -122,6 +122,69 @@ const sessionMessages = (sessionManager: SessionManager) => {
   };
 };
 
+/** 被中断的助手回复：只有这些回复值得重跑。 */
+const isInterrupted = (message: AgentMessage) =>
+  message.role === "assistant" &&
+  (message.stopReason === "aborted" || message.stopReason === "error" || message.stopReason === "length");
+
+/**
+ * 把失败的那次尝试整组从模型上下文里剔除：助手消息与它产生的工具结果必须成对移除。
+ * 只删助手消息会留下没有对应调用的工具结果，之后的每个请求都会被上游拒绝。
+ */
+const omitFailedAttempt = (manager: SessionManager, entryId: string, message: AgentMessage) => {
+  const toolCallIds = new Set(
+    message.role === "assistant"
+      ? message.content.flatMap((block) => (block.type === "toolCall" ? [block.id] : []))
+      : [],
+  );
+  manager.appendContextEdit(entryId, null);
+  for (const entry of manager.getBranch()) {
+    if (entry.type !== "message") continue;
+    const candidate = entry.message;
+    if (candidate.role === "toolResult" && toolCallIds.has(candidate.toolCallId)) {
+      manager.appendContextEdit(entry.id, null);
+    }
+  }
+};
+
+/**
+ * Pi 1.4 移除了会话私有的 `_runAgentPrompt([])`：会话的运行体现在只能由用户消息或自定义消息
+ * 触发，而自定义消息会被官方 `convertToLlm` 转成新的 user 输入，污染这次重试的请求。
+ * 这里用 core agent 公开的 `continue()` 重建请求（等价于重跑被中断的那一轮），并按官方
+ * `_startRun` 的顺序补齐收尾：失败恢复、溢出压缩重试、settle 边界与 `agent_settled`。
+ * 上游一旦提供公开的会话级 continue 入口，这段 shim 即可整体删除。
+ */
+type ContinuedTurnInternals = {
+  _isAgentRunActive: boolean;
+  _agentRunAbortRequested: boolean;
+  _failedResponse: unknown;
+  _handlePostAgentRun(): Promise<boolean>;
+  _runBeforeSettleBoundary(): Promise<boolean>;
+  _emitAgentSettled(): Promise<void>;
+};
+
+const continueTurn = async (session: AgentSession) => {
+  const internals = session as unknown as ContinuedTurnInternals;
+  internals._agentRunAbortRequested = false;
+  internals._failedResponse = undefined;
+  internals._isAgentRunActive = true;
+  try {
+    await session.agent.continue();
+    while (!internals._agentRunAbortRequested) {
+      if (await internals._handlePostAgentRun()) {
+        if (internals._agentRunAbortRequested) break;
+        await session.agent.continue();
+        continue;
+      }
+      if (internals._agentRunAbortRequested || !(await internals._runBeforeSettleBoundary())) break;
+      if (internals._agentRunAbortRequested) break;
+      await session.agent.continue();
+    }
+  } finally {
+    await internals._emitAgentSettled();
+  }
+};
+
 export class SdkSessionDriver implements SessionDriver {
   readonly mode = "sdk" as const;
   private runtime: AgentSessionRuntime | null = null;
@@ -184,19 +247,28 @@ export class SdkSessionDriver implements SessionDriver {
     const session = this.session;
     if (session.isStreaming) throw new Error("Cannot continue while a run is in progress");
     if (session.isCompacting) throw new Error("Cannot continue while compaction is in progress");
-    const projection = session.sessionManager.buildSessionProjection();
-    const contribution = projection.entries.findLast((entry) => entry.messages.some((message) => message.role !== "system"));
-    const last = contribution?.messages.findLast((message) => message.role !== "system");
+    const manager = session.sessionManager;
+    const contributions = manager
+      .buildSessionProjection()
+      .entries.filter((entry) => entry.messages.some((message) => message.role !== "system"));
+    const lastContribution = contributions.at(-1);
+    const last = lastContribution?.messages.findLast((message) => message.role !== "system");
     if (!last) throw new Error("Nothing to continue from an empty session");
     if (last.role === "assistant") {
-      if (last.stopReason !== "aborted" && last.stopReason !== "error" && last.stopReason !== "length") {
-        throw new Error("The last turn completed; there is nothing to continue");
+      if (!isInterrupted(last)) throw new Error("The last turn completed; there is nothing to continue");
+      omitFailedAttempt(manager, lastContribution!.sourceEntry.id, last);
+    } else if (last.role === "toolResult") {
+      // 工具结果留在末尾说明助手消息已被剔除或是被中断的尝试：同样要把这次尝试整组清掉，
+      // 否则重跑时请求里会残留没有对应调用的工具结果。
+      const attempt = contributions
+        .findLast((entry) => entry.messages.some((message) => message.role === "assistant"));
+      const assistant = attempt?.messages.findLast((message) => message.role === "assistant");
+      if (attempt && assistant && isInterrupted(assistant)) {
+        omitFailedAttempt(manager, attempt.sourceEntry.id, assistant);
       }
-      session.sessionManager.appendContextEdit(contribution!.sourceEntry.id, null);
     }
     session.refreshContext();
-    // 1.0.4 尚无公开 continue API；复用官方完整运行入口，保留重试、压缩和 settle 边界。
-    await (session as unknown as { _runAgentPrompt(messages: AgentMessage[]): Promise<void> })._runAgentPrompt([]);
+    await continueTurn(session);
   }
 
   compact(customInstructions?: string) {
