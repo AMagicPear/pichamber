@@ -1,0 +1,14 @@
+{
+  "name": "@amagicpear/pichamber-builtin-cheaperinference",
+  "version": "0.1.0",
+  "description": "Registers Cheaper Inference as a pi provider (dynamic model list via GET https://api.cheaperinference.com/public/models).",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:"
+  }
+}
