@@ -2,6 +2,8 @@
 
 A browser-based workspace for the Pi Coding Agent. Vue 3 + Bun thin shell wrapping `pi` with a real shell terminal.
 
+![pichamber workspace](https://raw.githubusercontent.com/AMagicPear/pichamber/main/docs/screenshot.png)
+
 ## Install from npm
 
 Requires [Bun](https://bun.sh) (the backend runs on it).
