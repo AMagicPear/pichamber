@@ -30,6 +30,19 @@ export default defineConfig({
       },
     }),
     vueJsx(),
+    // @vitejs/plugin-vue-jsx 把 optimizeDeps 的 JSX 转换改成 'preserve'，但依赖扫描
+    // 不跑插件链，rolldown 会把 .tsx 里的 JSX 原样留下再解析失败（PARSE_ERROR）。
+    // 注册在它之后，用 vue 的 automatic runtime 覆盖回来。
+    {
+      name: 'pichamber:dep-scan-jsx',
+      config: () => ({
+        optimizeDeps: {
+          rolldownOptions: {
+            transform: { jsx: { runtime: 'automatic', importSource: 'vue' } as const },
+          },
+        },
+      }),
+    },
     vueDevTools(),
   ],
   resolve: {
