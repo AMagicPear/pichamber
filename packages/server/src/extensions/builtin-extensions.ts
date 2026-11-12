@@ -55,6 +55,13 @@ export const builtinExtensions: BuiltinExtensionDef[] = [
     sourceDir: join(BUILTIN_EXTENSIONS_ROOT, "orcarouter"),
   },
   {
+    id: "cheaperinference",
+    name: "Cheaper Inference",
+    description:
+      "Registers Cheaper Inference as a provider. Model list is fetched dynamically from the Cheaper Inference public catalog (GET /public/models) and filtered to chat-capable models.",
+    sourceDir: join(BUILTIN_EXTENSIONS_ROOT, "cheaperinference"),
+  },
+  {
     id: "apply-patch",
     name: "Apply Patch",
     description:

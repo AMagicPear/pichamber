@@ -31,6 +31,20 @@ describe("builtin extensions", () => {
     expect(source).toContain("capability=chat");
   });
 
+  test("exposes the cheaperinference built-in", () => {
+    const def = getBuiltinExtension("cheaperinference");
+    expect(def.name).toBe("Cheaper Inference");
+    expect(existsSync(join(def.sourceDir, "index.ts"))).toBe(true);
+    expect(existsSync(join(def.sourceDir, "package.json"))).toBe(true);
+  });
+
+  test("cheaperinference source registers the provider with the gateway base URL", () => {
+    const source = readFileSync(join(getBuiltinExtension("cheaperinference").sourceDir, "index.ts"), "utf8");
+    expect(source).toContain("pi.registerProvider(CHEAPER_INFERENCE_PROVIDER_ID, config)");
+    expect(source).toContain("https://api.cheaperinference.com/v1");
+    expect(source).toContain("/public/models");
+  });
+
   test("exposes the apply-patch built-in with its source files", () => {
     const def = getBuiltinExtension("apply-patch");
     expect(def.name).toBe("Apply Patch");
